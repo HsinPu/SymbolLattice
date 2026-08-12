@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.382.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.383.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,11 +51,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.382.0 highlights
+## v0.383.0 highlights
 
-- Fixed-fixture acceptance uses the official [`luau-lang/luau`](https://github.com/luau-lang/luau) tag `0.731` at commit `f8ca77…` (MIT). Its byte-exact official lines 15–30 slice is SHA-256 `75f55…`; the complete source is SHA-256 `66cf…`. On the slice, SymbolLattice and CodeGraph each score `TP 3 / FP 0 / FN 0`.
-- The complete-file baseline is reported separately: SymbolLattice `TP 2 / FP 0 / FN 1`, CodeGraph `TP 3 / FP 0 / FN 0`, because the file includes top-level test harness setup. The bounded rule emits only an exact bare-function call with a supported argument list; it makes no completeness claim.
-- Generic or module-method calls, top-level setup, runtime behavior, and native semantics remain outside the rule. Extractor facts are v270; the resolver remains v143.
+- Fixed-commit real-project acceptance uses [`ikelaiah/free-pascal-snippets`](https://github.com/ikelaiah/free-pascal-snippets) commit [`1b100fdb1f2e30b522c4a4c3d1ce390bb5f778b9`](https://github.com/ikelaiah/free-pascal-snippets/tree/1b100fdb1f2e30b522c4a4c3d1ce390bb5f778b9) (MIT), scanning the full `src/FuncProc/ExampleFunctionWithoutParams/ExampleFunctionWithoutParams.lpr`; its source SHA-256 is `7BDF...639F`.
+- The observed identities are the file, `GetGreeting`, and the program-main `WriteLn(GetGreeting)` reference. The full-file baseline is SymbolLattice `TP 2 / FP 0 / FN 1` and CodeGraph `TP 3 / FP 0 / FN 0`; the postfix case is `TP 3 / FP 0 / FN 0` for both.
+- The exact program-main relation is limited to rule `syntax.pascal.program-main.unique-prior-zero-argument-function-writeln-expression`. Generic or qualified calls, non-trivial expressions, ambiguous or later declarations, compiler directives, runtime behavior, and native semantics are outside this rule. Extractor facts are v271; the resolver remains v143. Native compiler validation was environment-blocked.
 
 ## MCP
 

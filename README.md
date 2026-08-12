@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.382.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.383.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,11 +44,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.382.0 重點
+## v0.383.0 重點
 
-- 固定 fixture 採用官方 [`luau-lang/luau`](https://github.com/luau-lang/luau) tag `0.731`、commit `f8ca77…`（MIT）。官方第 15–30 行的逐位元組切片 SHA-256 為 `75f55…`，完整來源 SHA-256 為 `66cf…`；切片上 SymbolLattice 與 CodeGraph 均為 `TP 3 / FP 0 / FN 0`。
-- 完整檔案基準另行呈現：SymbolLattice `TP 2 / FP 0 / FN 1`、CodeGraph `TP 3 / FP 0 / FN 0`，因檔案含頂層測試 harness 設定。受限規則只對支援引數串列的裸函式呼叫建立 exact 關係，不宣稱完整性。
-- generic 或 module method 呼叫、頂層設定、runtime behavior 與 native semantics 均不在規則範圍。extractor facts 為 v270；resolver 維持 v143。
+- 固定 commit 的真實專案驗收使用 [`ikelaiah/free-pascal-snippets`](https://github.com/ikelaiah/free-pascal-snippets) commit [`1b100fdb1f2e30b522c4a4c3d1ce390bb5f778b9`](https://github.com/ikelaiah/free-pascal-snippets/tree/1b100fdb1f2e30b522c4a4c3d1ce390bb5f778b9)（MIT），掃描完整 `src/FuncProc/ExampleFunctionWithoutParams/ExampleFunctionWithoutParams.lpr`；來源 SHA-256 為 `7BDF...639F`。
+- 可觀測身分為檔案、`GetGreeting` 與程式主體的 `WriteLn(GetGreeting)` 參考。完整檔 baseline 為 SymbolLattice `TP 2 / FP 0 / FN 1`、CodeGraph `TP 3 / FP 0 / FN 0`；postfix case 則兩者皆為 `TP 3 / FP 0 / FN 0`。
+- 精確 program-main 關係僅由規則 `syntax.pascal.program-main.unique-prior-zero-argument-function-writeln-expression` 產生。generic 或 qualified call、非單純運算式、歧義或後置宣告、compiler directive、runtime behavior 與 native semantics 均在規則之外。extractor facts 為 v271，resolver 維持 v143；native compiler 驗證受環境阻擋。
 
 ## MCP
 

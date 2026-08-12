@@ -592,6 +592,457 @@ end.`
     ]);
   });
 
+  it("emits one exact Pascal program-main WriteLn function expression with file ownership", () => {
+    const facts = extractPascalFileFacts({
+      filePath: "src/greeting.pas",
+      language: "pascal",
+      sourceText: `program Greeting;
+
+function GetGreeting: string;
+begin
+  Result := 'Hello';
+end;
+
+begin
+  WriteLn(GetGreeting);
+end.`
+    });
+    const target = functionByName(facts, "GetGreeting");
+
+    expect(calls(facts)).toEqual([
+      expect.objectContaining({
+        sourceId: facts.symbols[0]?.id,
+        targetId: target.id,
+        range: {
+          start: { line: 9, column: 11 },
+          end: { line: 9, column: 22 }
+        },
+        resolution: "exact",
+        confidence: 1,
+        referenceName: "GetGreeting",
+        evidence: {
+          ruleId: "syntax.pascal.program-main.unique-prior-zero-argument-function-writeln-expression",
+          stage: "syntax",
+          candidateSymbolIds: [target.id]
+        }
+      })
+    ]);
+  });
+
+  it("fails closed for non-direct, ambiguous, or unsafe Pascal program-main WriteLn expressions", () => {
+    const sources = [
+      ["invoked target", `program Greeting;\nfunction GetGreeting: string; begin Result := 'Hello'; end;\nbegin\n  WriteLn(GetGreeting());\nend.`],
+      ["extra argument", `program Greeting;\nfunction GetGreeting: string; begin Result := 'Hello'; end;\nbegin\n  WriteLn(GetGreeting, 'x');\nend.`],
+      ["expression", `program Greeting;\nfunction GetGreeting: string; begin Result := 'Hello'; end;\nbegin\n  WriteLn(GetGreeting + '!');\nend.`],
+      ["qualified", `program Greeting;\nfunction GetGreeting: string; begin Result := 'Hello'; end;\nbegin\n  WriteLn(Foreign.GetGreeting);\nend.`],
+      ["member", `program Greeting;\nfunction GetGreeting: string; begin Result := 'Hello'; end;\nbegin\n  WriteLn(holder.GetGreeting);\nend.`],
+      ["string", `program Greeting;\nfunction GetGreeting: string; begin Result := 'Hello'; end;\nbegin\n  WriteLn('GetGreeting');\nend.`],
+      ["comment", `program Greeting;\nfunction GetGreeting: string; begin Result := 'Hello'; end;\nbegin\n  { WriteLn(GetGreeting); }\nend.`],
+      ["later declaration", `program Greeting;\nbegin\n  WriteLn(GetGreeting);\nend.\nfunction GetGreeting: string; begin Result := 'Hello'; end;`],
+      ["duplicate", `program Greeting;\nfunction GetGreeting: string; begin Result := 'Hello'; end;\nfunction GetGreeting: string; begin Result := 'Hi'; end;\nbegin\n  WriteLn(GetGreeting);\nend.`],
+      ["procedure", `program Greeting;\nprocedure GetGreeting; begin end;\nbegin\n  WriteLn(GetGreeting);\nend.`],
+      ["parameter", `program Greeting;\nfunction GetGreeting(value: Integer): string; begin Result := 'Hello'; end;\nbegin\n  WriteLn(GetGreeting);\nend.`],
+      ["shadow", `program Greeting;\nfunction GetGreeting: string; begin Result := 'Hello'; end;\nvar GetGreeting: string;\nbegin\n  WriteLn(GetGreeting);\nend.`],
+      ["assignment", `program Greeting;\nfunction GetGreeting: string; begin Result := 'Hello'; end;\nbegin\n  GetGreeting := 'x';\n  WriteLn(GetGreeting);\nend.`],
+      ["nested routine", `program Greeting;\nfunction GetGreeting: string; begin Result := 'Hello'; end;\nprocedure Host; function Inner: string; begin Result := 'x'; end; begin end;\nbegin\n  WriteLn(GetGreeting);\nend.`],
+      ["uses", `program Greeting;\nuses Foreign;\nfunction GetGreeting: string; begin Result := 'Hello'; end;\nbegin\n  WriteLn(GetGreeting);\nend.`],
+      ["include", `program Greeting;\n{$I shared.inc}\nfunction GetGreeting: string; begin Result := 'Hello'; end;\nbegin\n  WriteLn(GetGreeting);\nend.`],
+      ["conditional", `program Greeting;\n{$IFDEF FEATURE}\nfunction GetGreeting: string; begin Result := 'Hello'; end;\nbegin\n  WriteLn(GetGreeting);\nend.`],
+      ["forward", `program Greeting;\nfunction GetGreeting: string; forward;\nfunction GetGreeting: string; begin Result := 'Hello'; end;\nbegin\n  WriteLn(GetGreeting);\nend.`],
+      ["external", `program Greeting;\nfunction GetGreeting: string; external;\nfunction GetGreeting: string; begin Result := 'Hello'; end;\nbegin\n  WriteLn(GetGreeting);\nend.`],
+      ["overload", `program Greeting;\nfunction GetGreeting: string; overload; begin Result := 'Hello'; end;\nbegin\n  WriteLn(GetGreeting);\nend.`],
+      ["with", `program Greeting;\nfunction GetGreeting: string; begin Result := 'Hello'; end;\nbegin\n  with holder do WriteLn(GetGreeting);\nend.`],
+      ["malformed main", `program Greeting;\nfunction GetGreeting: string; begin Result := 'Hello'; end;\nbegin\n  WriteLn(GetGreeting);`]
+    ] as const;
+
+    for (const [description, sourceText] of sources) {
+      const facts = extractPascalFileFacts({ filePath: "src/greeting.pas", language: "pascal", sourceText });
+      expect(calls(facts), description).toEqual([]);
+    }
+  });
+
+  it("fails closed for Pascal macro-state directives that can rewrite a program-main target", () => {
+    const directives = [
+      `{$MACRO ON}
+{$DEFINE GetGreeting:=OtherGreeting}`,
+      `(*$MACRO ON*)
+(*$DEFINE GetGreeting OtherGreeting*)`,
+      "{$UNDEF GetGreeting}"
+    ] as const;
+
+    for (const directive of directives) {
+      const facts = extractPascalFileFacts({
+        filePath: "src/greeting.pas",
+        language: "pascal",
+        sourceText: `program Greeting;
+${directive}
+function GetGreeting: string;
+begin
+  Result := 'Hello';
+end;
+function OtherGreeting: string;
+begin
+  Result := 'Other';
+end;
+begin
+  WriteLn(GetGreeting);
+end.`
+      });
+      expect(calls(facts), directive).toEqual([]);
+      expect(functionByName(facts, "GetGreeting")).toBeDefined();
+      expect(functionByName(facts, "OtherGreeting")).toBeDefined();
+    }
+
+    const inertFacts = extractPascalFileFacts({
+      filePath: "src/greeting.pas",
+      language: "pascal",
+      sourceText: `program Greeting;
+function GetGreeting: string;
+begin
+  Result := '{$MACRO ON}';
+  { $DEFINE GetGreeting:=OtherGreeting }
+  (* $UNDEF GetGreeting *)
+end;
+begin
+  WriteLn(GetGreeting);
+end.`
+    });
+    expect(calls(inertFacts)).toHaveLength(1);
+  });
+
+  it("suppresses exact Pascal routine calls and Horse routes under token-rewriting directives", () => {
+    const routineDirectives = [
+      `{$MACRO ON}
+{$DEFINE pascalHelper:=otherHelper}`,
+      `(*$MACRO ON*)
+(*$DEFINE pascalHelper otherHelper*)`
+    ] as const;
+    for (const directive of routineDirectives) {
+      const facts = extractPascalFileFacts({
+        filePath: "src/smoke.pas",
+        language: "pascal",
+        sourceText: `program Smoke;
+${directive}
+procedure pascalHelper;
+begin
+end;
+procedure otherHelper;
+begin
+end;
+procedure pascalEntry;
+begin
+  pascalHelper();
+end;
+begin
+end.`
+      });
+      expect(calls(facts), directive).toEqual([]);
+      expect(functionByName(facts, "pascalHelper")).toBeDefined();
+      expect(functionByName(facts, "otherHelper")).toBeDefined();
+    }
+
+    const horseDirectives = [
+      `{$MACRO ON}
+{$DEFINE Health:=OtherHealth}`,
+      `(*$MACRO ON*)
+(*$DEFINE Health OtherHealth*)`
+    ] as const;
+    for (const directive of horseDirectives) {
+      const facts = extractPascalFileFacts({
+        filePath: "src/routes.pas",
+        language: "pascal",
+        sourceText: `program Smoke;
+uses Horse;
+${directive}
+procedure Health(Req: THorseRequest; Res: THorseResponse);
+begin
+end;
+procedure OtherHealth(Req: THorseRequest; Res: THorseResponse);
+begin
+end;
+begin
+  THorse.Get('/health', Health);
+end.`
+      });
+      expect(routes(facts), directive).toEqual([]);
+      expect(functionByName(facts, "Health")).toBeDefined();
+      expect(functionByName(facts, "OtherHealth")).toBeDefined();
+    }
+
+    const inertRoutineFacts = extractPascalFileFacts({
+      filePath: "src/smoke.pas",
+      language: "pascal",
+      sourceText: `program Smoke;
+procedure pascalHelper;
+begin
+end;
+procedure pascalEntry;
+begin
+  WriteLn('{$DEFINE pascalHelper:=otherHelper}');
+  { $MACRO ON }
+  pascalHelper();
+end;
+begin
+end.`
+    });
+    expect(calls(inertRoutineFacts)).toHaveLength(1);
+
+    const inertHorseFacts = extractPascalFileFacts({
+      filePath: "src/routes.pas",
+      language: "pascal",
+      sourceText: `program Smoke;
+uses Horse;
+{ $DEFINE Health:=OtherHealth }
+procedure Health(Req: THorseRequest; Res: THorseResponse);
+begin
+  WriteLn('{$MACRO ON}');
+end;
+begin
+  THorse.Get('/health', Health);
+end.`
+    });
+    expect(routes(inertHorseFacts)).toHaveLength(1);
+  });
+
+  it("fails closed for Pascal grouped parameter and local shadows", () => {
+    const sources = [
+      `program Smoke;
+
+procedure pascalHelper;
+begin
+end;
+
+procedure pascalEntry(pascalHelper, other: TProc);
+begin
+  pascalHelper();
+end;
+
+begin
+end.`,
+      `program Smoke;
+
+procedure pascalHelper;
+begin
+end;
+
+procedure pascalEntry;
+var
+  pascalHelper, other: TProc;
+begin
+  pascalHelper();
+end;
+
+begin
+end.`,
+      `program Smoke;
+
+procedure pascalHelper;
+begin
+end;
+
+procedure pascalEntry(pascalHelper, other TProc); begin
+  pascalHelper();
+end;
+
+begin
+end.`
+    ] as const;
+
+    for (const sourceText of sources) {
+      const facts = extractPascalFileFacts({ filePath: "src/smoke.pas", language: "pascal", sourceText });
+      expect(calls(facts), sourceText).toEqual([]);
+    }
+  });
+
+  it("does not emit Pascal nested routines as direct file functions without indentation evidence", () => {
+    const facts = extractPascalFileFacts({
+      filePath: "src/smoke.pas",
+      language: "pascal",
+      sourceText: `program Smoke;
+
+procedure pascalHelper;
+begin
+end;
+
+procedure pascalEntry;
+procedure nestedRoutine;
+begin
+end;
+begin
+  nestedRoutine();
+end;
+
+begin
+end.`
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.name)).toEqual([
+      "pascalHelper",
+      "pascalEntry"
+    ]);
+    expect(calls(facts)).toEqual([]);
+  });
+
+  it("suppresses Pascal semantic facts when compiler conditions are present, while strings remain inert", () => {
+    const directives = ["{$IF FEATURE}", "{$IFDEF FEATURE}", "{$IFNDEF FEATURE}", "{$ELSE}", "{$ELSEIF FEATURE}", "{$ENDIF}", "(*$IFDEF FEATURE*)"] as const;
+
+    for (const directive of directives) {
+      const facts = extractPascalFileFacts({
+        filePath: "src/smoke.pas",
+        language: "pascal",
+        sourceText: `program Smoke;
+${directive}
+procedure pascalHelper;
+begin
+end;
+procedure pascalEntry;
+begin
+  pascalHelper();
+end;
+begin
+end.`
+      });
+      expect(facts.symbols.filter((symbol) => symbol.kind === "function"), directive).toEqual([]);
+      expect(calls(facts), directive).toEqual([]);
+    }
+
+    const stringFacts = extractPascalFileFacts({
+      filePath: "src/smoke.pas",
+      language: "pascal",
+      sourceText: `program Smoke;
+procedure pascalHelper;
+begin
+end;
+procedure pascalEntry;
+begin
+  WriteLn('{$IFDEF FEATURE}');
+  pascalHelper();
+end;
+begin
+end.`
+    });
+    expect(calls(stringFacts)).toHaveLength(1);
+  });
+
+  it("suppresses exact Pascal Horse routes when an include can alter the program", () => {
+    const directives = ["{$I shared.inc}", "{$INCLUDE shared.inc}", "(*$I shared.inc*)"] as const;
+
+    for (const directive of directives) {
+      const facts = extractPascalFileFacts({
+        filePath: "src/routes.pas",
+        language: "pascal",
+        sourceText: `program Smoke;
+uses Horse;
+${directive}
+procedure Health(Req: THorseRequest; Res: THorseResponse);
+begin
+end;
+begin
+  THorse.Get('/health', Health);
+end.`
+      });
+
+      expect(functionByName(facts, "Health"), directive).toBeDefined();
+      expect(routes(facts), directive).toEqual([]);
+    }
+  });
+
+  it("marks only interface-declared Pascal unit routines as exported", () => {
+    const facts = extractPascalFileFacts({
+      filePath: "src/smoke.pas",
+      language: "pascal",
+      sourceText: `unit Smoke;
+interface
+procedure publicRoutine;
+implementation
+procedure publicRoutine;
+begin
+end;
+procedure implementationRoutine;
+begin
+end;
+end.`
+    });
+
+    expect(functionByName(facts, "publicRoutine")).toMatchObject({ isExported: true });
+    expect(functionByName(facts, "implementationRoutine")).toMatchObject({ isExported: false });
+    expect(calls(facts)).toEqual([]);
+  });
+
+  it("keeps Pascal unit type-member implementations private without an owner or visibility contract", () => {
+    const facts = extractPascalFileFacts({
+      filePath: "src/smoke.pas",
+      language: "pascal",
+      sourceText: `unit Smoke;
+interface
+type
+  TFoo = class
+  public
+    procedure PublicRoutine;
+  end;
+implementation
+procedure TFoo.PublicRoutine;
+begin
+end;
+procedure PublicRoutine;
+begin
+end;
+end.`
+    });
+
+    const methods = facts.symbols.filter((symbol) => symbol.kind === "function");
+    expect(methods).toEqual([
+      expect.objectContaining({ qualifiedName: "src/smoke.pas#TFoo.PublicRoutine", isExported: false }),
+      expect.objectContaining({ qualifiedName: "src/smoke.pas#PublicRoutine", isExported: false })
+    ]);
+    expect(calls(facts)).toEqual([]);
+  });
+
+  it("keeps Pascal class, record, and object implementations private regardless of interface visibility", () => {
+    const facts = extractPascalFileFacts({
+      filePath: "src/smoke.pas",
+      language: "pascal",
+      sourceText: `unit Smoke;
+interface
+type
+  TPublicClass = class
+  public
+    procedure PublicClassRoutine;
+  end;
+  TPrivateClass = class
+  private
+    procedure PrivateClassRoutine;
+  end;
+  TPublicRecord = record
+    procedure PublicRecordRoutine;
+  end;
+  TPublicObject = object
+    procedure PublicObjectRoutine;
+  end;
+implementation
+procedure TPublicClass.PublicClassRoutine;
+begin
+end;
+procedure TPrivateClass.PrivateClassRoutine;
+begin
+end;
+procedure TPublicRecord.PublicRecordRoutine;
+begin
+end;
+procedure TPublicObject.PublicObjectRoutine;
+begin
+end;
+end.`
+    });
+
+    expect(facts.symbols.filter((symbol) => symbol.kind === "function")).toEqual([
+      expect.objectContaining({ qualifiedName: "src/smoke.pas#TPublicClass.PublicClassRoutine", isExported: false }),
+      expect.objectContaining({ qualifiedName: "src/smoke.pas#TPrivateClass.PrivateClassRoutine", isExported: false }),
+      expect.objectContaining({ qualifiedName: "src/smoke.pas#TPublicRecord.PublicRecordRoutine", isExported: false }),
+      expect.objectContaining({ qualifiedName: "src/smoke.pas#TPublicObject.PublicObjectRoutine", isExported: false })
+    ]);
+  });
+
   it("fails closed for Lua and Luau shadowing, imports, members, environment mutation, duplicates, and nested closures", () => {
     const sources = [
       ["local shadow", `local function helper() end\nlocal function entry() local helper = function() end; helper() end`],
