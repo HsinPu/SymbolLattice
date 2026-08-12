@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.386.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.387.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,11 +51,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.386.0 highlights
+## v0.387.0 highlights
 
-- Fixed-source acceptance uses [`elixir-lang/elixir` v1.20.2](https://github.com/elixir-lang/elixir/releases/tag/v1.20.2) at commit [`545dddf138e4cb1ee874e6f2c26882c9b438f551`](https://github.com/elixir-lang/elixir/tree/545dddf138e4cb1ee874e6f2c26882c9b438f551), scanning the complete [`lib/elixir/lib/supervisor/default.ex`](https://github.com/elixir-lang/elixir/blob/545dddf138e4cb1ee874e6f2c26882c9b438f551/lib/elixir/lib/supervisor/default.ex). The three B1 truths are the `Supervisor.Default` module identity, the `init` method identity, and module-to-`init` containment; SymbolLattice scores `TP 3 / FP 0 / FN 0`, while CodeGraph 1.5 scores `TP 0 / FP 0 / FN 3`.
-- Elixir acceptance is limited to these syntax-proven declarations and containment. It makes no claim about direct calls, OTP runtime behavior, or dynamic dispatch.
-- Extractor facts remain v272 and the resolver remains v143. `elixir`, `mix`, and `erl` were unavailable in the validation environment, so native runtime validation is environment-blocked rather than reported as passed or failed.
+- Fixed-source acceptance uses [`erlang/otp` OTP-28.5.0.5](https://github.com/erlang/otp/releases/tag/OTP-28.5.0.5) at peeled commit [`61bcb2fdaa72f789d98c3b5afce92da43d944688`](https://github.com/erlang/otp/tree/61bcb2fdaa72f789d98c3b5afce92da43d944688), scanning the complete [`lib/kernel/src/erl_reply.erl`](https://github.com/erlang/otp/blob/61bcb2fdaa72f789d98c3b5afce92da43d944688/lib/kernel/src/erl_reply.erl). The three B1 truths are the `erl_reply` module identity, the `ip_string_to_tuple/1` method identity, and module-to-method containment; SymbolLattice and CodeGraph 1.5 both score `TP 3 / FP 0 / FN 0`.
+- Erlang acceptance is limited to these syntax-proven declarations and containment. It makes no claim about direct calls, BEAM runtime behavior, or dynamic dispatch.
+- Extractor facts remain v272 and the resolver remains v143. `erl`, `erlc`, and `rebar3` were unavailable in the validation environment, so native runtime validation is environment-blocked rather than reported as passed or failed.
 
 ## MCP
 
