@@ -394,6 +394,39 @@ describe("source discovery", () => {
       "@interface Incomplete : NSObject\n",
       "utf8"
     );
+    await writeFile(
+      join(projectPath, "Headers", "Conditional.h"),
+      ["#if 0", "@interface Dead : NSObject", "@end", "#endif"].join("\n"),
+      "utf8"
+    );
+    for (const [name, prefix] of [
+      ["CommentConditional.h", "/**/ "],
+      ["FormFeedConditional.h", "\f"],
+      ["VerticalTabConditional.h", "\v"]
+    ] as const) {
+      await writeFile(
+        join(projectPath, "Headers", name),
+        [
+          `${prefix}#if 0`,
+          "@interface Dead : NSObject",
+          "@end",
+          "#endif",
+          `@interface ${name.replace(".h", "")} : NSObject`,
+          "@end"
+        ].join("\n"),
+        "utf8"
+      );
+    }
+    await writeFile(
+      join(projectPath, "Headers", "InertDirectiveText.h"),
+      [
+        'const char *marker = "#if 0";',
+        "// #if 0",
+        "@interface InertDirectiveText : NSObject",
+        "@end"
+      ].join("\n"),
+      "utf8"
+    );
 
     expect(getSourceLanguage("Headers/HealthController.h")).toBeNull();
     expect(getSourceLanguage("Headers/HealthController.h", header)).toBe("objc");
@@ -401,8 +434,12 @@ describe("source discovery", () => {
     const files = await discoverSourceFiles(projectPath);
 
     expect(files.map((file) => [file.relativePath, file.language])).toEqual([
+      ["Headers/CommentConditional.h", "objc"],
+      ["Headers/FormFeedConditional.h", "objc"],
       ["Headers/HealthChecking.h", "objc"],
-      ["Headers/HealthController.h", "objc"]
+      ["Headers/HealthController.h", "objc"],
+      ["Headers/InertDirectiveText.h", "objc"],
+      ["Headers/VerticalTabConditional.h", "objc"]
     ]);
   });
 

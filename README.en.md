@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.383.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.384.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,11 +51,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.383.0 highlights
+## v0.384.0 highlights
 
-- Fixed-commit real-project acceptance uses [`ikelaiah/free-pascal-snippets`](https://github.com/ikelaiah/free-pascal-snippets) commit [`1b100fdb1f2e30b522c4a4c3d1ce390bb5f778b9`](https://github.com/ikelaiah/free-pascal-snippets/tree/1b100fdb1f2e30b522c4a4c3d1ce390bb5f778b9) (MIT), scanning the full `src/FuncProc/ExampleFunctionWithoutParams/ExampleFunctionWithoutParams.lpr`; its source SHA-256 is `7BDF...639F`.
-- The observed identities are the file, `GetGreeting`, and the program-main `WriteLn(GetGreeting)` reference. The full-file baseline is SymbolLattice `TP 2 / FP 0 / FN 1` and CodeGraph `TP 3 / FP 0 / FN 0`; the postfix case is `TP 3 / FP 0 / FN 0` for both.
-- The exact program-main relation is limited to rule `syntax.pascal.program-main.unique-prior-zero-argument-function-writeln-expression`. Generic or qualified calls, non-trivial expressions, ambiguous or later declarations, compiler directives, runtime behavior, and native semantics are outside this rule. Extractor facts are v271; the resolver remains v143. Native compiler validation was environment-blocked.
+- Fixed-source acceptance uses [`llvm/llvm-project` 20.1.0](https://github.com/llvm/llvm-project/releases/tag/llvmorg-20.1.0) at peeled commit [`68f0da5431dec2de8aed7ca0e54792c98cb110c4`](https://github.com/llvm/llvm-project/tree/68f0da5431dec2de8aed7ca0e54792c98cb110c4), scanning the complete [`clang/test/CodeGenObjC/gnustep2-class.m`](https://github.com/llvm/llvm-project/blob/68f0da5431dec2de8aed7ca0e54792c98cb110c4/clang/test/CodeGenObjC/gnustep2-class.m). The three B1 truths are `X`, `+clsMeth`, and `X extends Super`; SymbolLattice scores `TP 3 / FP 0 / FN 0`, while CodeGraph 1.5 scores `TP 2 / FP 0 / FN 1`.
+- Objective-C facts require complete, direct, unique interface, implementation, protocol, method, and same-file superclass evidence. Unknown preprocessor branches, conditional React Native bridges, categories, class extensions, duplicate or malformed methods, unmatched delimiters/directives, and literal disguises fail closed; dynamic dispatch never becomes an exact call.
+- Extractor facts are v272; the resolver remains v143. Native `clang` was not on the validation environment's `PATH`, so native compiler validation is environment-blocked rather than reported as passed or failed.
 
 ## MCP
 

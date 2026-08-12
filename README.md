@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.383.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.384.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,11 +44,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.383.0 重點
+## v0.384.0 重點
 
-- 固定 commit 的真實專案驗收使用 [`ikelaiah/free-pascal-snippets`](https://github.com/ikelaiah/free-pascal-snippets) commit [`1b100fdb1f2e30b522c4a4c3d1ce390bb5f778b9`](https://github.com/ikelaiah/free-pascal-snippets/tree/1b100fdb1f2e30b522c4a4c3d1ce390bb5f778b9)（MIT），掃描完整 `src/FuncProc/ExampleFunctionWithoutParams/ExampleFunctionWithoutParams.lpr`；來源 SHA-256 為 `7BDF...639F`。
-- 可觀測身分為檔案、`GetGreeting` 與程式主體的 `WriteLn(GetGreeting)` 參考。完整檔 baseline 為 SymbolLattice `TP 2 / FP 0 / FN 1`、CodeGraph `TP 3 / FP 0 / FN 0`；postfix case 則兩者皆為 `TP 3 / FP 0 / FN 0`。
-- 精確 program-main 關係僅由規則 `syntax.pascal.program-main.unique-prior-zero-argument-function-writeln-expression` 產生。generic 或 qualified call、非單純運算式、歧義或後置宣告、compiler directive、runtime behavior 與 native semantics 均在規則之外。extractor facts 為 v271，resolver 維持 v143；native compiler 驗證受環境阻擋。
+- 固定來源驗收使用 [`llvm/llvm-project` 20.1.0](https://github.com/llvm/llvm-project/releases/tag/llvmorg-20.1.0) 的 peeled commit [`68f0da5431dec2de8aed7ca0e54792c98cb110c4`](https://github.com/llvm/llvm-project/tree/68f0da5431dec2de8aed7ca0e54792c98cb110c4)，掃描完整 [`clang/test/CodeGenObjC/gnustep2-class.m`](https://github.com/llvm/llvm-project/blob/68f0da5431dec2de8aed7ca0e54792c98cb110c4/clang/test/CodeGenObjC/gnustep2-class.m)。三項 B1 truth 為 `X`、`+clsMeth` 與 `X extends Super`；SymbolLattice 為 `TP 3 / FP 0 / FN 0`，CodeGraph 1.5 為 `TP 2 / FP 0 / FN 1`。
+- Objective-C facts 僅來自完整、直接且唯一的 interface、implementation、protocol、method 與同檔 superclass 證據。未知 preprocessor 分支、條件式 React Native bridge、category、class extension、重複或 malformed method、未配對 delimiter／directive 與 literal 偽裝均 fail closed；dynamic dispatch 不會成為 exact call。
+- extractor facts 為 v272，resolver 維持 v143。原生 `clang` 不在驗證環境的 `PATH`，因此 native compiler 驗證標示為 environment-blocked；這不等同於編譯通過或失敗。
 
 ## MCP
 

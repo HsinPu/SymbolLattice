@@ -43,6 +43,7 @@ interface StaticObjectiveCSuperclass {
 
 interface StaticObjectiveCMethod {
   readonly name: string;
+  readonly polarity?: "+" | "-";
   readonly start: number;
   readonly end: number;
 }
@@ -84,6 +85,7 @@ interface StaticReactNativeObjectiveCExternModule {
 interface SanitizedObjectiveCSource {
   readonly valid: boolean;
   readonly text: string;
+  readonly hasReactNativeBridgeImport: boolean;
 }
 
 type ObjectiveCLexicalMode =
@@ -97,6 +99,8 @@ const DIRECT_IMPLEMENTATION_HEADER =
   /^[ \t]*@implementation[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*$/u;
 const DIRECT_INTERFACE_HEADER =
   /^[ \t]*@interface[ \t]+([A-Za-z_][A-Za-z0-9_]*)(.*)$/u;
+const DIRECT_EMPTY_INLINE_INTERFACE =
+  /^[ \t]*@interface[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]+@end[ \t]*$/u;
 const DIRECT_PROTOCOL_HEADER =
   /^[ \t]*@protocol[ \t]+([A-Za-z_][A-Za-z0-9_]*)(.*)$/u;
 const DIRECT_END_DIRECTIVE = /^[ \t]*@end[ \t]*$/u;
@@ -185,6 +189,136 @@ function isHorizontalWhitespace(character: string): boolean {
   return character === " " || character === "\t";
 }
 
+function isObjectiveCPreprocessorWhitespace(character: string): boolean {
+  return isHorizontalWhitespace(character) || character === "\f" || character === "\v";
+}
+
+interface ObjectiveCConditionalFrame {
+  sawElse: boolean;
+}
+
+function blankObjectiveCRange(characters: string[], start: number, end: number): void {
+  for (let index = start; index < end; index += 1) {
+    blankCharacter(characters, index);
+  }
+}
+
+/**
+ * No build defines are available to the extractor, so every conditional branch
+ * is unknown and therefore cannot prove an exact source fact. Directives must
+ * still form one balanced stack; malformed stacks invalidate the whole file.
+ */
+function applyObjectiveCPreprocessorSafety(
+  sourceText: string,
+  sanitizedText: string,
+  directiveStarts: ReadonlySet<number>
+): SanitizedObjectiveCSource {
+  const characters = sanitizedText.split("");
+  const stack: ObjectiveCConditionalFrame[] = [];
+  const lines = linesFor(sourceText);
+  const orderedDirectiveStarts = [...directiveStarts];
+  let directiveIndex = 0;
+  let hasReactNativeBridgeImport = false;
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    if (line === undefined) {
+      return { valid: false, text: sourceText, hasReactNativeBridgeImport: false };
+    }
+    while ((orderedDirectiveStarts[directiveIndex] ?? Number.POSITIVE_INFINITY) < line.start) {
+      directiveIndex += 1;
+    }
+    const candidateDirectiveStart = orderedDirectiveStarts[directiveIndex];
+    const directiveStart =
+      candidateDirectiveStart !== undefined && candidateDirectiveStart < line.end
+        ? candidateDirectiveStart
+        : undefined;
+    if (directiveStart !== undefined) {
+      directiveIndex += 1;
+      let directiveEndLine = lineIndex;
+      while ((lines[directiveEndLine]?.text ?? "").endsWith("\\")) {
+        directiveEndLine += 1;
+        if (directiveEndLine >= lines.length) {
+          return { valid: false, text: sourceText, hasReactNativeBridgeImport: false };
+        }
+      }
+      const directiveText = sourceText.slice(directiveStart, line.end);
+      const directive = /^\s*#\s*([A-Za-z_][A-Za-z0-9_]*)\b(.*)$/u.exec(directiveText);
+      if (directive === null) {
+        return { valid: false, text: sourceText, hasReactNativeBridgeImport: false };
+      }
+      const keyword = directive[1]?.toLowerCase();
+      const argument = directive[2]?.trim() ?? "";
+      if (keyword === "if" || keyword === "ifdef" || keyword === "ifndef") {
+        if (
+          argument.length === 0 ||
+          ((keyword === "ifdef" || keyword === "ifndef") &&
+            !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(argument))
+        ) {
+          return { valid: false, text: sourceText, hasReactNativeBridgeImport: false };
+        }
+        stack.push({ sawElse: false });
+      } else if (keyword === "elif") {
+        const frame = stack.at(-1);
+        if (frame === undefined || frame.sawElse || argument.length === 0) {
+          return { valid: false, text: sourceText, hasReactNativeBridgeImport: false };
+        }
+      } else if (keyword === "else") {
+        const frame = stack.at(-1);
+        if (frame === undefined || frame.sawElse || argument.length !== 0) {
+          return { valid: false, text: sourceText, hasReactNativeBridgeImport: false };
+        }
+        frame.sawElse = true;
+      } else if (keyword === "endif") {
+        if (stack.length === 0 || argument.length !== 0) {
+          return { valid: false, text: sourceText, hasReactNativeBridgeImport: false };
+        }
+        stack.pop();
+      } else if (
+        stack.length === 0 &&
+        directiveEndLine === lineIndex &&
+        REACT_NATIVE_BRIDGE_HEADER.test(directiveText)
+      ) {
+        hasReactNativeBridgeImport = true;
+      }
+
+      const lastDirectiveLine = lines[directiveEndLine];
+      if (lastDirectiveLine === undefined) {
+        return { valid: false, text: sourceText, hasReactNativeBridgeImport: false };
+      }
+      blankObjectiveCRange(characters, line.start, lastDirectiveLine.end);
+      lineIndex = directiveEndLine;
+      continue;
+    }
+
+    if (stack.length > 0) {
+      blankObjectiveCRange(characters, line.start, line.end);
+    }
+  }
+
+  return stack.length === 0
+    ? { valid: true, text: characters.join(""), hasReactNativeBridgeImport }
+    : { valid: false, text: sourceText, hasReactNativeBridgeImport: false };
+}
+
+function hasBalancedObjectiveCDelimiters(sourceText: string): boolean {
+  const stack: string[] = [];
+  const closingFor: Readonly<Record<string, string>> = { "(": ")", "[": "]", "{": "}" };
+  for (const character of sourceText) {
+    if (character === "(" || character === "[" || character === "{") {
+      stack.push(character);
+      continue;
+    }
+    if (character === ")" || character === "]" || character === "}") {
+      const opening = stack.pop();
+      if (opening === undefined || closingFor[opening] !== character) {
+        return false;
+      }
+    }
+  }
+  return stack.length === 0;
+}
+
 /**
  * Blanks C-family comments, quoted literals, and preprocessor directives
  * without changing offsets. This intentionally avoids parsing Objective-C;
@@ -193,6 +327,7 @@ function isHorizontalWhitespace(character: string): boolean {
  */
 function sanitizeObjectiveC(sourceText: string): SanitizedObjectiveCSource {
   const characters = sourceText.split("");
+  const directiveStarts = new Set<number>();
   let mode: ObjectiveCLexicalMode = null;
   let escaped = false;
   let atLineStart = true;
@@ -234,7 +369,7 @@ function sanitizeObjectiveC(sourceText: string): SanitizedObjectiveCSource {
 
     if (mode === "single-quoted-literal" || mode === "double-quoted-literal") {
       if (isNewline(character)) {
-        return { valid: false, text: sourceText };
+        return { valid: false, text: sourceText, hasReactNativeBridgeImport: false };
       }
       blankCharacter(characters, index);
       if (escaped) {
@@ -269,11 +404,12 @@ function sanitizeObjectiveC(sourceText: string): SanitizedObjectiveCSource {
       continue;
     }
 
-    if (atLineStart && isHorizontalWhitespace(character)) {
+    if (atLineStart && isObjectiveCPreprocessorWhitespace(character)) {
       continue;
     }
 
     if (atLineStart && character === "#") {
+      directiveStarts.add(index);
       blankCharacter(characters, index);
       inPreprocessorDirective = true;
       lastDirectiveNonWhitespace = "#";
@@ -281,7 +417,6 @@ function sanitizeObjectiveC(sourceText: string): SanitizedObjectiveCSource {
       continue;
     }
 
-    atLineStart = false;
     if (character === "/" && next === "*") {
       blankCharacter(characters, index);
       blankCharacter(characters, index + 1);
@@ -296,6 +431,7 @@ function sanitizeObjectiveC(sourceText: string): SanitizedObjectiveCSource {
       mode = "line-comment";
       continue;
     }
+    atLineStart = false;
     if (character === "'") {
       blankCharacter(characters, index);
       mode = "single-quoted-literal";
@@ -309,14 +445,22 @@ function sanitizeObjectiveC(sourceText: string): SanitizedObjectiveCSource {
     }
   }
 
-  return {
-    valid:
-      mode !== "block-comment" &&
-      mode !== "single-quoted-literal" &&
-      mode !== "double-quoted-literal" &&
-      !(inPreprocessorDirective && lastDirectiveNonWhitespace === "\\"),
-    text: characters.join("")
-  };
+  const lexicallyValid =
+    mode !== "block-comment" &&
+    mode !== "single-quoted-literal" &&
+    mode !== "double-quoted-literal" &&
+    !(inPreprocessorDirective && lastDirectiveNonWhitespace === "\\");
+  if (!lexicallyValid) {
+    return { valid: false, text: sourceText, hasReactNativeBridgeImport: false };
+  }
+  const preprocessed = applyObjectiveCPreprocessorSafety(
+    sourceText,
+    characters.join(""),
+    directiveStarts
+  );
+  return preprocessed.valid && hasBalancedObjectiveCDelimiters(preprocessed.text)
+    ? preprocessed
+    : { valid: false, text: sourceText, hasReactNativeBridgeImport: false };
 }
 
 function linesFor(sourceText: string): readonly ObjectiveCLine[] {
@@ -392,8 +536,60 @@ function directContainerHeader(
   return null;
 }
 
+function skipObjectiveCInlineTrivia(sourceText: string, from: number): number | null {
+  let cursor = from;
+  while (cursor < sourceText.length) {
+    const character = sourceText.charAt(cursor);
+    if (isHorizontalWhitespace(character)) {
+      cursor += 1;
+      continue;
+    }
+    if (sourceText.startsWith("/*", cursor)) {
+      const closing = sourceText.indexOf("*/", cursor + 2);
+      if (closing === -1) {
+        return null;
+      }
+      cursor = closing + 2;
+      continue;
+    }
+    if (sourceText.startsWith("//", cursor)) {
+      return sourceText.length;
+    }
+    break;
+  }
+  return cursor;
+}
+
+/** Re-proves the inline-empty grammar without treating literals as trivia. */
+function isDirectEmptyInlineInterfaceSourceLine(
+  sourceText: string,
+  expectedName: string
+): boolean {
+  let cursor = skipObjectiveCInlineTrivia(sourceText, 0);
+  if (cursor === null || !sourceText.startsWith("@interface", cursor)) {
+    return false;
+  }
+  cursor += "@interface".length;
+  const nameStart = skipObjectiveCInlineTrivia(sourceText, cursor);
+  if (nameStart === null || nameStart === cursor || !sourceText.startsWith(expectedName, nameStart)) {
+    return false;
+  }
+  cursor = nameStart + expectedName.length;
+  if (isIdentifierPart(sourceText.charAt(cursor))) {
+    return false;
+  }
+  const endStart = skipObjectiveCInlineTrivia(sourceText, cursor);
+  if (endStart === null || endStart === cursor || !sourceText.startsWith("@end", endStart)) {
+    return false;
+  }
+  cursor = endStart + "@end".length;
+  const end = skipObjectiveCInlineTrivia(sourceText, cursor);
+  return end === sourceText.length;
+}
+
 function collectDirectContainers(
-  lines: readonly ObjectiveCLine[]
+  lines: readonly ObjectiveCLine[],
+  sourceText: string
 ): readonly StaticObjectiveCContainer[] | null {
   const containers: StaticObjectiveCContainer[] = [];
   const identities = new Set<string>();
@@ -403,8 +599,59 @@ function collectDirectContainers(
     if (line === undefined) {
       return null;
     }
+    const emptyInlineInterface = DIRECT_EMPTY_INLINE_INTERFACE.exec(line.text);
+    if (emptyInlineInterface !== null) {
+      const name = emptyInlineInterface[1];
+      if (
+        name === undefined ||
+        !isDirectEmptyInlineInterfaceSourceLine(sourceText.slice(line.start, line.end), name)
+      ) {
+        return null;
+      }
+      const identity = "interface\u0000" + name;
+      if (identities.has(identity)) {
+        return null;
+      }
+      identities.add(identity);
+      containers.push({
+        kind: "interface",
+        name,
+        superclass: null,
+        start: firstCodeOffset(line),
+        end: line.end,
+        bodyStartLine: lineIndex + 1,
+        endLine: lineIndex
+      });
+      continue;
+    }
     const header = directContainerHeader(line);
     if (header === null) {
+      if (DIRECT_END_DIRECTIVE.test(line.text)) {
+        return null;
+      }
+      // Categories, class extensions, and React Native extern macro
+      // containers are deliberately outside this direct-container subset.
+      // Skip one complete unsupported container so its own @end is not
+      // mistaken for a stray top-level terminator.
+      if (OBJECTIVE_C_CONTAINER_DIRECTIVE.test(line.text)) {
+        let unsupportedEndLine = lineIndex + 1;
+        for (; unsupportedEndLine < lines.length; unsupportedEndLine += 1) {
+          const candidate = lines[unsupportedEndLine];
+          if (candidate === undefined) {
+            return null;
+          }
+          if (DIRECT_END_DIRECTIVE.test(candidate.text)) {
+            break;
+          }
+          if (OBJECTIVE_C_CONTAINER_DIRECTIVE.test(candidate.text)) {
+            return null;
+          }
+        }
+        if (lines[unsupportedEndLine] === undefined) {
+          return null;
+        }
+        lineIndex = unsupportedEndLine;
+      }
       continue;
     }
     const identity = header.kind + "\u0000" + header.name;
@@ -528,12 +775,14 @@ function matchingBrace(
   return null;
 }
 
+type DirectObjectiveCMethodResult = StaticObjectiveCMethod | "malformed" | null;
+
 function directMethodOnLine(
   sourceText: string,
   line: ObjectiveCLine,
   containerEnd: number,
   form: "declaration" | "implementation"
-): StaticObjectiveCMethod | null {
+): DirectObjectiveCMethodResult {
   let cursor = skipHorizontalWhitespace(sourceText, line.start, line.end);
   const start = cursor;
   const polarity = sourceText.charAt(cursor);
@@ -599,12 +848,30 @@ function directMethodOnLine(
   if (form === "declaration") {
     const end = cursor + 1;
     return skipHorizontalWhitespace(sourceText, end, line.end) === line.end
-      ? { name: selectorParts.join(""), start, end }
-      : null;
+      ? { name: selectorParts.join(""), polarity, start, end }
+      : "malformed";
   }
 
   const end = matchingBrace(sourceText, cursor, containerEnd);
-  return end === null ? null : { name: selectorParts.join(""), start, end: end + 1 };
+  if (end === null) {
+    return null;
+  }
+  const lineFeed = sourceText.indexOf("\n", end + 1);
+  const rawLineEnd = lineFeed === -1 ? sourceText.length : lineFeed;
+  const physicalLineEnd =
+    rawLineEnd > end + 1 && sourceText.charAt(rawLineEnd - 1) === "\r"
+      ? rawLineEnd - 1
+      : rawLineEnd;
+  let suffix = end + 1;
+  while (
+    suffix < physicalLineEnd &&
+    isObjectiveCPreprocessorWhitespace(sourceText.charAt(suffix))
+  ) {
+    suffix += 1;
+  }
+  return suffix === physicalLineEnd
+    ? { name: selectorParts.join(""), polarity, start, end: end + 1 }
+    : "malformed";
 }
 
 function directMethodsInContainer(
@@ -613,6 +880,7 @@ function directMethodsInContainer(
   container: StaticObjectiveCContainer
 ): readonly StaticObjectiveCMethod[] | null {
   const methods: StaticObjectiveCMethod[] = [];
+  const methodIdentities = new Set<string>();
   let braceDepth = 0;
   const endLine = lines[container.endLine];
   if (endLine === undefined) {
@@ -635,7 +903,15 @@ function directMethodsInContainer(
         endLine.start,
         container.kind === "implementation" ? "implementation" : "declaration"
       );
+      if (method === "malformed") {
+        return null;
+      }
       if (method !== null) {
+        const identity = (method.polarity ?? "") + method.name;
+        if (methodIdentities.has(identity)) {
+          return null;
+        }
+        methodIdentities.add(identity);
         methods.push(method);
       }
     }
@@ -654,6 +930,29 @@ function directMethodsInContainer(
   }
 
   return braceDepth === 0 ? methods : null;
+}
+
+function objectiveCMethodCandidateKey(method: StaticObjectiveCMethod): string {
+  return (method.polarity ?? "") + "\u0000" + method.name;
+}
+
+function objectiveCSelectorsWithBothPolarities(
+  methods: readonly StaticObjectiveCMethod[]
+): ReadonlySet<string> {
+  const polaritiesBySelector = new Map<string, Set<string>>();
+  for (const method of methods) {
+    if (method.polarity === undefined) {
+      continue;
+    }
+    const polarities = polaritiesBySelector.get(method.name) ?? new Set<string>();
+    polarities.add(method.polarity);
+    polaritiesBySelector.set(method.name, polarities);
+  }
+  return new Set(
+    [...polaritiesBySelector.entries()]
+      .filter(([, polarities]) => polarities.size > 1)
+      .map(([selector]) => selector)
+  );
 }
 
 /** True only for a macro written directly in one implementation body. */
@@ -682,11 +981,11 @@ function isDirectObjectiveCContainerMember(
  * import, exactly one module macro, and one or more unique export macros.
  */
 function staticReactNativeObjectiveCModule(
-  input: ObjectiveCExtractFileFactsInput,
   sanitizedSource: string,
-  container: StaticObjectiveCContainer
+  container: StaticObjectiveCContainer,
+  hasReactNativeBridgeImport: boolean
 ): StaticReactNativeObjectiveCModule | null {
-  if (container.kind !== "implementation" || !REACT_NATIVE_BRIDGE_HEADER.test(input.sourceText)) {
+  if (container.kind !== "implementation" || !hasReactNativeBridgeImport) {
     return null;
   }
   const body = sanitizedSource.slice(container.start, container.end);
@@ -1201,9 +1500,17 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
     ruleId:
       | "language.objc.method.direct-declaration"
       | "language.objc.method.direct-implementation"
-      | ReactNativeObjectiveCMethodRuleId
+      | ReactNativeObjectiveCMethodRuleId,
+    includePolarityInIdentity = false
   ): SymbolNode {
-    const qualifiedName = parent.qualifiedName + "." + method.name;
+    // Keep the selector as the display name. Existing single-polarity qualified
+    // names remain stable; only a real +/- selector collision gains a polarity
+    // marker so both Objective-C method namespaces remain addressable.
+    const identityName =
+      includePolarityInIdentity && method.polarity !== undefined
+        ? method.polarity + method.name
+        : method.name;
+    const qualifiedName = parent.qualifiedName + "." + identityName;
     const declarationOrdinal = nextOrdinal(qualifiedName, "method");
     const range = rangeFor(lineStarts, method.start, method.end);
     const symbol: SymbolNode = {
@@ -1231,11 +1538,11 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
     return emptyFacts(symbols, edges);
   }
   const lines = linesFor(sanitized.text);
-  const containers = collectDirectContainers(lines);
+  const containers = collectDirectContainers(lines, input.sourceText);
   if (containers === null) {
     return emptyFacts(symbols, edges);
   }
-  const reactNativeExternModules = REACT_NATIVE_BRIDGE_HEADER.test(input.sourceText)
+  const reactNativeExternModules = sanitized.hasReactNativeBridgeImport
     ? collectDirectReactNativeObjectiveCExternModules(sanitized.text, lines)
     : [];
   if (reactNativeExternModules === null) {
@@ -1314,8 +1621,15 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
   for (const owner of owners) {
     if (owner.kind === "protocol") {
       const parent = addProtocol(owner.container);
-      for (const method of methodsByContainer.get(owner.container) ?? []) {
-        addMethod(parent, method, "language.objc.method.direct-declaration");
+      const protocolMethods = methodsByContainer.get(owner.container) ?? [];
+      const polarityCollisions = objectiveCSelectorsWithBothPolarities(protocolMethods);
+      for (const method of protocolMethods) {
+        addMethod(
+          parent,
+          method,
+          "language.objc.method.direct-declaration",
+          polarityCollisions.has(method.name)
+        );
       }
       continue;
     }
@@ -1360,20 +1674,32 @@ export function extractObjectiveCFileFacts(input: ObjectiveCExtractFileFactsInpu
         continue;
       }
       for (const method of methodsByContainer.get(source.container) ?? []) {
-        if (source.ruleId === "language.objc.method.direct-implementation" || !selectedMethods.has(method.name)) {
-          selectedMethods.set(method.name, { method, ruleId: source.ruleId });
+        const candidateKey = objectiveCMethodCandidateKey(method);
+        if (
+          source.ruleId === "language.objc.method.direct-implementation" ||
+          !selectedMethods.has(candidateKey)
+        ) {
+          selectedMethods.set(candidateKey, { method, ruleId: source.ruleId });
         }
       }
     }
-    for (const { method, ruleId } of [...selectedMethods.values()].sort(
+    const selectedMethodValues = [...selectedMethods.values()];
+    const polarityCollisions = objectiveCSelectorsWithBothPolarities(
+      selectedMethodValues.map(({ method }) => method)
+    );
+    for (const { method, ruleId } of selectedMethodValues.sort(
       (left, right) => left.method.start - right.method.start
     )) {
-      addMethod(parent, method, ruleId);
+      addMethod(parent, method, ruleId, polarityCollisions.has(method.name));
     }
     const reactNativeModule =
       owner.implementation === null
         ? null
-        : staticReactNativeObjectiveCModule(input, sanitized.text, owner.implementation);
+        : staticReactNativeObjectiveCModule(
+            sanitized.text,
+            owner.implementation,
+            sanitized.hasReactNativeBridgeImport
+          );
     if (reactNativeModule !== null) {
       for (const method of reactNativeModule.methods) {
         const methodSymbol = addMethod(

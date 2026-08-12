@@ -503,6 +503,9 @@ function isObjectiveCHeaderPath(filePath: string): boolean {
  */
 function isProvenObjectiveCHeader(sourceText: string): boolean {
   const sanitized = sanitizeObjectiveCHeaderSource(sourceText);
+  if (sanitized === null) {
+    return false;
+  }
   const container = OBJECTIVE_C_HEADER_CONTAINER.exec(sanitized);
   if (container === null) {
     return false;
@@ -511,8 +514,9 @@ function isProvenObjectiveCHeader(sourceText: string): boolean {
   return OBJECTIVE_C_HEADER_END.test(sanitized.slice(container.index + container[0].length));
 }
 
-function sanitizeObjectiveCHeaderSource(sourceText: string): string {
+function sanitizeObjectiveCHeaderSource(sourceText: string): string | null {
   let result = "";
+  const directiveStarts = new Set<number>();
   let mode: "code" | "line-comment" | "block-comment" | "string" | "character" | "preprocessor" =
     "code";
 
@@ -588,7 +592,8 @@ function sanitizeObjectiveCHeaderSource(sourceText: string): string {
       mode = "character";
       continue;
     }
-    if (character === "#" && isLineStartOrWhitespaceOnly(sourceText, index)) {
+    if (character === "#" && isObjectiveCPreprocessorPrefix(result, index)) {
+      directiveStarts.add(index);
       result += " ";
       mode = "preprocessor";
       continue;
@@ -597,12 +602,87 @@ function sanitizeObjectiveCHeaderSource(sourceText: string): string {
     result += character;
   }
 
-  return result;
+  return blankUnknownObjectiveCHeaderConditionalRegions(sourceText, result, directiveStarts);
 }
 
-function isLineStartOrWhitespaceOnly(sourceText: string, index: number): boolean {
-  const lineStart = sourceText.lastIndexOf("\n", index - 1) + 1;
-  return /^[ \t]*$/u.test(sourceText.slice(lineStart, index));
+function blankUnknownObjectiveCHeaderConditionalRegions(
+  sourceText: string,
+  sanitizedText: string,
+  directiveStarts: ReadonlySet<number>
+): string | null {
+  const characters = sanitizedText.split("");
+  const stack: Array<{ sawElse: boolean }> = [];
+  const orderedDirectiveStarts = [...directiveStarts];
+  let directiveIndex = 0;
+  let lineStart = 0;
+
+  while (lineStart <= sourceText.length) {
+    const lineFeed = sourceText.indexOf("\n", lineStart);
+    const rawEnd = lineFeed === -1 ? sourceText.length : lineFeed;
+    const lineEnd = rawEnd > lineStart && sourceText[rawEnd - 1] === "\r" ? rawEnd - 1 : rawEnd;
+    const lineText = sourceText.slice(lineStart, lineEnd);
+    while ((orderedDirectiveStarts[directiveIndex] ?? Number.POSITIVE_INFINITY) < lineStart) {
+      directiveIndex += 1;
+    }
+    const candidateDirectiveOffset = orderedDirectiveStarts[directiveIndex];
+    const directiveOffset =
+      candidateDirectiveOffset !== undefined && candidateDirectiveOffset < lineEnd
+        ? candidateDirectiveOffset
+        : undefined;
+
+    if (directiveOffset !== undefined) {
+      directiveIndex += 1;
+      const directiveText = sourceText.slice(directiveOffset, lineEnd);
+      const directive = /^\s*#\s*([A-Za-z_][A-Za-z0-9_]*)\b(.*)$/u.exec(directiveText);
+      if (directive === null) {
+        return null;
+      }
+      const keyword = directive[1]?.toLowerCase();
+      const argument = directive[2]?.trim() ?? "";
+      if (keyword === "if" || keyword === "ifdef" || keyword === "ifndef") {
+        if (
+          argument.length === 0 ||
+          ((keyword === "ifdef" || keyword === "ifndef") &&
+            !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(argument))
+        ) {
+          return null;
+        }
+        stack.push({ sawElse: false });
+      } else if (keyword === "elif") {
+        const frame = stack.at(-1);
+        if (frame === undefined || frame.sawElse || argument.length === 0) {
+          return null;
+        }
+      } else if (keyword === "else") {
+        const frame = stack.at(-1);
+        if (frame === undefined || frame.sawElse || argument.length !== 0) {
+          return null;
+        }
+        frame.sawElse = true;
+      } else if (keyword === "endif") {
+        if (stack.length === 0 || argument.length !== 0) {
+          return null;
+        }
+        stack.pop();
+      }
+    } else if (stack.length > 0) {
+      for (let index = lineStart; index < lineEnd; index += 1) {
+        characters[index] = " ";
+      }
+    }
+
+    if (lineFeed === -1) {
+      break;
+    }
+    lineStart = lineFeed + 1;
+  }
+
+  return stack.length === 0 ? characters.join("") : null;
+}
+
+function isObjectiveCPreprocessorPrefix(sanitizedPrefix: string, index: number): boolean {
+  const lineStart = sanitizedPrefix.lastIndexOf("\n", index - 1) + 1;
+  return /^[ \t\f\v]*$/u.test(sanitizedPrefix.slice(lineStart, index));
 }
 
 function isPreprocessorContinuation(sourceText: string, lineFeedIndex: number): boolean {
