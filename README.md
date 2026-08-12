@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.394.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.395.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,11 +44,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.394.0 重點
+## v0.395.0 重點
 
-- 固定來源驗收使用官方 [`nim-lang/Nim` v2.2.10](https://github.com/nim-lang/Nim/tree/v2.2.10) 的 peeled commit [`bfeb3146d1638b39f69007a4ae5a23e23ae4e5ef`](https://github.com/nim-lang/Nim/tree/bfeb3146d1638b39f69007a4ae5a23e23ae4e5ef)，掃描完整 [`tests/ic/mimportsb.nim`](https://github.com/nim-lang/Nim/blob/bfeb3146d1638b39f69007a4ae5a23e23ae4e5ef/tests/ic/mimportsb.nim)。三項 B1 truth 為 `fnb1` function identity、`fnb2` function identity，以及檔案到 `fnb1` 的 exact containment；SymbolLattice 是 `TP 3／FP 0／FN 0`，CodeGraph 1.5 因未掃描 `.nim` 而是 `TP 0／FP 0／FN 3`。
-- Nim 驗收僅涵蓋由語法直接證明的頂層零參數 `proc` identity 與 containment；不宣稱 exported marker、overload、template、macro、iterator、UFCS、cross-file linking、runtime dispatch 或 direct-call 語義。
-- extractor facts 維持 v272，resolver 維持 v143。驗證環境沒有可用 Nim compiler／Nimble，因此原生驗證標示為 environment-blocked，不會誤報成執行通過或失敗。
+- 固定來源驗收使用官方 [`llvm/llvm-project` 20.1.8](https://github.com/llvm/llvm-project/tree/llvmorg-20.1.8) 的 commit [`87f0227cb60147a26a1eeb4fb06e3b505e9c7261`](https://github.com/llvm/llvm-project/tree/87f0227cb60147a26a1eeb4fb06e3b505e9c7261)，掃描完整 [`clang/test/CodeGenCXX/flatten.cpp`](https://github.com/llvm/llvm-project/blob/87f0227cb60147a26a1eeb4fb06e3b505e9c7261/clang/test/CodeGenCXX/flatten.cpp)。三項 B1 truth 為 `f` function identity、`g` function identity，以及 `g` 到 `f` 的 exact direct call；SymbolLattice 與 CodeGraph 1.5 都是 `TP 3／FP 0／FN 0`。
+- C++ direct-call exactness 現在對所有預處理 directive 保守停用，並拒絕 enum enumerator shadow、參數數量不符、overload／template declaration、local／type shadow、member／indirect／lambda call。不宣稱完整 overload resolution、default／variadic argument、include 或 runtime semantics。
+- extractor facts 更新為 v273，resolver 維持 v143。驗證環境沒有可用 Clang／G++，因此原生驗證標示為 environment-blocked，不會誤報成執行通過或失敗。
 
 ## MCP
 

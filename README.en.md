@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.394.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.395.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,11 +51,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.394.0 highlights
+## v0.395.0 highlights
 
-- Fixed-source acceptance uses official [`nim-lang/Nim` v2.2.10](https://github.com/nim-lang/Nim/tree/v2.2.10) at peeled commit [`bfeb3146d1638b39f69007a4ae5a23e23ae4e5ef`](https://github.com/nim-lang/Nim/tree/bfeb3146d1638b39f69007a4ae5a23e23ae4e5ef), scanning the complete [`tests/ic/mimportsb.nim`](https://github.com/nim-lang/Nim/blob/bfeb3146d1638b39f69007a4ae5a23e23ae4e5ef/tests/ic/mimportsb.nim). The three B1 truths are the `fnb1` function identity, the `fnb2` function identity, and exact file-to-`fnb1` containment; SymbolLattice scores `TP 3 / FP 0 / FN 0`, while CodeGraph 1.5 scores `TP 0 / FP 0 / FN 3` because it does not scan `.nim`.
-- Nim acceptance is limited to syntax-proven top-level zero-parameter `proc` identities and containment. It makes no claim about export markers, overloads, templates, macros, iterators, UFCS, cross-file linking, runtime dispatch, or direct-call semantics.
-- Extractor facts remain v272 and the resolver remains v143. Native Nim compiler and Nimble tools are unavailable in the validation environment, so native validation is marked environment-blocked rather than reported as passed or failed.
+- Fixed-source acceptance uses official [`llvm/llvm-project` 20.1.8](https://github.com/llvm/llvm-project/tree/llvmorg-20.1.8) at commit [`87f0227cb60147a26a1eeb4fb06e3b505e9c7261`](https://github.com/llvm/llvm-project/tree/87f0227cb60147a26a1eeb4fb06e3b505e9c7261), scanning the complete [`clang/test/CodeGenCXX/flatten.cpp`](https://github.com/llvm/llvm-project/blob/87f0227cb60147a26a1eeb4fb06e3b505e9c7261/clang/test/CodeGenCXX/flatten.cpp). The three B1 truths are the `f` function identity, the `g` function identity, and the exact direct call from `g` to `f`; SymbolLattice and CodeGraph 1.5 both score `TP 3 / FP 0 / FN 0`.
+- C++ direct-call exactness now fails closed for every preprocessing directive and rejects enum-enumerator shadowing, argument-count mismatches, overload or template declarations, local/type shadows, and member, indirect, or lambda calls. It does not claim complete overload resolution, default/variadic arguments, include semantics, or runtime behavior.
+- Extractor facts advance to v273 and the resolver remains v143. Clang and G++ are unavailable in the validation environment, so native validation is marked environment-blocked rather than reported as passed or failed.
 
 ## MCP
 

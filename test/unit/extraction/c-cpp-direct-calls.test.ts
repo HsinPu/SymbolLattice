@@ -387,4 +387,30 @@ describe("C and C++ same-file direct calls", () => {
     expect(functionId("cpp", sourceText, "caller")).toBeDefined();
     expect(callsFor("cpp", sourceText)).toEqual([]);
   });
+
+  it("fails closed for C++ preprocessing, enum enumerator shadows, and arity mismatches", () => {
+    const unsafeSources = [
+      ["disabled target", "#if 0\nint target() { return 0; }\n#endif\nint caller() { return target(); }"],
+      ["conditional callsite", "int target() { return 0; }\nint caller() {\n#if FEATURE\nreturn target();\n#endif\nreturn 0;\n}"],
+      ["unproven include", "#include \"foreign.h\"\nint target() { return 0; }\nint caller() { return target(); }"],
+      ["macro-expanded argument", "#define PAIR 1,2\nint target(int left, int right) { return left + right; }\nint caller() { return target(PAIR); }"],
+      ["enumerator shadow", "int target() { return 0; }\nint caller() { enum E { target = 1 }; return target(); }"],
+      ["missing argument", "int target(int value) { return value; }\nint caller() { return target(); }"],
+      ["extra argument", "int target() { return 0; }\nint caller() { return target(1); }"]
+    ] as const;
+
+    for (const [description, sourceText] of unsafeSources) {
+      expect(functionId("cpp", sourceText, "caller"), description).toBeDefined();
+      expect(callsFor("cpp", sourceText), description).toEqual([]);
+    }
+  });
+
+  it("retains exact C++ calls when bounded argument counts match", () => {
+    const sourceText = [
+      "int target(int value) { return value; }",
+      "int caller() { return target(1); }"
+    ].join("\n");
+
+    expect(callsFor("cpp", sourceText)).toHaveLength(1);
+  });
 });
