@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.377.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.378.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.377.0 highlights
+## v0.378.0 highlights
 
-- In fixed real-project acceptance for `abitofhelp/result` v1.0.0, Ada B1 scored `TP 3 / FP 0 / FN 0` for SymbolLattice and `TP 0 / FP 0 / FN 3` for CodeGraph.
-- An exact reference is emitted only from a root library package body to its canonical sibling `.ads` spec in the same directory, with one unique full name. Child units, custom filenames, renames, instances, subunits, duplicates, and forged or malformed facts all fail closed. This is not a general public claim of Ada cross-file support.
+- In fixed real-project acceptance for WordPress 6.7.0 (commit `262f4b6…`), using `load.php` as the source, identities for `wp_get_development_mode` and `wp_is_development_mode` plus their same-file direct call scored `TP 3 / FP 0 / FN 0` for SymbolLattice and `TP 3 / FP 0 / FN 0` for CodeGraph.
+- There is no product semantic change in this release; extractor v264 and resolver v143 are unchanged. Namespace, include, autoload, method, hook, and runtime relationships are not claims of this acceptance; the native PHP/Composer environment check is environment-blocked.
 
 ## MCP
 

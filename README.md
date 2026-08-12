@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.377.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.378.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 專案用途
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.377.0 重點
+## v0.378.0 重點
 
-- 在固定的 `abitofhelp/result` v1.0.0 真實專案驗收中，Ada B1 的結果為 SymbolLattice `TP 3 / FP 0 / FN 0`、CodeGraph `TP 0 / FP 0 / FN 3`。
-- 只對同一目錄、canonical sibling `.adb`／`.ads` 且完整名稱唯一的 root library package body → spec 建立 exact reference。child/custom filename、rename、instance、subunit、duplicate，以及偽造或 malformed fact 全部 fail-closed；不宣稱泛用的 Ada 跨檔案支援。
+- 在固定的 WordPress 6.7.0（commit `262f4b6…`）真實專案驗收中，來源為 `load.php`：`wp_get_development_mode` 與 `wp_is_development_mode` identity，以及同檔案 direct call，SymbolLattice 為 `TP 3 / FP 0 / FN 0`，CodeGraph 為 `TP 3 / FP 0 / FN 0`。
+- 此版沒有產品語意變更；extractor v264 與 resolver v143 維持不變。namespace、include、autoload、method、hook 與 runtime 關係不在此驗收的宣稱範圍；PHP／Composer 原生環境檢查為 environment-blocked。
 
 ## MCP
 
