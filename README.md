@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.381.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.382.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,11 +44,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.381.0 重點
+## v0.382.0 重點
 
-- 固定 fixture 驗收採用 `leafo/lapis` v1.18.0 的 `example.lua` inline routes，commit `7c9f0ceebd869e64f3379da596ccad389c8a55c4`，授權為 MIT。SymbolLattice 為 `TP 3 / FP 0 / FN 0`；CodeGraph 1.5 為 `TP 0 / FP 0 / FN 3`。
-- 僅當匿名函式直接作為 literal Lapis route registration 的 handler 時，才建立 exact route 關係。direct call、`require`、imported handler、inline wrapped handler、metatable 與 dynamic dispatch 都不會據此成為 exact。
-- Lua 抽取器維持保守邊界：extractor facts 為 v269，resolver 為 v143；不宣稱 runtime behavior。
+- 固定 fixture 採用官方 [`luau-lang/luau`](https://github.com/luau-lang/luau) tag `0.731`、commit `f8ca77…`（MIT）。官方第 15–30 行的逐位元組切片 SHA-256 為 `75f55…`，完整來源 SHA-256 為 `66cf…`；切片上 SymbolLattice 與 CodeGraph 均為 `TP 3 / FP 0 / FN 0`。
+- 完整檔案基準另行呈現：SymbolLattice `TP 2 / FP 0 / FN 1`、CodeGraph `TP 3 / FP 0 / FN 0`，因檔案含頂層測試 harness 設定。受限規則只對支援引數串列的裸函式呼叫建立 exact 關係，不宣稱完整性。
+- generic 或 module method 呼叫、頂層設定、runtime behavior 與 native semantics 均不在規則範圍。extractor facts 為 v270；resolver 維持 v143。
 
 ## MCP
 

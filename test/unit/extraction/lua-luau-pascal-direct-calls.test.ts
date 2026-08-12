@@ -464,6 +464,97 @@ end`
     ]);
   });
 
+  it("emits one exact Luau typed bare-function call with a bounded argument list", () => {
+    const facts = extractLuaFileFacts({
+      filePath: "tests/conformance/jit_inliner.luau",
+      language: "luau",
+      sourceText: `local function compute(a: number, b: number): number
+  return a + b
+end
+
+local function caller(): number
+  return compute(2.0, 0.5)
+end`
+    });
+    const caller = functionByName(facts, "caller");
+    const callee = functionByName(facts, "compute");
+
+    expect(calls(facts)).toEqual([
+      expect.objectContaining({
+        sourceId: caller.id,
+        targetId: callee.id,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: "compute",
+        evidence: {
+          ruleId: "syntax.luau.same-file.unique-bounded-argument-bare-function-call",
+          stage: "syntax",
+          candidateSymbolIds: [callee.id]
+        }
+      })
+    ]);
+  });
+
+  it("fails closed for malformed Luau bare-function argument lists", () => {
+    const sources = [
+      ["missing comma", `local function helper(value: number): number return value end\nlocal function entry(): number return helper(1 2) end`],
+      ["repeated comma", `local function helper(first: number, second: number): number return first + second end\nlocal function entry(): number return helper(1,, 2) end`],
+      ["incomplete table", `local function helper(value: unknown): unknown return value end\nlocal function entry(): unknown return helper({ value = }) end`],
+      ["incomplete nested call", `local function helper(value: number): number return value end\nlocal function other(value: number): number return value end\nlocal function entry(): number return helper(other(1,)) end`]
+    ] as const;
+
+    for (const [description, sourceText] of sources) {
+      const facts = extractLuaFileFacts({
+        filePath: "tests/conformance/jit_inliner.luau",
+        language: "luau",
+        sourceText
+      });
+      expect(calls(facts), description).toEqual([]);
+    }
+  });
+
+  it("fails closed for invalid Luau caller bodies around otherwise direct calls", () => {
+    const sources = [
+      ["trailing return expression", `local function target(): number return 1 end\nlocal function caller(): number return target() 1 end`],
+      ["missing local name", `local function target(): number return 1 end\nlocal function caller(): number local = 1; return target() end`],
+      ["break outside loop", `local function target(): number return 1 end\nlocal function caller(): number break; return target() end`],
+      ["trailing argument-call expression", `local function target(value: number): number return value end\nlocal function caller(): number return target(1) 2 end`],
+      ["invalid statement before return", `local function target(value: number): number return value end\nlocal function caller(): number target(1); local = 2 end`]
+    ] as const;
+
+    for (const [description, sourceText] of sources) {
+      const facts = extractLuaFileFacts({
+        filePath: "tests/conformance/jit_inliner.luau",
+        language: "luau",
+        sourceText
+      });
+      expect(calls(facts), description).toEqual([]);
+    }
+  });
+
+  it("fails closed for malformed Luau caller and target signatures", () => {
+    const callerSources = [
+      ["missing parameter type", `local function target(): number return 1 end\nlocal function caller(a:): number return target() end`],
+      ["missing parameter colon", `local function target(): number return 1 end\nlocal function caller(a number): number return target() end`],
+      ["missing parameter comma", `local function target(): number return 1 end\nlocal function caller(a: number b: string): number return target() end`],
+      ["missing parameter name", `local function target(): number return 1 end\nlocal function caller(: number): number return target() end`],
+      ["trailing parameter comma", `local function target(): number return 1 end\nlocal function caller(a: number,): number return target() end`]
+    ] as const;
+    const targetSources = [
+      ["missing target parameter type", `local function target(a:): number return 1 end\nlocal function caller(): number return target(1) end`],
+      ["missing target return type", `local function target(): return 1 end\nlocal function caller(): number return target() end`]
+    ] as const;
+
+    for (const [description, sourceText] of [...callerSources, ...targetSources]) {
+      const facts = extractLuaFileFacts({
+        filePath: "tests/conformance/jit_inliner.luau",
+        language: "luau",
+        sourceText
+      });
+      expect(calls(facts), description).toEqual([]);
+    }
+  });
+
   it("emits one exact Pascal zero-argument bare routine call with unique target evidence", () => {
     const facts = extractPascalFileFacts({
       filePath: "src/smoke.pas",

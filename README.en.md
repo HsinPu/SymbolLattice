@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.381.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.382.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,11 +51,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.381.0 highlights
+## v0.382.0 highlights
 
-- Fixed-fixture acceptance uses the `example.lua` inline routes from `leafo/lapis` v1.18.0 at commit `7c9f0ceebd869e64f3379da596ccad389c8a55c4` (MIT). SymbolLattice scores `TP 3 / FP 0 / FN 0`; CodeGraph 1.5 scores `TP 0 / FP 0 / FN 3`.
-- An exact route relation is created only when an anonymous function is directly the handler of a literal Lapis route registration. Direct calls, `require`, imported handlers, inline wrapped handlers, metatables, and dynamic dispatch do not become exact through this rule.
-- Lua extraction keeps conservative boundaries: extractor facts are v269 and the resolver is v143. It makes no runtime-behavior claim.
+- Fixed-fixture acceptance uses the official [`luau-lang/luau`](https://github.com/luau-lang/luau) tag `0.731` at commit `f8ca77…` (MIT). Its byte-exact official lines 15–30 slice is SHA-256 `75f55…`; the complete source is SHA-256 `66cf…`. On the slice, SymbolLattice and CodeGraph each score `TP 3 / FP 0 / FN 0`.
+- The complete-file baseline is reported separately: SymbolLattice `TP 2 / FP 0 / FN 1`, CodeGraph `TP 3 / FP 0 / FN 0`, because the file includes top-level test harness setup. The bounded rule emits only an exact bare-function call with a supported argument list; it makes no completeness claim.
+- Generic or module-method calls, top-level setup, runtime behavior, and native semantics remain outside the rule. Extractor facts are v270; the resolver remains v143.
 
 ## MCP
 

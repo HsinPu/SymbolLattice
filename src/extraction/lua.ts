@@ -49,6 +49,7 @@ interface LuaStructure {
 
 interface StaticLuaFunction {
   readonly name: string;
+  readonly functionIndex: number;
   readonly start: number;
   readonly end: number;
   readonly isLocal: boolean;
@@ -88,8 +89,14 @@ interface StaticLapisEnable {
 interface StaticLuaDirectCall {
   readonly caller: StaticLuaFunction;
   readonly targetName: string;
+  readonly hasArguments: boolean;
   readonly start: number;
   readonly end: number;
+}
+
+interface BoundedLuauFunctionSignature {
+  readonly functionEndIndex: number;
+  readonly bodyStart: number;
 }
 
 const LUA_KEYWORDS = new Set([
@@ -493,6 +500,7 @@ function collectTopLevelFunctions(
     }
     functions.push({
       name,
+      functionIndex: index,
       start: isLocal ? (previous?.start ?? functionToken.start) : functionToken.start,
       end: endToken.end,
       isLocal
@@ -686,7 +694,7 @@ function hasLuaTargetMutationOrEnvironmentReflection(
 }
 
 /**
- * Collects only calls whose lexical shape is a bare `name()` directly in a
+ * Collects only calls whose lexical shape is a bare `name(arguments)` directly in a
  * top-level function body. The deliberately broad environment gate keeps this
  * B1 pass out of Lua's mutable global/import and metatable semantics.
  */
@@ -701,21 +709,14 @@ function collectStaticLuaDirectCalls(
   }
   const calls: StaticLuaDirectCall[] = [];
   for (const caller of functions) {
-    const functionIndex = structure.tokens.findIndex(
-      (token, index) =>
-        token.text === "function" &&
-        structure.depthBefore[index] === 0 &&
-        token.start >= caller.start &&
-        identifierText(structure.tokens[index + 1]) === caller.name
-    );
-    const functionEndIndex =
-      functionIndex < 0 ? undefined : structure.functionEnds.get(functionIndex);
-    const parametersEnd =
-      functionIndex < 0 ? undefined : structure.pairedParentheses.get(functionIndex + 2);
-    if (functionIndex < 0 || functionEndIndex === undefined || parametersEnd === undefined) {
+    const signature = boundedLuauFunctionSignature(structure, caller.functionIndex);
+    if (
+      signature === null ||
+      !hasValidLuaFunctionBody(sourceText, structure, signature.bodyStart, signature.functionEndIndex)
+    ) {
       continue;
     }
-    for (let index = parametersEnd + 1; index < functionEndIndex; index += 1) {
+    for (let index = signature.bodyStart; index < signature.functionEndIndex; index += 1) {
       const token = structure.tokens[index];
       const targetName = identifierText(token);
       const close = structure.pairedParentheses.get(index + 1);
@@ -727,16 +728,22 @@ function collectStaticLuaDirectCalls(
         structure.tokens[index - 1]?.text === ":" ||
         structure.tokens[index + 1]?.text !== "(" ||
         close === undefined ||
-        close !== index + 2 ||
+        !hasValidLuaCallArgumentList(sourceText, structure, index + 1, close) ||
         (rebindings.get(targetName)?.length ?? 0) > 0 ||
         hasLuaTargetMutationOrEnvironmentReflection(structure, targetName) ||
-        hasLuaLexicalShadow(structure, functionIndex, functionEndIndex, targetName)
+        hasLuaLexicalShadow(structure, caller.functionIndex, signature.functionEndIndex, targetName)
       ) {
         continue;
       }
       const closingToken = structure.tokens[close];
       if (closingToken !== undefined) {
-        calls.push({ caller, targetName, start: token.start, end: closingToken.end });
+        calls.push({
+          caller,
+          targetName,
+          hasArguments: close !== index + 2,
+          start: token.start,
+          end: closingToken.end
+        });
       }
     }
   }
@@ -1020,6 +1027,10 @@ class BoundedLuaHandlerParser {
     return true;
   }
 
+  public parseExpressionListOnly(): boolean {
+    return this.parseExpressionList() && this.position === this.end;
+  }
+
   private parseLocalDeclaration(): boolean {
     if (identifierText(this.token()) === null) {
       return false;
@@ -1270,6 +1281,103 @@ class BoundedLuaHandlerParser {
     const index = this.position + offset;
     return index < this.end ? this.structure.tokens[index] : undefined;
   }
+}
+
+function hasValidLuaCallArgumentList(
+  sourceText: string,
+  structure: LuaStructure,
+  openingParenthesis: number,
+  closingParenthesis: number
+): boolean {
+  if (openingParenthesis + 1 === closingParenthesis) {
+    return true;
+  }
+  return new BoundedLuaHandlerParser(
+    sourceText,
+    structure,
+    openingParenthesis + 1,
+    closingParenthesis
+  ).parseExpressionListOnly();
+}
+
+function luauFunctionBodyStart(
+  structure: LuaStructure,
+  afterParameters: number,
+  functionEnd: number | undefined
+): number | null {
+  if (functionEnd === undefined) {
+    return null;
+  }
+  if (structure.tokens[afterParameters]?.text !== ":") {
+    return afterParameters;
+  }
+  return identifierText(structure.tokens[afterParameters + 1]) !== null && afterParameters + 2 <= functionEnd
+    ? afterParameters + 2
+    : null;
+}
+
+function hasValidBoundedLuauParameters(
+  structure: LuaStructure,
+  openingParenthesis: number,
+  closingParenthesis: number
+): boolean {
+  let cursor = openingParenthesis + 1;
+  if (cursor === closingParenthesis) {
+    return true;
+  }
+  while (cursor < closingParenthesis) {
+    if (identifierText(structure.tokens[cursor]) === null) {
+      return false;
+    }
+    cursor += 1;
+    if (structure.tokens[cursor]?.text === ":") {
+      if (identifierText(structure.tokens[cursor + 1]) === null) {
+        return false;
+      }
+      cursor += 2;
+    }
+    if (cursor === closingParenthesis) {
+      return true;
+    }
+    if (structure.tokens[cursor]?.text !== ",") {
+      return false;
+    }
+    cursor += 1;
+    if (cursor === closingParenthesis) {
+      return false;
+    }
+  }
+  return false;
+}
+
+function boundedLuauFunctionSignature(
+  structure: LuaStructure,
+  functionIndex: number
+): BoundedLuauFunctionSignature | null {
+  const openingParenthesis = functionIndex + 2;
+  const closingParenthesis = structure.pairedParentheses.get(openingParenthesis);
+  const functionEndIndex = structure.functionEnds.get(functionIndex);
+  if (
+    structure.tokens[functionIndex]?.text !== "function" ||
+    identifierText(structure.tokens[functionIndex + 1]) === null ||
+    structure.tokens[openingParenthesis]?.text !== "(" ||
+    closingParenthesis === undefined ||
+    functionEndIndex === undefined ||
+    !hasValidBoundedLuauParameters(structure, openingParenthesis, closingParenthesis)
+  ) {
+    return null;
+  }
+  const bodyStart = luauFunctionBodyStart(structure, closingParenthesis + 1, functionEndIndex);
+  return bodyStart === null ? null : { functionEndIndex, bodyStart };
+}
+
+function hasValidLuaFunctionBody(
+  sourceText: string,
+  structure: LuaStructure,
+  bodyStart: number,
+  functionEnd: number
+): boolean {
+  return new BoundedLuaHandlerParser(sourceText, structure, bodyStart, functionEnd).parse();
 }
 
 function hasValidInlineFunctionBody(
@@ -1663,7 +1771,9 @@ export function extractLuaFileFacts(input: LuaExtractFileFactsInput): ArtifactFa
       confidence: 1,
       referenceName: call.targetName,
       evidence: {
-        ruleId: `syntax.${input.language}.same-file.unique-zero-argument-bare-function-call`,
+        ruleId: call.hasArguments
+          ? `syntax.${input.language}.same-file.unique-bounded-argument-bare-function-call`
+          : `syntax.${input.language}.same-file.unique-zero-argument-bare-function-call`,
         stage: "syntax",
         candidateSymbolIds: [callee.id]
       }
@@ -1689,7 +1799,12 @@ export function extractLuaFileFacts(input: LuaExtractFileFactsInput): ArtifactFa
         if (callerCandidates.length === 1 && targetCandidates.length === 1) {
           const caller = callerCandidates[0];
           const target = targetCandidates[0];
-          if (caller !== undefined && target !== undefined) {
+          if (
+            caller !== undefined &&
+            target !== undefined &&
+            boundedLuauFunctionSignature(structure, caller.declaration.functionIndex) !== null &&
+            boundedLuauFunctionSignature(structure, target.declaration.functionIndex) !== null
+          ) {
             addDirectCall(call, caller.symbol, target.symbol);
           }
         }
