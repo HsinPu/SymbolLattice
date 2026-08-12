@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.390.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.391.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,11 +51,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.390.0 highlights
+## v0.391.0 highlights
 
-- Fixed-source acceptance uses official [`JuliaLang/julia` v1.12.6](https://github.com/JuliaLang/julia/tree/v1.12.6) at commit [`15346901f0039751c5488744f1f62de7d87510a8`](https://github.com/JuliaLang/julia/tree/15346901f0039751c5488744f1f62de7d87510a8), scanning the complete [`base/pkgid.jl`](https://github.com/JuliaLang/julia/blob/15346901f0039751c5488744f1f62de7d87510a8/base/pkgid.jl). The three B1 truths are the `PkgId` function identity, the `show` function identity, and exact file-to-`PkgId` containment; SymbolLattice scores `TP 3 / FP 0 / FN 0`, while CodeGraph 1.5 scores `TP 0 / FP 0 / FN 3` because it does not scan `.jl`.
-- Julia acceptance is limited to syntax-proven short-form function declarations and containment. It makes no claim about multimethod dispatch, complete block-form functions, macro expansion, module exports, runtime dispatch, or direct-call semantics.
-- Extractor facts remain v272 and the resolver remains v143. If native Julia tools are unavailable in the validation environment, native validation is marked environment-blocked rather than reported as passed or failed.
+- Fixed-source acceptance uses official [`haskell/bytestring` 0.12.2.0](https://github.com/haskell/bytestring/tree/0.12.2.0) at commit [`d984ad00644c0157bad04900434b9d36f23633c5`](https://github.com/haskell/bytestring/tree/d984ad00644c0157bad04900434b9d36f23633c5), scanning the complete [`Data/ByteString/Builder/Extra.hs`](https://github.com/haskell/bytestring/blob/d984ad00644c0157bad04900434b9d36f23633c5/Data/ByteString/Builder/Extra.hs). The three B1 truths are the `intHost` function identity, the `int16Host` function identity, and exact file-to-`intHost` containment; SymbolLattice scores `TP 3 / FP 0 / FN 0`, while CodeGraph 1.5 scores `TP 0 / FP 0 / FN 3` because it does not scan `.hs`.
+- Haskell acceptance is limited to syntax-proven top-level function equations and containment. It makes no claim about typeclass resolution, module exports, qualified imports, operators, Template Haskell, runtime dispatch, or direct-call semantics.
+- Extractor facts remain v272 and the resolver remains v143. If native GHC, Cabal, or Stack tools are unavailable in the validation environment, native validation is marked environment-blocked rather than reported as passed or failed.
 
 ## MCP
 

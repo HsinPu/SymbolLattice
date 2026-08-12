@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.390.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.391.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,11 +44,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.390.0 重點
+## v0.391.0 重點
 
-- 固定來源驗收使用官方 [`JuliaLang/julia` v1.12.6](https://github.com/JuliaLang/julia/tree/v1.12.6) 的 commit [`15346901f0039751c5488744f1f62de7d87510a8`](https://github.com/JuliaLang/julia/tree/15346901f0039751c5488744f1f62de7d87510a8)，掃描完整 [`base/pkgid.jl`](https://github.com/JuliaLang/julia/blob/15346901f0039751c5488744f1f62de7d87510a8/base/pkgid.jl)。三項 B1 truth 為 `PkgId` function identity、`show` function identity，以及檔案到 `PkgId` 的 exact containment；SymbolLattice 是 `TP 3／FP 0／FN 0`，CodeGraph 1.5 因未掃描 `.jl` 而是 `TP 0／FP 0／FN 3`。
-- Julia 驗收僅涵蓋由語法直接證明的短式 function declarations 與 containment；不宣稱 multimethod dispatch、完整 block-form function、macro expansion、module export、runtime dispatch 或 direct-call 語義。
-- extractor facts 維持 v272，resolver 維持 v143。驗證環境中的原生 Julia 工具若不可用，會標示為 environment-blocked，不會誤報成執行通過或失敗。
+- 固定來源驗收使用官方 [`haskell/bytestring` 0.12.2.0](https://github.com/haskell/bytestring/tree/0.12.2.0) 的 commit [`d984ad00644c0157bad04900434b9d36f23633c5`](https://github.com/haskell/bytestring/tree/d984ad00644c0157bad04900434b9d36f23633c5)，掃描完整 [`Data/ByteString/Builder/Extra.hs`](https://github.com/haskell/bytestring/blob/d984ad00644c0157bad04900434b9d36f23633c5/Data/ByteString/Builder/Extra.hs)。三項 B1 truth 為 `intHost` function identity、`int16Host` function identity，以及檔案到 `intHost` 的 exact containment；SymbolLattice 是 `TP 3／FP 0／FN 0`，CodeGraph 1.5 因未掃描 `.hs` 而是 `TP 0／FP 0／FN 3`。
+- Haskell 驗收僅涵蓋由語法直接證明的頂層 function equations 與 containment；不宣稱 typeclass resolution、module export、qualified import、operator、Template Haskell、runtime dispatch 或 direct-call 語義。
+- extractor facts 維持 v272，resolver 維持 v143。驗證環境中的原生 GHC／Cabal／Stack 工具若不可用，會標示為 environment-blocked，不會誤報成執行通過或失敗。
 
 ## MCP
 
