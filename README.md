@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.393.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.394.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,11 +44,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.393.0 重點
+## v0.394.0 重點
 
-- 固定來源驗收使用官方 [`dotnet/fsharp` v14.0.111](https://github.com/dotnet/fsharp/tree/v14.0.111) 的 commit [`b611d184a141d1ad1994ff59c01fecc10f787a89`](https://github.com/dotnet/fsharp/tree/b611d184a141d1ad1994ff59c01fecc10f787a89)，掃描完整 [`CustomCollectionBuilderComputationExpr.fs`](https://github.com/dotnet/fsharp/blob/b611d184a141d1ad1994ff59c01fecc10f787a89/tests/FSharp.Compiler.ComponentTests/EmittedIL/ComputationExpressions/CustomCollectionBuilderComputationExpr.fs)。三項 B1 truth 為 `f0` function identity、`f1` function identity，以及檔案到 `f0` 的 exact containment；SymbolLattice 是 `TP 3／FP 0／FN 0`，CodeGraph 1.5 因未掃描 `.fs` 而是 `TP 0／FP 0／FN 3`。
-- F# 驗收僅涵蓋由語法直接證明的頂層零參數 `let` function 與 containment；不宣稱 computation-expression、module export、type inference、member dispatch、cross-file linking、runtime dispatch 或 direct-call 語義。
-- extractor facts 維持 v272，resolver 維持 v143。驗證環境雖有 .NET host，但沒有可用 SDK／F# Interactive／F# compiler，因此原生驗證標示為 environment-blocked，不會誤報成執行通過或失敗。
+- 固定來源驗收使用官方 [`nim-lang/Nim` v2.2.10](https://github.com/nim-lang/Nim/tree/v2.2.10) 的 peeled commit [`bfeb3146d1638b39f69007a4ae5a23e23ae4e5ef`](https://github.com/nim-lang/Nim/tree/bfeb3146d1638b39f69007a4ae5a23e23ae4e5ef)，掃描完整 [`tests/ic/mimportsb.nim`](https://github.com/nim-lang/Nim/blob/bfeb3146d1638b39f69007a4ae5a23e23ae4e5ef/tests/ic/mimportsb.nim)。三項 B1 truth 為 `fnb1` function identity、`fnb2` function identity，以及檔案到 `fnb1` 的 exact containment；SymbolLattice 是 `TP 3／FP 0／FN 0`，CodeGraph 1.5 因未掃描 `.nim` 而是 `TP 0／FP 0／FN 3`。
+- Nim 驗收僅涵蓋由語法直接證明的頂層零參數 `proc` identity 與 containment；不宣稱 exported marker、overload、template、macro、iterator、UFCS、cross-file linking、runtime dispatch 或 direct-call 語義。
+- extractor facts 維持 v272，resolver 維持 v143。驗證環境沒有可用 Nim compiler／Nimble，因此原生驗證標示為 environment-blocked，不會誤報成執行通過或失敗。
 
 ## MCP
 
