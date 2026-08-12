@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.398.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.399.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,11 +44,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.398.0 重點
+## v0.399.0 重點
 
-- 固定來源驗收使用官方 [`Kotlin/kotlin-koans`](https://github.com/Kotlin/kotlin-koans) 的 commit [`5935a3cab5293bd7967b1bf1f4d2ae713f9e0e9e`](https://github.com/Kotlin/kotlin-koans/tree/5935a3cab5293bd7967b1bf1f4d2ae713f9e0e9e)，掃描完整 [`test/i_introduction/_0_Hello_World/N00StartKtTest.kt`](https://github.com/Kotlin/kotlin-koans/blob/5935a3cab5293bd7967b1bf1f4d2ae713f9e0e9e/test/i_introduction/_0_Hello_World/N00StartKtTest.kt)。三項 B1 truth 為 `N00StartKtTest` class identity、`testOk` method identity，以及 class 到 method 的 exact containment；SymbolLattice 與 CodeGraph 1.5 都是 `TP 3／FP 0／FN 0`。
-- 本版驗收既有 Kotlin symbol／containment 表面，不把 JUnit annotation、`assertEquals`、`task0` 或 runtime 行為算成 truth，也不宣稱 dependency resolution 或跨檔案語義。
-- extractor facts 維持 v274，resolver 維持 v143。驗證環境沒有可用 Kotlin compiler/runtime 時，原生驗證會標示為 environment-blocked，不會誤報成執行通過或失敗。
+- 固定來源驗收使用官方 [`apple/swift-log`](https://github.com/apple/swift-log) 1.6.4 的 peeled commit [`ce592ae52f982c847a4efc0dd881cc9eb32d29f2`](https://github.com/apple/swift-log/tree/ce592ae52f982c847a4efc0dd881cc9eb32d29f2)，掃描完整 [`Tests/LoggingTests/TestSendable.swift`](https://github.com/apple/swift-log/blob/ce592ae52f982c847a4efc0dd881cc9eb32d29f2/Tests/LoggingTests/TestSendable.swift)。三項 B1 truth 為 `SendableTest` class identity、`testSendableLogger` method identity，以及 class 到 method 的 exact containment；SymbolLattice 與 CodeGraph 1.5 都是 `TP 3／FP 0／FN 0`。
+- 本版驗收既有 Swift symbol／containment 表面，不把 XCTest import、method body 內的 logger calls、concurrency 或 runtime 行為算成 truth，也不宣稱 dependency resolution 或跨檔案語義。
+- extractor facts 維持 v274，resolver 維持 v143。驗證環境沒有可用 Swift compiler/runtime 時，原生驗證會標示為 environment-blocked，不會誤報成執行通過或失敗。
 
 ## MCP
 
