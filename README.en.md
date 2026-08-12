@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.392.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.393.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,11 +51,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.392.0 highlights
+## v0.393.0 highlights
 
-- Fixed-source acceptance uses official [`ocaml/ocaml` 5.5.0](https://github.com/ocaml/ocaml/tree/5.5.0) at peeled commit [`f5238509da6029a44ba0eb648f5dff7d9c89f519`](https://github.com/ocaml/ocaml/tree/f5238509da6029a44ba0eb648f5dff7d9c89f519), scanning the complete [`middle_end/linkage_name.ml`](https://github.com/ocaml/ocaml/blob/f5238509da6029a44ba0eb648f5dff7d9c89f519/middle_end/linkage_name.ml). The three B1 truths are the `create` function identity, the `to_string` function identity, and exact file-to-`create` containment; SymbolLattice scores `TP 3 / FP 0 / FN 0`, while CodeGraph 1.5 scores `TP 0 / FP 0 / FN 3` because it does not scan `.ml`.
-- OCaml acceptance is limited to syntax-proven top-level `let` functions and containment. It makes no claim about module signatures, functors, type inference, operators, pattern dispatch, cross-file linking, runtime dispatch, or direct-call semantics.
-- Extractor facts remain v272 and the resolver remains v143. If native OCaml, ocamlc, opam, or Dune tools are unavailable in the validation environment, native validation is marked environment-blocked rather than reported as passed or failed.
+- Fixed-source acceptance uses official [`dotnet/fsharp` v14.0.111](https://github.com/dotnet/fsharp/tree/v14.0.111) at commit [`b611d184a141d1ad1994ff59c01fecc10f787a89`](https://github.com/dotnet/fsharp/tree/b611d184a141d1ad1994ff59c01fecc10f787a89), scanning the complete [`CustomCollectionBuilderComputationExpr.fs`](https://github.com/dotnet/fsharp/blob/b611d184a141d1ad1994ff59c01fecc10f787a89/tests/FSharp.Compiler.ComponentTests/EmittedIL/ComputationExpressions/CustomCollectionBuilderComputationExpr.fs). The three B1 truths are the `f0` function identity, the `f1` function identity, and exact file-to-`f0` containment; SymbolLattice scores `TP 3 / FP 0 / FN 0`, while CodeGraph 1.5 scores `TP 0 / FP 0 / FN 3` because it does not scan `.fs`.
+- F# acceptance is limited to syntax-proven top-level zero-parameter `let` functions and containment. It makes no claim about computation expressions, module exports, type inference, member dispatch, cross-file linking, runtime dispatch, or direct-call semantics.
+- Extractor facts remain v272 and the resolver remains v143. The validation environment has a .NET host but no usable SDK, F# Interactive, or F# compiler, so native validation is marked environment-blocked rather than reported as passed or failed.
 
 ## MCP
 
