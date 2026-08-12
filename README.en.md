@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.399.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.400.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,11 +51,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.399.0 highlights
+## v0.400.0 highlights
 
-- Fixed-source acceptance uses official [`apple/swift-log`](https://github.com/apple/swift-log) 1.6.4 at peeled commit [`ce592ae52f982c847a4efc0dd881cc9eb32d29f2`](https://github.com/apple/swift-log/tree/ce592ae52f982c847a4efc0dd881cc9eb32d29f2), scanning the complete [`Tests/LoggingTests/TestSendable.swift`](https://github.com/apple/swift-log/blob/ce592ae52f982c847a4efc0dd881cc9eb32d29f2/Tests/LoggingTests/TestSendable.swift). The three B1 truths are the `SendableTest` class identity, the `testSendableLogger` method identity, and exact class-to-method containment; SymbolLattice and CodeGraph 1.5 both score `TP 3 / FP 0 / FN 0`.
-- This release qualifies the existing Swift symbol/containment surface. XCTest imports, logger calls inside the method body, concurrency, and runtime behavior are not truths, and no dependency-resolution or cross-file semantic claim is made.
-- Extractor facts remain v274 and the resolver remains v143. If a Swift compiler/runtime is unavailable in the validation environment, native validation is marked environment-blocked rather than reported as passed or failed.
+- Fixed-source acceptance uses official [`dart-lang/samples`](https://github.com/dart-lang/samples) at commit [`adebcfac11d1e5119ed46055635d41b1d3cce7e5`](https://github.com/dart-lang/samples/tree/adebcfac11d1e5119ed46055635d41b1d3cce7e5), scanning the complete [`null_safety/calculate_lix/lib/lix.dart`](https://github.com/dart-lang/samples/blob/adebcfac11d1e5119ed46055635d41b1d3cce7e5/null_safety/calculate_lix/lib/lix.dart). The three B1 truths are the `Lix` class identity, the `describe` method identity, and exact class-to-method containment; SymbolLattice and CodeGraph 1.5 both score `TP 3 / FP 0 / FN 0`.
+- This release qualifies the existing Dart symbol/containment surface. The constructor, `_calculate()` member call, runtime behavior, and package dependencies are not truths, and no cross-file semantic claim is made.
+- Extractor facts remain v274 and the resolver remains v143. If a Dart SDK/runtime is unavailable in the validation environment, native validation is marked environment-blocked rather than reported as passed or failed.
 
 ## MCP
 
