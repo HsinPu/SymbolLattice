@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.389.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.390.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,11 +51,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.389.0 highlights
+## v0.390.0 highlights
 
-- Fixed-source acceptance uses official [`Perl/perl5` v5.40.0](https://github.com/Perl/perl5/tree/v5.40.0) at commit [`f22a16ecf4821b7e93d2569f630817a2631fddd9`](https://github.com/Perl/perl5/tree/f22a16ecf4821b7e93d2569f630817a2631fddd9), scanning the complete [`lib/SelectSaver.pm`](https://github.com/Perl/perl5/blob/f22a16ecf4821b7e93d2569f630817a2631fddd9/lib/SelectSaver.pm). The three B1 truths are the `SelectSaver` package identity, the `new` function identity, and exact package-to-function containment; SymbolLattice scores `TP 3 / FP 0 / FN 0`, while CodeGraph 1.5 scores `TP 0 / FP 0 / FN 3` because it does not scan `.pm`.
-- Perl acceptance is limited to these syntax-proven declarations and containment. It makes no claim about method/direct calls, dynamic loading, typeglob mutation, Dancer2 routes, Perl runtime behavior, or package exports.
-- Extractor facts remain v272 and the resolver remains v143. If native Perl tools are unavailable in the validation environment, native validation is marked environment-blocked rather than reported as passed or failed.
+- Fixed-source acceptance uses official [`JuliaLang/julia` v1.12.6](https://github.com/JuliaLang/julia/tree/v1.12.6) at commit [`15346901f0039751c5488744f1f62de7d87510a8`](https://github.com/JuliaLang/julia/tree/15346901f0039751c5488744f1f62de7d87510a8), scanning the complete [`base/pkgid.jl`](https://github.com/JuliaLang/julia/blob/15346901f0039751c5488744f1f62de7d87510a8/base/pkgid.jl). The three B1 truths are the `PkgId` function identity, the `show` function identity, and exact file-to-`PkgId` containment; SymbolLattice scores `TP 3 / FP 0 / FN 0`, while CodeGraph 1.5 scores `TP 0 / FP 0 / FN 3` because it does not scan `.jl`.
+- Julia acceptance is limited to syntax-proven short-form function declarations and containment. It makes no claim about multimethod dispatch, complete block-form functions, macro expansion, module exports, runtime dispatch, or direct-call semantics.
+- Extractor facts remain v272 and the resolver remains v143. If native Julia tools are unavailable in the validation environment, native validation is marked environment-blocked rather than reported as passed or failed.
 
 ## MCP
 
