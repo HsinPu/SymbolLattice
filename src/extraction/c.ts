@@ -44,6 +44,31 @@ interface StaticCivetWebRoute {
   readonly node: CSyntaxNode;
 }
 
+interface CParameterContract {
+  readonly signature: string;
+  readonly minimumArgumentCount: number;
+  readonly variadic: boolean;
+}
+
+interface CFunctionContract {
+  readonly returnType: string;
+  readonly parameters: CParameterContract;
+}
+
+interface DirectCFunctionCall {
+  readonly name: string;
+  readonly argumentCount: number;
+  readonly argumentIdentifierNames: readonly string[];
+  readonly node: CSyntaxNode;
+}
+
+interface CPreprocessorFacts {
+  readonly hasInclude: boolean;
+  readonly malformed: boolean;
+  readonly macroNames: ReadonlySet<string>;
+  conditionalDepthAt(offset: number): number | null;
+}
+
 function directChildren(node: CSyntaxNode): readonly CSyntaxNode[] {
   const children: CSyntaxNode[] = [];
   for (let child = node.firstChild; child !== null; child = child.nextSibling) {
@@ -180,18 +205,72 @@ function cParameterSignature(input: CExtractFileFactsInput, parameterList: CSynt
   return characters.join("").replace(/\s+/gu, "");
 }
 
-function cFunctionSignature(
+function cParameterContract(
+  input: CExtractFileFactsInput,
+  parameterList: CSyntaxNode
+): CParameterContract | null {
+  const compact = nodeText(input, parameterList).replace(/\s+/gu, "");
+  if (compact.length < 2 || compact[0] !== "(" || compact.at(-1) !== ")") {
+    return null;
+  }
+  const parameters = directChildren(parameterList).filter((child) => child.name === "ParameterDeclaration");
+  const contents = compact.slice(1, -1);
+  if (contents === "void") {
+    return parameters.length === 1
+      ? { signature: cParameterSignature(input, parameterList), minimumArgumentCount: 0, variadic: false }
+      : null;
+  }
+  if (contents.length === 0 || parameters.length === 0) {
+    // In C, an empty list is an old-style declaration with unspecified parameters.
+    return null;
+  }
+  const variadic = contents.endsWith(",...");
+  if (contents.includes("...") && !variadic) {
+    return null;
+  }
+  return {
+    signature: cParameterSignature(input, parameterList),
+    minimumArgumentCount: parameters.length,
+    variadic
+  };
+}
+
+function cFunctionContract(
   input: CExtractFileFactsInput,
   node: CSyntaxNode,
   parameterList: CSyntaxNode
-): string | null {
+): CFunctionContract | null {
   const declarators = directChildren(node).filter((child) => child.name === "FunctionDeclarator");
   const declarator = declarators.length === 1 ? declarators[0] : undefined;
   if (declarator === undefined) {
     return null;
   }
-  const returnType = input.sourceText.slice(node.from, declarator.from).replace(/\s+/gu, "");
-  return returnType.length === 0 ? null : `${returnType}\u0000${cParameterSignature(input, parameterList)}`;
+  const returnType = input.sourceText
+    .slice(node.from, declarator.from)
+    .replace(/\b(?:auto|extern|register|static|typedef|_Thread_local)\b/gu, "")
+    .replace(/\s+/gu, "");
+  const parameters = cParameterContract(input, parameterList);
+  return returnType.length === 0 || parameters === null ? null : { returnType, parameters };
+}
+
+function hasStorageClass(input: CExtractFileFactsInput, node: CSyntaxNode, storageClass: string): boolean {
+  const declarator = directChildren(node).find((child) => child.name === "FunctionDeclarator");
+  if (declarator === undefined) {
+    return false;
+  }
+  return new RegExp(`\\b${storageClass}\\b`, "u").test(
+    input.sourceText.slice(node.from, declarator.from).replace(/\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/gu, " ")
+  );
+}
+
+function compatibleFunctionContracts(left: CFunctionContract, right: CFunctionContract): boolean {
+  return left.returnType === right.returnType && left.parameters.signature === right.parameters.signature;
+}
+
+function acceptsCallArgumentCount(contract: CFunctionContract, argumentCount: number): boolean {
+  return contract.parameters.variadic
+    ? argumentCount >= contract.parameters.minimumArgumentCount
+    : argumentCount === contract.parameters.minimumArgumentCount;
 }
 
 function includesCivetWeb(input: CExtractFileFactsInput, root: CSyntaxNode): boolean {
@@ -263,32 +342,10 @@ function hasPotentialHandlerShadow(
   );
 }
 
-function macroNames(input: CExtractFileFactsInput, root: CSyntaxNode): ReadonlySet<string> {
-  const names = new Set<string>();
-  function visit(node: CSyntaxNode): void {
-    if (node.name === "PreprocDirective") {
-      const text = nodeText(input, node);
-      const match = /^\s*#\s*define\s+([A-Za-z_][A-Za-z0-9_]*)/u.exec(text);
-      if (match?.[1] !== undefined) {
-        names.add(match[1]);
-      } else if (/^\s*#\s*define\b/u.test(text)) {
-        for (const name of identifierNames(input, node)) {
-          names.add(name);
-        }
-      }
-    }
-    for (const child of directChildren(node)) {
-      visit(child);
-    }
-  }
-  visit(root);
-  return names;
-}
-
 function directBareCall(
   input: CExtractFileFactsInput,
   statement: CSyntaxNode
-): { readonly name: string; readonly node: CSyntaxNode } | null {
+): DirectCFunctionCall | null {
   if (statement.name !== "ExpressionStatement" && statement.name !== "ReturnStatement") {
     return null;
   }
@@ -300,13 +357,25 @@ function directBareCall(
   const callee = children[0];
   const arguments_ = children[1];
   const name = callee === undefined ? null : identifierText(input, callee);
+  const argumentChildren = arguments_ === undefined ? [] : directChildren(arguments_);
+  const argumentExpressions = argumentChildren.filter(
+    (child) => !["(", ")", ","].includes(child.name)
+  );
   return (
     children.length === 2 &&
     callee?.name === "Identifier" &&
     arguments_?.name === "ArgumentList" &&
+    argumentChildren.length >= 2 &&
+    argumentChildren[0]?.name === "(" &&
+    argumentChildren.at(-1)?.name === ")" &&
     name !== null
   )
-    ? { name, node: calls[0] }
+    ? {
+      name,
+      argumentCount: argumentExpressions.length,
+      argumentIdentifierNames: argumentExpressions.flatMap((argument) => identifierNames(input, argument)),
+      node: calls[0]
+    }
     : null;
 }
 
@@ -338,12 +407,32 @@ function localBindingNames(input: CExtractFileFactsInput, statement: CSyntaxNode
   return identifierNames(input, statement);
 }
 
+function enumEnumeratorNames(input: CExtractFileFactsInput, statement: CSyntaxNode): readonly string[] {
+  if (!/\benum\b/u.test(nodeText(input, statement))) {
+    return [];
+  }
+  const names: string[] = [];
+  for (const match of nodeText(input, statement).matchAll(/\benum\b[^{}]*\{([^}]*)\}/gu)) {
+    const body = match[1];
+    if (body === undefined) {
+      continue;
+    }
+    for (const enumerator of body.split(",")) {
+      const name = /^\s*([A-Za-z_][A-Za-z0-9_]*)/u.exec(enumerator)?.[1];
+      if (name !== undefined) {
+        names.push(name);
+      }
+    }
+  }
+  return names;
+}
+
 function directCallerCalls(
   input: CExtractFileFactsInput,
   declaration: StaticCFunction
-): readonly { readonly name: string; readonly node: CSyntaxNode }[] {
+): readonly DirectCFunctionCall[] {
   const shadowedNames = new Set(identifierNames(input, declaration.parameterList));
-  const calls: Array<{ readonly name: string; readonly node: CSyntaxNode }> = [];
+  const calls: DirectCFunctionCall[] = [];
   for (const statement of directChildren(declaration.body)) {
     if (
       ["Declaration", "AliasDeclaration", "TypeDefinition", "StructSpecifier", "ClassSpecifier", "EnumSpecifier"].includes(
@@ -351,6 +440,9 @@ function directCallerCalls(
       )
     ) {
       for (const name of localBindingNames(input, statement)) {
+        shadowedNames.add(name);
+      }
+      for (const name of enumEnumeratorNames(input, statement)) {
         shadowedNames.add(name);
       }
       continue;
@@ -361,6 +453,117 @@ function directCallerCalls(
     }
   }
   return calls.filter((call) => !shadowedNames.has(call.name));
+}
+
+function cPreprocessorFacts(input: CExtractFileFactsInput): CPreprocessorFacts {
+  const lineDepths: Array<{ readonly from: number; readonly to: number; readonly depth: number }> = [];
+  const macroNames = new Set<string>();
+  const conditionalStack: Array<{ elseSeen: boolean }> = [];
+  let hasInclude = false;
+  let malformed = false;
+  let offset = 0;
+  const identifier = "[A-Za-z_][A-Za-z0-9_]*";
+  const lines = input.sourceText.matchAll(/.*(?:\r\n|\r|\n|$)/gu);
+
+  for (const match of lines) {
+    const line = match[0];
+    if (line.length === 0) {
+      continue;
+    }
+    const lineBody = line.replace(/[\r\n]+$/gu, "");
+    lineDepths.push({ from: offset, to: offset + line.length, depth: conditionalStack.length });
+    offset += line.length;
+    let directiveCandidate = lineBody;
+    let cursor = 0;
+    while (true) {
+      cursor += /^\s*/u.exec(directiveCandidate.slice(cursor))?.[0].length ?? 0;
+      if (!directiveCandidate.startsWith("/*", cursor)) {
+        break;
+      }
+      const close = directiveCandidate.indexOf("*/", cursor + 2);
+      if (close < 0) {
+        break;
+      }
+      cursor = close + 2;
+    }
+    directiveCandidate = directiveCandidate.slice(cursor);
+    if (!/^#/u.test(directiveCandidate)) {
+      continue;
+    }
+    const directive = /^#\s*([A-Za-z_][A-Za-z0-9_]*)(.*)$/u.exec(directiveCandidate);
+    if (directive?.[1] === undefined || directive[2] === undefined || /\\\s*$/u.test(directiveCandidate)) {
+      malformed = true;
+      continue;
+    }
+    const command = directive[1];
+    const rest = directive[2].trim();
+    if (["if", "ifdef", "ifndef"].includes(command)) {
+      if (
+        (command === "if" && rest.length === 0) ||
+        ((command === "ifdef" || command === "ifndef") && !new RegExp(`^${identifier}$`, "u").test(rest))
+      ) {
+        malformed = true;
+      }
+      conditionalStack.push({ elseSeen: false });
+      continue;
+    }
+    if (command === "elif") {
+      const frame = conditionalStack.at(-1);
+      if (frame === undefined || frame.elseSeen || rest.length === 0) {
+        malformed = true;
+      }
+      continue;
+    }
+    if (command === "else") {
+      const frame = conditionalStack.at(-1);
+      if (frame === undefined || frame.elseSeen || rest.length !== 0) {
+        malformed = true;
+      } else {
+        frame.elseSeen = true;
+      }
+      continue;
+    }
+    if (command === "endif") {
+      if (conditionalStack.length === 0 || rest.length !== 0) {
+        malformed = true;
+      } else {
+        conditionalStack.pop();
+      }
+      continue;
+    }
+    if (["elifdef", "elifndef"].includes(command)) {
+      malformed = true;
+      continue;
+    }
+    if (command === "include") {
+      hasInclude = true;
+      continue;
+    }
+    if (command === "define") {
+      const name = new RegExp(`^(${identifier})(?:\\s|\\(|$)`, "u").exec(rest)?.[1];
+      if (name === undefined) {
+        malformed = true;
+      } else {
+        macroNames.add(name);
+      }
+      continue;
+    }
+    if (command === "undef" && !new RegExp(`^${identifier}$`, "u").test(rest)) {
+      malformed = true;
+    }
+  }
+  if (conditionalStack.length > 0) {
+    malformed = true;
+  }
+  return {
+    hasInclude,
+    malformed,
+    macroNames,
+    conditionalDepthAt(targetOffset: number): number | null {
+      const line = lineDepths.find(({ from, to }) => targetOffset >= from && targetOffset < to);
+      return line?.depth ?? null;
+    }
+  };
 }
 
 /**
@@ -433,7 +636,7 @@ export function extractCFileFacts(input: CExtractFileFactsInput): ArtifactFacts 
     });
   }
 
-  function addFunction(declaration: StaticCFunction): SymbolNode {
+  function addFunction(declaration: StaticCFunction, isExported: boolean): SymbolNode {
     const qualifiedName = `${input.filePath}#${declaration.name}`;
     const declarationOrdinal = nextOrdinal(qualifiedName, "function");
     const symbol: SymbolNode = {
@@ -448,7 +651,7 @@ export function extractCFileFacts(input: CExtractFileFactsInput): ArtifactFacts 
       kind: "function",
       filePath: input.filePath,
       range: rangeFor(lineStarts, declaration.node.from, declaration.node.to),
-      isExported: true,
+      isExported,
       declarationOrdinal
     };
     symbols.push(symbol);
@@ -543,20 +746,31 @@ export function extractCFileFacts(input: CExtractFileFactsInput): ArtifactFacts 
       .filter((candidate): candidate is StaticCFunctionDeclaration => candidate !== null);
     const symbolsByFunction = new Map<StaticCFunction, SymbolNode>();
     const functionsByName = new Map<string, SymbolNode[]>();
-    const functionSignaturesBySymbolId = new Map<string, string | null>();
-    const declarationSignaturesByName = new Map<string, Array<string | null>>();
+    const functionsBySymbolId = new Map<string, StaticCFunction>();
+    const functionContractsBySymbolId = new Map<string, CFunctionContract | null>();
+    const declarationsByName = new Map<string, StaticCFunctionDeclaration[]>();
     for (const declaration of declarations) {
-      declarationSignaturesByName.set(declaration.name, [
-        ...(declarationSignaturesByName.get(declaration.name) ?? []),
-        cFunctionSignature(input, declaration.node, declaration.parameterList)
+      declarationsByName.set(declaration.name, [
+        ...(declarationsByName.get(declaration.name) ?? []),
+        declaration
       ]);
     }
     for (const functionDeclaration of functions) {
-      const symbol = addFunction(functionDeclaration);
+      const inheritedInternalLinkage = declarations.some(
+        (declaration) =>
+          declaration.name === functionDeclaration.name &&
+          declaration.node.from < functionDeclaration.node.from &&
+          hasStorageClass(input, declaration.node, "static")
+      );
+      const symbol = addFunction(
+        functionDeclaration,
+        !hasStorageClass(input, functionDeclaration.node, "static") && !inheritedInternalLinkage
+      );
       symbolsByFunction.set(functionDeclaration, symbol);
-      functionSignaturesBySymbolId.set(
+      functionsBySymbolId.set(symbol.id, functionDeclaration);
+      functionContractsBySymbolId.set(
         symbol.id,
-        cFunctionSignature(input, functionDeclaration.node, functionDeclaration.parameterList)
+        cFunctionContract(input, functionDeclaration.node, functionDeclaration.parameterList)
       );
       functionsByName.set(functionDeclaration.name, [
         ...(functionsByName.get(functionDeclaration.name) ?? []),
@@ -564,29 +778,62 @@ export function extractCFileFacts(input: CExtractFileFactsInput): ArtifactFacts 
       ]);
     }
 
-    const definedMacros = macroNames(input, root);
-    for (const functionDeclaration of functions) {
-      const caller = symbolsByFunction.get(functionDeclaration);
-      if (caller === undefined) {
-        continue;
-      }
-      for (const call of directCallerCalls(input, functionDeclaration)) {
-        if (definedMacros.has(call.name)) {
+    const preprocessor = cPreprocessorFacts(input);
+    if (!preprocessor.hasInclude && !preprocessor.malformed) {
+      for (const functionDeclaration of functions) {
+        const caller = symbolsByFunction.get(functionDeclaration);
+        if (
+          caller === undefined ||
+          preprocessor.macroNames.has(functionDeclaration.name) ||
+          preprocessor.conditionalDepthAt(functionDeclaration.node.from) !== 0
+        ) {
           continue;
         }
-        const candidates = functionsByName.get(call.name) ?? [];
-        const candidate = candidates.length === 1 ? candidates[0] : undefined;
-        const candidateSignature =
-          candidate === undefined ? undefined : functionSignaturesBySymbolId.get(candidate.id);
-        if (
-          candidate !== undefined &&
-          candidateSignature !== undefined &&
-          candidateSignature !== null &&
-          declarationSignaturesByName
-            .get(call.name)
-            ?.every((signature) => signature === candidateSignature) !== false
-        ) {
-          addCall(caller, candidate, call.node);
+        for (const call of directCallerCalls(input, functionDeclaration)) {
+          if (
+            preprocessor.macroNames.has(call.name) ||
+            call.argumentIdentifierNames.some((name) => preprocessor.macroNames.has(name)) ||
+            preprocessor.conditionalDepthAt(call.node.from) !== 0
+          ) {
+            continue;
+          }
+          const candidates = functionsByName.get(call.name) ?? [];
+          const candidate = candidates.length === 1 ? candidates[0] : undefined;
+          const candidateContract =
+            candidate === undefined ? undefined : functionContractsBySymbolId.get(candidate.id);
+          const candidateDefinition =
+            candidate === undefined ? undefined : functionsBySymbolId.get(candidate.id);
+          const visibleDeclarations = (declarationsByName.get(call.name) ?? []).filter(
+            (declaration) => declaration.node.from < call.node.from
+          );
+          const compatibleDeclarations = visibleDeclarations.every(
+            (declaration) =>
+              preprocessor.conditionalDepthAt(declaration.node.from) === 0 &&
+              candidateContract !== null &&
+              candidateContract !== undefined &&
+              (() => {
+                const declarationContract = cFunctionContract(
+                  input,
+                  declaration.node,
+                  declaration.parameterList
+                );
+                return (
+                  declarationContract !== null &&
+                  compatibleFunctionContracts(candidateContract, declarationContract)
+                );
+              })()
+          );
+          if (
+            candidate !== undefined &&
+            candidateDefinition !== undefined &&
+            candidateContract !== undefined &&
+            candidateContract !== null &&
+            preprocessor.conditionalDepthAt(candidateDefinition.node.from) === 0 &&
+            compatibleDeclarations &&
+            acceptsCallArgumentCount(candidateContract, call.argumentCount)
+          ) {
+            addCall(caller, candidate, call.node);
+          }
         }
       }
     }

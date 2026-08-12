@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.379.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.380.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.379.0 highlights
+## v0.380.0 highlights
 
-- Fixed real-project acceptance uses `laravel/quickstart-basic` at commit `f6cebbc60224bed89e4443dd69a8f770bc75e837` (MIT) and a hash-locked two-file source slice: `tasks.blade.php` and `layouts/app.blade.php`. The selected ground truth is the two view identities plus the literal `@extends` relation: SymbolLattice scored `TP 3 / FP 0 / FN 0`; CodeGraph 1.5 scored `TP 2 / FP 0 / FN 1`.
-- On the full-repository baseline, both tools scored `TP 2 / FP 0 / FN 1`. SymbolLattice leaves the unresolved relation unresolved because an arbitrary PHP runtime `ViewFinder` mutation cannot be proven from source. This release has no production semantic change: extractor v264 and resolver v143 are unchanged. It does not claim support for arbitrary Laravel runtime `ViewFinder`, config/provider/dynamic PHP, namespaces/packages/components/includes; the native PHP/Composer check is environment-blocked.
+- Fixed-fixture acceptance uses LLVM 20.1.8 `clang/test/CodeGen/2002-07-31-BadAssert.c` at commit `87f0227…` (`Apache-2.0 WITH LLVM-exception`). It verifies the `SetInternalFPFZero` and `denormalize` identities plus their exact typed direct call: SymbolLattice and CodeGraph 1.5 both score `TP 3 / FP 0 / FN 0`.
+- C extraction now fails closed around prototype and arity ambiguity, preprocessor and macro effects, ordinary-namespace shadows, and static linkage. Extractor facts are v265; resolver remains v143. It does not claim support for includes, preprocessor configurations, cross-translation-unit resolution, function pointers, or runtime behavior; native compiler verification is environment-blocked.
 
 ## MCP
 

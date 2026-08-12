@@ -200,7 +200,7 @@ describe("C and C++ same-file direct calls", () => {
 
   it("accepts a matching C prototype and rejects a conflicting one", () => {
     const matchingPrototype = [
-      "int target(void);",
+      "extern int target(void);",
       "int target(void) { return 0; }",
       "int caller(void) { return target(); }"
     ].join("\n");
@@ -224,6 +224,158 @@ describe("C and C++ same-file direct calls", () => {
     expect(callsFor("c", conflictingPrototype)).toEqual([]);
     expect(callsFor("c", conflictingReturnType)).toEqual([]);
     expect(callsFor("c", typeReferenceParameter)).toHaveLength(1);
+  });
+
+  it("requires C calls to satisfy the normalized definition and prototype arity", () => {
+    const cases = [
+      [
+        "zero argument call to one argument target",
+        [
+          "int target(int value) { return value; }",
+          "int caller(void) { return target(); }"
+        ].join("\n"),
+        0
+      ],
+      [
+        "one argument call to one argument target",
+        [
+          "int target(int value) { return value; }",
+          "int caller(void) { return target(1); }"
+        ].join("\n"),
+        1
+      ],
+      [
+        "one argument call to two argument target",
+        [
+          "int target(int left, int right) { return left + right; }",
+          "int caller(void) { return target(1); }"
+        ].join("\n"),
+        0
+      ],
+      [
+        "two argument call to two argument target",
+        [
+          "int target(int left, int right) { return left + right; }",
+          "int caller(void) { return target(1, 2); }"
+        ].join("\n"),
+        1
+      ],
+      [
+        "void parameter list accepts no arguments",
+        [
+          "void target(void) {}",
+          "int caller(void) { target(); return 0; }"
+        ].join("\n"),
+        1
+      ],
+      [
+        "old-style empty parameter list is unspecified",
+        [
+          "int target() { return 0; }",
+          "int caller(void) { return target(); }"
+        ].join("\n"),
+        0
+      ],
+      [
+        "variadic target accepts its known minimum",
+        [
+          "int target(int first, ...) { return first; }",
+          "int caller(void) { return target(1, 2); }"
+        ].join("\n"),
+        1
+      ],
+      [
+        "variadic target rejects calls below its known minimum",
+        [
+          "int target(int first, ...) { return first; }",
+          "int caller(void) { return target(); }"
+        ].join("\n"),
+        0
+      ]
+    ] as const;
+
+    for (const [description, sourceText, count] of cases) {
+      expect(callsFor("c", sourceText), description).toHaveLength(count);
+    }
+  });
+
+  it("fails closed for C conditional target, caller, and callsite code without suppressing unrelated balanced conditionals", () => {
+    const unsafeSources = [
+      ["disabled target", "#if 0\nint target(void) { return 0; }\n#endif\nint caller(void) { return target(); }"],
+      ["conditional target", "#ifdef FEATURE\nint target(void) { return 0; }\n#endif\nint caller(void) { return target(); }"],
+      ["disabled caller", "int target(void) { return 0; }\n#if 0\nint caller(void) { return target(); }\n#endif"],
+      ["conditional callsite", "int target(void) { return 0; }\nint caller(void) {\n#ifdef FEATURE\n  return target();\n#endif\n  return 0;\n}"],
+      ["conditional prototype", "#ifdef FEATURE\nint target(void);\n#endif\nint target(void) { return 0; }\nint caller(void) { return target(); }"],
+      ["conditional target macro", "#ifdef FEATURE\n#define target() 0\n#endif\nint target(void) { return 0; }\nint caller(void) { return target(); }"],
+      ["included translation unit", "#include \"foreign.h\"\nint target(void) { return 0; }\nint caller(void) { return target(); }"],
+      ["unbalanced conditional", "#if 1\nint target(void) { return 0; }\nint caller(void) { return target(); }"]
+    ] as const;
+
+    for (const [description, sourceText] of unsafeSources) {
+      expect(callsFor("c", sourceText), description).toEqual([]);
+    }
+
+    const unrelatedConditional = [
+      "#if 0",
+      "int unrelated(void) { return 0; }",
+      "#endif",
+      "int target(void) { return 0; }",
+      "int caller(void) { return target(); }"
+    ].join("\n");
+    expect(callsFor("c", unrelatedConditional)).toHaveLength(1);
+  });
+
+  it("keeps C static functions non-exported", () => {
+    const sourceText = "static int target(void) { return 0; }";
+    const facts = factsFor("c", sourceText);
+    const target = facts.symbols.find((symbol) => symbol.kind === "function" && symbol.name === "target");
+
+    expect(target).toMatchObject({ isExported: false });
+  });
+
+  it("fails closed for C ordinary-namespace enum enumerators and macro-expanded arguments", () => {
+    const enumEnumerator = [
+      "int target(void) { return 0; }",
+      "int caller(void) { enum E { target = 1 }; return target(); }"
+    ].join("\n");
+    const macroArgument = [
+      "#define PAIR 1,2",
+      "int target(int left, int right) { return left + right; }",
+      "int caller(void) { return target(PAIR); }"
+    ].join("\n");
+
+    expect(callsFor("c", enumEnumerator)).toEqual([]);
+    expect(callsFor("c", macroArgument)).toEqual([]);
+  });
+
+  it("fails closed for C directives preceded by same-line block comments", () => {
+    const conditional = [
+      "/*a*/ #if 0",
+      "int target(void) { return 0; }",
+      "#endif",
+      "int caller(void) { return target(); }"
+    ].join("\n");
+    const macro = [
+      "/*lead*/ #define target() 0",
+      "int target(void) { return 0; }",
+      "int caller(void) { return target(); }"
+    ].join("\n");
+
+    expect(callsFor("c", conditional)).toEqual([]);
+    expect(callsFor("c", macro)).toEqual([]);
+  });
+
+  it("keeps comment text from changing C linkage and inherits a prior static prototype", () => {
+    const commentOnly = "/* static */ int target(void) { return 0; }";
+    const inheritedStatic = [
+      "static int target(void);",
+      "int target(void) { return 0; }"
+    ].join("\n");
+
+    expect(factsFor("c", commentOnly).symbols.find((symbol) => symbol.name === "target"))
+      .toMatchObject({ isExported: true });
+    expect(factsFor("c", inheritedStatic).symbols.find((symbol) => symbol.name === "target"))
+      .toMatchObject({ isExported: false });
   });
 
   it("rejects C++ calls contained in a lambda body", () => {

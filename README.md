@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**證據優先、本機優先的程式碼圖譜與 AI 程式碼脈絡工具**
+**以證據為先、在本機運作的程式碼圖譜與 AI Agent 程式碼脈絡工具**
 
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -13,17 +13,17 @@
 </div>
 
 > [!IMPORTANT]
-> v0.379.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.380.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
-## 專案用途
+## 簡介
 
-SymbolLattice 掃描本機 repository、建立可持久化的程式碼圖譜，並透過 CLI／MCP 查詢：
+SymbolLattice 掃描本機 repository、保存程式碼圖譜，並以 CLI 與 MCP 提供查詢：
 
-- 檔案、symbol、call、import、inheritance、route 與 entrypoint。
-- callers、callees、impact、affected、context 與跨檔案 explore。
-- 每條關係的來源範圍、解析階段、信心度與規則證據。
+- 檔案、symbol、call、import、inheritance、route 與 entry point。
+- callers、callees、impact、affected path、context 與跨檔探索。
+- 每個關係的來源範圍、解析階段、信心值與規則證據。
 
-無法精確證明的關係會保留為 unresolved／pending，不會為了提高表面支援率而產生錯誤 exact edge。
+無法精確證明的關係會維持 unresolved 或 pending，不會轉成錯誤的 exact edge。
 
 ## 快速開始
 
@@ -35,26 +35,20 @@ cd symbol-lattice
 npm install
 npm run build
 
-# 建立本機圖譜
 node dist/cli/main.js init /path/to/project
-
-# 更新圖譜
 node dist/cli/main.js sync /path/to/project
-
-# 基本查詢
 node dist/cli/main.js files --project /path/to/project --json
 node dist/cli/main.js find createOrder --project /path/to/project --json
 node dist/cli/main.js callees createOrder --project /path/to/project --json
 node dist/cli/main.js routes --project /path/to/project --json
-
-# 讓 Agent 取得有界的跨檔案脈絡
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.379.0 重點
+## v0.380.0 重點
 
-- 固定真實專案驗收使用 `laravel/quickstart-basic` commit `f6cebbc60224bed89e4443dd69a8f770bc75e837`（MIT），並鎖定雜湊的兩個來源檔：`tasks.blade.php` 與 `layouts/app.blade.php`。驗收 ground truth 為兩個 view identity 和 literal `@extends` 關係：SymbolLattice 為 `TP 3 / FP 0 / FN 0`；CodeGraph 1.5 為 `TP 2 / FP 0 / FN 1`。
-- 全 repo baseline 中，兩者都是 `TP 2 / FP 0 / FN 1`。SymbolLattice 將該關係保留為 unresolved，因為任意 PHP runtime 的 `ViewFinder` mutation 無法僅從來源證明。本版沒有 production semantic change；extractor v264 與 resolver v143 維持不變。不宣稱支援任意 Laravel runtime `ViewFinder`、config/provider/dynamic PHP、namespace/package/component/include；PHP／Composer 原生環境檢查為 environment-blocked。
+- 固定 fixture 驗收採用 LLVM 20.1.8 的 `clang/test/CodeGen/2002-07-31-BadAssert.c`，commit `87f0227…`，授權為 `Apache-2.0 WITH LLVM-exception`。驗證 `SetInternalFPFZero` 與 `denormalize` identity，以及兩者的 exact typed direct call；SymbolLattice 與 CodeGraph 1.5 均為 `TP 3 / FP 0 / FN 0`。
+- C 抽取器針對 prototype／arity 歧義、preprocessor／macro 影響、ordinary namespace shadow 與 static linkage 採取 fail-closed。extractor facts 為 v265，resolver 維持 v143。
+- 不宣稱支援 include、preprocessor configuration、cross-translation-unit resolution、function pointer 或 runtime behavior；原生 compiler 驗證為 environment-blocked。
 
 ## MCP
 
@@ -65,7 +59,7 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 node dist/cli/main.js serve --mcp --project /path/to/project --no-auto-sync
 ```
 
-MCP 查詢不直接執行 `init` 或 `sync`。需要手動控制索引時，請使用 CLI 的 `init`、`sync`、`watch` 或經明確核准的 watcher 流程。
+MCP 查詢不會直接執行 `init` 或 `sync`。需要控制索引時，請使用 CLI 的 `init`、`sync`、`watch`，或明確核准的 watcher 流程。
 
 ## 常用指令
 
@@ -73,20 +67,20 @@ MCP 查詢不直接執行 `init` 或 `sync`。需要手動控制索引時，請�
 | --- | --- |
 | `init` | 建立專案圖譜。 |
 | `sync` | 明確同步索引。 |
-| `status` | 檢查 generation 與 freshness。 |
-| `files`／`file` | 列出或閱讀已保存的來源檔。 |
-| `find`／`node` | 尋找並查看 symbol。 |
-| `callers`／`callees` | 查詢靜態呼叫關係。 |
-| `routes`／`entrypoints` | 查看框架路由與入口。 |
-| `impact`／`affected` | 進行有界影響分析。 |
-| `context`／`explore` | 取得適合 Agent 使用的程式碼脈絡。 |
-| `explain-edge` | 查看一條關係的完整證據。 |
+| `status` | 查看 generation 與 freshness。 |
+| `files` / `file` | 列出或讀取已保存來源。 |
+| `find` / `node` | 尋找並查看 symbol。 |
+| `callers` / `callees` | 查詢靜態 call 關係。 |
+| `routes` / `entrypoints` | 查看 framework route 與進入點。 |
+| `impact` / `affected` | 執行有界的影響分析。 |
+| `context` / `explore` | 取得適合 Agent 使用的程式碼脈絡。 |
+| `explain-edge` | 查看單一 edge 的完整證據。 |
 
-使用 `node dist/cli/main.js <command> --help` 查看完整選項。
+使用 `node dist/cli/main.js <command> --help` 查看所有選項。
 
 ## 限制
 
-SymbolLattice 是靜態 code graph／code intelligence 工具，不是完整編譯器、型別檢查器、runtime tracer、RDF ontology 或通用推理系統。動態 dispatch、reflection、macro、code generation、dependency injection 與外部套件型別可能保持 unresolved。
+SymbolLattice 是靜態程式碼圖譜與程式碼 intelligence 工具，不是完整編譯器、type checker、runtime tracer、RDF ontology 或通用推理引擎。dynamic dispatch、reflection、macro、code generation、dependency injection 與外部 package type 可能維持 unresolved。
 
 ## 驗證
 
