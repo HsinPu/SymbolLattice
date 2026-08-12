@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.388.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.389.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,11 +44,11 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.388.0 重點
+## v0.389.0 重點
 
-- 固定來源驗收使用官方 [`clojure/tools.namespace` v1.5.1](https://github.com/clojure/tools.namespace/releases/tag/v1.5.1) 的 commit [`b14a58a88cd5aa7605dc5bc77d8786cb264fabf7`](https://github.com/clojure/tools.namespace/tree/b14a58a88cd5aa7605dc5bc77d8786cb264fabf7)，掃描完整 [`src/test/clojure/clojure/tools/namespace/parse_test.clj`](https://github.com/clojure/tools.namespace/blob/b14a58a88cd5aa7605dc5bc77d8786cb264fabf7/src/test/clojure/clojure/tools/namespace/parse_test.clj)。三項 B1 truth 為 `clojure.tools.namespace.parse-test` namespace identity、`str->ns-decl` function identity，以及 namespace 到該 function 的 exact containment；SymbolLattice 是 `TP 3／FP 0／FN 0`，CodeGraph 1.5 因未掃描 `.clj` 而是 `TP 0／FP 0／FN 3`。
-- Clojure 驗收僅涵蓋由語法直接證明的 declaration 與 containment；不宣稱一般 direct call、macro expansion、動態 binding、JVM runtime behavior 或套件 export。
-- extractor facts 維持 v272，resolver 維持 v143。驗證環境中的原生 Clojure 工具若不可用，會標示為 environment-blocked，不會誤報成執行通過或失敗。
+- 固定來源驗收使用官方 [`Perl/perl5` v5.40.0](https://github.com/Perl/perl5/tree/v5.40.0) 的 commit [`f22a16ecf4821b7e93d2569f630817a2631fddd9`](https://github.com/Perl/perl5/tree/f22a16ecf4821b7e93d2569f630817a2631fddd9)，掃描完整 [`lib/SelectSaver.pm`](https://github.com/Perl/perl5/blob/f22a16ecf4821b7e93d2569f630817a2631fddd9/lib/SelectSaver.pm)。三項 B1 truth 為 `SelectSaver` package identity、`new` function identity，以及 package 到該 function 的 exact containment；SymbolLattice 是 `TP 3／FP 0／FN 0`，CodeGraph 1.5 因未掃描 `.pm` 而是 `TP 0／FP 0／FN 3`。
+- Perl 驗收僅涵蓋由語法直接證明的 declaration 與 containment；不宣稱 method/direct call、動態載入、typeglob mutation、Dancer2 route、Perl runtime behavior 或套件 export。
+- extractor facts 維持 v272，resolver 維持 v143。驗證環境中的原生 Perl 工具若不可用，會標示為 environment-blocked，不會誤報成執行通過或失敗。
 
 ## MCP
 
