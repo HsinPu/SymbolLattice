@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.413.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.414.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.413.0 highlights
+## v0.414.0 highlights
 
-- Fixed-source acceptance uses [`spring-projects/spring-petclinic`](https://github.com/spring-projects/spring-petclinic) at commit [`88e37c15cf6fc8490b01bc3e8e2c800cec1ac272`](https://github.com/spring-projects/spring-petclinic/tree/88e37c15cf6fc8490b01bc3e8e2c800cec1ac272) (Apache-2.0), scanning the complete [`src/main/resources/application-mysql.properties`](https://github.com/spring-projects/spring-petclinic/blob/88e37c15cf6fc8490b01bc3e8e2c800cec1ac272/src/main/resources/application-mysql.properties). The three B1 truths are the file identity, the literal `database` key identity, and the unique direct containment file→`database`; SymbolLattice scores **TP 3 / FP 0 / FN 0**, while CodeGraph 1.5 proves only file inventory and has no Properties key identity or containment, scoring **TP 1 / FP 0 / FN 2**.
-- Spring Boot runtime, profile merging, placeholder expansion, database connectivity, and property values are not claimed; source delivery continues to withhold sensitive-format contents. Extractor facts remain v274 and the resolver remains v143.
+- Fixed-source acceptance uses the official [`dotnet/fsharp`](https://github.com/dotnet/fsharp) repository at commit [`b611d184a141d1ad1994ff59c01fecc10f787a89`](https://github.com/dotnet/fsharp/tree/b611d184a141d1ad1994ff59c01fecc10f787a89) (MIT), scanning the complete [`tests/benchmarks/SmokeTestBenchmarks.sh`](https://github.com/dotnet/fsharp/blob/b611d184a141d1ad1994ff59c01fecc10f787a89/tests/benchmarks/SmokeTestBenchmarks.sh). The three B1 truths are the file identity, the top-level `run` function identity, and the unique direct containment file→`run`; SymbolLattice scores **TP 3 / FP 0 / FN 0**, while CodeGraph 1.5 does not scan `.sh`, scoring **TP 0 / FP 0 / FN 3**.
+- Shell runtime, `dotnet` execution, parameter expansion, function calls, and cross-process semantics are not claimed. Extractor facts remain v274 and the resolver remains v143; this acceptance is limited to static function identity and containment.
 
 ## MCP
 

@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.413.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.414.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,10 +44,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.413.0 重點
+## v0.414.0 重點
 
-- 固定來源驗收使用 [`spring-projects/spring-petclinic`](https://github.com/spring-projects/spring-petclinic) commit [`88e37c15cf6fc8490b01bc3e8e2c800cec1ac272`](https://github.com/spring-projects/spring-petclinic/tree/88e37c15cf6fc8490b01bc3e8e2c800cec1ac272)（Apache-2.0），掃描完整 [`src/main/resources/application-mysql.properties`](https://github.com/spring-projects/spring-petclinic/blob/88e37c15cf6fc8490b01bc3e8e2c800cec1ac272/src/main/resources/application-mysql.properties)。三項 B1 truth 為檔案 identity、literal key `database` identity，以及 file→`database` 的唯一直接 containment；SymbolLattice 為 **TP 3／FP 0／FN 0**，CodeGraph 1.5 僅證明檔案 inventory、沒有 Properties key identity／containment，為 **TP 1／FP 0／FN 2**。
-- 不宣稱 Spring Boot runtime、profile 合併、placeholder 展開、資料庫連線或 property values；敏感格式的來源內容仍由讀取介面隱藏。extractor facts 維持 v274，resolver 維持 v143。
+- 固定來源驗收使用官方 [`dotnet/fsharp`](https://github.com/dotnet/fsharp) commit [`b611d184a141d1ad1994ff59c01fecc10f787a89`](https://github.com/dotnet/fsharp/tree/b611d184a141d1ad1994ff59c01fecc10f787a89)（MIT），掃描完整 [`tests/benchmarks/SmokeTestBenchmarks.sh`](https://github.com/dotnet/fsharp/blob/b611d184a141d1ad1994ff59c01fecc10f787a89/tests/benchmarks/SmokeTestBenchmarks.sh)。三項 B1 truth 為檔案 identity、頂層 `run` function identity，以及 file→`run` 的唯一直接 containment；SymbolLattice 為 **TP 3／FP 0／FN 0**，CodeGraph 1.5 不掃描 `.sh`，為 **TP 0／FP 0／FN 3**。
+- 不宣稱 Shell runtime、`dotnet` 執行、參數展開、函式呼叫或跨程序語義。extractor facts 維持 v274，resolver 維持 v143；本次只驗證靜態 function identity 與 containment。
 
 ## MCP
 
