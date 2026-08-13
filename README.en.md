@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.416.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.417.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.416.0 highlights
+## v0.417.0 highlights
 
-- Fixed-source acceptance uses the official [`graphql/graphql-js`](https://github.com/graphql/graphql-js) v17.0.2 repository at commit [`71606d736c79b77588a15b32b9c9497e397adae0`](https://github.com/graphql/graphql-js/tree/71606d736c79b77588a15b32b9c9497e397adae0) (MIT), scanning the complete [`benchmark/github-schema.graphql`](https://github.com/graphql/graphql-js/blob/71606d736c79b77588a15b32b9c9497e397adae0/benchmark/github-schema.graphql). The three B1 truths are the `Contribution` interface identity, the `CreatedCommitContribution` type identity, and the type's unique direct implementation of that interface; SymbolLattice scores **TP 3 / FP 0 / FN 0**, while CodeGraph 1.5 does not scan `.graphql`, scoring **TP 0 / FP 0 / FN 3**.
-- GraphQL runtime, resolver execution, query validation, schema stitching, federation, and cross-file type merging are not claimed. Extractor facts remain v274 and the resolver remains v143; this acceptance is limited to static identities and one same-file direct interface implementation.
+- Fixed-source acceptance uses the official [`luau-lang/luau`](https://github.com/luau-lang/luau) 0.731 repository at commit [`f8ca77acdcb50241e3da21af663f8ef97b4b5ce4`](https://github.com/luau-lang/luau/tree/f8ca77acdcb50241e3da21af663f8ef97b4b5ce4) (MIT), scanning the complete [`fuzz/luau.proto`](https://github.com/luau-lang/luau/blob/f8ca77acdcb50241e3da21af663f8ef97b4b5ce4/fuzz/luau.proto). The three B1 truths are the Proto file identity, the `Expr` message identity, and the exact containment file→`Expr`; SymbolLattice scores **TP 3 / FP 0 / FN 0**, while CodeGraph 1.5 does not scan `.proto`, scoring **TP 0 / FP 0 / FN 3**.
+- Protoc compilation, wire compatibility, field schemas, import resolution, nested declarations, RPC option blocks, and gRPC runtime behavior are not claimed. Extractor facts remain v274 and the resolver remains v143; this acceptance is limited to static message identity and containment.
 
 ## MCP
 
