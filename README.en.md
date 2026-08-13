@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.407.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.408.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.407.0 highlights
+## v0.408.0 highlights
 
-- Fixed-source acceptance uses official [`Ortus-Solutions/commandbox`](https://github.com/Ortus-Solutions/commandbox) v6.3.1 at commit [`8fff2b126c01eb69920f120896ef63f6ff9aaeab`](https://github.com/Ortus-Solutions/commandbox/tree/8fff2b126c01eb69920f120896ef63f6ff9aaeab), scanning the complete [`pwd.cfc`](https://github.com/Ortus-Solutions/commandbox/blob/8fff2b126c01eb69920f120896ef63f6ff9aaeab/src/cfml/system/modules_app/system-commands/commands/pwd.cfc). The three B1 truths are the `pwd` component identity, the `run` method identity, and the unique direct containment from `pwd` to `run`; SymbolLattice and CodeGraph 1.5 both score **TP 3 / FP 0 / FN 0**.
-- `getCWD()` call resolution, CommandBox injection, command routing, remote endpoints, and CFML runtime behavior are not claimed. Extractor facts remain v274 and the resolver remains v143; no CFML runtime is available locally, so native execution is environment-blocked.
+- Fixed-source acceptance uses official [`NixOS/nix`](https://github.com/NixOS/nix) 2.32.8 at commit [`ad2aac683cda793a3b860eabd9c0ad528097ae65`](https://github.com/NixOS/nix/tree/ad2aac683cda793a3b860eabd9c0ad528097ae65), scanning the complete [`eval-okay-attrs6.nix`](https://github.com/NixOS/nix/blob/ad2aac683cda793a3b860eabd9c0ad528097ae65/tests/functional/lang/eval-okay-attrs6.nix). The three B1 truths are the file identity, the `__overrides` variable identity, and the unique direct containment from the file to `__overrides`; SymbolLattice and CodeGraph 1.5 both score **TP 3 / FP 0 / FN 0**.
+- Nix evaluation, `__overrides` runtime behavior, dynamic attribute semantics, import resolution, and package/build results are not claimed. Extractor facts remain v274 and the resolver remains v143; no Nix runtime is available locally, so native execution is environment-blocked.
 
 ## MCP
 

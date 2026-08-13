@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.407.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.408.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,10 +44,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.407.0 重點
+## v0.408.0 重點
 
-- 固定來源驗收使用官方 [`Ortus-Solutions/commandbox`](https://github.com/Ortus-Solutions/commandbox) v6.3.1、commit [`8fff2b126c01eb69920f120896ef63f6ff9aaeab`](https://github.com/Ortus-Solutions/commandbox/tree/8fff2b126c01eb69920f120896ef63f6ff9aaeab)，掃描完整 [`pwd.cfc`](https://github.com/Ortus-Solutions/commandbox/blob/8fff2b126c01eb69920f120896ef63f6ff9aaeab/src/cfml/system/modules_app/system-commands/commands/pwd.cfc)。三項 B1 truth 為 `pwd` component identity、`run` method identity，以及 `pwd`→`run` 的唯一直接 containment；SymbolLattice 與 CodeGraph 1.5 均為 **TP 3／FP 0／FN 0**。
-- 不宣稱 `getCWD()` 呼叫解析、CommandBox 注入、命令路由、remote endpoint 或 CFML runtime behavior。extractor facts 維持 v274，resolver 維持 v143；本機未提供 CFML runtime，因此 native execution 為 environment-blocked。
+- 固定來源驗收使用官方 [`NixOS/nix`](https://github.com/NixOS/nix) 2.32.8、commit [`ad2aac683cda793a3b860eabd9c0ad528097ae65`](https://github.com/NixOS/nix/tree/ad2aac683cda793a3b860eabd9c0ad528097ae65)，掃描完整 [`eval-okay-attrs6.nix`](https://github.com/NixOS/nix/blob/ad2aac683cda793a3b860eabd9c0ad528097ae65/tests/functional/lang/eval-okay-attrs6.nix)。三項 B1 truth 為檔案 identity、`__overrides` variable identity，以及檔案→`__overrides` 的唯一直接 containment；SymbolLattice 與 CodeGraph 1.5 均為 **TP 3／FP 0／FN 0**。
+- 不宣稱 Nix evaluation、`__overrides` runtime behavior、動態 attribute semantics、import resolution 或 package/build 結果。extractor facts 維持 v274，resolver 維持 v143；本機未提供 Nix runtime，因此 native execution 為 environment-blocked。
 
 ## MCP
 
