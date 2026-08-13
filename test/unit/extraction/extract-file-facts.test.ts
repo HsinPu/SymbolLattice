@@ -18214,6 +18214,69 @@ describe("source extraction", () => {
     expect(facts.razorFacts?.postHandlers?.map((handler) => handler.handlerName)).toEqual(["Save"]);
   });
 
+  it("ignores handler-looking markup inside complete Razor control-flow chains", () => {
+    const fake = `  var fake = "<form method='post' asp-page-handler='Forged'></form>";`;
+    const controls = [
+      ["@if (false) {", "  <p>if</p>", "} else {", fake, "}"],
+      ["@if (false) {", "  <p>if</p>", "} else if (true) {", fake, "}"],
+      ["@try {", "  <p>try</p>", "} catch (System.Exception) {", fake, "}"],
+      ["@try {", "  <p>try</p>", "} finally {", fake, "}"],
+      ["@do {", fake, "} while (false);"]
+    ];
+
+    for (const control of controls) {
+      const facts = extractFileFacts({
+        filePath: "Pages/Index.cshtml",
+        language: "razor",
+        sourceText: [
+          "@page",
+          "@model IndexModel",
+          "<p>header</p>",
+          ...control
+        ].join("\n")
+      });
+
+      expect(facts.razorFacts?.postHandlers, control.join(" ")).toEqual([]);
+    }
+
+    const positive = extractFileFacts({
+      filePath: "Pages/Index.cshtml",
+      language: "razor",
+      sourceText: [
+        "@page",
+        "@model IndexModel",
+        "<p>header</p>",
+        "@if (true) {",
+        "  <p>ok</p>",
+        "} else {",
+        "  <p>fallback</p>",
+        "}",
+        '<form method="post" asp-page-handler="Save"></form>'
+      ].join("\n")
+    });
+    expect(positive.razorFacts?.postHandlers?.map((handler) => handler.handlerName)).toEqual(["Save"]);
+  });
+
+  it("fails Razor handler facts closed for incomplete try and do control structures", () => {
+    for (const control of [
+      ["@try {", "  <p>body</p>", "}"],
+      ["@do {", "  <p>body</p>", "} while (false)"]
+    ]) {
+      const facts = extractFileFacts({
+        filePath: "Pages/Index.cshtml",
+        language: "razor",
+        sourceText: [
+          "@page",
+          "@model IndexModel",
+          "<p>header</p>",
+          ...control,
+          '<form method="post" asp-page-handler="Forged"></form>'
+        ].join("\n")
+      });
+      expect(facts.razorFacts?.postHandlers, control.join(" ")).toEqual([]);
+    }
+  });
+
   it("fails Razor handler facts closed for malformed closing tags", () => {
     const facts = extractFileFacts({
       filePath: "Pages/Index.cshtml",

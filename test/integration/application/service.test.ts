@@ -26573,7 +26573,19 @@ describe("SymbolLatticeService", () => {
         `@("<form method='post' asp-page-handler='Forged'></form>")`
       ].join("\n"),
       "Pages/ExplicitExpression.cshtml.cs":
-        "public class ExplicitExpressionModel : Microsoft.AspNetCore.Mvc.RazorPages.PageModel { public void OnPostForged() {} }\n"
+        "public class ExplicitExpressionModel : Microsoft.AspNetCore.Mvc.RazorPages.PageModel { public void OnPostForged() {} }\n",
+      "Pages/ControlFlow.cshtml": [
+        "@page",
+        "@model ControlFlowModel",
+        "<p>header</p>",
+        "@if (true) {",
+        "  <p>ok</p>",
+        "} else {",
+        `  var fake = "<form method='post' asp-page-handler='Forged'></form>";`,
+        "}"
+      ].join("\n"),
+      "Pages/ControlFlow.cshtml.cs":
+        "public class ControlFlowModel : Microsoft.AspNetCore.Mvc.RazorPages.PageModel { public void OnPostForged() {} }\n"
     });
     const graphStore = new SqliteGraphStore();
     const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
@@ -26598,6 +26610,11 @@ describe("SymbolLatticeService", () => {
     expect(
       snapshot.edges.filter(
         (edge) => edge.sourceId === page("Pages/ExplicitExpression.cshtml")?.id && edge.kind === "handles"
+      )
+    ).toEqual([]);
+    expect(
+      snapshot.edges.filter(
+        (edge) => edge.sourceId === page("Pages/ControlFlow.cshtml")?.id && edge.kind === "handles"
       )
     ).toEqual([]);
     expect(

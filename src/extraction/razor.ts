@@ -342,15 +342,148 @@ function matchingRazorCodeDelimiter(
   return null;
 }
 
+function skipRazorCodeTrivia(sourceText: string, start: number): number | null {
+  let cursor = start;
+  while (cursor < sourceText.length) {
+    if (/[\t\n\f\r ]/u.test(sourceText[cursor] ?? "")) {
+      cursor += 1;
+      continue;
+    }
+    if (sourceText.startsWith("//", cursor)) {
+      const newline = sourceText.indexOf("\n", cursor + 2);
+      cursor = newline === -1 ? sourceText.length : newline + 1;
+      continue;
+    }
+    if (sourceText.startsWith("/*", cursor)) {
+      const close = sourceText.indexOf("*/", cursor + 2);
+      if (close === -1) return null;
+      cursor = close + 2;
+      continue;
+    }
+    if (sourceText.startsWith("@*", cursor)) {
+      const close = sourceText.indexOf("*@", cursor + 2);
+      if (close === -1) return null;
+      cursor = close + 2;
+      continue;
+    }
+    return cursor;
+  }
+  return cursor;
+}
+
+function razorCodeWordAt(sourceText: string, start: number, word: string): boolean {
+  return (
+    sourceText.startsWith(word, start) &&
+    !/[A-Za-z0-9_]/u.test(sourceText[start + word.length] ?? "")
+  );
+}
+
+function razorContinuationBlockEnd(
+  sourceText: string,
+  start: number,
+  condition: "optional" | "required" | "none"
+): number | null {
+  let cursor = skipRazorCodeTrivia(sourceText, start);
+  if (cursor === null) return null;
+  if (condition !== "none" && sourceText[cursor] === "(") {
+    const conditionEnd = matchingRazorCodeDelimiter(sourceText, cursor, "(", ")");
+    if (conditionEnd === null) return null;
+    cursor = skipRazorCodeTrivia(sourceText, conditionEnd);
+    if (cursor === null) return null;
+  } else if (condition === "required") {
+    return null;
+  }
+  if (sourceText[cursor] !== "{") return null;
+  return matchingRazorCodeDelimiter(sourceText, cursor, "{", "}");
+}
+
+function completeRazorControlRange(
+  sourceText: string,
+  keyword: string,
+  initialEnd: number
+): number | null {
+  let end = initialEnd;
+  if (keyword === "if") {
+    while (true) {
+      let cursor = skipRazorCodeTrivia(sourceText, end);
+      if (cursor === null) return null;
+      if (!razorCodeWordAt(sourceText, cursor, "else")) return end;
+      cursor = skipRazorCodeTrivia(sourceText, cursor + "else".length);
+      if (cursor === null) return null;
+      const elseIf = razorCodeWordAt(sourceText, cursor, "if");
+      const blockEnd = razorContinuationBlockEnd(
+        sourceText,
+        elseIf ? cursor + "if".length : cursor,
+        elseIf ? "required" : "none"
+      );
+      if (blockEnd === null) return null;
+      end = blockEnd;
+    }
+  }
+  if (keyword === "try") {
+    let sawContinuation = false;
+    let sawFinally = false;
+    while (true) {
+      let cursor = skipRazorCodeTrivia(sourceText, end);
+      if (cursor === null) return null;
+      if (!sawFinally && razorCodeWordAt(sourceText, cursor, "catch")) {
+        const blockEnd = razorContinuationBlockEnd(
+          sourceText,
+          cursor + "catch".length,
+          "optional"
+        );
+        if (blockEnd === null) return null;
+        end = blockEnd;
+        sawContinuation = true;
+        continue;
+      }
+      if (!sawFinally && razorCodeWordAt(sourceText, cursor, "finally")) {
+        const blockEnd = razorContinuationBlockEnd(
+          sourceText,
+          cursor + "finally".length,
+          "none"
+        );
+        if (blockEnd === null) return null;
+        end = blockEnd;
+        sawContinuation = true;
+        sawFinally = true;
+        continue;
+      }
+      if (
+        sawFinally &&
+        (razorCodeWordAt(sourceText, cursor, "catch") || razorCodeWordAt(sourceText, cursor, "finally"))
+      ) {
+        return null;
+      }
+      return sawContinuation ? end : null;
+    }
+  }
+  if (keyword === "do") {
+    let cursor = skipRazorCodeTrivia(sourceText, end);
+    if (cursor === null || !razorCodeWordAt(sourceText, cursor, "while")) return null;
+    cursor = skipRazorCodeTrivia(sourceText, cursor + "while".length);
+    if (cursor === null || sourceText[cursor] !== "(") return null;
+    const conditionEnd = matchingRazorCodeDelimiter(sourceText, cursor, "(", ")");
+    if (conditionEnd === null) return null;
+    cursor = skipRazorCodeTrivia(sourceText, conditionEnd);
+    if (cursor === null) return null;
+    return sourceText[cursor] === ";" ? cursor + 1 : null;
+  }
+  return end;
+}
+
 function razorCodeRanges(sourceText: string): readonly { start: number; end: number }[] | null {
   const ranges: Array<{ start: number; end: number }> = [];
-  const pattern = /@\{|@(?:foreach|for|if|while|switch|using|lock|try|functions|code)\b/gu;
+  const pattern = /@\{|@(?:foreach|for|if|while|do|switch|using|lock|try|functions|code)\b/gu;
   for (const match of sourceText.matchAll(pattern)) {
     const start = match.index;
     if (start === undefined) continue;
     const open = match[0] === "@{" ? start + 1 : sourceText.indexOf("{", start + match[0].length);
     if (open === -1) return null;
-    const end = matchingRazorCodeDelimiter(sourceText, open, "{", "}");
+    const initialEnd = matchingRazorCodeDelimiter(sourceText, open, "{", "}");
+    if (initialEnd === null) return null;
+    const keyword = match[0].startsWith("@") ? match[0].slice(1) : "";
+    const end = completeRazorControlRange(sourceText, keyword, initialEnd);
     if (end === null) return null;
     ranges.push({ start, end });
     pattern.lastIndex = end;
