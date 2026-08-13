@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.415.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.416.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.415.0 highlights
+## v0.416.0 highlights
 
-- Fixed-source acceptance uses the official [`spring-projects/spring-petclinic`](https://github.com/spring-projects/spring-petclinic) repository at commit [`88e37c15cf6fc8490b01bc3e8e2c800cec1ac272`](https://github.com/spring-projects/spring-petclinic/tree/88e37c15cf6fc8490b01bc3e8e2c800cec1ac272) (Apache-2.0), scanning the complete [`src/main/resources/db/postgres/schema.sql`](https://github.com/spring-projects/spring-petclinic/blob/88e37c15cf6fc8490b01bc3e8e2c800cec1ac272/src/main/resources/db/postgres/schema.sql). The three B1 truths are the SQL file identity, the `vets` table identity, and the unique direct containment file→`vets`; SymbolLattice scores **TP 3 / FP 0 / FN 0**, while CodeGraph 1.5 does not scan `.sql`, scoring **TP 0 / FP 0 / FN 3**.
-- Database runtime, DDL executability, indexes, constraints, foreign keys, query plans, and cross-file schema semantics are not claimed. Extractor facts remain v274 and the resolver remains v143; this acceptance is limited to static table identity and containment.
+- Fixed-source acceptance uses the official [`graphql/graphql-js`](https://github.com/graphql/graphql-js) v17.0.2 repository at commit [`71606d736c79b77588a15b32b9c9497e397adae0`](https://github.com/graphql/graphql-js/tree/71606d736c79b77588a15b32b9c9497e397adae0) (MIT), scanning the complete [`benchmark/github-schema.graphql`](https://github.com/graphql/graphql-js/blob/71606d736c79b77588a15b32b9c9497e397adae0/benchmark/github-schema.graphql). The three B1 truths are the `Contribution` interface identity, the `CreatedCommitContribution` type identity, and the type's unique direct implementation of that interface; SymbolLattice scores **TP 3 / FP 0 / FN 0**, while CodeGraph 1.5 does not scan `.graphql`, scoring **TP 0 / FP 0 / FN 3**.
+- GraphQL runtime, resolver execution, query validation, schema stitching, federation, and cross-file type merging are not claimed. Extractor facts remain v274 and the resolver remains v143; this acceptance is limited to static identities and one same-file direct interface implementation.
 
 ## MCP
 

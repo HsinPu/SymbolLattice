@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.415.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.416.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,10 +44,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.415.0 重點
+## v0.416.0 重點
 
-- 固定來源驗收使用官方 [`spring-projects/spring-petclinic`](https://github.com/spring-projects/spring-petclinic) commit [`88e37c15cf6fc8490b01bc3e8e2c800cec1ac272`](https://github.com/spring-projects/spring-petclinic/tree/88e37c15cf6fc8490b01bc3e8e2c800cec1ac272)（Apache-2.0），掃描完整 [`src/main/resources/db/postgres/schema.sql`](https://github.com/spring-projects/spring-petclinic/blob/88e37c15cf6fc8490b01bc3e8e2c800cec1ac272/src/main/resources/db/postgres/schema.sql)。三項 B1 truth 為 SQL 檔案 identity、`vets` table identity，以及 file→`vets` 的唯一直接 containment；SymbolLattice 為 **TP 3／FP 0／FN 0**，CodeGraph 1.5 不掃描 `.sql`，為 **TP 0／FP 0／FN 3**。
-- 不宣稱資料庫 runtime、DDL 可執行性、索引、constraint、foreign key、query plan 或跨檔 schema 語義。extractor facts 維持 v274，resolver 維持 v143；本次只驗證靜態 table identity 與 containment。
+- 固定來源驗收使用官方 [`graphql/graphql-js`](https://github.com/graphql/graphql-js) v17.0.2 commit [`71606d736c79b77588a15b32b9c9497e397adae0`](https://github.com/graphql/graphql-js/tree/71606d736c79b77588a15b32b9c9497e397adae0)（MIT），掃描完整 [`benchmark/github-schema.graphql`](https://github.com/graphql/graphql-js/blob/71606d736c79b77588a15b32b9c9497e397adae0/benchmark/github-schema.graphql)。三項 B1 truth 為 `Contribution` interface identity、`CreatedCommitContribution` type identity，以及該 type 對 interface 的唯一直接 implementation；SymbolLattice 為 **TP 3／FP 0／FN 0**，CodeGraph 1.5 不掃描 `.graphql`，為 **TP 0／FP 0／FN 3**。
+- 不宣稱 GraphQL runtime、resolver 執行、query validation、schema stitching、federation 或跨檔 type merge。extractor facts 維持 v274，resolver 維持 v143；本次只驗證靜態 identity 與同檔直接 interface implementation。
 
 ## MCP
 
