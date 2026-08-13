@@ -26566,7 +26566,14 @@ describe("SymbolLatticeService", () => {
         '  <button type="submit" formmethod="get" asp-page-handler="Save">Save</button>',
         "</form>"
       ].join("\n"),
-      "Pages/FormMethod.cshtml.cs": "public class FormMethodModel : Microsoft.AspNetCore.Mvc.RazorPages.PageModel { public void OnPostSave() {} }\n"
+      "Pages/FormMethod.cshtml.cs": "public class FormMethodModel : Microsoft.AspNetCore.Mvc.RazorPages.PageModel { public void OnPostSave() {} }\n",
+      "Pages/ExplicitExpression.cshtml": [
+        "@page",
+        "@model ExplicitExpressionModel",
+        `@("<form method='post' asp-page-handler='Forged'></form>")`
+      ].join("\n"),
+      "Pages/ExplicitExpression.cshtml.cs":
+        "public class ExplicitExpressionModel : Microsoft.AspNetCore.Mvc.RazorPages.PageModel { public void OnPostForged() {} }\n"
     });
     const graphStore = new SqliteGraphStore();
     const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
@@ -26587,6 +26594,11 @@ describe("SymbolLatticeService", () => {
 
     expect(
       snapshot.edges.filter((edge) => edge.sourceId === page("Pages/Ambiguous.cshtml")?.id && edge.kind === "handles")
+    ).toEqual([]);
+    expect(
+      snapshot.edges.filter(
+        (edge) => edge.sourceId === page("Pages/ExplicitExpression.cshtml")?.id && edge.kind === "handles"
+      )
     ).toEqual([]);
     expect(
       snapshot.edges.filter(

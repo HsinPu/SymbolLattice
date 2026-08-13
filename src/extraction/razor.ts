@@ -281,7 +281,12 @@ function razorHtmlAttributes(
   return attributes;
 }
 
-function matchingRazorCodeBrace(sourceText: string, open: number): number | null {
+function matchingRazorCodeDelimiter(
+  sourceText: string,
+  open: number,
+  openingCharacter: "{" | "(",
+  closingCharacter: "}" | ")"
+): number | null {
   let depth = 0;
   let quote: '"' | "'" | null = null;
   let verbatim = false;
@@ -327,8 +332,8 @@ function matchingRazorCodeBrace(sourceText: string, open: number): number | null
       verbatim = character === '"' && sourceText[cursor - 1] === "@";
       continue;
     }
-    if (character === "{") depth += 1;
-    if (character === "}") {
+    if (character === openingCharacter) depth += 1;
+    if (character === closingCharacter) {
       depth -= 1;
       if (depth === 0) return cursor + 1;
       if (depth < 0) return null;
@@ -337,7 +342,7 @@ function matchingRazorCodeBrace(sourceText: string, open: number): number | null
   return null;
 }
 
-function razorCodeBlockRanges(sourceText: string): readonly { start: number; end: number }[] | null {
+function razorCodeRanges(sourceText: string): readonly { start: number; end: number }[] | null {
   const ranges: Array<{ start: number; end: number }> = [];
   const pattern = /@\{|@(?:foreach|for|if|while|switch|using|lock|try|functions|code)\b/gu;
   for (const match of sourceText.matchAll(pattern)) {
@@ -345,18 +350,36 @@ function razorCodeBlockRanges(sourceText: string): readonly { start: number; end
     if (start === undefined) continue;
     const open = match[0] === "@{" ? start + 1 : sourceText.indexOf("{", start + match[0].length);
     if (open === -1) return null;
-    const end = matchingRazorCodeBrace(sourceText, open);
+    const end = matchingRazorCodeDelimiter(sourceText, open, "{", "}");
     if (end === null) return null;
     ranges.push({ start, end });
     pattern.lastIndex = end;
   }
+  const explicitExpressionPattern = /@\(/gu;
+  for (const match of sourceText.matchAll(explicitExpressionPattern)) {
+    const start = match.index;
+    if (start === undefined) continue;
+    if (ranges.some((range) => range.start <= start && start < range.end)) continue;
+    if (
+      sourceText.lastIndexOf("@*", start) > sourceText.lastIndexOf("*@", start) ||
+      sourceText.lastIndexOf("<!--", start) > sourceText.lastIndexOf("-->", start)
+    ) {
+      continue;
+    }
+    const open = start + 1;
+    const end = matchingRazorCodeDelimiter(sourceText, open, "(", ")");
+    if (end === null) return null;
+    ranges.push({ start, end });
+    explicitExpressionPattern.lastIndex = end;
+  }
+  ranges.sort((left, right) => left.start - right.start || right.end - left.end);
   return ranges;
 }
 
 function literalRazorPostHandlers(sourceText: string): readonly RazorPostHandlerDirective[] {
   const handlers: RazorPostHandlerDirective[] = [];
   const rawContainers = new Set(["script", "style", "textarea", "template"]);
-  const codeRanges = razorCodeBlockRanges(sourceText);
+  const codeRanges = razorCodeRanges(sourceText);
   if (codeRanges === null) return [];
   let codeRangeIndex = 0;
   let openFormIsPost: boolean | null = null;

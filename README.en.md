@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.418.1 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.418.2 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.418.1 highlights
+## v0.418.2 highlights
 
 - Fixed-source acceptance uses [`dotnet/AspNetCore.Docs.Samples`](https://github.com/dotnet/AspNetCore.Docs.Samples) commit [`17a4652a7ed5442ab5111b9ecb827aadd6262558`](https://github.com/dotnet/AspNetCore.Docs.Samples/tree/17a4652a7ed5442ab5111b9ecb827aadd6262558) (MIT), scanning [`Pages/Index.cshtml`](https://github.com/dotnet/AspNetCore.Docs.Samples/blob/17a4652a7ed5442ab5111b9ecb827aadd6262558/test/integration-tests/10.x/IntegrationTestsSample/src/RazorPagesProject/Pages/Index.cshtml) and its conventional companion. The three B1 truths are the page identity, root route `/`, and `AddMessage` resolving exactly to the unique `IndexModel.OnPostAddMessageAsync`; SymbolLattice scores **TP 3 / FP 0 / FN 0**, while CodeGraph 1.5 measures **TP 1 / FP 0 / FN 2**.
-- Exact handlers are limited to literal POST forms/buttons, the unique conventional `.cshtml.cs` companion, a source-proven `PageModel`, and one public, non-static, non-generic, non-override `OnPost…` method without `NonHandler`. A literal button `formmethod` overrides the enclosing form method, so the exact handler is retained only when it is omitted or explicitly `post`. Dynamic Tag Helper values, cross-page handlers, partial/overloaded targets, runtime model binding, authorization, and the Razor rendering lifecycle are not claimed. Extractor facts are v276 and the resolver is v144.
+- Exact handlers are limited to literal POST forms/buttons, the unique conventional `.cshtml.cs` companion, a source-proven `PageModel`, and one public, non-static, non-generic, non-override `OnPost…` method without `NonHandler`. A literal button `formmethod` overrides the enclosing form method, so the exact handler is retained only when it is omitted or explicitly `post`. Handler-looking strings inside Razor `@(...)` explicit expressions are excluded. Dynamic Tag Helper values, cross-page handlers, partial/overloaded targets, runtime model binding, authorization, and the Razor rendering lifecycle are not claimed. Extractor facts are v277 and the resolver is v144.
 
 ## MCP
 

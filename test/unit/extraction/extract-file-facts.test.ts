@@ -18188,7 +18188,25 @@ describe("source extraction", () => {
         "@model IndexModel",
         "@{",
         "  var fake = \"<form method='post' asp-page-handler='Forged'></form>\";",
+        '  var marker = "@(";',
         "}",
+        "@* marker @( *@",
+        "<!-- marker @( -->",
+        '<form method="post" asp-page-handler="Save"></form>'
+      ].join("\n")
+    });
+
+    expect(facts.razorFacts?.postHandlers?.map((handler) => handler.handlerName)).toEqual(["Save"]);
+  });
+
+  it("ignores handler-looking markup inside Razor explicit expressions", () => {
+    const facts = extractFileFacts({
+      filePath: "Pages/Index.cshtml",
+      language: "razor",
+      sourceText: [
+        "@page",
+        "@model IndexModel",
+        `@("<form method='post' asp-page-handler='Forged'></form>")`,
         '<form method="post" asp-page-handler="Save"></form>'
       ].join("\n")
     });
