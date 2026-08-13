@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.405.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.406.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.405.0 highlights
+## v0.406.0 highlights
 
-- Fixed-source acceptance uses official [`symfony/demo`](https://github.com/symfony/demo) at commit [`920d86dc809f837543cb519d3df5b364a2c36577`](https://github.com/symfony/demo/tree/920d86dc809f837543cb519d3df5b364a2c36577), scanning the complete [`templates/default/homepage.html.twig`](https://github.com/symfony/demo/blob/920d86dc809f837543cb519d3df5b364a2c36577/templates/default/homepage.html.twig) and [`templates/base.html.twig`](https://github.com/symfony/demo/blob/920d86dc809f837543cb519d3df5b364a2c36577/templates/base.html.twig). The three B1 truths are the two file identities and the unique literal `extends` from homepage to base; SymbolLattice scores **TP 3 / FP 0 / FN 0**, while CodeGraph 1.5 scores **TP 0 / FP 0 / FN 3**.
-- Dynamic template names, Twig runtime behavior, loaders, namespaces, bundle overrides, and Symfony container semantics are not truths. Extractor facts remain v274 and the resolver remains v143; Twig/Symfony runtime rendering was not executed.
+- Fixed-source acceptance uses official [`ethereum/solidity`](https://github.com/ethereum/solidity) at commit [`ff3c7124e002efff46731dfff1d30ab8d057a095`](https://github.com/ethereum/solidity/tree/ff3c7124e002efff46731dfff1d30ab8d057a095), scanning the complete [`test/libsolidity/ASTJSON/inheritance_specifier.sol`](https://github.com/ethereum/solidity/blob/ff3c7124e002efff46731dfff1d30ab8d057a095/test/libsolidity/ASTJSON/inheritance_specifier.sol). The three B1 truths are the `C1` and `C2` contract identities and the unique same-file inheritance from `C2` to `C1`; SymbolLattice scores **TP 3 / FP 0 / FN 0**, while CodeGraph 1.5 scores **TP 2 / FP 0 / FN 1**.
+- Constructor linearization, override/dispatch, storage layout, ABI, EVM, and runtime behavior are not truths. Extractor facts remain v274 and the resolver remains v143; `solc` is unavailable locally, so native compilation is environment-blocked.
 
 ## MCP
 

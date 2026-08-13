@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.405.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.406.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,10 +44,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.405.0 重點
+## v0.406.0 重點
 
-- 固定來源驗收使用官方 [`symfony/demo`](https://github.com/symfony/demo) commit [`920d86dc809f837543cb519d3df5b364a2c36577`](https://github.com/symfony/demo/tree/920d86dc809f837543cb519d3df5b364a2c36577)，掃描完整 [`templates/default/homepage.html.twig`](https://github.com/symfony/demo/blob/920d86dc809f837543cb519d3df5b364a2c36577/templates/default/homepage.html.twig) 與 [`templates/base.html.twig`](https://github.com/symfony/demo/blob/920d86dc809f837543cb519d3df5b364a2c36577/templates/base.html.twig)。三項 B1 truth 為兩個檔案 identity，以及 homepage→base 的唯一字面 `extends`；SymbolLattice 為 **TP 3／FP 0／FN 0**，CodeGraph 1.5 為 **TP 0／FP 0／FN 3**。
-- 不宣稱動態模板名稱、Twig runtime、loader、namespace、bundle override 或 Symfony container 語義。extractor facts 維持 v274，resolver 維持 v143；未執行 Twig／Symfony runtime rendering。
+- 固定來源驗收使用官方 [`ethereum/solidity`](https://github.com/ethereum/solidity) commit [`ff3c7124e002efff46731dfff1d30ab8d057a095`](https://github.com/ethereum/solidity/tree/ff3c7124e002efff46731dfff1d30ab8d057a095)，掃描完整 [`test/libsolidity/ASTJSON/inheritance_specifier.sol`](https://github.com/ethereum/solidity/blob/ff3c7124e002efff46731dfff1d30ab8d057a095/test/libsolidity/ASTJSON/inheritance_specifier.sol)。三項 B1 truth 為 `C1`、`C2` contract identities，以及 `C2`→`C1` 的唯一同檔 inheritance；SymbolLattice 為 **TP 3／FP 0／FN 0**，CodeGraph 1.5 為 **TP 2／FP 0／FN 1**。
+- 不宣稱 constructor linearization、override／dispatch、storage layout、ABI、EVM 或 runtime behavior。extractor facts 維持 v274，resolver 維持 v143；本機未提供 `solc`，因此 native compilation 為 environment-blocked。
 
 ## MCP
 
