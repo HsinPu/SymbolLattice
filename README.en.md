@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.404.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.405.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.404.0 highlights
+## v0.405.0 highlights
 
-- Fixed-source acceptance uses official [`Shopify/dawn`](https://github.com/Shopify/dawn) at commit [`258f00f64365e2018ca4c62778a6bf55a5d3cd18`](https://github.com/Shopify/dawn/tree/258f00f64365e2018ca4c62778a6bf55a5d3cd18), scanning the complete [`layout/password.liquid`](https://github.com/Shopify/dawn/blob/258f00f64365e2018ca4c62778a6bf55a5d3cd18/layout/password.liquid) and [`snippets/meta-tags.liquid`](https://github.com/Shopify/dawn/blob/258f00f64365e2018ca4c62778a6bf55a5d3cd18/snippets/meta-tags.liquid). The three B1 truths are the two file identities and the unique literal render from the password template to the meta-tags snippet; SymbolLattice and CodeGraph 1.5 both score **TP 3 / FP 0 / FN 0**.
-- Dynamic snippet names, variable/filter evaluation, Shopify runtime behavior, section schemas, and cross-theme dependency semantics are not truths. Extractor facts remain v274 and the resolver remains v143; Shopify runtime rendering was not executed.
+- Fixed-source acceptance uses official [`symfony/demo`](https://github.com/symfony/demo) at commit [`920d86dc809f837543cb519d3df5b364a2c36577`](https://github.com/symfony/demo/tree/920d86dc809f837543cb519d3df5b364a2c36577), scanning the complete [`templates/default/homepage.html.twig`](https://github.com/symfony/demo/blob/920d86dc809f837543cb519d3df5b364a2c36577/templates/default/homepage.html.twig) and [`templates/base.html.twig`](https://github.com/symfony/demo/blob/920d86dc809f837543cb519d3df5b364a2c36577/templates/base.html.twig). The three B1 truths are the two file identities and the unique literal `extends` from homepage to base; SymbolLattice scores **TP 3 / FP 0 / FN 0**, while CodeGraph 1.5 scores **TP 0 / FP 0 / FN 3**.
+- Dynamic template names, Twig runtime behavior, loaders, namespaces, bundle overrides, and Symfony container semantics are not truths. Extractor facts remain v274 and the resolver remains v143; Twig/Symfony runtime rendering was not executed.
 
 ## MCP
 
