@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.409.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.410.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,10 +44,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.409.0 重點
+## v0.410.0 重點
 
-- 固定來源驗收使用 [`shamrice/COBOL-Examples`](https://github.com/shamrice/COBOL-Examples) commit [`5c6dc7ceda33c86c98b026f77f09f551105146aa`](https://github.com/shamrice/COBOL-Examples/tree/5c6dc7ceda33c86c98b026f77f09f551105146aa)（MIT），掃描完整 [`accept/accept-secure.cbl`](https://github.com/shamrice/COBOL-Examples/blob/5c6dc7ceda33c86c98b026f77f09f551105146aa/accept/accept-secure.cbl)。三項 B1 truth 為 `accept-secure` program identity、`main-procedure` paragraph identity，以及 program→paragraph 的唯一直接 containment；SymbolLattice 與 CodeGraph 1.5 均為 **TP 3／FP 0／FN 0**。
-- 不宣稱 `ACCEPT SECURE`、DISPLAY、I/O、runtime behavior、PERFORM 或 paragraph call 語義。extractor facts 維持 v274，resolver 維持 v143；本機未提供 `cobc`／`cobcrun`，因此 native execution 為 environment-blocked。
+- 固定來源驗收使用官方 [`ziglang/zig`](https://github.com/ziglang/zig) 0.15.1、commit [`3db960767d12b6214bcf43f1966a037c7a586a12`](https://github.com/ziglang/zig/tree/3db960767d12b6214bcf43f1966a037c7a586a12)（MIT），掃描完整 [`test/cases/exit.zig`](https://github.com/ziglang/zig/blob/3db960767d12b6214bcf43f1966a037c7a586a12/test/cases/exit.zig)。三項 B1 truth 為檔案 identity、`main` function identity，以及 file→`main` 的唯一直接 containment；SymbolLattice 為 **TP 3／FP 0／FN 0**，CodeGraph 1.5 因不索引 Zig 為 **TP 0／FP 0／FN 3**。
+- 不宣稱程式啟動、exit behavior、target-specific runtime 或 function-call 語義。extractor facts 維持 v274，resolver 維持 v143；本機未提供 Zig compiler，因此 native execution 為 environment-blocked。
 
 ## MCP
 
