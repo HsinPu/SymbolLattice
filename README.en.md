@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.410.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.411.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.410.0 highlights
+## v0.411.0 highlights
 
-- Fixed-source acceptance uses official [`ziglang/zig`](https://github.com/ziglang/zig) 0.15.1 at commit [`3db960767d12b6214bcf43f1966a037c7a586a12`](https://github.com/ziglang/zig/tree/3db960767d12b6214bcf43f1966a037c7a586a12) (MIT), scanning the complete [`test/cases/exit.zig`](https://github.com/ziglang/zig/blob/3db960767d12b6214bcf43f1966a037c7a586a12/test/cases/exit.zig). The three B1 truths are the file identity, the `main` function identity, and the unique direct containment from the file to `main`; SymbolLattice scores **TP 3 / FP 0 / FN 0**, while CodeGraph 1.5 does not index Zig and scores **TP 0 / FP 0 / FN 3**.
-- Program startup, exit behavior, target-specific runtime, and function-call semantics are not claimed. Extractor facts remain v274 and the resolver remains v143; no Zig compiler is available locally, so native execution is environment-blocked.
+- Fixed-source acceptance uses GitHub's official [`actions/starter-workflows`](https://github.com/actions/starter-workflows) at commit [`e3c451d60f119b71caebf13c98ac45da6e15b4b7`](https://github.com/actions/starter-workflows/tree/e3c451d60f119b71caebf13c98ac45da6e15b4b7) (MIT), scanning the complete [`ci/node.js.yml`](https://github.com/actions/starter-workflows/blob/e3c451d60f119b71caebf13c98ac45da6e15b4b7/ci/node.js.yml). The three B1 truths are the file identity, the top-level scalar `name` identity, and the unique direct containment from the file to `name`; SymbolLattice scores **TP 3 / FP 0 / FN 0**, while CodeGraph 1.5 proves only file inventory and has no YAML symbol or containment, scoring **TP 1 / FP 0 / FN 2**.
+- GitHub Actions execution, workflow runtime, nested keys, and value semantics are not claimed. Extractor facts remain v274 and the resolver remains v143; this acceptance is limited to static YAML identity and containment.
 
 ## MCP
 
