@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.406.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.407.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,10 +44,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.406.0 重點
+## v0.407.0 重點
 
-- 固定來源驗收使用官方 [`ethereum/solidity`](https://github.com/ethereum/solidity) commit [`ff3c7124e002efff46731dfff1d30ab8d057a095`](https://github.com/ethereum/solidity/tree/ff3c7124e002efff46731dfff1d30ab8d057a095)，掃描完整 [`test/libsolidity/ASTJSON/inheritance_specifier.sol`](https://github.com/ethereum/solidity/blob/ff3c7124e002efff46731dfff1d30ab8d057a095/test/libsolidity/ASTJSON/inheritance_specifier.sol)。三項 B1 truth 為 `C1`、`C2` contract identities，以及 `C2`→`C1` 的唯一同檔 inheritance；SymbolLattice 為 **TP 3／FP 0／FN 0**，CodeGraph 1.5 為 **TP 2／FP 0／FN 1**。
-- 不宣稱 constructor linearization、override／dispatch、storage layout、ABI、EVM 或 runtime behavior。extractor facts 維持 v274，resolver 維持 v143；本機未提供 `solc`，因此 native compilation 為 environment-blocked。
+- 固定來源驗收使用官方 [`Ortus-Solutions/commandbox`](https://github.com/Ortus-Solutions/commandbox) v6.3.1、commit [`8fff2b126c01eb69920f120896ef63f6ff9aaeab`](https://github.com/Ortus-Solutions/commandbox/tree/8fff2b126c01eb69920f120896ef63f6ff9aaeab)，掃描完整 [`pwd.cfc`](https://github.com/Ortus-Solutions/commandbox/blob/8fff2b126c01eb69920f120896ef63f6ff9aaeab/src/cfml/system/modules_app/system-commands/commands/pwd.cfc)。三項 B1 truth 為 `pwd` component identity、`run` method identity，以及 `pwd`→`run` 的唯一直接 containment；SymbolLattice 與 CodeGraph 1.5 均為 **TP 3／FP 0／FN 0**。
+- 不宣稱 `getCWD()` 呼叫解析、CommandBox 注入、命令路由、remote endpoint 或 CFML runtime behavior。extractor facts 維持 v274，resolver 維持 v143；本機未提供 CFML runtime，因此 native execution 為 environment-blocked。
 
 ## MCP
 

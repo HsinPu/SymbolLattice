@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.406.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.407.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.406.0 highlights
+## v0.407.0 highlights
 
-- Fixed-source acceptance uses official [`ethereum/solidity`](https://github.com/ethereum/solidity) at commit [`ff3c7124e002efff46731dfff1d30ab8d057a095`](https://github.com/ethereum/solidity/tree/ff3c7124e002efff46731dfff1d30ab8d057a095), scanning the complete [`test/libsolidity/ASTJSON/inheritance_specifier.sol`](https://github.com/ethereum/solidity/blob/ff3c7124e002efff46731dfff1d30ab8d057a095/test/libsolidity/ASTJSON/inheritance_specifier.sol). The three B1 truths are the `C1` and `C2` contract identities and the unique same-file inheritance from `C2` to `C1`; SymbolLattice scores **TP 3 / FP 0 / FN 0**, while CodeGraph 1.5 scores **TP 2 / FP 0 / FN 1**.
-- Constructor linearization, override/dispatch, storage layout, ABI, EVM, and runtime behavior are not truths. Extractor facts remain v274 and the resolver remains v143; `solc` is unavailable locally, so native compilation is environment-blocked.
+- Fixed-source acceptance uses official [`Ortus-Solutions/commandbox`](https://github.com/Ortus-Solutions/commandbox) v6.3.1 at commit [`8fff2b126c01eb69920f120896ef63f6ff9aaeab`](https://github.com/Ortus-Solutions/commandbox/tree/8fff2b126c01eb69920f120896ef63f6ff9aaeab), scanning the complete [`pwd.cfc`](https://github.com/Ortus-Solutions/commandbox/blob/8fff2b126c01eb69920f120896ef63f6ff9aaeab/src/cfml/system/modules_app/system-commands/commands/pwd.cfc). The three B1 truths are the `pwd` component identity, the `run` method identity, and the unique direct containment from `pwd` to `run`; SymbolLattice and CodeGraph 1.5 both score **TP 3 / FP 0 / FN 0**.
+- `getCWD()` call resolution, CommandBox injection, command routing, remote endpoints, and CFML runtime behavior are not claimed. Extractor facts remain v274 and the resolver remains v143; no CFML runtime is available locally, so native execution is environment-blocked.
 
 ## MCP
 
