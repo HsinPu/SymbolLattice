@@ -26558,7 +26558,15 @@ describe("SymbolLatticeService", () => {
       "Pages/Override.cshtml": ["@page", "@model OverrideModel", '<form method="post" asp-page-handler="Save"></form>'].join("\n"),
       "Pages/Override.cshtml.cs": "public class OverrideModel : Microsoft.AspNetCore.Mvc.RazorPages.PageModel { public override void OnPostSave() {} }\n",
       "Pages/DefaultAsync.cshtml": ["@page", "@model DefaultAsyncModel", '<form method="post" asp-page-handler="Async"></form>'].join("\n"),
-      "Pages/DefaultAsync.cshtml.cs": "public class DefaultAsyncModel : Microsoft.AspNetCore.Mvc.RazorPages.PageModel { public void OnPostAsync() {} }\n"
+      "Pages/DefaultAsync.cshtml.cs": "public class DefaultAsyncModel : Microsoft.AspNetCore.Mvc.RazorPages.PageModel { public void OnPostAsync() {} }\n",
+      "Pages/FormMethod.cshtml": [
+        "@page",
+        "@model FormMethodModel",
+        '<form method="post">',
+        '  <button type="submit" formmethod="get" asp-page-handler="Save">Save</button>',
+        "</form>"
+      ].join("\n"),
+      "Pages/FormMethod.cshtml.cs": "public class FormMethodModel : Microsoft.AspNetCore.Mvc.RazorPages.PageModel { public void OnPostSave() {} }\n"
     });
     const graphStore = new SqliteGraphStore();
     const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
@@ -26603,7 +26611,7 @@ describe("SymbolLatticeService", () => {
         (edge) => edge.sourceId === page("Pages/Code.cshtml")?.id && edge.targetId === codeModel?.id && edge.kind === "references"
       )
     ).toEqual([]);
-    for (const path of ["Private", "Static", "Generic", "NonHandler", "NoBase", "Base", "Override", "DefaultAsync"]) {
+    for (const path of ["Private", "Static", "Generic", "NonHandler", "NoBase", "Base", "Override", "DefaultAsync", "FormMethod"]) {
       expect(
         snapshot.edges.filter(
           (edge) => edge.sourceId === page(`Pages/${path}.cshtml`)?.id && edge.kind === "handles"

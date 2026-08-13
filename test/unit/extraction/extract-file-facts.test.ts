@@ -18058,6 +18058,48 @@ describe("source extraction", () => {
         ),
         true,
         true
+      ],
+      [
+        "Pages/Index.cshtml",
+        [
+          "@page",
+          "@model IndexModel",
+          '<form method="post">',
+          '  <button type="submit" formmethod="get" asp-page-handler="Save">Save</button>',
+          "</form>"
+        ].join("\n"),
+        true,
+        true
+      ],
+      [
+        "Pages/Index.cshtml",
+        ["@page", "@model IndexModel", '<form method="post" action="/other" asp-page-handler="Save"></form>'].join("\n"),
+        true,
+        true
+      ],
+      [
+        "Pages/Index.cshtml",
+        [
+          "@page",
+          "@model IndexModel",
+          '<form method="post" asp-page="Other">',
+          '  <button type="submit" asp-page-handler="Save">Save</button>',
+          "</form>"
+        ].join("\n"),
+        true,
+        true
+      ],
+      [
+        "Pages/Index.cshtml",
+        [
+          "@page",
+          "@model IndexModel",
+          '<form method="post">',
+          '  <button type="submit" formaction="/other" asp-page-handler="Save">Save</button>',
+          "</form>"
+        ].join("\n"),
+        true,
+        true
       ]
     ] as const;
 
@@ -18167,6 +18209,34 @@ describe("source extraction", () => {
     });
 
     expect(facts.razorFacts?.postHandlers).toEqual([]);
+  });
+
+  it("honors a literal Razor submit button formmethod override", () => {
+    const post = extractFileFacts({
+      filePath: "Pages/Index.cshtml",
+      language: "razor",
+      sourceText: [
+        "@page",
+        "@model IndexModel",
+        '<form method="post">',
+        '  <button type="submit" formmethod="post" asp-page-handler="Save">Save</button>',
+        "</form>"
+      ].join("\n")
+    });
+    const get = extractFileFacts({
+      filePath: "Pages/Index.cshtml",
+      language: "razor",
+      sourceText: [
+        "@page",
+        "@model IndexModel",
+        '<form method="post">',
+        '  <button type="submit" formmethod="get" asp-page-handler="Save">Save</button>',
+        "</form>"
+      ].join("\n")
+    });
+
+    expect(post.razorFacts?.postHandlers?.map((handler) => handler.handlerName)).toEqual(["Save"]);
+    expect(get.razorFacts?.postHandlers).toEqual([]);
   });
 
   it("extracts complete ArkTS ArkUI component structs and direct UI roots", () => {

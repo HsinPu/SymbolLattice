@@ -426,21 +426,38 @@ function literalRazorPostHandlers(sourceText: string): readonly RazorPostHandler
       attributes.find((candidate) => candidate.name === name);
     const handler = attribute("asp-page-handler");
     const method = attribute("method")?.value?.toLowerCase();
+    const formMethodAttribute = attribute("formmethod");
+    const formMethod = formMethodAttribute?.value?.toLowerCase();
     const type = attribute("type")?.value?.toLowerCase();
     const selfClosing = /\/\s*>$/u.test(sourceText.slice(next, tagEnd));
     if (tagName === "form") {
       if (openFormIsPost !== null) return [];
-      openFormIsPost = method === "post";
+      openFormIsPost =
+        method === "post" &&
+        !["action", "asp-page", "asp-action", "asp-controller", "asp-area"].some(
+          (name) => attribute(name) !== undefined
+        );
     }
     if (handler !== undefined) {
+      const hasButtonTargetOverride = [
+        "form",
+        "formaction",
+        "asp-page",
+        "asp-action",
+        "asp-controller",
+        "asp-area"
+      ].some((name) => attribute(name) !== undefined);
       if (
-        attribute("asp-page") !== undefined ||
         handler.value === null ||
         handler.valueStart === null ||
         !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(handler.value) ||
         !(
-          (tagName === "form" && method === "post") ||
-          (tagName === "button" && type === "submit" && openFormIsPost === true)
+          (tagName === "form" && openFormIsPost === true) ||
+          (tagName === "button" &&
+            type === "submit" &&
+            openFormIsPost === true &&
+            !hasButtonTargetOverride &&
+            (formMethodAttribute === undefined || formMethod === "post"))
         )
       ) {
         return [];
