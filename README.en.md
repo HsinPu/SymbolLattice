@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.411.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.412.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.411.0 highlights
+## v0.412.0 highlights
 
-- Fixed-source acceptance uses GitHub's official [`actions/starter-workflows`](https://github.com/actions/starter-workflows) at commit [`e3c451d60f119b71caebf13c98ac45da6e15b4b7`](https://github.com/actions/starter-workflows/tree/e3c451d60f119b71caebf13c98ac45da6e15b4b7) (MIT), scanning the complete [`ci/node.js.yml`](https://github.com/actions/starter-workflows/blob/e3c451d60f119b71caebf13c98ac45da6e15b4b7/ci/node.js.yml). The three B1 truths are the file identity, the top-level scalar `name` identity, and the unique direct containment from the file to `name`; SymbolLattice scores **TP 3 / FP 0 / FN 0**, while CodeGraph 1.5 proves only file inventory and has no YAML symbol or containment, scoring **TP 1 / FP 0 / FN 2**.
-- GitHub Actions execution, workflow runtime, nested keys, and value semantics are not claimed. Extractor facts remain v274 and the resolver remains v143; this acceptance is limited to static YAML identity and containment.
+- Fixed-source acceptance uses WordPress's official [`wordpress-develop`](https://github.com/WordPress/wordpress-develop) 6.7.0 commit [`262f4b6add2d1503bdd35611764ec58742b10fb9`](https://github.com/WordPress/wordpress-develop/tree/262f4b6add2d1503bdd35611764ec58742b10fb9) (GPL-2.0-or-later), scanning the complete [`tests/phpunit/multisite.xml`](https://github.com/WordPress/wordpress-develop/blob/262f4b6add2d1503bdd35611764ec58742b10fb9/tests/phpunit/multisite.xml). The three B1 truths are the `phpunit` root element, its direct `php` child element, and the unique direct containment `phpunit`→`php`; SymbolLattice scores **TP 3 / FP 0 / FN 0**, while CodeGraph 1.5 recognizes only the XML file and has no element identities or containment, scoring **TP 0 / FP 0 / FN 3**.
+- PHPUnit execution, XML Schema validation, attribute values, text content, and arbitrary deep XML semantics are not claimed. Extractor facts remain v274 and the resolver remains v143; this acceptance is limited to static XML element identity and direct containment.
 
 ## MCP
 

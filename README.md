@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.411.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.412.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,10 +44,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.411.0 重點
+## v0.412.0 重點
 
-- 固定來源驗收使用 GitHub 官方 [`actions/starter-workflows`](https://github.com/actions/starter-workflows) commit [`e3c451d60f119b71caebf13c98ac45da6e15b4b7`](https://github.com/actions/starter-workflows/tree/e3c451d60f119b71caebf13c98ac45da6e15b4b7)（MIT），掃描完整 [`ci/node.js.yml`](https://github.com/actions/starter-workflows/blob/e3c451d60f119b71caebf13c98ac45da6e15b4b7/ci/node.js.yml)。三項 B1 truth 為檔案 identity、頂層 scalar `name` identity，以及 file→`name` 的唯一直接 containment；SymbolLattice 為 **TP 3／FP 0／FN 0**，CodeGraph 1.5 僅證明檔案 inventory、沒有 YAML symbol／containment，為 **TP 1／FP 0／FN 2**。
-- 不宣稱 GitHub Actions 執行、workflow runtime、巢狀 keys 或 values 語義。extractor facts 維持 v274，resolver 維持 v143；本次只驗證靜態 YAML identity 與 containment。
+- 固定來源驗收使用 WordPress 官方 [`wordpress-develop`](https://github.com/WordPress/wordpress-develop) 6.7.0 commit [`262f4b6add2d1503bdd35611764ec58742b10fb9`](https://github.com/WordPress/wordpress-develop/tree/262f4b6add2d1503bdd35611764ec58742b10fb9)（GPL-2.0-or-later），掃描完整 [`tests/phpunit/multisite.xml`](https://github.com/WordPress/wordpress-develop/blob/262f4b6add2d1503bdd35611764ec58742b10fb9/tests/phpunit/multisite.xml)。三項 B1 truth 為根元素 `phpunit`、直接子元素 `php`，以及 `phpunit`→`php` 的唯一直接 containment；SymbolLattice 為 **TP 3／FP 0／FN 0**，CodeGraph 1.5 僅辨識 XML 檔案、沒有元素 identity／containment，為 **TP 0／FP 0／FN 3**。
+- 不宣稱 PHPUnit 執行、XML Schema 驗證、屬性值、文字內容或任意深層 XML 語義。extractor facts 維持 v274，resolver 維持 v143；本次只驗證靜態 XML 元素 identity 與直接 containment。
 
 ## MCP
 
