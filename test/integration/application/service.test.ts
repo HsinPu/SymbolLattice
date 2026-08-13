@@ -26411,7 +26411,7 @@ describe("SymbolLatticeService", () => {
     );
   });
 
-  it("projects conventional Razor Pages model references while leaving post handlers unresolved across reopen and changed sync", async () => {
+  it("projects conventional Razor Pages model and literal post-handler references across reopen and changed sync", async () => {
     const projectPath = await createInlineProject({
       "Pages/Index.cshtml": [
         "\ufeff@page",
@@ -26421,6 +26421,7 @@ describe("SymbolLatticeService", () => {
         "</form>"
       ].join("\n"),
       "Pages/Index.cshtml.cs": [
+        "using Microsoft.AspNetCore.Mvc.RazorPages;",
         "public class IndexModel : PageModel {",
         "  public System.Threading.Tasks.Task OnPostAddMessageAsync() => System.Threading.Tasks.Task.CompletedTask;",
         "}"
@@ -26464,7 +26465,21 @@ describe("SymbolLatticeService", () => {
       );
       expect(
         snapshot.edges.filter((edge) => edge.sourceId === page.id && edge.targetId === handler.id && edge.kind === "handles")
-      ).toEqual([]);
+      ).toEqual([
+        expect.objectContaining({
+          sourceId: page.id,
+          targetId: handler.id,
+          kind: "handles",
+          resolution: "exact",
+          confidence: 1,
+          referenceName: "AddMessage",
+          evidence: expect.objectContaining({
+            ruleId: "framework.razor-pages.literal-post-handler.conventional-companion-method",
+            stage: "module",
+            candidateSymbolIds: [handler.id]
+          })
+        })
+      ]);
     };
 
     await assertProjected(graphStore);
@@ -26477,6 +26492,7 @@ describe("SymbolLatticeService", () => {
     await writeFile(
       join(projectPath, "Pages", "Index.cshtml.cs"),
       [
+        "using Microsoft.AspNetCore.Mvc.RazorPages;",
         "public class IndexModel : PageModel {",
         "  public System.Threading.Tasks.Task OnPostAddMessageAsync() => System.Threading.Tasks.Task.CompletedTask;",
         "  public void Changed() {}",
@@ -26493,6 +26509,17 @@ describe("SymbolLatticeService", () => {
     });
     expect(changed.generationId).not.toBe(initialGenerationId);
     await assertProjected(graphStore);
+    await writeFile(join(projectPath, "Pages", "PageModel.cs"), "public class PageModel {}\n", "utf8");
+    await service.sync({ projectPath });
+    const shadowedSnapshot = graphStore.getSnapshot(projectPath);
+    const shadowedPage = shadowedSnapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "Pages/Index.cshtml#default"
+    );
+    expect(
+      shadowedSnapshot.edges.filter(
+        (edge) => edge.sourceId === shadowedPage?.id && edge.kind === "handles"
+      )
+    ).toEqual([]);
   });
 
   it("fails closed for Razor Pages partial, overloaded, and non-companion C# targets", async () => {
@@ -26503,7 +26530,7 @@ describe("SymbolLatticeService", () => {
         '<form method="post" asp-page-handler="Save"></form>'
       ].join("\n"),
       "Pages/Ambiguous.cshtml.cs": [
-        "public class AmbiguousModel {",
+        "public class AmbiguousModel : Microsoft.AspNetCore.Mvc.RazorPages.PageModel {",
         "  public void OnPostSave() {}",
         "  public void OnPostSaveAsync() {}",
         "}"
@@ -26517,19 +26544,21 @@ describe("SymbolLatticeService", () => {
       "Pages/Code.cshtml": ["@page", "@{", '  var raw = """', "@model CodeModel", '""";', "}"].join("\n"),
       "Pages/Code.cshtml.cs": "public class CodeModel {}\n",
       "Pages/Private.cshtml": ["@page", "@model PrivateModel", '<form method="post" asp-page-handler="Save"></form>'].join("\n"),
-      "Pages/Private.cshtml.cs": "public class PrivateModel { private void OnPostSave() {} }\n",
+      "Pages/Private.cshtml.cs": "public class PrivateModel : Microsoft.AspNetCore.Mvc.RazorPages.PageModel { private void OnPostSave() {} }\n",
       "Pages/Static.cshtml": ["@page", "@model StaticModel", '<form method="post" asp-page-handler="Save"></form>'].join("\n"),
-      "Pages/Static.cshtml.cs": "public class StaticModel { public static void OnPostSave() {} }\n",
+      "Pages/Static.cshtml.cs": "public class StaticModel : Microsoft.AspNetCore.Mvc.RazorPages.PageModel { public static void OnPostSave() {} }\n",
       "Pages/Generic.cshtml": ["@page", "@model GenericModel", '<form method="post" asp-page-handler="Save"></form>'].join("\n"),
-      "Pages/Generic.cshtml.cs": "public class GenericModel { public void OnPostSave<T>() {} }\n",
+      "Pages/Generic.cshtml.cs": "public class GenericModel : Microsoft.AspNetCore.Mvc.RazorPages.PageModel { public void OnPostSave<T>() {} }\n",
       "Pages/NonHandler.cshtml": ["@page", "@model NonHandlerModel", '<form method="post" asp-page-handler="Save"></form>'].join("\n"),
-      "Pages/NonHandler.cshtml.cs": "public class NonHandlerModel { [NonHandler] public void OnPostSave() {} }\n",
+      "Pages/NonHandler.cshtml.cs": "public class NonHandlerModel : Microsoft.AspNetCore.Mvc.RazorPages.PageModel { [NonHandler] public void OnPostSave() {} }\n",
       "Pages/NoBase.cshtml": ["@page", "@model NoBaseModel", '<form method="post" asp-page-handler="Save"></form>'].join("\n"),
       "Pages/NoBase.cshtml.cs": "public class NoBaseModel { public void OnPostSave() {} }\n",
       "Pages/Base.cshtml": ["@page", "@model BaseModel", '<form method="post" asp-page-handler="Save"></form>'].join("\n"),
       "Pages/Base.cshtml.cs": "public class BaseModel : CustomBase { public void OnPostSave() {} }\n",
       "Pages/Override.cshtml": ["@page", "@model OverrideModel", '<form method="post" asp-page-handler="Save"></form>'].join("\n"),
-      "Pages/Override.cshtml.cs": "public class OverrideModel : PageModel { public override void OnPostSave() {} }\n"
+      "Pages/Override.cshtml.cs": "public class OverrideModel : Microsoft.AspNetCore.Mvc.RazorPages.PageModel { public override void OnPostSave() {} }\n",
+      "Pages/DefaultAsync.cshtml": ["@page", "@model DefaultAsyncModel", '<form method="post" asp-page-handler="Async"></form>'].join("\n"),
+      "Pages/DefaultAsync.cshtml.cs": "public class DefaultAsyncModel : Microsoft.AspNetCore.Mvc.RazorPages.PageModel { public void OnPostAsync() {} }\n"
     });
     const graphStore = new SqliteGraphStore();
     const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
@@ -26574,7 +26603,7 @@ describe("SymbolLatticeService", () => {
         (edge) => edge.sourceId === page("Pages/Code.cshtml")?.id && edge.targetId === codeModel?.id && edge.kind === "references"
       )
     ).toEqual([]);
-    for (const path of ["Private", "Static", "Generic", "NonHandler", "NoBase", "Base", "Override"]) {
+    for (const path of ["Private", "Static", "Generic", "NonHandler", "NoBase", "Base", "Override", "DefaultAsync"]) {
       expect(
         snapshot.edges.filter(
           (edge) => edge.sourceId === page(`Pages/${path}.cshtml`)?.id && edge.kind === "handles"

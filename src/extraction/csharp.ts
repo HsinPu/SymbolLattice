@@ -26,6 +26,7 @@ export interface CsharpExtractFileFactsInput {
 type CsharpSyntaxNode = SgNode;
 
 interface StaticCsharpType {
+  readonly baseName: string | null;
   readonly kind: "class" | "interface";
   readonly isPartial: boolean;
   readonly isStatic: boolean;
@@ -312,6 +313,7 @@ function staticCsharpType(node: CsharpSyntaxNode): StaticCsharpType | null {
   const children = directChildren(node);
   const nameNode = children.find((child) => child.kind() === "identifier");
   const body = children.find((child) => child.kind() === "declaration_list");
+  const baseList = children.find((child) => child.kind() === "base_list");
   const name = nameNode === undefined ? null : identifierText(nameNode);
   const isStatic = children.some(
     (child) => child.kind() === "modifier" && nodeText(child) === "static"
@@ -319,7 +321,14 @@ function staticCsharpType(node: CsharpSyntaxNode): StaticCsharpType | null {
   const isPartial = children.some(
     (child) => child.kind() === "modifier" && nodeText(child) === "partial"
   );
-  return name === null || body === undefined ? null : { kind, isPartial, isStatic, name, node, body };
+  const baseText = baseList === undefined ? null : nodeText(baseList).trim();
+  const baseName =
+    baseText === null
+      ? null
+      : /^:\s*(PageModel|Microsoft\.AspNetCore\.Mvc\.RazorPages\.PageModel)$/u.exec(baseText)?.[1] ?? null;
+  return name === null || body === undefined
+    ? null
+    : { baseName, kind, isPartial, isStatic, name, node, body };
 }
 
 function directTopLevelTypeNodes(root: CsharpSyntaxNode): readonly CsharpSyntaxNode[] {
@@ -373,6 +382,40 @@ function staticCsharpMethod(node: CsharpSyntaxNode): StaticCsharpMethod | null {
     (child) => child.kind() === "modifier" && nodeText(child) === "static"
   );
   return name === null ? null : { body: body ?? null, isStatic, name, node, parameterCount };
+}
+
+function hasDirectRazorPagesImport(root: CsharpSyntaxNode): boolean {
+  return (
+    directChildren(root).filter((node) => {
+      const text = nodeText(node).trim();
+      return (
+        (node.kind() === "using_directive" &&
+          text === "using Microsoft.AspNetCore.Mvc.RazorPages;") ||
+        (node.kind() === "global_using_directive" &&
+          text === "global using Microsoft.AspNetCore.Mvc.RazorPages;")
+      );
+    }).length === 1
+  );
+}
+
+function razorPageHandlerName(method: StaticCsharpMethod): string | null {
+  if (method.body === null || method.isStatic || method.name === "OnPostAsync") {
+    return null;
+  }
+  const children = directChildren(method.node);
+  const modifiers = children
+    .filter((child) => child.kind() === "modifier")
+    .map((child) => nodeText(child));
+  if (
+    modifiers.filter((modifier) => modifier === "public").length !== 1 ||
+    modifiers.some((modifier) => modifier !== "public" && modifier !== "async") ||
+    children.some((child) => child.kind() === "type_parameter_list") ||
+    staticRouteAttributes(method.node).some((attribute) => attribute.shortName === "NonHandler")
+  ) {
+    return null;
+  }
+  const match = /^OnPost([A-Za-z_][A-Za-z0-9_]*?)(?:Async)?$/u.exec(method.name);
+  return match?.[1] ?? null;
 }
 
 function boundedCsharpParameterCount(parameterList: CsharpSyntaxNode): number | null {
@@ -703,7 +746,12 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
-  const csharpDirectClassFacts: { classId: string; isPartial: boolean }[] = [];
+  const csharpDirectClassFacts: Array<{
+    classId: string;
+    isPartial: boolean;
+    isRazorPageModel?: boolean;
+    razorPageHandlerMethods?: Array<{ handlerName: string; methodId: string }>;
+  }> = [];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -915,6 +963,12 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
       .map((node) => staticCsharpType(node))
       .filter((candidate): candidate is StaticCsharpType => candidate !== null);
     const hasMvcImport = hasDirectMvcImport(root);
+    const hasRazorPagesImport = hasDirectRazorPagesImport(root);
+    const hasPreprocessing = hasCsharpPreprocessing(root);
+    const hasAmbiguousUsing = hasAmbiguousCsharpUsing(root);
+    const hasLocalPageModelDeclaration = types.some(
+      (candidate) => candidate.kind === "class" && candidate.name === "PageModel"
+    );
     const staticClassMethods: Array<{
       readonly declaration: StaticCsharpMethod;
       readonly symbol: SymbolNode;
@@ -924,15 +978,34 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
 
     for (const type of types) {
       const typeSymbol = addType(type);
-      if (type.kind === "class") {
-        csharpDirectClassFacts.push({ classId: typeSymbol.id, isPartial: type.isPartial });
-      }
+      const directClassFact =
+        type.kind === "class"
+          ? {
+              classId: typeSymbol.id,
+              isPartial: type.isPartial,
+              isRazorPageModel:
+                !type.isPartial &&
+                !hasPreprocessing &&
+                !hasAmbiguousUsing &&
+                !hasLocalPageModelDeclaration &&
+                (type.baseName === "Microsoft.AspNetCore.Mvc.RazorPages.PageModel" ||
+                  (type.baseName === "PageModel" && hasRazorPagesImport)),
+              razorPageHandlerMethods: [] as Array<{ handlerName: string; methodId: string }>
+            }
+          : null;
       const controllerPath = staticControllerPath(type, hasMvcImport);
       const methods = directChildren(type.body)
         .map((node) => staticCsharpMethod(node))
         .filter((candidate): candidate is StaticCsharpMethod => candidate !== null);
       for (const methodDeclaration of methods) {
         const methodSymbol = addMethod(typeSymbol, methodDeclaration);
+        const handlerName =
+          directClassFact?.isRazorPageModel === true
+            ? razorPageHandlerName(methodDeclaration)
+            : null;
+        if (handlerName !== null && directClassFact !== null) {
+          directClassFact.razorPageHandlerMethods.push({ handlerName, methodId: methodSymbol.id });
+        }
         staticClassMethods.push({ declaration: methodDeclaration, symbol: methodSymbol, type, typeSymbol });
         if (controllerPath === null) {
           continue;
@@ -947,9 +1020,12 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
           );
         }
       }
+      if (directClassFact !== null) {
+        csharpDirectClassFacts.push(directClassFact);
+      }
     }
 
-    if (!hasAmbiguousCsharpUsing(root) && !hasCsharpPreprocessing(root)) {
+    if (!hasAmbiguousUsing && !hasPreprocessing) {
       for (const caller of staticClassMethods) {
         if (
           caller.type.kind !== "class" ||

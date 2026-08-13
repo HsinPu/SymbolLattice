@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v274";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v275";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v143";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v144";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -2520,6 +2520,13 @@ export interface RazorModelFact {
   readonly range: SourceRange;
 }
 
+/** One literal Razor Pages POST handler attribute retained for its code-behind method. */
+export interface RazorPageHandlerFact {
+  readonly sourceId: string;
+  readonly handlerName: string;
+  readonly range: SourceRange;
+}
+
 /**
  * Syntax-only Razor facts. The resolver intentionally considers only the
  * canonical same-path `.cshtml.cs` companion; it never falls back to project
@@ -2529,12 +2536,20 @@ export interface RazorFacts {
   readonly fileSymbolId: string;
   readonly defaultSymbolId: string;
   readonly model?: RazorModelFact;
+  readonly postHandlers?: readonly RazorPageHandlerFact[];
 }
 
 /** A direct C# class declaration retained for exact same-file consumers. */
 export interface CsharpDirectClassFact {
   readonly classId: string;
   readonly isPartial: boolean;
+  /** True only for a direct, non-partial class with a source-proven Razor Pages PageModel base. */
+  readonly isRazorPageModel?: boolean;
+  /** Eligible public instance OnPost handlers declared directly by this class. */
+  readonly razorPageHandlerMethods?: readonly {
+    readonly handlerName: string;
+    readonly methodId: string;
+  }[];
 }
 
 /**

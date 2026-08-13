@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.417.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
+> v0.418.0 是開發預覽版。MCP 查詢工具本身唯讀；`serve --mcp` 預設會另外啟動本機 auto-sync watcher，可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用自動同步。
 
 ## 簡介
 
@@ -44,10 +44,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.417.0 重點
+## v0.418.0 重點
 
-- 固定來源驗收使用官方 [`luau-lang/luau`](https://github.com/luau-lang/luau) 0.731 commit [`f8ca77acdcb50241e3da21af663f8ef97b4b5ce4`](https://github.com/luau-lang/luau/tree/f8ca77acdcb50241e3da21af663f8ef97b4b5ce4)（MIT），掃描完整 [`fuzz/luau.proto`](https://github.com/luau-lang/luau/blob/f8ca77acdcb50241e3da21af663f8ef97b4b5ce4/fuzz/luau.proto)。三項 B1 truth 為 Proto file identity、`Expr` message identity，以及 file→`Expr` 的 exact containment；SymbolLattice 為 **TP 3／FP 0／FN 0**，CodeGraph 1.5 不掃描 `.proto`，為 **TP 0／FP 0／FN 3**。
-- 不宣稱 protoc 編譯、wire compatibility、field schema、import resolution、nested declarations、RPC option block 或 gRPC runtime。extractor facts 維持 v274，resolver 維持 v143；本次只驗證靜態 message identity 與 containment。
+- 固定來源驗收使用 [`dotnet/AspNetCore.Docs.Samples`](https://github.com/dotnet/AspNetCore.Docs.Samples) commit [`17a4652a7ed5442ab5111b9ecb827aadd6262558`](https://github.com/dotnet/AspNetCore.Docs.Samples/tree/17a4652a7ed5442ab5111b9ecb827aadd6262558)（MIT）的 [`Pages/Index.cshtml`](https://github.com/dotnet/AspNetCore.Docs.Samples/blob/17a4652a7ed5442ab5111b9ecb827aadd6262558/test/integration-tests/10.x/IntegrationTestsSample/src/RazorPagesProject/Pages/Index.cshtml) 與 conventional companion。三項 B1 truth 為 page identity、根路徑 `/`，以及 `AddMessage` 精確連到唯一 `IndexModel.OnPostAddMessageAsync`；SymbolLattice 為 **TP 3／FP 0／FN 0**，CodeGraph 1.5 實測為 **TP 1／FP 0／FN 2**。
+- Handler exactness 僅涵蓋 literal POST form/button、唯一 conventional `.cshtml.cs` companion、source-proven `PageModel`，以及唯一公開、非靜態、非泛型、非 override、未標記 `NonHandler` 的 `OnPost…` 方法。動態 Tag Helper 值、跨頁 handler、partial/overload、runtime model binding、authorization 與 Razor rendering lifecycle 均不宣稱。extractor facts 為 v275，resolver 為 v144。
 
 ## MCP
 

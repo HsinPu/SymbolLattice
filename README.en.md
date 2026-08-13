@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.417.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.418.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -51,10 +51,10 @@ node dist/cli/main.js routes --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.417.0 highlights
+## v0.418.0 highlights
 
-- Fixed-source acceptance uses the official [`luau-lang/luau`](https://github.com/luau-lang/luau) 0.731 repository at commit [`f8ca77acdcb50241e3da21af663f8ef97b4b5ce4`](https://github.com/luau-lang/luau/tree/f8ca77acdcb50241e3da21af663f8ef97b4b5ce4) (MIT), scanning the complete [`fuzz/luau.proto`](https://github.com/luau-lang/luau/blob/f8ca77acdcb50241e3da21af663f8ef97b4b5ce4/fuzz/luau.proto). The three B1 truths are the Proto file identity, the `Expr` message identity, and the exact containment file→`Expr`; SymbolLattice scores **TP 3 / FP 0 / FN 0**, while CodeGraph 1.5 does not scan `.proto`, scoring **TP 0 / FP 0 / FN 3**.
-- Protoc compilation, wire compatibility, field schemas, import resolution, nested declarations, RPC option blocks, and gRPC runtime behavior are not claimed. Extractor facts remain v274 and the resolver remains v143; this acceptance is limited to static message identity and containment.
+- Fixed-source acceptance uses [`dotnet/AspNetCore.Docs.Samples`](https://github.com/dotnet/AspNetCore.Docs.Samples) commit [`17a4652a7ed5442ab5111b9ecb827aadd6262558`](https://github.com/dotnet/AspNetCore.Docs.Samples/tree/17a4652a7ed5442ab5111b9ecb827aadd6262558) (MIT), scanning [`Pages/Index.cshtml`](https://github.com/dotnet/AspNetCore.Docs.Samples/blob/17a4652a7ed5442ab5111b9ecb827aadd6262558/test/integration-tests/10.x/IntegrationTestsSample/src/RazorPagesProject/Pages/Index.cshtml) and its conventional companion. The three B1 truths are the page identity, root route `/`, and `AddMessage` resolving exactly to the unique `IndexModel.OnPostAddMessageAsync`; SymbolLattice scores **TP 3 / FP 0 / FN 0**, while CodeGraph 1.5 measures **TP 1 / FP 0 / FN 2**.
+- Exact handlers are limited to literal POST forms/buttons, the unique conventional `.cshtml.cs` companion, a source-proven `PageModel`, and one public, non-static, non-generic, non-override `OnPost…` method without `NonHandler`. Dynamic Tag Helper values, cross-page handlers, partial/overloaded targets, runtime model binding, authorization, and the Razor rendering lifecycle are not claimed. Extractor facts are v275 and the resolver is v144.
 
 ## MCP
 

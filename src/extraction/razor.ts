@@ -29,6 +29,18 @@ interface RazorModelDirective {
   readonly end: number;
 }
 
+interface RazorPostHandlerDirective {
+  readonly handlerName: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface RazorHtmlAttribute {
+  readonly name: string;
+  readonly value: string | null;
+  readonly valueStart: number | null;
+}
+
 const FILE_SCOPE_ID = "razor:file";
 
 function lineStartsFor(sourceText: string): readonly number[] {
@@ -213,6 +225,238 @@ function leadingCshtmlDirectives(sourceText: string): CshtmlLeadingDirectives {
   return { page, model };
 }
 
+function razorTagEnd(sourceText: string, start: number): number | null {
+  let quote: '"' | "'" | null = null;
+  for (let cursor = start + 1; cursor < sourceText.length; cursor += 1) {
+    const character = sourceText[cursor];
+    if (quote !== null) {
+      if (character === quote) quote = null;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === ">") return cursor + 1;
+  }
+  return null;
+}
+
+function razorHtmlAttributes(
+  sourceText: string,
+  nameEnd: number,
+  tagEnd: number
+): readonly RazorHtmlAttribute[] | null {
+  const attributes: RazorHtmlAttribute[] = [];
+  const names = new Set<string>();
+  let cursor = nameEnd;
+  const contentEnd = tagEnd - 1;
+  while (cursor < contentEnd) {
+    while (cursor < contentEnd && /[\t\n\f\r ]/u.test(sourceText[cursor] ?? "")) cursor += 1;
+    if (cursor >= contentEnd || sourceText[cursor] === "/") break;
+    const match = /^[A-Za-z_:][A-Za-z0-9_.:-]*/u.exec(sourceText.slice(cursor, contentEnd));
+    if (match === null) return null;
+    const name = match[0].toLowerCase();
+    if (names.has(name)) return null;
+    names.add(name);
+    cursor += match[0].length;
+    while (cursor < contentEnd && /[\t\n\f\r ]/u.test(sourceText[cursor] ?? "")) cursor += 1;
+    if (sourceText[cursor] !== "=") {
+      attributes.push({ name, value: null, valueStart: null });
+      continue;
+    }
+    cursor += 1;
+    while (cursor < contentEnd && /[\t\n\f\r ]/u.test(sourceText[cursor] ?? "")) cursor += 1;
+    const quote = sourceText[cursor];
+    if (quote !== '"' && quote !== "'") return null;
+    const valueStart = cursor + 1;
+    const valueEnd = sourceText.indexOf(quote, valueStart);
+    if (valueEnd === -1 || valueEnd >= contentEnd) return null;
+    attributes.push({ name, value: sourceText.slice(valueStart, valueEnd), valueStart });
+    cursor = valueEnd + 1;
+  }
+  if (sourceText.slice(cursor, contentEnd).trim() !== "" && sourceText.slice(cursor, contentEnd).trim() !== "/") {
+    return null;
+  }
+  return attributes;
+}
+
+function matchingRazorCodeBrace(sourceText: string, open: number): number | null {
+  let depth = 0;
+  let quote: '"' | "'" | null = null;
+  let verbatim = false;
+  let lineComment = false;
+  let blockComment = false;
+  for (let cursor = open; cursor < sourceText.length; cursor += 1) {
+    const character = sourceText[cursor] ?? "";
+    const next = sourceText[cursor + 1] ?? "";
+    if (lineComment) {
+      if (character === "\n") lineComment = false;
+      continue;
+    }
+    if (blockComment) {
+      if (character === "*" && next === "/") {
+        blockComment = false;
+        cursor += 1;
+      }
+      continue;
+    }
+    if (quote !== null) {
+      if (verbatim && quote === '"' && character === '"' && next === '"') {
+        cursor += 1;
+        continue;
+      }
+      if (character === quote && (verbatim || sourceText[cursor - 1] !== "\\")) {
+        quote = null;
+        verbatim = false;
+      }
+      continue;
+    }
+    if (character === "/" && next === "/") {
+      lineComment = true;
+      cursor += 1;
+      continue;
+    }
+    if (character === "/" && next === "*") {
+      blockComment = true;
+      cursor += 1;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      verbatim = character === '"' && sourceText[cursor - 1] === "@";
+      continue;
+    }
+    if (character === "{") depth += 1;
+    if (character === "}") {
+      depth -= 1;
+      if (depth === 0) return cursor + 1;
+      if (depth < 0) return null;
+    }
+  }
+  return null;
+}
+
+function razorCodeBlockRanges(sourceText: string): readonly { start: number; end: number }[] | null {
+  const ranges: Array<{ start: number; end: number }> = [];
+  const pattern = /@\{|@(?:foreach|for|if|while|switch|using|lock|try|functions|code)\b/gu;
+  for (const match of sourceText.matchAll(pattern)) {
+    const start = match.index;
+    if (start === undefined) continue;
+    const open = match[0] === "@{" ? start + 1 : sourceText.indexOf("{", start + match[0].length);
+    if (open === -1) return null;
+    const end = matchingRazorCodeBrace(sourceText, open);
+    if (end === null) return null;
+    ranges.push({ start, end });
+    pattern.lastIndex = end;
+  }
+  return ranges;
+}
+
+function literalRazorPostHandlers(sourceText: string): readonly RazorPostHandlerDirective[] {
+  const handlers: RazorPostHandlerDirective[] = [];
+  const rawContainers = new Set(["script", "style", "textarea", "template"]);
+  const codeRanges = razorCodeBlockRanges(sourceText);
+  if (codeRanges === null) return [];
+  let codeRangeIndex = 0;
+  let openFormIsPost: boolean | null = null;
+  let cursor = 0;
+  while (cursor < sourceText.length) {
+    while ((codeRanges[codeRangeIndex]?.end ?? Number.POSITIVE_INFINITY) <= cursor) {
+      codeRangeIndex += 1;
+    }
+    const codeRange = codeRanges[codeRangeIndex];
+    const razorComment = sourceText.indexOf("@*", cursor);
+    const htmlComment = sourceText.indexOf("<!--", cursor);
+    const tagStart = sourceText.indexOf("<", cursor);
+    const codeStart = codeRange === undefined ? -1 : codeRange.start;
+    const next = [razorComment, htmlComment, tagStart, codeStart]
+      .filter((offset) => offset !== -1)
+      .sort((left, right) => left - right)[0];
+    if (next === undefined) break;
+    if (next === codeStart && codeRange !== undefined) {
+      cursor = codeRange.end;
+      codeRangeIndex += 1;
+      continue;
+    }
+    if (next === razorComment) {
+      const close = sourceText.indexOf("*@", next + 2);
+      if (close === -1) return [];
+      cursor = close + 2;
+      continue;
+    }
+    if (next === htmlComment) {
+      const close = sourceText.indexOf("-->", next + 4);
+      if (close === -1) return [];
+      cursor = close + 3;
+      continue;
+    }
+    const tagEnd = razorTagEnd(sourceText, next);
+    if (tagEnd === null) return [];
+    const header = /^<\s*(\/)?\s*([A-Za-z][A-Za-z0-9:-]*)/u.exec(sourceText.slice(next, tagEnd));
+    if (header === null || header[2] === undefined) {
+      cursor = tagEnd;
+      continue;
+    }
+    const closing = header[1] !== undefined;
+    const tagName = header[2].toLowerCase();
+    const nameEnd = next + header[0].length;
+    const attributes = closing ? [] : razorHtmlAttributes(sourceText, nameEnd, tagEnd);
+    if (attributes === null) return [];
+    if (closing) {
+      if (!/^<\s*\/\s*[A-Za-z][A-Za-z0-9:-]*\s*>$/u.test(sourceText.slice(next, tagEnd))) {
+        return [];
+      }
+      if (tagName === "form") {
+        if (openFormIsPost === null) return [];
+        openFormIsPost = null;
+      }
+      cursor = tagEnd;
+      continue;
+    }
+    if (rawContainers.has(tagName)) {
+      const closePattern = new RegExp(`<\\/\\s*${tagName}\\s*>`, "igu");
+      closePattern.lastIndex = tagEnd;
+      const close = closePattern.exec(sourceText);
+      if (close === null) return [];
+      cursor = close.index + close[0].length;
+      continue;
+    }
+    const attribute = (name: string): RazorHtmlAttribute | undefined =>
+      attributes.find((candidate) => candidate.name === name);
+    const handler = attribute("asp-page-handler");
+    const method = attribute("method")?.value?.toLowerCase();
+    const type = attribute("type")?.value?.toLowerCase();
+    const selfClosing = /\/\s*>$/u.test(sourceText.slice(next, tagEnd));
+    if (tagName === "form") {
+      if (openFormIsPost !== null) return [];
+      openFormIsPost = method === "post";
+    }
+    if (handler !== undefined) {
+      if (
+        attribute("asp-page") !== undefined ||
+        handler.value === null ||
+        handler.valueStart === null ||
+        !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(handler.value) ||
+        !(
+          (tagName === "form" && method === "post") ||
+          (tagName === "button" && type === "submit" && openFormIsPost === true)
+        )
+      ) {
+        return [];
+      }
+      handlers.push({
+        handlerName: handler.value,
+        start: handler.valueStart,
+        end: handler.valueStart + handler.value.length
+      });
+    }
+    if (tagName === "form" && selfClosing) openFormIsPost = null;
+    cursor = tagEnd;
+  }
+  return openFormIsPost === null ? handlers : [];
+}
+
 /**
  * Extracts a deliberately narrow Razor component contract. A `.razor` file
  * always contributes its conventional local component; only standalone,
@@ -385,7 +629,12 @@ export function extractRazorFileFacts(input: RazorExtractFileFactsInput): Artifa
             sourceId: component.id,
             modelName: cshtmlModel.modelName,
             range: rangeForSpan(lineStarts, cshtmlModel.start, cshtmlModel.end)
-          }
+          },
+          postHandlers: literalRazorPostHandlers(input.sourceText).map((handler) => ({
+            sourceId: component.id,
+            handlerName: handler.handlerName,
+            range: rangeForSpan(lineStarts, handler.start, handler.end)
+          }))
         }
       : undefined;
 

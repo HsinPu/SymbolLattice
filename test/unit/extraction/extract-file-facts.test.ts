@@ -17998,7 +17998,17 @@ describe("source extraction", () => {
     expect(facts.razorFacts).toEqual({
       fileSymbolId: expect.any(String),
       defaultSymbolId: expect.any(String),
-      model: expect.objectContaining({ modelName: "IndexModel" })
+      model: expect.objectContaining({ modelName: "IndexModel" }),
+      postHandlers: [
+        expect.objectContaining({
+          handlerName: "AddMessage",
+          sourceId: expect.any(String),
+          range: {
+            start: { line: 3, column: 38 },
+            end: { line: 3, column: 48 }
+          }
+        })
+      ]
     });
 
     for (const filePath of ["Views/Index.cshtml", "Pages/Other.cshtml"]) {
@@ -18054,7 +18064,12 @@ describe("source extraction", () => {
     for (const [filePath, sourceText, keepsRoute, keepsModel] of invalidSources) {
       const facts = extractFileFacts({ filePath, language: "razor", sourceText });
       if (keepsModel === true) {
-        expect(facts.razorFacts).toEqual(expect.objectContaining({ model: expect.objectContaining({ modelName: "IndexModel" }) }));
+        expect(facts.razorFacts).toEqual(
+          expect.objectContaining({
+            model: expect.objectContaining({ modelName: "IndexModel" }),
+            postHandlers: []
+          })
+        );
       } else {
         expect(facts.razorFacts).toBeUndefined();
       }
@@ -18118,7 +18133,40 @@ describe("source extraction", () => {
         ].join("\n")
       });
       expect(facts.razorFacts, container).toEqual(expect.objectContaining({ model: expect.objectContaining({ modelName: "IndexModel" }) }));
+      expect(facts.razorFacts?.postHandlers, container).toEqual([]);
     }
+  });
+
+  it("ignores handler-looking markup inside Razor code blocks", () => {
+    const facts = extractFileFacts({
+      filePath: "Pages/Index.cshtml",
+      language: "razor",
+      sourceText: [
+        "@page",
+        "@model IndexModel",
+        "@{",
+        "  var fake = \"<form method='post' asp-page-handler='Forged'></form>\";",
+        "}",
+        '<form method="post" asp-page-handler="Save"></form>'
+      ].join("\n")
+    });
+
+    expect(facts.razorFacts?.postHandlers?.map((handler) => handler.handlerName)).toEqual(["Save"]);
+  });
+
+  it("fails Razor handler facts closed for malformed closing tags", () => {
+    const facts = extractFileFacts({
+      filePath: "Pages/Index.cshtml",
+      language: "razor",
+      sourceText: [
+        "@page",
+        "@model IndexModel",
+        '<form method="post" asp-page-handler="Save">',
+        "</form trailing>"
+      ].join("\n")
+    });
+
+    expect(facts.razorFacts?.postHandlers).toEqual([]);
   });
 
   it("extracts complete ArkTS ArkUI component structs and direct UI roots", () => {

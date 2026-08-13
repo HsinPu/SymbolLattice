@@ -1421,11 +1421,12 @@ function projectRazorPagesReferences(input: {
       input.structuralEdges.some(
         (edge) => edge.kind === "contains" && edge.sourceId === parentId && edge.targetId === childId
       );
-    const hasExactlyOneNonPartialClassFact = (classId: string): boolean => {
-      const matchingFacts = (companionFacts.csharpDirectClassFacts ?? []).filter(
-        (candidate) => candidate.classId === classId
-      );
-      return matchingFacts.length === 1 && matchingFacts[0]?.isPartial === false;
+    const directClassFacts = companionFacts.csharpDirectClassFacts ?? [];
+    const directClassFact = (classId: string) => {
+      const matchingFacts = directClassFacts.filter((candidate) => candidate.classId === classId);
+      return matchingFacts.length === 1 && matchingFacts[0]?.isPartial === false
+        ? matchingFacts[0]
+        : undefined;
     };
     const modelCandidates = companionFacts.symbols.filter(
       (symbol) =>
@@ -1433,7 +1434,7 @@ function projectRazorPagesReferences(input: {
         symbol.name === razorFacts.model?.modelName &&
         symbol.filePath === companionPath &&
         directlyContains(companionFile.id, symbol.id) &&
-        hasExactlyOneNonPartialClassFact(symbol.id)
+        directClassFact(symbol.id) !== undefined
     );
     if (modelCandidates.length !== 1 || modelCandidates[0] === undefined) {
       continue;
@@ -1464,6 +1465,56 @@ function projectRazorPagesReferences(input: {
         [pagePath, companionPath]
       )
     });
+    const modelFact = directClassFact(model.id);
+    const hasIndexedPageModelShadow = [...input.symbolsById.values()].some(
+      (symbol) => symbol.kind === "class" && symbol.name === "PageModel"
+    );
+    if (modelFact?.isRazorPageModel !== true || hasIndexedPageModelShadow) {
+      continue;
+    }
+    for (const handler of razorFacts.postHandlers ?? []) {
+      if (handler.sourceId !== pageDefault.id) {
+        continue;
+      }
+      const handlerCandidates = (modelFact.razorPageHandlerMethods ?? [])
+        .filter((candidate) => candidate.handlerName === handler.handlerName)
+        .map((candidate) => input.symbolsById.get(candidate.methodId))
+        .filter(
+          (candidate): candidate is SymbolNode =>
+            candidate?.kind === "method" &&
+            candidate.filePath === companionPath &&
+            directlyContains(model.id, candidate.id)
+        );
+      if (handlerCandidates.length !== 1 || handlerCandidates[0] === undefined) {
+        continue;
+      }
+      const target = handlerCandidates[0];
+      edges.push({
+        id: createEdgeId({
+          sourceId: pageDefault.id,
+          targetId: target.id,
+          kind: "handles",
+          line: handler.range.start.line,
+          column: handler.range.start.column,
+          referenceName: handler.handlerName
+        }),
+        sourceId: pageDefault.id,
+        targetId: target.id,
+        kind: "handles",
+        filePath: pagePath,
+        range: handler.range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: handler.handlerName,
+        evidence: referenceEvidence(
+          "framework.razor-pages.literal-post-handler.conventional-companion-method",
+          "module",
+          [target.id],
+          [],
+          [pagePath, companionPath]
+        )
+      });
+    }
   }
   return edges;
 }
