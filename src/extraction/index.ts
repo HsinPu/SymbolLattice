@@ -278,6 +278,11 @@ function declarationInfo(
     return name === null ? null : { name, kind: "method", isExported: false };
   }
 
+  if (ts.isPropertySignature(node) || ts.isPropertyDeclaration(node)) {
+    const name = declarationName(node);
+    return name === null ? null : { name, kind: "variable", isExported: false };
+  }
+
   if (ts.isConstructorDeclaration(node)) {
     return { name: "constructor", kind: "method", isExported: false };
   }
@@ -1401,6 +1406,247 @@ function visibleRouteBindingKind(
   return visibleRouteBinding(sourceFile, identifier, bindings)?.kind;
 }
 
+interface StaticTypeScriptMemberCall {
+  readonly method: ts.Identifier;
+  readonly receiverTypeName: string | null;
+  readonly receiverBindingSpace: BindingSpace | null;
+  readonly inlineParameterMember: boolean;
+}
+
+function nearestNamedClass(node: ts.Node): ts.ClassDeclaration | ts.ClassExpression | null {
+  let current: ts.Node | undefined = node.parent;
+  while (current !== undefined && !ts.isSourceFile(current)) {
+    if (ts.isArrowFunction(current)) {
+      current = current.parent;
+      continue;
+    }
+    if (ts.isFunctionLike(current)) {
+      if (
+        !ts.isMethodDeclaration(current) &&
+        !ts.isConstructorDeclaration(current) &&
+        !ts.isGetAccessorDeclaration(current) &&
+        !ts.isSetAccessorDeclaration(current)
+      ) {
+        return null;
+      }
+    }
+    if (
+      (ts.isClassDeclaration(current) || ts.isClassExpression(current)) &&
+      current.name !== undefined
+    ) {
+      return current;
+    }
+    current = current.parent;
+  }
+  return null;
+}
+
+function nearestNamedType(
+  node: ts.Node
+): ts.ClassDeclaration | ts.ClassExpression | ts.InterfaceDeclaration | null {
+  let current: ts.Node | undefined = node.parent;
+  while (current !== undefined && !ts.isSourceFile(current)) {
+    if (
+      (ts.isClassDeclaration(current) ||
+        ts.isClassExpression(current) ||
+        ts.isInterfaceDeclaration(current)) &&
+      current.name !== undefined
+    ) {
+      return current;
+    }
+    current = current.parent;
+  }
+  return null;
+}
+
+function typeReferenceIdentifier(type: ts.TypeNode | undefined): ts.Identifier | null {
+  return type !== undefined &&
+    ts.isTypeReferenceNode(type) &&
+    type.typeArguments === undefined &&
+    ts.isIdentifier(type.typeName)
+    ? type.typeName
+    : null;
+}
+
+function directValueImportSpecifier(node: ts.Node): ts.ImportSpecifier | null {
+  const specifier = ts.isImportSpecifier(node)
+    ? node
+    : ts.isIdentifier(node) && ts.isImportSpecifier(node.parent) && node.parent.name === node
+      ? node.parent
+      : null;
+  if (specifier === null || specifier.isTypeOnly || !ts.isNamedImports(specifier.parent)) {
+    return null;
+  }
+  const importClause = specifier.parent.parent;
+  return ts.isImportClause(importClause) &&
+    importClause.isTypeOnly !== true &&
+    ts.isImportDeclaration(importClause.parent)
+    ? specifier
+    : null;
+}
+
+function provenValueConstructorName(
+  sourceFile: ts.SourceFile,
+  identifier: ts.Identifier,
+  bindings: ScopedRouteReceiverBindings
+): string | null {
+  const declaration = visibleRouteBinding(sourceFile, identifier, bindings)?.declaration;
+  return declaration !== undefined &&
+    (ts.isClassDeclaration(declaration) || directValueImportSpecifier(declaration) !== null)
+    ? identifier.text
+    : null;
+}
+
+function staticThisReceiverTypeName(node: ts.Node): string | null {
+  let current: ts.Node | undefined = node.parent;
+  while (current !== undefined && !ts.isSourceFile(current)) {
+    if (ts.isArrowFunction(current)) {
+      current = current.parent;
+      continue;
+    }
+    if (ts.isFunctionLike(current)) {
+      const explicitThis = current.parameters.find(
+        (parameter) => ts.isIdentifier(parameter.name) && parameter.name.text === "this"
+      );
+      if (explicitThis !== undefined) {
+        const typeName = typeReferenceIdentifier(explicitThis.type);
+        return typeName !== null && !enclosingTypeParameterNames(explicitThis).has(typeName.text)
+          ? typeName.text
+          : null;
+      }
+      if (
+        !ts.isMethodDeclaration(current) &&
+        !ts.isConstructorDeclaration(current) &&
+        !ts.isGetAccessorDeclaration(current) &&
+        !ts.isSetAccessorDeclaration(current)
+      ) {
+        return null;
+      }
+    }
+    if (
+      (ts.isClassDeclaration(current) || ts.isClassExpression(current)) &&
+      current.name !== undefined
+    ) {
+      return current.name.text;
+    }
+    current = current.parent;
+  }
+  return null;
+}
+
+function hasReadonlyParameterPropertyModifier(parameter: ts.ParameterDeclaration): boolean {
+  const modifiers = parameter.modifiers ?? [];
+  return (
+    modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.ReadonlyKeyword) &&
+    modifiers.some(
+      (modifier) =>
+        modifier.kind === ts.SyntaxKind.PublicKeyword ||
+        modifier.kind === ts.SyntaxKind.PrivateKeyword ||
+        modifier.kind === ts.SyntaxKind.ProtectedKeyword
+    )
+  );
+}
+
+function directReadonlyConstructorParameterPropertyType(
+  node: ts.Node,
+  propertyName: string
+): ts.Identifier | null {
+  const owner = nearestNamedClass(node);
+  if (owner === null) {
+    return null;
+  }
+  const parameters = owner.members
+    .filter(ts.isConstructorDeclaration)
+    .flatMap((constructor) => constructor.parameters)
+    .filter(
+      (parameter) =>
+        ts.isIdentifier(parameter.name) &&
+        parameter.name.text === propertyName &&
+        hasReadonlyParameterPropertyModifier(parameter)
+    );
+  if (parameters.length !== 1) {
+    return null;
+  }
+  return typeReferenceIdentifier(parameters[0]?.type);
+}
+
+function isThisPropertyAccess(expression: ts.Expression, propertyName: string): boolean {
+  return (
+    ts.isPropertyAccessExpression(expression) &&
+    expression.questionDotToken === undefined &&
+    expression.name.text === propertyName &&
+    expression.expression.kind === ts.SyntaxKind.ThisKeyword
+  );
+}
+
+function startsWithThisProperty(expression: ts.Expression, propertyName: string): boolean {
+  return (
+    isThisPropertyAccess(expression, propertyName) ||
+    (ts.isPropertyAccessExpression(expression) &&
+      expression.questionDotToken === undefined &&
+      startsWithThisProperty(expression.expression, propertyName))
+  );
+}
+
+function thisPropertyIsMutated(
+  owner: ts.ClassDeclaration | ts.ClassExpression,
+  propertyName: string
+): boolean {
+  let mutated = false;
+  const visit = (node: ts.Node): void => {
+    if (mutated) {
+      return;
+    }
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
+      startsWithThisProperty(node.left, propertyName)
+    ) {
+      mutated = true;
+      return;
+    }
+    if (node !== owner && (ts.isClassDeclaration(node) || ts.isClassExpression(node))) {
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(owner, visit);
+  return mutated;
+}
+
+function receiverMemberIsMutated(
+  sourceFile: ts.SourceFile,
+  receiver: ts.Expression,
+  methodName: string
+): boolean {
+  let mutated = false;
+  const visit = (node: ts.Node): void => {
+    if (mutated) {
+      return;
+    }
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
+      ts.isPropertyAccessExpression(node.left) &&
+      node.left.name.text === methodName
+    ) {
+      const candidate = node.left.expression;
+      if (
+        (receiver.kind === ts.SyntaxKind.ThisKeyword && candidate.kind === ts.SyntaxKind.ThisKeyword) ||
+        (ts.isIdentifier(receiver) && ts.isIdentifier(candidate) && candidate.text === receiver.text)
+      ) {
+        mutated = true;
+        return;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(sourceFile, visit);
+  return mutated;
+}
+
 /**
  * Proves the callback hop made by one direct `const values = []` Array sort.
  * Unknown receivers, mutable bindings, optional calls, extra arguments, and
@@ -1426,7 +1672,6 @@ function staticArraySortComparator(
   ) {
     return null;
   }
-
   const binding = visibleRouteBinding(sourceFile, expression.expression, bindings);
   if (
     binding === undefined ||
@@ -1438,6 +1683,149 @@ function staticArraySortComparator(
     return null;
   }
   return callback;
+}
+
+/**
+ * Recognizes a bounded TypeScript member call only when the receiver's class or
+ * interface is explicit in source. Dynamic/computed/optional/mutable shapes
+ * remain unprojected instead of becoming a name-only exact edge.
+ */
+function staticTypeScriptMemberCall(
+  sourceFile: ts.SourceFile,
+  node: ts.CallExpression,
+  bindings: ScopedRouteReceiverBindings
+): StaticTypeScriptMemberCall | null {
+  if (
+    node.questionDotToken !== undefined ||
+    !ts.isPropertyAccessExpression(node.expression) ||
+    node.expression.questionDotToken !== undefined
+  ) {
+    return null;
+  }
+  const access = node.expression;
+  if (!ts.isIdentifier(access.name)) {
+    return null;
+  }
+  const receiver = access.expression;
+  if (receiverMemberIsMutated(sourceFile, receiver, access.name.text)) {
+    return null;
+  }
+
+  if (receiver.kind === ts.SyntaxKind.ThisKeyword) {
+    const receiverTypeName = staticThisReceiverTypeName(node);
+    return receiverTypeName === null
+      ? null
+      : {
+          method: access.name,
+          receiverTypeName,
+          receiverBindingSpace: "type",
+          inlineParameterMember: false
+        };
+  }
+
+  if (ts.isNewExpression(receiver) && ts.isIdentifier(receiver.expression)) {
+    const receiverTypeName = provenValueConstructorName(
+      sourceFile,
+      receiver.expression,
+      bindings
+    );
+    if (receiverTypeName === null) {
+      return null;
+    }
+    return {
+      method: access.name,
+      receiverTypeName,
+      receiverBindingSpace: "value",
+      inlineParameterMember: false
+    };
+  }
+
+  if (
+    ts.isPropertyAccessExpression(receiver) &&
+    receiver.questionDotToken === undefined &&
+    receiver.expression.kind === ts.SyntaxKind.ThisKeyword
+  ) {
+    const owner = nearestNamedClass(node);
+    if (owner === null || thisPropertyIsMutated(owner, receiver.name.text)) {
+      return null;
+    }
+    const receiverTypeName = directReadonlyConstructorParameterPropertyType(node, receiver.name.text);
+    return receiverTypeName === null
+      ? null
+      : {
+          method: access.name,
+          receiverTypeName: receiverTypeName.text,
+          receiverBindingSpace: "type",
+          inlineParameterMember: false
+        };
+  }
+
+  if (!ts.isIdentifier(receiver)) {
+    return null;
+  }
+  const binding = visibleRouteBinding(sourceFile, receiver, bindings);
+  const declaration = binding?.declaration;
+  if (declaration === undefined) {
+    return null;
+  }
+  if (directValueImportSpecifier(declaration) !== null) {
+    return {
+      method: access.name,
+      receiverTypeName: receiver.text,
+      receiverBindingSpace: "value",
+      inlineParameterMember: false
+    };
+  }
+  if (ts.isVariableDeclaration(declaration)) {
+    if (
+      !isConstVariableDeclaration(declaration) ||
+      declaration.initializer === undefined ||
+      !ts.isNewExpression(declaration.initializer) ||
+      !ts.isIdentifier(declaration.initializer.expression) ||
+      provenValueConstructorName(sourceFile, declaration.initializer.expression, bindings) === null
+    ) {
+      return null;
+    }
+    return {
+      method: access.name,
+      receiverTypeName: declaration.initializer.expression.text,
+      receiverBindingSpace: "value",
+      inlineParameterMember: false
+    };
+  }
+  if (ts.isParameter(declaration)) {
+    const typeName = typeReferenceIdentifier(declaration.type);
+    if (typeName !== null) {
+      return {
+        method: access.name,
+        receiverTypeName: typeName.text,
+        receiverBindingSpace: "type",
+        inlineParameterMember: false
+      };
+    }
+    if (declaration.type !== undefined && ts.isTypeLiteralNode(declaration.type)) {
+      const callableMembers = declaration.type.members.filter(
+        (member) =>
+          ((ts.isPropertySignature(member) &&
+            member.type !== undefined &&
+            ts.isFunctionTypeNode(member.type)) ||
+            ts.isMethodSignature(member)) &&
+          member.name !== undefined &&
+          ts.isIdentifier(member.name) &&
+          member.name.text === access.name.text
+      );
+      return callableMembers.length === 1
+        ? {
+            method: access.name,
+            receiverTypeName: null,
+            receiverBindingSpace: null,
+            inlineParameterMember: true
+          }
+        : null;
+    }
+    return null;
+  }
+  return null;
 }
 
 /**
@@ -6021,10 +6409,38 @@ export function extractFileFacts(
    * class-boundary initializers on their declaration owner instead of crossing
    * into an unrelated outer callable.
    */
-  function currentCallOwner(): SymbolNode {
+  function currentCallOwner(node: ts.Node): SymbolNode {
+    let callableAncestor: ts.Node | undefined = node;
+    while (callableAncestor !== undefined && !ts.isSourceFile(callableAncestor)) {
+      if (
+        ts.isVariableDeclaration(callableAncestor) &&
+        callableAncestor.initializer !== undefined &&
+        (ts.isArrowFunction(callableAncestor.initializer) ||
+          ts.isFunctionExpression(callableAncestor.initializer))
+      ) {
+        const callableVariable = symbolsByDeclaration.get(callableAncestor);
+        if (callableVariable !== undefined) {
+          return callableVariable;
+        }
+      }
+      callableAncestor = callableAncestor.parent;
+    }
     const owner = currentOwner();
     if (owner.kind !== "variable") {
       return owner;
+    }
+    let current: ts.Node | undefined = node;
+    while (current !== undefined && !ts.isSourceFile(current)) {
+      if (ts.isVariableDeclaration(current) && symbolsByDeclaration.get(current)?.id === owner.id) {
+        if (
+          current.initializer !== undefined &&
+          (ts.isArrowFunction(current.initializer) || ts.isFunctionExpression(current.initializer))
+        ) {
+          return owner;
+        }
+        break;
+      }
+      current = current.parent;
     }
     for (let index = stack.length - 2; index >= 0; index -= 1) {
       const candidate = stack[index];
@@ -6086,7 +6502,10 @@ export function extractFileFacts(
     routeFramework?: PendingReference["routeFramework"],
     routeRegistration?: PendingReference["routeRegistration"],
     routePrefixChain?: PendingReference["routePrefixChain"],
-    callSemantics?: PendingReference["callSemantics"]
+    callSemantics?: PendingReference["callSemantics"],
+    callReceiverTypeName?: string,
+    callReceiverTargetQualifiedName?: string,
+    callReceiverBindingSpace?: PendingReference["callReceiverBindingSpace"]
   ): PendingReference {
     const range = sourceRange(sourceFile, node);
     const reference: PendingReference = {
@@ -6104,6 +6523,11 @@ export function extractFileFacts(
       relationKind,
       range,
       ...(callSemantics === undefined ? {} : { callSemantics }),
+      ...(callReceiverTypeName === undefined ? {} : { callReceiverTypeName }),
+      ...(callReceiverTargetQualifiedName === undefined
+        ? {}
+        : { callReceiverTargetQualifiedName }),
+      ...(callReceiverBindingSpace === undefined ? {} : { callReceiverBindingSpace }),
       ...(routeFramework === undefined ? {} : { routeFramework }),
       ...(routeRegistration === undefined ? {} : { routeRegistration }),
       ...(routePrefixChain === undefined ? {} : { routePrefixChain })
@@ -6141,6 +6565,37 @@ export function extractFileFacts(
 
     for (const parameter of signature.parameters) {
       addSignatureReferences(parameter.type, "accepts");
+    }
+    if (signature.type !== undefined && ts.isThisTypeNode(signature.type)) {
+      const enclosingType = nearestNamedType(signature);
+      const target = enclosingType === null ? undefined : symbolsByDeclaration.get(enclosingType);
+      if (target !== undefined) {
+        const range = sourceRange(sourceFile, signature.type);
+        edges.push({
+          id: createEdgeId({
+            sourceId: owner.id,
+            targetId: target.id,
+            kind: "returns",
+            line: range.start.line,
+            column: range.start.column,
+            referenceName: "this"
+          }),
+          sourceId: owner.id,
+          targetId: target.id,
+          kind: "returns",
+          filePath: input.filePath,
+          range,
+          resolution: "exact",
+          confidence: 1,
+          referenceName: "this",
+          evidence: {
+            ruleId: "syntax.typescript.explicit-this-return-type",
+            stage: "syntax",
+            candidateSymbolIds: [target.id]
+          }
+        });
+      }
+      return;
     }
     addSignatureReferences(signature.type, "returns");
   }
@@ -6815,13 +7270,13 @@ export function extractFileFacts(
     }
 
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-      addPendingReference(currentCallOwner().id, node.expression.text, "calls", node.expression);
+      addPendingReference(currentCallOwner(node).id, node.expression.text, "calls", node.expression);
     }
     if (ts.isCallExpression(node)) {
       const comparator = staticArraySortComparator(sourceFile, node, routeReceiverBindings);
       if (comparator !== null) {
         addPendingReference(
-          currentCallOwner().id,
+          currentCallOwner(node).id,
           comparator.text,
           "calls",
           comparator,
@@ -6829,6 +7284,29 @@ export function extractFileFacts(
           undefined,
           undefined,
           "typescript-array-sort-comparator"
+        );
+      }
+    }
+    if (
+      input.language === "typescript" &&
+      ts.isCallExpression(node)
+    ) {
+      const memberCall = staticTypeScriptMemberCall(sourceFile, node, routeReceiverBindings);
+      if (memberCall !== null) {
+        addPendingReference(
+          currentCallOwner(node).id,
+          memberCall.method.text,
+          "calls",
+          memberCall.method,
+          undefined,
+          undefined,
+          undefined,
+          "typescript-proven-receiver-member-call",
+          memberCall.receiverTypeName ?? undefined,
+          memberCall.inlineParameterMember
+            ? `${currentCallOwner(node).qualifiedName}.${memberCall.method.text}`
+            : undefined,
+          memberCall.receiverBindingSpace ?? undefined
         );
       }
     }

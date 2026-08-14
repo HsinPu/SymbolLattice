@@ -579,6 +579,19 @@ function investigateResult(): InvestigateResult {
           selectionRank: 1,
           sourceRank: 1,
           candidateRank: 1,
+          generatedRanking: {
+            itemId: candidate.id,
+            filePath: candidate.filePath,
+            generated: {
+              classifierVersion: "generated-evidence-v1",
+              generated: false,
+              evidence: []
+            },
+            baseRank: 1,
+            finalRank: 1,
+            generatedPenalty: 0,
+            reason: "original-order-preserved"
+          },
           structuralSignals: {
             directExactCallerCount: 0,
             directExactCalleeCount: 0,
@@ -613,6 +626,11 @@ function investigateResult(): InvestigateResult {
             depthLimitReached: false
           },
           impactSignals: null,
+          lexicalFocus: {
+            language: "typescript",
+            range: search.results[0]!.range,
+            matchingTerms: ["user"]
+          },
           symbol: candidate
         }
       ],
@@ -3000,6 +3018,23 @@ describe("SymbolLattice MCP server", () => {
             enum: ["adaptive", "prefix", "focused", "signature", "multi"]
           }
         }
+      },
+      outputSchema: {
+        properties: {
+          selection: {
+            properties: {
+              items: {
+                items: {
+                  additionalProperties: false,
+                  properties: {
+                    generatedRanking: { type: "object" },
+                    lexicalFocus: { type: "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     });
 
@@ -3029,6 +3064,16 @@ describe("SymbolLattice MCP server", () => {
       selection: {
         items: [
           {
+            generatedRanking: {
+              itemId: "symbol:user-by-id",
+              filePath: "src/users.ts",
+              generatedPenalty: 0,
+              reason: "original-order-preserved"
+            },
+            lexicalFocus: {
+              language: "typescript",
+              matchingTerms: ["user"]
+            },
             topologySignals: {
               maxHops: 3,
               maxVisitedSymbols: 500,

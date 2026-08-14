@@ -291,7 +291,15 @@ export interface PendingReference {
     | HierarchyRelationKind
   >;
   /** Syntax-proven invocation semantics that are stronger than a generic identifier reference. */
-  readonly callSemantics?: "typescript-array-sort-comparator";
+  readonly callSemantics?:
+    | "typescript-array-sort-comparator"
+    | "typescript-proven-receiver-member-call";
+  /** Static class or interface binding that proves a TypeScript member-call receiver. */
+  readonly callReceiverTypeName?: string;
+  /** Namespace in which the syntax-proven TypeScript receiver binding must resolve. */
+  readonly callReceiverBindingSpace?: "value" | "type";
+  /** Direct lexical callable-property identity for an inline parameter type. */
+  readonly callReceiverTargetQualifiedName?: string;
   /** Present only when a validated extraction plugin emitted this reference. */
   readonly extractionPlugin?: ExtractionPluginProvenance;
   /** Present only when a validated project finalizer emitted this reference. */

@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**Evidence-first, local-first code graphs and code context for AI agents**
+**Evidence-first, local-first code graphs and bounded code context for AI agents**
 
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -13,15 +13,11 @@
 </div>
 
 > [!IMPORTANT]
-> v0.418.3 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.419.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
-SymbolLattice scans a local repository, persists a code graph, and exposes CLI/MCP queries for:
-
-- Files, symbols, calls, imports, inheritance, routes, and entry points.
-- Callers, callees, impact, affected paths, context, and cross-file exploration.
-- Source ranges, resolution stages, confidence, and rule evidence for every relationship.
+SymbolLattice scans a local repository, persists a code graph, and exposes CLI/MCP queries for files, symbols, calls, imports, inheritance, routes, entry points, bounded impact paths, and source-backed context. Every relationship carries source range, resolution stage, confidence, and rule evidence.
 
 Relationships that cannot be proven exactly remain unresolved or pending instead of becoming false exact edges.
 
@@ -35,26 +31,31 @@ cd symbol-lattice
 npm install
 npm run build
 
-# Build a local graph
 node dist/cli/main.js init /path/to/project
-
-# Refresh it
 node dist/cli/main.js sync /path/to/project
-
-# Basic queries
-node dist/cli/main.js files --project /path/to/project --json
 node dist/cli/main.js find createOrder --project /path/to/project --json
-node dist/cli/main.js callees createOrder --project /path/to/project --json
-node dist/cli/main.js routes --project /path/to/project --json
-
-# Bounded cross-file context for an agent
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.418.3 highlights
+## v0.419.0 TypeScript self-hosting evidence
 
-- Fixed-source acceptance uses [`dotnet/AspNetCore.Docs.Samples`](https://github.com/dotnet/AspNetCore.Docs.Samples) commit [`17a4652a7ed5442ab5111b9ecb827aadd6262558`](https://github.com/dotnet/AspNetCore.Docs.Samples/tree/17a4652a7ed5442ab5111b9ecb827aadd6262558) (MIT), scanning [`Pages/Index.cshtml`](https://github.com/dotnet/AspNetCore.Docs.Samples/blob/17a4652a7ed5442ab5111b9ecb827aadd6262558/test/integration-tests/10.x/IntegrationTestsSample/src/RazorPagesProject/Pages/Index.cshtml) and its conventional companion. The three B1 truths are the page identity, root route `/`, and `AddMessage` resolving exactly to the unique `IndexModel.OnPostAddMessageAsync`; SymbolLattice scores **TP 3 / FP 0 / FN 0**, while CodeGraph 1.5 measures **TP 1 / FP 0 / FN 2**.
-- Exact handlers are limited to literal POST forms/buttons, the unique conventional `.cshtml.cs` companion, a source-proven `PageModel`, and one public, non-static, non-generic, non-override `OnPost…` method without `NonHandler`. A literal button `formmethod` overrides the enclosing form method, so the exact handler is retained only when it is omitted or explicitly `post`. Handler-looking C# strings inside Razor `@(...)` explicit expressions and complete `if/else if/else`, `try/catch/finally`, and `do/while` control-flow chains are excluded. Dynamic Tag Helper values, cross-page handlers, partial/overloaded targets, runtime model binding, authorization, and the Razor rendering lifecycle are not claimed. Extractor facts are v278 and the resolver is v144.
+This release work evaluates bounded, exact-safe relations in fixed TypeScript scopes. It does **not** claim complete TypeScript coverage or correctness for every TypeScript project, language feature, runtime path, or dynamic relation.
+
+- Stage 2 established 250 compiler-grounded positive truths and 100 negative assertions.
+- Stage 3 scored **TP 250 / FP 0 / FN 0** on that fixed corpus.
+- Stage 4's fixed A/B evaluation recorded 4/4 successful tasks for each arm, with no token-performance claim.
+- Stage 5 evaluated the MIT-licensed NestJS v11.1.16 tree at peeled commit `315e698…`: 1,659 TypeScript files and about 108,540 lines. Its fixed oracle scored **TP 300 / FP 0 / FN 0**, plus 150 negative assertions. The final fresh index reported 1,748 files, 18,125 symbols, 46,920 edges, and 15,134 pending references; the incremental checks passed 9/9 and the MCP check recorded zero fallbacks and zero worker crashes. The extractor is v283 and the resolver is v148.
+
+The public npm aliases run the internal Stage 5 tools and deliberately require explicit project and output arguments:
+
+```bash
+npm run benchmark:typescript-large-oracle -- --project /path/to/project ...
+npm run benchmark:typescript-large-index-evidence -- --project /path/to/project --output evidence.json
+npm run benchmark:typescript-large-incremental -- --project /path/to/disposable-project ...
+npm run verify:typescript-self-hosting-mcp -- --project /path/to/indexed-project ...
+```
+
+Use each script's required-argument message as the canonical parameter reference. These tools can write their requested output and, where applicable, an index under the project supplied to them; use a disposable copy for experiments.
 
 ## MCP
 
@@ -65,14 +66,13 @@ node dist/cli/main.js serve --mcp --project /path/to/project
 node dist/cli/main.js serve --mcp --project /path/to/project --no-auto-sync
 ```
 
-MCP queries do not directly run `init` or `sync`. Use the CLI's `init`, `sync`, `watch`, or an explicitly approved watcher flow when you need to control indexing.
+MCP queries do not directly run `init` or `sync`. Use the CLI's `init`, `sync`, or `watch` when you need to control indexing.
 
 ## Common commands
 
 | Command | Purpose |
 | --- | --- |
-| `init` | Build a project graph. |
-| `sync` | Explicitly synchronize the index. |
+| `init` / `sync` | Build or explicitly refresh a project graph. |
 | `status` | Inspect generation and freshness. |
 | `files` / `file` | List or read persisted source. |
 | `find` / `node` | Find and inspect a symbol. |
@@ -86,7 +86,7 @@ Run `node dist/cli/main.js <command> --help` for all options.
 
 ## Limits
 
-SymbolLattice is a static code graph and code intelligence tool. It is not a complete compiler, type checker, runtime tracer, RDF ontology, or general reasoning engine. Dynamic dispatch, reflection, macros, code generation, dependency injection, and external package types may remain unresolved.
+SymbolLattice is a static code graph and code-intelligence tool. It is not a complete compiler, type checker, runtime tracer, RDF ontology, or general reasoning engine. Dynamic dispatch, reflection, macros, code generation, dependency injection, and external package types may remain unresolved.
 
 ## Verification
 

@@ -117,6 +117,16 @@ function file(
     filePath,
     language,
     indexedAt: "2026-08-04T00:00:00.000Z",
+    generated: {
+      classifierVersion: "generated-evidence-v1",
+      generated: false,
+      evidence: []
+    },
+    sourceRole: {
+      classifierVersion: "source-role-evidence-v2",
+      role: filePath.includes("test") ? "test" : "production",
+      evidence: []
+    },
     declarationCount: 1,
     edgeCount: 2,
     pendingReferenceCount: 0

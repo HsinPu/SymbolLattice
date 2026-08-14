@@ -2016,6 +2016,27 @@ const investigateOutputSchema = z
           selectionRank: z.number().int().positive(),
           sourceRank: z.number().int().positive(),
           candidateRank: z.number().int().positive(),
+          generatedRanking: z.object({
+            itemId: z.string().min(1),
+            filePath: z.string().min(1),
+            generated: z.object({
+              classifierVersion: z.string().min(1),
+              generated: z.boolean(),
+              evidence: z.array(z.object({
+                kind: z.enum(["path", "header"]),
+                ruleId: z.string().min(1),
+                range: sourceRangeOutputSchema.nullable()
+              })).max(8)
+            }),
+            baseRank: z.number().int().positive(),
+            finalRank: z.number().int().positive(),
+            generatedPenalty: z.union([z.literal(0), z.literal(1)]),
+            reason: z.enum([
+              "handwritten-preferred",
+              "generated-file-soft-penalty",
+              "original-order-preserved"
+            ])
+          }),
           structuralSignals: z.object({
             directExactCallerCount: z.number().int().nonnegative(),
             directExactCalleeCount: z.number().int().nonnegative(),
@@ -2114,6 +2135,11 @@ const investigateOutputSchema = z
               truncated: z.boolean()
             })
             .nullable(),
+          lexicalFocus: z.object({
+            language: z.enum(ARTIFACT_LANGUAGES),
+            range: sourceRangeOutputSchema,
+            matchingTerms: z.array(z.string())
+          }),
           symbol: z.object({}).passthrough()
         })
       ),

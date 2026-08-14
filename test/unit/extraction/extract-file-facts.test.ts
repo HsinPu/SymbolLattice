@@ -89,7 +89,7 @@ describe("source extraction", () => {
     ]);
   });
 
-  it("extracts only a statically proven local Array.sort comparator callback", () => {
+  it("emits only the source-proven Array.sort comparator callback", () => {
     const facts = extractFileFacts({
       filePath: "src/sort-callback.ts",
       language: "typescript",
@@ -105,17 +105,18 @@ describe("source extraction", () => {
       ].join("\n")
     });
 
-    const execute = facts.symbols.find(
-      (symbol) => symbol.kind === "function" && symbol.name === "execute"
-    );
     const comparatorCalls = facts.pendingReferences.filter(
       (reference) => reference.relationKind === "calls" && reference.referenceName === "compare"
     );
 
-    expect(comparatorCalls).toEqual([
-      expect.objectContaining({ sourceId: execute?.id })
-    ]);
-    expect(comparatorCalls[0]?.range.start.line).toBe(6);
+    expect(comparatorCalls).toHaveLength(1);
+    expect(comparatorCalls[0]).toMatchObject({
+      sourceId: facts.symbols.find((symbol) => symbol.name === "execute")?.id,
+      referenceName: "compare",
+      relationKind: "calls",
+      callSemantics: "typescript-array-sort-comparator"
+    });
+    expect(comparatorCalls[0]?.range.start).toEqual({ line: 6, column: 15 });
   });
 
   it("extracts precise callable signature type references without wrapper or generic noise", () => {

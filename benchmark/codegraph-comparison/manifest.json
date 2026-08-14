@@ -77,7 +77,7 @@
       "projectId": "codegraph",
       "language": "typescript",
       "reference": "loadGrammarsForLanguages",
-      "expectedTargets": ["expandGrammarLanguages", "initGrammars", "resolveWasmPath"]
+      "expectedTargets": ["expandGrammarLanguages", "initGrammars", "load", "resolveWasmPath"]
     },
     {
       "id": "codegraph-supported-language-negative-control",

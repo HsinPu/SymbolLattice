@@ -12070,6 +12070,7 @@ export function resolveProjectFacts(input: {
   const moduleResolutionByKey = new Map<string, ResolvedModule>();
   const resolvedEdges: GraphEdge[] = [];
   const unresolvedReferences: PendingReference[] = [];
+  const deferredTypeScriptMemberReferences: PendingReference[] = [];
   const replacedStructuralEdgeIds = new Set<string>();
   const sourceDocumentsByPath = new Map(
     input.sourceDocuments.map((document) => [document.relativePath, document])
@@ -12523,6 +12524,16 @@ export function resolveProjectFacts(input: {
       continue;
     }
 
+    if (
+      reference.relationKind === "calls" &&
+      reference.callSemantics === "typescript-proven-receiver-member-call" &&
+      (reference.callReceiverTypeName !== undefined ||
+        reference.callReceiverTargetQualifiedName !== undefined)
+    ) {
+      deferredTypeScriptMemberReferences.push(reference);
+      continue;
+    }
+
     const cobolCicsTransactionResolution = resolveCobolCicsTransactionTarget({
       reference,
       factsByFile,
@@ -12821,9 +12832,11 @@ export function resolveProjectFacts(input: {
                 ? resolutionPath.length === 0
                   ? staticRouteHandlerRuleId(reference, "imported-handler")
                   : staticRouteHandlerRuleId(reference, "reexported-handler")
-                : resolutionPath.length === 0
-                  ? "module.explicit-import-binding"
-                  : "module.reexported-import-binding",
+                : reference.callSemantics === "typescript-array-sort-comparator"
+                  ? "syntax.typescript.array-sort-comparator"
+                  : resolutionPath.length === 0
+                    ? "module.explicit-import-binding"
+                    : "module.reexported-import-binding",
             "module",
             candidateSymbolIds(exactImportedSymbols),
             exactImportedConfigurationPaths,
@@ -12988,6 +13001,167 @@ export function resolveProjectFacts(input: {
     );
   }
 
+  const exactTypeScriptHeritageEdges = [...structuralEdges, ...resolvedEdges].filter(
+    (edge) =>
+      (edge.kind === "extends" || edge.kind === "implements") &&
+      edge.resolution === "exact" &&
+      edge.targetId !== null
+  );
+  const directTypeScriptMemberCandidates = (
+    receiver: SymbolNode,
+    memberName: string
+  ): readonly SymbolNode[] =>
+    symbols.filter(
+      (symbol) =>
+        (symbol.kind === "method" || symbol.kind === "variable") &&
+        symbol.qualifiedName === `${receiver.qualifiedName}.${memberName}`
+    );
+  const uniqueInheritedTypeScriptMember = (
+    receiver: SymbolNode,
+    memberName: string
+  ): { readonly candidates: readonly SymbolNode[]; readonly path: readonly GraphEdge[] } => {
+    const path: GraphEdge[] = [];
+    const visited = new Set<string>([receiver.id]);
+    let current = receiver;
+    while (true) {
+      const eligibleEdges = exactTypeScriptHeritageEdges.filter((edge) => {
+        if (edge.sourceId !== current.id || edge.targetId === null) {
+          return false;
+        }
+        const target = symbolsById.get(edge.targetId);
+        if (target === undefined) {
+          return false;
+        }
+        return current.kind === "class"
+          ? edge.kind === "extends" && target.kind === "class"
+          : edge.kind === "extends" && target.kind === "interface";
+      });
+      const edge = eligibleEdges.length === 1 ? eligibleEdges[0] : undefined;
+      if (edge === undefined || edge.targetId === null) {
+        return { candidates: [], path: [] };
+      }
+      const target = symbolsById.get(edge.targetId);
+      if (target === undefined || visited.has(target.id)) {
+        return { candidates: [], path: [] };
+      }
+      visited.add(target.id);
+      path.push(edge);
+      const candidates = directTypeScriptMemberCandidates(target, memberName);
+      if (candidates.length > 0) {
+        return { candidates, path };
+      }
+      current = target;
+    }
+  };
+
+  for (const reference of deferredTypeScriptMemberReferences) {
+    const receiverTypeName = reference.callReceiverTypeName;
+    const receiverBindingSpace = reference.callReceiverBindingSpace ?? "type";
+    const scopedReceiver =
+      receiverTypeName === undefined
+        ? null
+        : resolveScopedBinding(
+            receiverTypeName,
+            referenceScopeIdsByReferenceId.get(reference.id) ?? [],
+            localBindingsByFile.get(reference.filePath) ?? [],
+            symbolsById,
+            receiverBindingSpace
+          );
+    const localReceiverCandidates =
+      receiverTypeName === undefined
+        ? []
+        : scopedReceiver?.hasBinding === true
+          ? scopedReceiver.candidates.filter(
+              (symbol) => symbol.kind === "class" || symbol.kind === "interface"
+            )
+          : topLevelLocalCandidates(symbols, reference.filePath, receiverTypeName).filter(
+              (symbol) => symbol.kind === "class" || symbol.kind === "interface"
+            );
+    const importedReceiverCandidates = canonicalExportCandidates(
+      (scopedReceiver?.hasBinding === true ? [] : importBindingsByFile.get(reference.filePath) ?? [])
+        .filter(
+          (binding) =>
+            receiverTypeName !== undefined &&
+            binding.localName === receiverTypeName &&
+            (receiverBindingSpace === "type" || binding.isTypeOnly !== true)
+        )
+        .flatMap((binding) => {
+          const targetPath = moduleTargetPathByKey.get(
+            moduleKey(reference.filePath, binding.moduleSpecifier)
+          );
+          return targetPath === undefined
+            ? []
+            : candidatesForExport(exportSurfaces, targetPath, binding.importedName);
+        })
+        .filter(
+          (candidate) =>
+            (candidate.symbol.kind === "class" || candidate.symbol.kind === "interface") &&
+            (receiverBindingSpace === "type" || candidate.isTypeOnly !== true)
+        )
+    );
+    const receiverCandidates = [
+      ...localReceiverCandidates,
+      ...importedReceiverCandidates.map((candidate) => candidate.symbol)
+    ].filter(
+      (candidate, index, all) => all.findIndex((other) => other.id === candidate.id) === index
+    );
+    const directMemberCandidates =
+      reference.callReceiverTargetQualifiedName !== undefined
+        ? symbols.filter(
+            (symbol) =>
+              (symbol.kind === "method" || symbol.kind === "variable") &&
+              symbol.qualifiedName === reference.callReceiverTargetQualifiedName
+          )
+        : receiverCandidates.length === 1 && receiverCandidates[0] !== undefined
+          ? directTypeScriptMemberCandidates(receiverCandidates[0], reference.referenceName)
+          : [];
+    const inherited =
+      directMemberCandidates.length === 0 &&
+      reference.callReceiverTargetQualifiedName === undefined &&
+      receiverCandidates.length === 1 &&
+      receiverCandidates[0] !== undefined
+        ? uniqueInheritedTypeScriptMember(receiverCandidates[0], reference.referenceName)
+        : { candidates: [], path: [] };
+    const memberCandidates =
+      directMemberCandidates.length === 0 ? inherited.candidates : directMemberCandidates;
+    const target = memberCandidates.length === 1 ? memberCandidates[0] : undefined;
+    if (target !== undefined) {
+      resolvedEdges.push(
+        referenceEdge(
+          reference,
+          target.id,
+          "exact",
+          1,
+          referenceEvidence(
+            "syntax.typescript.proven-receiver-member-call",
+            target.filePath === reference.filePath ? "lexical" : "module",
+            candidateSymbolIds(memberCandidates),
+            uniqueConfigurationPaths([
+              ...importedReceiverCandidates.map((candidate) => candidate.configurationPaths),
+              ...inherited.path.map((edge) => edge.evidence?.configurationPaths ?? [])
+            ]),
+            target.filePath === reference.filePath ? [] : [reference.filePath, target.filePath]
+          )
+        )
+      );
+      continue;
+    }
+    unresolvedReferences.push(reference);
+    resolvedEdges.push(
+      referenceEdge(
+        reference,
+        null,
+        "unresolved",
+        0,
+        referenceEvidence(
+          "syntax.typescript.proven-receiver-member-call.unresolved-target",
+          "unresolved",
+          candidateSymbolIds(memberCandidates)
+        )
+      )
+    );
+  }
+
   const overrideReferences = [...references]
     .filter(isOverrideReference)
     .sort((left, right) => compareStableText(left.id, right.id));
@@ -13118,6 +13292,13 @@ export function resolveProjectFacts(input: {
     ...nestRouteProjection.structuralEdges.filter((edge) => !replacedStructuralEdgeIds.has(edge.id)),
     ...projectedResolvedEdges
   ]) {
+    const existing = edgeById.get(edge.id);
+    if (
+      existing?.evidence?.ruleId === "syntax.typescript.array-sort-comparator" &&
+      edge.evidence?.ruleId !== "syntax.typescript.array-sort-comparator"
+    ) {
+      continue;
+    }
     edgeById.set(edge.id, edge);
   }
 

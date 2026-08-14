@@ -27,7 +27,10 @@ const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(SCRIPT_DIRECTORY, "..");
 const DEFAULT_MANIFEST = join(PROJECT_ROOT, "benchmark", "codegraph-comparison", "manifest.json");
 const MAX_CAPTURE_BYTES = 32 * 1024 * 1024;
-const PROCESS_TIMEOUT_MS = 180_000;
+// Large Windows worktree snapshots can legitimately need several minutes for
+// a cold initial index. Keep an outer bound, but do not terminate a healthy
+// comparison at the previous three-minute threshold.
+const PROCESS_TIMEOUT_MS = 600_000;
 const MCP_REQUEST_TIMEOUT_MS = 30_000;
 const MCP_REQUEST_COUNT = 8;
 const MCP_CONCURRENCY = 4;
