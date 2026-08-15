@@ -37,7 +37,7 @@ node dist/cli/main.js find createOrder --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## Install for Codex (v0.420.0 candidate)
+## Install for Codex
 
 Install the public CLI, then explicitly create an index in the repository where you want to use it:
 
@@ -64,29 +64,7 @@ symbol-lattice uninstall codex
 symbol-lattice uninstall codex --apply --yes
 ```
 
-The installer never creates or deletes a project index automatically. v0.420.0 passed isolated npm installation, MCP stdio cwd verification, and an on-device check from a new Codex task. That task loaded the SymbolLattice MCP server and resolved the current repository `C:\Users\win10\Desktop\Graph\symbol-lattice` as its project path.
-
-## TypeScript self-hosting evidence (carried forward from v0.419.1)
-
-This release work evaluates bounded, exact-safe relations in fixed TypeScript scopes. It does **not** claim complete TypeScript coverage or correctness for every TypeScript project, language feature, runtime path, or dynamic relation.
-
-- Stage 2 established 250 compiler-grounded positive truths and 100 negative assertions.
-- Stage 3 scored **TP 250 / FP 0 / FN 0** on that fixed corpus.
-- Stage 4's fixed A/B evaluation recorded 4/4 successful tasks for each arm, with no token-performance claim.
-- Stage 5 evaluated the MIT-licensed NestJS v11.1.16 tree at peeled commit `315e698…`: 1,659 TypeScript files and about 108,540 lines. Its fixed oracle scored **TP 300 / FP 0 / FN 0**, plus 150 negative assertions. The final fresh index reported 1,748 files, 18,125 symbols, 46,141 edges, and 15,394 pending references; the incremental checks passed 9/9 and the MCP check recorded zero fallbacks and zero worker crashes. These figures come from v0.419.1 extractor v307 and resolver v150; the v0.420.0 installer work does not change the analysis engine.
-
-The public npm aliases run the internal Stage 5 tools and deliberately require explicit project and output arguments:
-
-```bash
-npm run benchmark:typescript-large-oracle -- --project /path/to/project ...
-npm run benchmark:typescript-large-index-evidence -- --project /path/to/project --output evidence.json
-npm run benchmark:typescript-large-incremental -- --project /path/to/disposable-project ...
-npm run verify:typescript-self-hosting-mcp -- --project /path/to/indexed-project ...
-```
-
-Use each script's required-argument message as the canonical parameter reference. These tools can write their requested output and, where applicable, an index under the project supplied to them; use a disposable copy for experiments.
-
-`benchmark:typescript-self-hosting` and `check:typescript-self-hosting` require the complete repository source, tests, and tsconfig files. They are checkout-only development commands, not part of the public npm-pack tool surface.
+The installer never creates or deletes a project index automatically. v0.420.0 passed isolated npm installation, MCP stdio cwd verification, and an on-device check from a new Codex task. That task loaded the SymbolLattice MCP server and resolved the active repository as its project path.
 
 ## MCP
 
@@ -125,10 +103,7 @@ SymbolLattice is a static code graph and code-intelligence tool. It is not a com
 npm run check
 npm test
 npm run build
-npm run benchmark:capabilities
 npm run verify:mcp-worker-generation
-npm run benchmark:mcp
-npm run benchmark:comparison
 npm pack --dry-run
 ```
 

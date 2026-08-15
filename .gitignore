@@ -5,3 +5,6 @@ coverage/
 .codegraph/
 .env
 *.log
+.npm-cache*/
+.tmp/
+*.tgz

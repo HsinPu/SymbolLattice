@@ -1,6 +1,0 @@
-<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
-  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.UserMapper">
-  <sql id="baseColumns">id, email</sql>
-  <select id="findById">SELECT <include refid="baseColumns"/> FROM users</select>
-</mapper>
