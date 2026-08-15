@@ -11,8 +11,8 @@ import { fileURLToPath } from "node:url";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import ts from "typescript";
 
-export const ORACLE_VERSION = "typescript-large-project-correctness-oracle-v2";
-export const DEFAULT_SEED = "symbol-lattice-v0.419.0-nest-v11.1.16-stage5";
+export const ORACLE_VERSION = "typescript-large-project-correctness-oracle-v3";
+export const DEFAULT_SEED = "symbol-lattice-v0.419.1-nest-v11.1.16-stage5";
 export const DEFAULT_QUOTAS = Object.freeze({
   identity: 60,
   moduleImportExport: 60,
@@ -216,11 +216,21 @@ function readonlyParameterPropertyType(checker, node, propertyName) {
  */
 function isExactEligibleInvocation(checker, node, target) {
   if (!isGraphDeclaration(target)) return false;
+  if (hasRuntimeDecorator(node) || hasRuntimeDecorator(target)) return false;
+  if (namedInvocationOwner(node) === null) return false;
+  if (hasUnsupportedCallableBoundary(node)) return false;
+  const callerClass = nearestClass(node);
+  const targetClass = nearestClass(target);
+  if (
+    (callerClass !== null && classHasUnprovenRuntimeEscape(callerClass)) ||
+    (targetClass !== null && classHasUnprovenRuntimeEscape(targetClass))
+  ) return false;
   for (let current = node.parent; current && !ts.isSourceFile(current); current = current.parent) {
     if (ts.isDecorator(current)) return false;
   }
   if (ts.isNewExpression(node)) {
-    return node.questionDotToken === undefined && ts.isIdentifier(node.expression) && ts.isClassDeclaration(target);
+    return node.questionDotToken === undefined && ts.isIdentifier(node.expression) && ts.isClassDeclaration(target) &&
+      resolvedDeclaration(checker, node.expression) === target;
   }
   if (!ts.isCallExpression(node) || node.questionDotToken !== undefined) return false;
   if (ts.isIdentifier(node.expression)) return true;
@@ -232,7 +242,9 @@ function isExactEligibleInvocation(checker, node, target) {
     const owner = nearestClass(node);
     return owner !== null && target.parent === owner;
   }
-  if (ts.isNewExpression(receiver) && ts.isIdentifier(receiver.expression)) return true;
+  if (ts.isNewExpression(receiver) && ts.isIdentifier(receiver.expression)) {
+    return resolvedDeclaration(checker, receiver.expression) === target.parent;
+  }
   if (ts.isIdentifier(receiver)) {
     const declaration = visibleIdentifierDeclaration(checker, receiver);
     if (ts.isImportSpecifier(declaration) || ts.isImportClause(declaration) || ts.isNamespaceImport(declaration)) {
@@ -241,15 +253,103 @@ function isExactEligibleInvocation(checker, node, target) {
         hasUniqueNamedGraphMember(imported, node.expression.name.text);
     }
     if (ts.isParameter(declaration)) {
-      return declaration.type !== undefined && (ts.isTypeReferenceNode(declaration.type) || ts.isTypeLiteralNode(declaration.type));
+      if (declaration.type === undefined || (!ts.isTypeReferenceNode(declaration.type) && !ts.isTypeLiteralNode(declaration.type))) return false;
+      const receiverType = resolvedDeclaration(checker, declaration.type);
+      return receiverType !== null && target.parent === receiverType;
     }
     return ts.isVariableDeclaration(declaration) && declaration.initializer !== undefined &&
       ts.isNewExpression(declaration.initializer) && ts.isIdentifier(declaration.initializer.expression) &&
-      (declaration.parent.flags & ts.NodeFlags.Const) !== 0;
+      (declaration.parent.flags & ts.NodeFlags.Const) !== 0 &&
+      resolvedDeclaration(checker, declaration.initializer.expression) === target.parent;
   }
   if (ts.isPropertyAccessExpression(receiver) && receiver.expression.kind === ts.SyntaxKind.ThisKeyword) {
     const receiverType = readonlyParameterPropertyType(checker, node, receiver.name.text);
-    return receiverType !== null;
+    return receiverType !== null && target.parent === receiverType;
+  }
+  return false;
+}
+
+/**
+ * Compiler symbol resolution alone cannot prove the runtime identity of a
+ * declaration whose callable or enclosing class can be replaced by a legacy
+ * or standard decorator. The large-project oracle must therefore exclude the
+ * same runtime-unstable surface instead of counting it as a false negative.
+ */
+export function hasRuntimeDecorator(node) {
+  for (let current = node; current && !ts.isSourceFile(current); current = current.parent) {
+    if (ts.canHaveDecorators(current) && (ts.getDecorators(current)?.length ?? 0) > 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function transparent(expression) {
+  let current = expression;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isTypeAssertionExpression(current) ||
+    ts.isSatisfiesExpression(current) ||
+    ts.isNonNullExpression(current)
+  ) current = current.expression;
+  return current;
+}
+
+function classHasUnprovenRuntimeEscape(owner) {
+  let unstable = false;
+  const visit = (node) => {
+    if (unstable || (node !== owner && (ts.isClassDeclaration(node) || ts.isClassExpression(node)))) return;
+    if (
+      (ts.isCallExpression(node) || ts.isNewExpression(node)) &&
+      node.arguments.some(expressionContainsThis)
+    ) {
+      unstable = true;
+      return;
+    }
+    if (
+      (ts.isVariableDeclaration(node) && node.initializer !== undefined && expressionContainsThis(node.initializer)) ||
+      (ts.isBinaryExpression(node) && expressionContainsThis(node.right)) ||
+      (ts.isReturnStatement(node) && node.expression !== undefined && expressionContainsThis(node.expression))
+    ) {
+      unstable = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(owner, visit);
+  return unstable;
+}
+
+function expressionContainsThis(expression) {
+  const current = transparent(expression);
+  if (current.kind === ts.SyntaxKind.ThisKeyword) return true;
+  // A property value is not the receiver itself.
+  if (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) return false;
+  if (ts.isObjectLiteralExpression(current)) return current.properties.some((property) => {
+    if (ts.isPropertyAssignment(property)) return expressionContainsThis(property.initializer);
+    if (ts.isShorthandPropertyAssignment(property)) return property.name.text === "this";
+    return ts.isSpreadAssignment(property) && expressionContainsThis(property.expression);
+  });
+  if (ts.isArrayLiteralExpression(current)) return current.elements.some((element) => !ts.isOmittedExpression(element) && expressionContainsThis(ts.isSpreadElement(element) ? element.expression : element));
+  if (ts.isConditionalExpression(current)) return expressionContainsThis(current.whenTrue) || expressionContainsThis(current.whenFalse);
+  return false;
+}
+
+function namedInvocationOwner(node) {
+  const owner = enclosingSourceGraphOwner(node);
+  return owner !== null && graphDeclarationName(owner) !== null ? owner : null;
+}
+
+function hasUnsupportedCallableBoundary(node) {
+  for (let current = node.parent; current && !ts.isSourceFile(current); current = current.parent) {
+    if (ts.isMethodDeclaration(current) || ts.isMethodSignature(current)) {
+      return current.name === undefined || !ts.isIdentifier(current.name);
+    }
+    if (ts.isConstructorDeclaration(current) || ts.isFunctionDeclaration(current)) {
+      return graphDeclarationName(current) === null;
+    }
+    if (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) return false;
   }
   return false;
 }

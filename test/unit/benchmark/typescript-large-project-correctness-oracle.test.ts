@@ -6,6 +6,7 @@ import {
   buildNegatives,
   descriptorMatches,
   enclosingSourceGraphOwner,
+  hasRuntimeDecorator,
   isGraphDeclaration,
   isTestSourcePath,
   parseOracleArguments,
@@ -25,7 +26,7 @@ const truth = (name: string, line: number, occurrenceColumn = 4) => ({ kind: "ca
 describe("typescript large-project correctness oracle", () => {
   it("requires every CLI input that protects source/evidence separation", () => {
     expect(() => parseOracleArguments(["--project", "fixture"])).toThrow("--manifest is required");
-    expect(parseOracleArguments(["--project", "fixture", "--manifest", "manifest.json", "--index-evidence", "evidence.json"])).toMatchObject({ project: "fixture", seed: "symbol-lattice-v0.419.0-nest-v11.1.16-stage5" });
+    expect(parseOracleArguments(["--project", "fixture", "--manifest", "manifest.json", "--index-evidence", "evidence.json"])).toMatchObject({ project: "fixture", seed: "symbol-lattice-v0.419.1-nest-v11.1.16-stage5" });
   });
 
   it("keeps quota defaults while allowing a manifest to tighten them", () => {
@@ -58,6 +59,28 @@ describe("typescript large-project correctness oracle", () => {
     const observed = { ...expected, range: { start: { line: 3, column: 1 }, end: { line: 8, column: 2 } } };
     expect(descriptorMatches(expected, observed)).toBe(true);
     expect(descriptorMatches(expected, { ...observed, name: "Other" })).toBe(false);
+  });
+
+  it("marks a call or target enclosed by a runtime decorator as ineligible oracle evidence", () => {
+    const file = ts.createSourceFile(
+      "src/decorated.ts",
+      "@service() class Decorated { @replace() target() {} run() { this.target(); } } class Plain { target() {} run() { this.target(); } }",
+      ts.ScriptTarget.Latest,
+      true
+    );
+    const calls: ts.CallExpression[] = [];
+    const methods: ts.MethodDeclaration[] = [];
+    const walk = (node: ts.Node): void => {
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) calls.push(node);
+      if (ts.isMethodDeclaration(node) && node.name.getText(file) === "target") methods.push(node);
+      ts.forEachChild(node, walk);
+    };
+    walk(file);
+
+    expect(hasRuntimeDecorator(calls[0]!)).toBe(true);
+    expect(hasRuntimeDecorator(methods[0]!)).toBe(true);
+    expect(hasRuntimeDecorator(calls[1]!)).toBe(false);
+    expect(hasRuntimeDecorator(methods[1]!)).toBe(false);
   });
 
   it("excludes incidental syntax from graph declarations and resolves arrow owners to their carrier", () => {

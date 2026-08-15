@@ -5,7 +5,10 @@ import { join } from "node:path";
 import ts from "typescript";
 import { afterEach, describe, expect, test } from "vitest";
 
-import { compilerProvenArraySortComparator } from "../../../scripts/typescript-self-hosting-ground-truth.mjs";
+import {
+  buildCandidateBinding,
+  compilerProvenArraySortComparator
+} from "../../../scripts/typescript-self-hosting-ground-truth.mjs";
 
 const temporaryDirectories = [];
 
@@ -32,6 +35,34 @@ async function comparatorCandidates(sourceText) {
 }
 
 describe("TypeScript self-hosting ground-truth comparator oracle", () => {
+  test("binds evidence to one base commit and tracked diff while rejecting mismatches and untracked files", () => {
+    const binding = buildCandidateBinding({
+      expectedBaseCommit: "a".repeat(40),
+      actualBaseCommit: "a".repeat(40),
+      trackedDiffSha1: "b".repeat(40),
+      statusLines: [" M src/example.ts", "M  README.md"]
+    });
+    expect(binding).toMatchObject({
+      baseCommitMatches: true,
+      candidateBound: true,
+      changedPaths: ["README.md", "src/example.ts"],
+      stagedPaths: ["README.md"],
+      untrackedPaths: []
+    });
+    expect(buildCandidateBinding({
+      expectedBaseCommit: "a".repeat(40),
+      actualBaseCommit: "c".repeat(40),
+      trackedDiffSha1: "b".repeat(40),
+      statusLines: []
+    }).candidateBound).toBe(false);
+    expect(buildCandidateBinding({
+      expectedBaseCommit: "a".repeat(40),
+      actualBaseCommit: "a".repeat(40),
+      trackedDiffSha1: "b".repeat(40),
+      statusLines: ["?? unexpected.txt"]
+    }).candidateBound).toBe(false);
+  });
+
   test("independently recognizes an identifier passed to built-in Array.sort", async () => {
     await expect(comparatorCandidates(`
       function compare(left: string, right: string): number { return left.localeCompare(right); }

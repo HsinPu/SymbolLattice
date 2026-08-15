@@ -12071,6 +12071,33 @@ export function resolveProjectFacts(input: {
   const resolvedEdges: GraphEdge[] = [];
   const unresolvedReferences: PendingReference[] = [];
   const deferredTypeScriptMemberReferences: PendingReference[] = [];
+  const decoratorTaintedTypeScriptTypeSymbolIds = new Set(
+    input.extractedFiles.flatMap(
+      (facts) => facts.typescriptFacts?.decoratorTaintedTypeSymbolIds ?? []
+    )
+  );
+  const decoratorTaintedTypeScriptMemberSymbolIds = new Set(
+    input.extractedFiles.flatMap(
+      (facts) => facts.typescriptFacts?.decoratorTaintedMemberSymbolIds ?? []
+    )
+  );
+  const staticTypeScriptMemberSymbolIds = new Set(
+    input.extractedFiles.flatMap((facts) => facts.typescriptFacts?.staticMemberSymbolIds ?? [])
+  );
+  const instanceTypeScriptMemberSymbolIds = new Set(
+    input.extractedFiles.flatMap((facts) => facts.typescriptFacts?.instanceMemberSymbolIds ?? [])
+  );
+  const callableTypeScriptMemberSymbolIds = new Set(
+    input.extractedFiles.flatMap((facts) => facts.typescriptFacts?.callableMemberSymbolIds ?? [])
+  );
+  const runtimeTaintedTypeScriptMemberSurfaceKeys = new Set(
+    input.extractedFiles.flatMap((facts) =>
+      (facts.typescriptFacts?.runtimeTaintedMemberSurfaces ?? []).map(
+        (surface) =>
+          `${surface.typeSymbolId}\u0000${surface.memberKind}\u0000${surface.memberName ?? "*"}`
+      )
+    )
+  );
   const replacedStructuralEdgeIds = new Set<string>();
   const sourceDocumentsByPath = new Map(
     input.sourceDocuments.map((document) => [document.relativePath, document])
@@ -13009,16 +13036,22 @@ export function resolveProjectFacts(input: {
   );
   const directTypeScriptMemberCandidates = (
     receiver: SymbolNode,
-    memberName: string
+    memberName: string,
+    memberKind: "static" | "instance"
   ): readonly SymbolNode[] =>
     symbols.filter(
       (symbol) =>
         (symbol.kind === "method" || symbol.kind === "variable") &&
-        symbol.qualifiedName === `${receiver.qualifiedName}.${memberName}`
+        symbol.qualifiedName === `${receiver.qualifiedName}.${memberName}` &&
+        callableTypeScriptMemberSymbolIds.has(symbol.id) &&
+        (memberKind === "static"
+          ? staticTypeScriptMemberSymbolIds.has(symbol.id)
+          : instanceTypeScriptMemberSymbolIds.has(symbol.id))
     );
   const uniqueInheritedTypeScriptMember = (
     receiver: SymbolNode,
-    memberName: string
+    memberName: string,
+    memberKind: "static" | "instance"
   ): { readonly candidates: readonly SymbolNode[]; readonly path: readonly GraphEdge[] } => {
     const path: GraphEdge[] = [];
     const visited = new Set<string>([receiver.id]);
@@ -13046,7 +13079,7 @@ export function resolveProjectFacts(input: {
       }
       visited.add(target.id);
       path.push(edge);
-      const candidates = directTypeScriptMemberCandidates(target, memberName);
+      const candidates = directTypeScriptMemberCandidates(target, memberName, memberKind);
       if (candidates.length > 0) {
         return { candidates, path };
       }
@@ -13057,6 +13090,7 @@ export function resolveProjectFacts(input: {
   for (const reference of deferredTypeScriptMemberReferences) {
     const receiverTypeName = reference.callReceiverTypeName;
     const receiverBindingSpace = reference.callReceiverBindingSpace ?? "type";
+    const receiverMemberKind = reference.callReceiverMemberKind;
     const scopedReceiver =
       receiverTypeName === undefined
         ? null
@@ -13106,25 +13140,69 @@ export function resolveProjectFacts(input: {
       (candidate, index, all) => all.findIndex((other) => other.id === candidate.id) === index
     );
     const directMemberCandidates =
-      reference.callReceiverTargetQualifiedName !== undefined
+      receiverMemberKind === undefined
+        ? []
+        : reference.callReceiverTargetQualifiedName !== undefined
         ? symbols.filter(
             (symbol) =>
               (symbol.kind === "method" || symbol.kind === "variable") &&
-              symbol.qualifiedName === reference.callReceiverTargetQualifiedName
+              symbol.qualifiedName === reference.callReceiverTargetQualifiedName &&
+              callableTypeScriptMemberSymbolIds.has(symbol.id) &&
+              (receiverMemberKind === "static"
+                ? staticTypeScriptMemberSymbolIds.has(symbol.id)
+                : instanceTypeScriptMemberSymbolIds.has(symbol.id))
           )
         : receiverCandidates.length === 1 && receiverCandidates[0] !== undefined
-          ? directTypeScriptMemberCandidates(receiverCandidates[0], reference.referenceName)
+          ? directTypeScriptMemberCandidates(
+              receiverCandidates[0],
+              reference.referenceName,
+              receiverMemberKind
+            )
           : [];
     const inherited =
       directMemberCandidates.length === 0 &&
       reference.callReceiverTargetQualifiedName === undefined &&
       receiverCandidates.length === 1 &&
       receiverCandidates[0] !== undefined
-        ? uniqueInheritedTypeScriptMember(receiverCandidates[0], reference.referenceName)
+        ? uniqueInheritedTypeScriptMember(
+            receiverCandidates[0],
+            reference.referenceName,
+            receiverMemberKind ?? "instance"
+          )
         : { candidates: [], path: [] };
     const memberCandidates =
       directMemberCandidates.length === 0 ? inherited.candidates : directMemberCandidates;
-    const target = memberCandidates.length === 1 ? memberCandidates[0] : undefined;
+    const runtimeSurfaceTainted =
+      receiverMemberKind !== undefined &&
+      [
+        ...receiverCandidates.map((candidate) => candidate.id),
+        ...inherited.path.flatMap((edge) =>
+          edge.targetId === null ? [edge.sourceId] : [edge.sourceId, edge.targetId]
+        )
+      ].some(
+        (typeSymbolId) =>
+          runtimeTaintedTypeScriptMemberSurfaceKeys.has(
+            `${typeSymbolId}\u0000${receiverMemberKind}\u0000${reference.referenceName}`
+          ) ||
+          runtimeTaintedTypeScriptMemberSurfaceKeys.has(
+            `${typeSymbolId}\u0000${receiverMemberKind}\u0000*`
+          )
+      );
+    const decoratorTainted =
+      receiverCandidates.some((candidate) =>
+        decoratorTaintedTypeScriptTypeSymbolIds.has(candidate.id)
+      ) ||
+      inherited.path.some(
+        (edge) =>
+          decoratorTaintedTypeScriptTypeSymbolIds.has(edge.sourceId) ||
+          (edge.targetId !== null && decoratorTaintedTypeScriptTypeSymbolIds.has(edge.targetId))
+      ) ||
+      memberCandidates.some((candidate) =>
+        decoratorTaintedTypeScriptMemberSymbolIds.has(candidate.id)
+      ) ||
+      runtimeSurfaceTainted;
+    const target =
+      !decoratorTainted && memberCandidates.length === 1 ? memberCandidates[0] : undefined;
     if (target !== undefined) {
       resolvedEdges.push(
         referenceEdge(

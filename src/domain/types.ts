@@ -298,6 +298,8 @@ export interface PendingReference {
   readonly callReceiverTypeName?: string;
   /** Namespace in which the syntax-proven TypeScript receiver binding must resolve. */
   readonly callReceiverBindingSpace?: "value" | "type";
+  /** Runtime side on which the TypeScript member must be declared. */
+  readonly callReceiverMemberKind?: "static" | "instance";
   /** Direct lexical callable-property identity for an inline parameter type. */
   readonly callReceiverTargetQualifiedName?: string;
   /** Present only when a validated extraction plugin emitted this reference. */

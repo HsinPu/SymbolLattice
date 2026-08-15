@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.419.0 為開發者預覽版。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用。
+> v0.419.1 為開發者預覽版。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用。
 
 ## 這是什麼
 
@@ -37,14 +37,14 @@ node dist/cli/main.js find createOrder --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.419.0 TypeScript 自我託管證據
+## v0.419.1 TypeScript 自我託管證據
 
 本版工作只在固定 TypeScript 範圍評估限界、exact-safe 的關係；**不**主張所有 TypeScript 專案、語言特性、runtime 路徑或動態關係的完整涵蓋或正確性。
 
 - Stage 2 建立 250 個 compiler-grounded positive truths 與 100 個 negative assertions。
 - Stage 3 在該固定 corpus 得分為 **TP 250 / FP 0 / FN 0**。
 - Stage 4 的固定 A/B 評估中，兩個 arm 均為 4/4 任務成功；不提出 token 效能主張。
-- Stage 5 評估 MIT 授權、peeled commit `315e698…` 的 NestJS v11.1.16：1,659 個 TypeScript 檔案、約 108,540 行。固定 oracle 得分為 **TP 300 / FP 0 / FN 0**，另有 150 個 negative assertions。最終 fresh index 為 1,748 files、18,125 symbols、46,920 edges、15,134 pending references；incremental 檢查 9/9 通過，MCP 檢查為 0 fallback、0 worker crash。extractor 為 v283，resolver 為 v148。
+- Stage 5 評估 MIT 授權、peeled commit `315e698…` 的 NestJS v11.1.16：1,659 個 TypeScript 檔案、約 108,540 行。固定 oracle 得分為 **TP 300 / FP 0 / FN 0**，另有 150 個 negative assertions。最終 fresh index 為 1,748 files、18,125 symbols、46,141 edges、15,394 pending references；incremental 檢查 9/9 通過，MCP 檢查為 0 fallback、0 worker crash。v0.419.1 的候選 extractor 為 v307，resolver 為 v150，以上數值均已由本候選重新產生。
 
 下列公開 npm alias 可執行內部 Stage 5 工具，且刻意要求明確的 project 與 output 參數：
 
@@ -56,6 +56,8 @@ npm run verify:typescript-self-hosting-mcp -- --project /path/to/indexed-project
 ```
 
 各 script 的 required-argument 訊息是參數的權威來源。它們會寫入指定 output，且在適用時會寫入所提供 project 的索引；實驗請使用可丟棄的副本。
+
+`benchmark:typescript-self-hosting` 與 `check:typescript-self-hosting` 需要完整 repository source／test／tsconfig，只供原始碼 checkout 使用，不屬於 npm pack 的公開工具表面。
 
 ## MCP
 

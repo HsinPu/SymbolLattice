@@ -1410,6 +1410,7 @@ interface StaticTypeScriptMemberCall {
   readonly method: ts.Identifier;
   readonly receiverTypeName: string | null;
   readonly receiverBindingSpace: BindingSpace | null;
+  readonly receiverMemberKind: "static" | "instance";
   readonly inlineParameterMember: boolean;
 }
 
@@ -1468,6 +1469,27 @@ function typeReferenceIdentifier(type: ts.TypeNode | undefined): ts.Identifier |
     : null;
 }
 
+function isDirectlyCallableTypeScriptMember(node: ts.Node): boolean {
+  if (ts.isMethodDeclaration(node) || ts.isMethodSignature(node)) {
+    return true;
+  }
+  if (!ts.isPropertyDeclaration(node) && !ts.isPropertySignature(node)) {
+    return false;
+  }
+  let type = node.type;
+  while (type !== undefined && ts.isParenthesizedTypeNode(type)) {
+    type = type.type;
+  }
+  if (type !== undefined && ts.isFunctionTypeNode(type)) {
+    return true;
+  }
+  if (!ts.isPropertyDeclaration(node) || node.initializer === undefined) {
+    return false;
+  }
+  const initializer = transparentExpression(node.initializer);
+  return ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer);
+}
+
 function directValueImportSpecifier(node: ts.Node): ts.ImportSpecifier | null {
   const specifier = ts.isImportSpecifier(node)
     ? node
@@ -1497,8 +1519,11 @@ function provenValueConstructorName(
     : null;
 }
 
-function staticThisReceiverTypeName(node: ts.Node): string | null {
+function staticThisReceiver(
+  node: ts.Node
+): { readonly typeName: string; readonly memberKind: "static" | "instance" } | null {
   let current: ts.Node | undefined = node.parent;
+  let enclosingMemberKind: "static" | "instance" | null = null;
   while (current !== undefined && !ts.isSourceFile(current)) {
     if (ts.isArrowFunction(current)) {
       current = current.parent;
@@ -1511,7 +1536,7 @@ function staticThisReceiverTypeName(node: ts.Node): string | null {
       if (explicitThis !== undefined) {
         const typeName = typeReferenceIdentifier(explicitThis.type);
         return typeName !== null && !enclosingTypeParameterNames(explicitThis).has(typeName.text)
-          ? typeName.text
+          ? { typeName: typeName.text, memberKind: "instance" }
           : null;
       }
       if (
@@ -1522,12 +1547,35 @@ function staticThisReceiverTypeName(node: ts.Node): string | null {
       ) {
         return null;
       }
+      enclosingMemberKind =
+        ts.isConstructorDeclaration(current) ||
+        !ts.canHaveModifiers(current) ||
+        !ts.getModifiers(current)?.some(
+          (modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword
+        )
+          ? "instance"
+          : "static";
+    }
+    if (ts.isClassStaticBlockDeclaration(current)) {
+      enclosingMemberKind = "static";
+    } else if (
+      ts.isPropertyDeclaration(current) &&
+      (ts.isClassDeclaration(current.parent) || ts.isClassExpression(current.parent))
+    ) {
+      enclosingMemberKind = current.modifiers?.some(
+        (modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword
+      )
+        ? "static"
+        : "instance";
     }
     if (
       (ts.isClassDeclaration(current) || ts.isClassExpression(current)) &&
       current.name !== undefined
     ) {
-      return current.name.text;
+      return {
+        typeName: current.name.text,
+        memberKind: enclosingMemberKind ?? "instance"
+      };
     }
     current = current.parent;
   }
@@ -1588,10 +1636,22 @@ function startsWithThisProperty(expression: ts.Expression, propertyName: string)
   );
 }
 
+const thisPropertyMutationCache = new WeakMap<
+  ts.ClassDeclaration | ts.ClassExpression,
+  Map<string, boolean>
+>();
+
 function thisPropertyIsMutated(
   owner: ts.ClassDeclaration | ts.ClassExpression,
   propertyName: string
 ): boolean {
+  let byProperty = thisPropertyMutationCache.get(owner);
+  if (byProperty === undefined) {
+    byProperty = new Map();
+    thisPropertyMutationCache.set(owner, byProperty);
+  }
+  const cached = byProperty.get(propertyName);
+  if (cached !== undefined) return cached;
   let mutated = false;
   const visit = (node: ts.Node): void => {
     if (mutated) {
@@ -1606,36 +1666,1202 @@ function thisPropertyIsMutated(
       mutated = true;
       return;
     }
+    const mutationTarget = memberMutationCallTarget(node);
+    if (mutationTarget !== null && startsWithThisProperty(mutationTarget, propertyName)) {
+      mutated = true;
+      return;
+    }
     if (node !== owner && (ts.isClassDeclaration(node) || ts.isClassExpression(node))) {
       return;
     }
     ts.forEachChild(node, visit);
   };
   ts.forEachChild(owner, visit);
+  byProperty.set(propertyName, mutated);
   return mutated;
+}
+
+function staticMemberAccessName(expression: ts.Expression): string | null {
+  const current = transparentExpression(expression);
+  if (ts.isPropertyAccessExpression(current)) {
+    return current.name.text;
+  }
+  if (
+    ts.isElementAccessExpression(current) &&
+    current.argumentExpression !== undefined &&
+    (ts.isStringLiteral(current.argumentExpression) ||
+      ts.isNoSubstitutionTemplateLiteral(current.argumentExpression))
+  ) {
+    return current.argumentExpression.text;
+  }
+  return null;
+}
+
+function memberMutationCallTarget(node: ts.Node): ts.Expression | null {
+  if (!ts.isCallExpression(node)) {
+    return null;
+  }
+  const ownerExpression = staticMemberAccessReceiver(node.expression);
+  const owner = ownerExpression === null ? null : transparentIdentifier(ownerExpression);
+  const method = staticMemberAccessName(node.expression);
+  if (owner === null || method === null) {
+    return null;
+  }
+  const mutationCall =
+    (owner.text === "Object" &&
+      ["assign", "defineProperties", "defineProperty", "setPrototypeOf"].includes(method)) ||
+    (owner.text === "Reflect" &&
+      ["defineProperty", "set", "setPrototypeOf"].includes(method));
+  return mutationCall ? (node.arguments[0] ?? null) : null;
+}
+
+function staticMemberAccessReceiver(expression: ts.Expression): ts.Expression | null {
+  const current = transparentExpression(expression);
+  return ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)
+    ? current.expression
+    : null;
+}
+
+function transparentExpression(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isTypeAssertionExpression(current) ||
+    ts.isSatisfiesExpression(current) ||
+    ts.isNonNullExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
+}
+
+function transparentIdentifier(expression: ts.Expression): ts.Identifier | null {
+  const current = transparentExpression(expression);
+  return ts.isIdentifier(current) ? current : null;
+}
+
+function staticExpressionPath(expression: ts.Expression): string | null {
+  const current = transparentExpression(expression);
+  if (current.kind === ts.SyntaxKind.ThisKeyword) {
+    return "this";
+  }
+  if (ts.isIdentifier(current)) {
+    return current.text;
+  }
+  if (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
+    const receiver = staticExpressionPath(current.expression);
+    const member = staticMemberAccessName(current);
+    return receiver === null || member === null ? null : `${receiver}.${member}`;
+  }
+  return null;
+}
+
+const identifierAliasCache = new WeakMap<ts.SourceFile, Map<string, ReadonlySet<string>>>();
+const trackedValueCarrierAliasCache = new WeakMap<ts.Node, Map<string, ReadonlySet<string>>>();
+const constructorInstanceAliasCache = new WeakMap<ts.SourceFile, Map<string, ReadonlySet<string>>>();
+const constructorPrototypeAliasCache = new WeakMap<ts.SourceFile, Map<string, ReadonlySet<string>>>();
+const unprovenDynamicPrototypeAliasCache = new WeakMap<ts.SourceFile, ReadonlySet<string>>();
+const receiverMemberMutationCache = new WeakMap<ts.SourceFile, Map<string, boolean>>();
+const constructorPrototypeMemberMutationCache = new WeakMap<
+  ts.SourceFile,
+  Map<string, boolean>
+>();
+
+function aliasSetKey(values: ReadonlySet<string>): string {
+  return [...values].sort().join("\u0000");
+}
+
+function identifierAliases(sourceFile: ts.SourceFile, initialName: string): ReadonlySet<string> {
+  let byName = identifierAliasCache.get(sourceFile);
+  if (byName === undefined) {
+    byName = new Map();
+    identifierAliasCache.set(sourceFile, byName);
+  }
+  const cached = byName.get(initialName);
+  if (cached !== undefined) return cached;
+  const aliases = new Set<string>([initialName]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const visit = (node: ts.Node): void => {
+      let left: ts.Identifier | undefined;
+      let right: ts.Identifier | undefined;
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.initializer !== undefined
+      ) {
+        left = node.name;
+        right = transparentIdentifier(node.initializer) ?? undefined;
+      } else if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        ts.isIdentifier(node.left)
+      ) {
+        left = node.left;
+        right = transparentIdentifier(node.right) ?? undefined;
+      }
+      if (left !== undefined && right !== undefined && aliases.has(right.text) && !aliases.has(left.text)) {
+        aliases.add(left.text);
+        changed = true;
+      }
+      ts.forEachChild(node, visit);
+    };
+    ts.forEachChild(sourceFile, visit);
+  }
+  byName.set(initialName, aliases);
+  return aliases;
+}
+
+function expressionCarriesTrackedValue(
+  expression: ts.Expression,
+  carrierAliases: ReadonlySet<string>
+): boolean {
+  const current = transparentExpression(expression);
+  const expressionPath = staticExpressionPath(current);
+  if (expressionPath !== null && carrierAliases.has(expressionPath)) {
+    return true;
+  }
+  if (ts.isObjectLiteralExpression(current)) {
+    return current.properties.some((property) => {
+      if (ts.isPropertyAssignment(property)) {
+        return expressionCarriesTrackedValue(property.initializer, carrierAliases);
+      }
+      if (ts.isShorthandPropertyAssignment(property)) {
+        return carrierAliases.has(property.name.text);
+      }
+      return (
+        ts.isSpreadAssignment(property) &&
+        expressionCarriesTrackedValue(property.expression, carrierAliases)
+      );
+    });
+  }
+  if (ts.isArrayLiteralExpression(current)) {
+    return current.elements.some(
+      (element) =>
+        !ts.isOmittedExpression(element) &&
+        expressionCarriesTrackedValue(element, carrierAliases)
+    );
+  }
+  if (ts.isPropertyAccessExpression(current)) {
+    // Reading a property does not imply that the property value carries its
+    // receiver. Carrier members are recorded explicitly by
+    // trackedValueCarrierAliases, so only the full static path is evidence.
+    return false;
+  }
+  if (ts.isElementAccessExpression(current)) {
+    // Numeric/dynamic array slots have no staticExpressionPath. Preserve the
+    // conservative container-carrier proof for those indexed reads.
+    return staticMemberAccessName(current) === null &&
+      expressionCarriesTrackedValue(current.expression, carrierAliases);
+  }
+  if (ts.isCallExpression(current)) {
+    const calleePath = staticExpressionPath(current.expression);
+    if (calleePath !== null && carrierAliases.has(calleePath)) {
+      return true;
+    }
+    const callee = transparentExpression(current.expression);
+    return (
+      (ts.isArrowFunction(callee) || ts.isFunctionExpression(callee)) &&
+      functionLikeReturnsTrackedValue(callee, carrierAliases)
+    );
+  }
+  if (ts.isConditionalExpression(current)) {
+    return (
+      expressionCarriesTrackedValue(current.whenTrue, carrierAliases) ||
+      expressionCarriesTrackedValue(current.whenFalse, carrierAliases)
+    );
+  }
+  if (
+    ts.isBinaryExpression(current) &&
+    (current.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken ||
+      current.operatorToken.kind === ts.SyntaxKind.CommaToken)
+  ) {
+    return (
+      expressionCarriesTrackedValue(current.left, carrierAliases) ||
+      expressionCarriesTrackedValue(current.right, carrierAliases)
+    );
+  }
+  return false;
+}
+
+type TrackedValueFactoryDeclaration =
+  | ConstructorInstanceFactoryDeclaration
+  | ts.GetAccessorDeclaration;
+
+function functionLikeReturnsTrackedValue(
+  declaration: TrackedValueFactoryDeclaration,
+  carrierAliases: ReadonlySet<string>
+): boolean {
+  if (ts.isArrowFunction(declaration) && !ts.isBlock(declaration.body)) {
+    return expressionCarriesTrackedValue(declaration.body, carrierAliases);
+  }
+  if (declaration.body === undefined) {
+    return false;
+  }
+  let returnsTrackedValue = false;
+  const visit = (node: ts.Node): void => {
+    if (returnsTrackedValue || (node !== declaration && ts.isFunctionLike(node))) {
+      return;
+    }
+    if (
+      ts.isReturnStatement(node) &&
+      node.expression !== undefined &&
+      expressionCarriesTrackedValue(node.expression, carrierAliases)
+    ) {
+      returnsTrackedValue = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(declaration.body, visit);
+  return returnsTrackedValue;
+}
+
+function trackedValueCarrierAliases(
+  root: ts.Node,
+  initialAliases: ReadonlySet<string>
+): ReadonlySet<string> {
+  let byInitialAliases = trackedValueCarrierAliasCache.get(root);
+  if (byInitialAliases === undefined) {
+    byInitialAliases = new Map();
+    trackedValueCarrierAliasCache.set(root, byInitialAliases);
+  }
+  const cacheKey = aliasSetKey(initialAliases);
+  const cached = byInitialAliases.get(cacheKey);
+  if (cached !== undefined) return cached;
+  const aliases = new Set(initialAliases);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const addAlias = (alias: string): void => {
+      if (!aliases.has(alias)) {
+        aliases.add(alias);
+        changed = true;
+      }
+    };
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isFunctionDeclaration(node) &&
+        node.name !== undefined &&
+        functionLikeReturnsTrackedValue(node, aliases)
+      ) {
+        addAlias(node.name.text);
+      }
+      if (ts.isVariableDeclaration(node) && node.initializer !== undefined) {
+        const initializer = transparentExpression(node.initializer);
+        if (
+          ts.isIdentifier(node.name) &&
+          (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) &&
+          functionLikeReturnsTrackedValue(initializer, aliases)
+        ) {
+          addAlias(node.name.text);
+        }
+        if (ts.isIdentifier(node.name) && ts.isObjectLiteralExpression(initializer)) {
+          for (const property of initializer.properties) {
+            const memberName =
+              ts.isMethodDeclaration(property) ||
+              ts.isGetAccessorDeclaration(property) ||
+              ts.isPropertyAssignment(property)
+                ? staticPropertyName(property.name)
+                : null;
+            const factory = ts.isMethodDeclaration(property) || ts.isGetAccessorDeclaration(property)
+              ? property
+              : ts.isPropertyAssignment(property) &&
+                  (ts.isArrowFunction(property.initializer) ||
+                    ts.isFunctionExpression(property.initializer))
+                ? property.initializer
+                : null;
+            if (
+              memberName !== null &&
+              factory !== null &&
+              functionLikeReturnsTrackedValue(factory, aliases)
+            ) {
+              addAlias(`${node.name.text}.${memberName}`);
+            }
+            const carriedExpression = ts.isPropertyAssignment(property)
+              ? property.initializer
+              : ts.isShorthandPropertyAssignment(property)
+                ? property.name
+                : ts.isSpreadAssignment(property)
+                  ? property.expression
+                  : undefined;
+            if (
+              memberName !== null &&
+              carriedExpression !== undefined &&
+              expressionCarriesTrackedValue(carriedExpression, aliases)
+            ) {
+              addAlias(`${node.name.text}.${memberName}`);
+            }
+          }
+        }
+        if (ts.isIdentifier(node.name) && ts.isArrayLiteralExpression(initializer)) {
+          const arrayName = node.name.text;
+          initializer.elements.forEach((element, index) => {
+            if (
+              !ts.isOmittedExpression(element) &&
+              expressionCarriesTrackedValue(
+                ts.isSpreadElement(element) ? element.expression : element,
+                aliases
+              )
+            ) {
+              addAlias(`${arrayName}.${index}`);
+            }
+          });
+        }
+      }
+      if (ts.isClassDeclaration(node) && node.name !== undefined) {
+        for (const member of node.members) {
+          if (
+            (!ts.isMethodDeclaration(member) && !ts.isGetAccessorDeclaration(member)) ||
+            !isStaticMethod(member)
+          ) {
+            continue;
+          }
+          const memberName = staticPropertyName(member.name);
+          if (
+            memberName !== null &&
+            functionLikeReturnsTrackedValue(member, aliases)
+          ) {
+            addAlias(`${node.name.text}.${memberName}`);
+          }
+        }
+      }
+      let leftPaths: readonly string[] = [];
+      let right: ts.Expression | undefined;
+      if (ts.isVariableDeclaration(node) && node.initializer !== undefined) {
+        leftPaths = bindingNames(node.name);
+        right = node.initializer;
+      } else if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+        node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+      ) {
+        leftPaths = assignmentTargetPaths(node.left);
+        right = node.right;
+      }
+      if (
+        right !== undefined &&
+        expressionCarriesTrackedValue(right, aliases)
+      ) {
+        for (const leftPath of leftPaths) {
+          addAlias(leftPath);
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    ts.forEachChild(root, visit);
+  }
+  byInitialAliases.set(cacheKey, aliases);
+  return aliases;
+}
+
+function isConstructorPrototype(
+  expression: ts.Expression,
+  constructorNames: ReadonlySet<string>
+): boolean {
+  const receiver = staticMemberAccessReceiver(expression);
+  const constructor = receiver === null ? null : transparentIdentifier(receiver);
+  return (
+    staticMemberAccessName(expression) === "prototype" &&
+    constructor !== null &&
+    constructorNames.has(constructor.text)
+  );
+}
+
+function isConstructedConstructorAlias(
+  expression: ts.Expression,
+  constructorNames: ReadonlySet<string>
+): boolean {
+  const current = transparentExpression(expression);
+  if (!ts.isNewExpression(current)) {
+    return false;
+  }
+  const constructor = transparentIdentifier(current.expression);
+  return constructor !== null && constructorNames.has(constructor.text);
+}
+
+function expressionCarriesConstructorInstance(
+  expression: ts.Expression,
+  constructorNames: ReadonlySet<string>,
+  carrierAliases: ReadonlySet<string>
+): boolean {
+  const current = transparentExpression(expression);
+  if (isConstructedConstructorAlias(current, constructorNames)) {
+    return true;
+  }
+  const identifier = transparentIdentifier(current);
+  if (identifier !== null && carrierAliases.has(identifier.text)) {
+    return true;
+  }
+  if (ts.isObjectLiteralExpression(current)) {
+    return current.properties.some((property) => {
+      if (ts.isPropertyAssignment(property)) {
+        return expressionCarriesConstructorInstance(
+          property.initializer,
+          constructorNames,
+          carrierAliases
+        );
+      }
+      if (ts.isShorthandPropertyAssignment(property)) {
+        return carrierAliases.has(property.name.text);
+      }
+      return ts.isSpreadAssignment(property) &&
+        expressionCarriesConstructorInstance(property.expression, constructorNames, carrierAliases);
+    });
+  }
+  if (ts.isArrayLiteralExpression(current)) {
+    return current.elements.some((element) =>
+      !ts.isOmittedExpression(element) &&
+      expressionCarriesConstructorInstance(element, constructorNames, carrierAliases)
+    );
+  }
+  if (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
+    return expressionCarriesConstructorInstance(
+      current.expression,
+      constructorNames,
+      carrierAliases
+    );
+  }
+  if (ts.isCallExpression(current)) {
+    const callee = staticExpressionPath(current.expression);
+    return callee !== null && carrierAliases.has(callee);
+  }
+  return false;
+}
+
+type ConstructorInstanceFactoryDeclaration =
+  | ts.FunctionDeclaration
+  | ts.FunctionExpression
+  | ts.ArrowFunction
+  | ts.MethodDeclaration;
+
+function functionLikeReturnsConstructorInstance(
+  declaration: ConstructorInstanceFactoryDeclaration,
+  constructorNames: ReadonlySet<string>,
+  carrierAliases: ReadonlySet<string>
+): boolean {
+  if (ts.isArrowFunction(declaration) && !ts.isBlock(declaration.body)) {
+    return expressionCarriesConstructorInstance(
+      declaration.body,
+      constructorNames,
+      carrierAliases
+    );
+  }
+  if (declaration.body === undefined) {
+    return false;
+  }
+  let returnsInstance = false;
+  const visit = (node: ts.Node): void => {
+    if (returnsInstance || (node !== declaration && ts.isFunctionLike(node))) {
+      return;
+    }
+    if (
+      ts.isReturnStatement(node) &&
+      node.expression !== undefined &&
+      expressionCarriesConstructorInstance(node.expression, constructorNames, carrierAliases)
+    ) {
+      returnsInstance = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(declaration.body, visit);
+  return returnsInstance;
+}
+
+function constructorInstanceAliases(
+  sourceFile: ts.SourceFile,
+  constructorNames: ReadonlySet<string>
+): ReadonlySet<string> {
+  let byConstructorNames = constructorInstanceAliasCache.get(sourceFile);
+  if (byConstructorNames === undefined) {
+    byConstructorNames = new Map();
+    constructorInstanceAliasCache.set(sourceFile, byConstructorNames);
+  }
+  const cacheKey = aliasSetKey(constructorNames);
+  const cached = byConstructorNames.get(cacheKey);
+  if (cached !== undefined) return cached;
+  const aliases = new Set<string>();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isFunctionDeclaration(node) &&
+        node.name !== undefined &&
+        !aliases.has(node.name.text) &&
+        functionLikeReturnsConstructorInstance(node, constructorNames, aliases)
+      ) {
+        aliases.add(node.name.text);
+        changed = true;
+      }
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.initializer !== undefined
+      ) {
+        const initializer = transparentExpression(node.initializer);
+        if (
+          (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) &&
+          !aliases.has(node.name.text) &&
+          functionLikeReturnsConstructorInstance(initializer, constructorNames, aliases)
+        ) {
+          aliases.add(node.name.text);
+          changed = true;
+        }
+        if (ts.isObjectLiteralExpression(initializer)) {
+          for (const property of initializer.properties) {
+            const memberName = ts.isMethodDeclaration(property) || ts.isPropertyAssignment(property)
+              ? staticPropertyName(property.name)
+              : null;
+            const factory = ts.isMethodDeclaration(property)
+              ? property
+              : ts.isPropertyAssignment(property) &&
+                  (ts.isArrowFunction(property.initializer) ||
+                    ts.isFunctionExpression(property.initializer))
+                ? property.initializer
+                : null;
+            const factoryPath = memberName === null ? null : `${node.name.text}.${memberName}`;
+            if (
+              factory !== null &&
+              factoryPath !== null &&
+              !aliases.has(factoryPath) &&
+              functionLikeReturnsConstructorInstance(factory, constructorNames, aliases)
+            ) {
+              aliases.add(factoryPath);
+              changed = true;
+            }
+          }
+        }
+      }
+      if (ts.isClassDeclaration(node) && node.name !== undefined) {
+        for (const member of node.members) {
+          if (!ts.isMethodDeclaration(member) || !isStaticMethod(member)) {
+            continue;
+          }
+          const memberName = staticPropertyName(member.name);
+          const factoryPath = memberName === null ? null : `${node.name.text}.${memberName}`;
+          if (
+            factoryPath !== null &&
+            !aliases.has(factoryPath) &&
+            functionLikeReturnsConstructorInstance(member, constructorNames, aliases)
+          ) {
+            aliases.add(factoryPath);
+            changed = true;
+          }
+        }
+      }
+      let left: ts.Identifier | undefined;
+      let right: ts.Expression | undefined;
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.initializer !== undefined
+      ) {
+        left = node.name;
+        right = node.initializer;
+      } else if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        ts.isIdentifier(node.left)
+      ) {
+        left = node.left;
+        right = node.right;
+      }
+      if (left !== undefined && right !== undefined && !aliases.has(left.text)) {
+        if (expressionCarriesConstructorInstance(right, constructorNames, aliases)) {
+          aliases.add(left.text);
+          changed = true;
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    ts.forEachChild(sourceFile, visit);
+  }
+  byConstructorNames.set(cacheKey, aliases);
+  return aliases;
+}
+
+function isConstructorInstanceExpression(
+  expression: ts.Expression,
+  constructorNames: ReadonlySet<string>,
+  instanceAliases: ReadonlySet<string>
+): boolean {
+  return expressionCarriesConstructorInstance(expression, constructorNames, instanceAliases);
+}
+
+function expressionMayBeConstructorPrototype(
+  expression: ts.Expression,
+  constructorNames: ReadonlySet<string>,
+  prototypeAliases: ReadonlySet<string>,
+  instanceAliases: ReadonlySet<string>
+): boolean {
+  const current = transparentExpression(expression);
+  const identifier = transparentIdentifier(current);
+  if (identifier !== null && prototypeAliases.has(identifier.text)) {
+    return true;
+  }
+  if (isConstructorPrototype(current, constructorNames)) {
+    return true;
+  }
+  const memberReceiver = staticMemberAccessReceiver(current);
+  const memberName = staticMemberAccessName(current);
+  if (
+    memberReceiver !== null &&
+    memberName === "__proto__" &&
+    isConstructorInstanceExpression(memberReceiver, constructorNames, instanceAliases)
+  ) {
+    return true;
+  }
+  if (memberReceiver !== null && memberName === "prototype") {
+    const constructorReceiver = staticMemberAccessReceiver(memberReceiver);
+    if (
+      staticMemberAccessName(memberReceiver) === "constructor" &&
+      constructorReceiver !== null &&
+      isConstructorInstanceExpression(constructorReceiver, constructorNames, instanceAliases)
+    ) {
+      return true;
+    }
+  }
+  if (
+    memberReceiver !== null &&
+    expressionMayBeConstructorPrototype(
+      memberReceiver,
+      constructorNames,
+      prototypeAliases,
+      instanceAliases
+    )
+  ) {
+    return true;
+  }
+  const memberConstructor = memberReceiver === null
+    ? null
+    : transparentIdentifier(memberReceiver);
+  if (
+    memberConstructor !== null &&
+    constructorNames.has(memberConstructor.text) &&
+    staticMemberAccessName(current) === null
+  ) {
+    return true;
+  }
+  if (ts.isCallExpression(current)) {
+    const callOwnerExpression = staticMemberAccessReceiver(current.expression);
+    const callOwner = callOwnerExpression === null
+      ? null
+      : transparentIdentifier(callOwnerExpression);
+    const callMethod = staticMemberAccessName(current.expression);
+    if (
+      callOwner !== null &&
+      (callOwner.text === "Object" || callOwner.text === "Reflect") &&
+      callMethod === "getPrototypeOf" &&
+      current.arguments[0] !== undefined &&
+      isConstructorInstanceExpression(current.arguments[0], constructorNames, instanceAliases)
+    ) {
+      return true;
+    }
+    return current.arguments.some((argument) => {
+      const argumentIdentifier = transparentIdentifier(argument);
+      return (
+        (argumentIdentifier !== null && constructorNames.has(argumentIdentifier.text)) ||
+        isConstructorInstanceExpression(argument, constructorNames, instanceAliases) ||
+        expressionMayBeConstructorPrototype(
+          argument,
+          constructorNames,
+          prototypeAliases,
+          instanceAliases
+        )
+      );
+    });
+  }
+  return false;
+}
+
+function expressionMayBeUnprovenDynamicPrototype(expression: ts.Expression): boolean {
+  const current = transparentExpression(expression);
+  if (ts.isCallExpression(current)) {
+    return true;
+  }
+  const receiver = staticMemberAccessReceiver(current);
+  const memberName = staticMemberAccessName(current);
+  if (receiver === null) {
+    return false;
+  }
+  if (memberName === "__proto__") {
+    return true;
+  }
+  if (
+    memberName === "prototype" &&
+    staticMemberAccessName(receiver) === "constructor"
+  ) {
+    return true;
+  }
+  return expressionMayBeUnprovenDynamicPrototype(receiver);
+}
+
+function expressionCarriesUnprovenDynamicPrototype(
+  expression: ts.Expression,
+  carrierAliases: ReadonlySet<string>
+): boolean {
+  const current = transparentExpression(expression);
+  if (expressionMayBeUnprovenDynamicPrototype(current)) {
+    return true;
+  }
+  const expressionPath = staticExpressionPath(current);
+  if (expressionPath !== null && carrierAliases.has(expressionPath)) {
+    return true;
+  }
+  const identifier = transparentIdentifier(current);
+  if (identifier !== null && carrierAliases.has(identifier.text)) {
+    return true;
+  }
+  if (ts.isObjectLiteralExpression(current)) {
+    return current.properties.some((property) => {
+      if (ts.isPropertyAssignment(property)) {
+        return expressionCarriesUnprovenDynamicPrototype(property.initializer, carrierAliases);
+      }
+      if (ts.isShorthandPropertyAssignment(property)) {
+        return carrierAliases.has(property.name.text);
+      }
+      return ts.isSpreadAssignment(property) &&
+        expressionCarriesUnprovenDynamicPrototype(property.expression, carrierAliases);
+    });
+  }
+  if (ts.isArrayLiteralExpression(current)) {
+    return current.elements.some(
+      (element) =>
+        !ts.isOmittedExpression(element) &&
+        expressionCarriesUnprovenDynamicPrototype(element, carrierAliases)
+    );
+  }
+  if (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
+    return expressionCarriesUnprovenDynamicPrototype(current.expression, carrierAliases);
+  }
+  let nestedCarrier = false;
+  ts.forEachChild(current, (child) => {
+    if (
+      !nestedCarrier &&
+      ts.isExpression(child) &&
+      expressionCarriesUnprovenDynamicPrototype(child, carrierAliases)
+    ) {
+      nestedCarrier = true;
+    }
+  });
+  return nestedCarrier;
+}
+
+function assignmentTargetPaths(expression: ts.Expression): readonly string[] {
+  const current = transparentExpression(expression);
+  const directPath = staticExpressionPath(current);
+  if (directPath !== null) {
+    return [directPath];
+  }
+  if (
+    ts.isBinaryExpression(current) &&
+    current.operatorToken.kind === ts.SyntaxKind.EqualsToken
+  ) {
+    return assignmentTargetPaths(current.left);
+  }
+  if (ts.isArrayLiteralExpression(current)) {
+    return current.elements.flatMap((element) => {
+      if (ts.isOmittedExpression(element)) {
+        return [];
+      }
+      return assignmentTargetPaths(
+        ts.isSpreadElement(element) ? element.expression : element
+      );
+    });
+  }
+  if (ts.isObjectLiteralExpression(current)) {
+    return current.properties.flatMap((property) => {
+      if (ts.isPropertyAssignment(property)) {
+        return assignmentTargetPaths(property.initializer);
+      }
+      if (ts.isShorthandPropertyAssignment(property)) {
+        return [property.name.text];
+      }
+      if (ts.isSpreadAssignment(property)) {
+        return assignmentTargetPaths(property.expression);
+      }
+      return [];
+    });
+  }
+  return [];
+}
+
+function unprovenDynamicPrototypeCarrierAliases(sourceFile: ts.SourceFile): ReadonlySet<string> {
+  const cached = unprovenDynamicPrototypeAliasCache.get(sourceFile);
+  if (cached !== undefined) return cached;
+  const aliases = new Set<string>();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const visit = (node: ts.Node): void => {
+      let leftNames: readonly string[] = [];
+      let right: ts.Expression | undefined;
+      if (
+        ts.isVariableDeclaration(node) &&
+        node.initializer !== undefined
+      ) {
+        leftNames = bindingNames(node.name);
+        right = node.initializer;
+      } else if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+        node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+      ) {
+        leftNames = assignmentTargetPaths(node.left);
+        right = node.right;
+      }
+      if (
+        leftNames.length > 0 &&
+        right !== undefined &&
+        expressionCarriesUnprovenDynamicPrototype(right, aliases)
+      ) {
+        for (const leftName of leftNames) {
+          if (!aliases.has(leftName)) {
+            aliases.add(leftName);
+            changed = true;
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    ts.forEachChild(sourceFile, visit);
+  }
+  unprovenDynamicPrototypeAliasCache.set(sourceFile, aliases);
+  return aliases;
+}
+
+function staticDestructuringPropertyName(name: ts.PropertyName): string | null {
+  const directName = staticPropertyName(name);
+  if (directName !== null) {
+    return directName;
+  }
+  if (ts.isComputedPropertyName(name)) {
+    const expression = transparentExpression(name.expression);
+    return ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression)
+      ? expression.text
+      : null;
+  }
+  return null;
+}
+
+function constructorPrototypeAliases(
+  sourceFile: ts.SourceFile,
+  constructorNames: ReadonlySet<string>,
+  instanceAliases: ReadonlySet<string>
+): ReadonlySet<string> {
+  let byInputs = constructorPrototypeAliasCache.get(sourceFile);
+  if (byInputs === undefined) {
+    byInputs = new Map();
+    constructorPrototypeAliasCache.set(sourceFile, byInputs);
+  }
+  const cacheKey = `${aliasSetKey(constructorNames)}\u0001${aliasSetKey(instanceAliases)}`;
+  const cached = byInputs.get(cacheKey);
+  if (cached !== undefined) return cached;
+  const aliases = new Set<string>();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isObjectBindingPattern(node.name) &&
+        node.initializer !== undefined
+      ) {
+        const constructor = transparentIdentifier(node.initializer);
+        if (constructor !== null && constructorNames.has(constructor.text)) {
+          for (const element of node.name.elements) {
+            if (!ts.isIdentifier(element.name)) {
+              continue;
+            }
+            const property = element.propertyName ?? element.name;
+            const propertyName = staticDestructuringPropertyName(property);
+            if (
+              propertyName === "prototype" &&
+              !aliases.has(element.name.text)
+            ) {
+              aliases.add(element.name.text);
+              changed = true;
+            }
+          }
+        }
+      }
+      const assignmentPattern = ts.isBinaryExpression(node)
+        ? transparentExpression(node.left)
+        : null;
+      if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        assignmentPattern !== null &&
+        ts.isObjectLiteralExpression(assignmentPattern)
+      ) {
+        const constructor = transparentIdentifier(node.right);
+        if (constructor !== null && constructorNames.has(constructor.text)) {
+          for (const property of assignmentPattern.properties) {
+            if (
+              ts.isPropertyAssignment(property) &&
+              staticDestructuringPropertyName(property.name) === "prototype"
+            ) {
+              const target = transparentIdentifier(property.initializer);
+              if (target !== null && !aliases.has(target.text)) {
+                aliases.add(target.text);
+                changed = true;
+              }
+            } else if (
+              ts.isShorthandPropertyAssignment(property) &&
+              property.name.text === "prototype" &&
+              !aliases.has(property.name.text)
+            ) {
+              aliases.add(property.name.text);
+              changed = true;
+            }
+          }
+        }
+      }
+      let left: ts.Identifier | undefined;
+      let right: ts.Expression | undefined;
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.initializer !== undefined
+      ) {
+        left = node.name;
+        right = node.initializer;
+      } else if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        ts.isIdentifier(node.left)
+      ) {
+        left = node.left;
+        right = node.right;
+      }
+      if (left !== undefined && right !== undefined && !aliases.has(left.text)) {
+        if (expressionMayBeConstructorPrototype(right, constructorNames, aliases, instanceAliases)) {
+          aliases.add(left.text);
+          changed = true;
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    ts.forEachChild(sourceFile, visit);
+  }
+  byInputs.set(cacheKey, aliases);
+  return aliases;
 }
 
 function receiverMemberIsMutated(
   sourceFile: ts.SourceFile,
   receiver: ts.Expression,
-  methodName: string
+  methodName: string,
+  callNode: ts.Node
 ): boolean {
+  const receiverPath = staticExpressionPath(receiver);
+  const owner =
+    receiverPath === "this" || receiverPath?.startsWith("this.") === true
+      ? nearestNamedClass(callNode)
+      : null;
+  let byReceiver = receiverMemberMutationCache.get(sourceFile);
+  if (byReceiver === undefined) {
+    byReceiver = new Map();
+    receiverMemberMutationCache.set(sourceFile, byReceiver);
+  }
+  const receiverIdentity =
+    receiverPath ?? `${receiver.getStart(sourceFile)}:${receiver.end}`;
+  const cacheKey = `${owner?.pos ?? -1}\u0000${receiverIdentity}\u0000${methodName}`;
+  const cached = byReceiver.get(cacheKey);
+  if (cached !== undefined) return cached;
+  const aliases = ts.isIdentifier(receiver)
+    ? identifierAliases(sourceFile, receiver.text)
+    : receiverPath === null
+      ? null
+      : new Set([receiverPath]);
+  const receiverCarrierAliases =
+    aliases === null ? null : trackedValueCarrierAliases(owner ?? sourceFile, aliases);
+  const constructorName =
+    ts.isNewExpression(receiver) && ts.isIdentifier(receiver.expression)
+      ? receiver.expression.text
+      : null;
+  const constructorAliases = constructorName === null
+    ? null
+    : identifierAliases(sourceFile, constructorName);
+  const instanceAliases = constructorAliases === null
+    ? null
+    : constructorInstanceAliases(sourceFile, constructorAliases);
+  const prototypeAliases = constructorAliases === null
+    ? null
+    : constructorPrototypeAliases(sourceFile, constructorAliases, instanceAliases ?? new Set());
+  const unprovenPrototypeAliases = constructorAliases === null
+    ? null
+    : unprovenDynamicPrototypeCarrierAliases(sourceFile);
+  if (prototypeAliases !== null && prototypeAliases.size > 0) {
+    byReceiver.set(cacheKey, true);
+    return true;
+  }
+  const root: ts.Node = owner ?? sourceFile;
+  const matchesReceiver = (expression: ts.Expression): boolean => {
+    const identifier = transparentIdentifier(expression);
+    return (
+      (receiverCarrierAliases !== null &&
+        ((identifier !== null && receiverCarrierAliases.has(identifier.text)) ||
+          expressionCarriesTrackedValue(expression, receiverCarrierAliases))) ||
+      (constructorAliases !== null &&
+        (isConstructorInstanceExpression(expression, constructorAliases, instanceAliases ?? new Set()) ||
+          expressionMayBeConstructorPrototype(
+            expression,
+            constructorAliases,
+            prototypeAliases ?? new Set(),
+            instanceAliases ?? new Set()
+          ))) ||
+      (owner !== null && expression.kind === ts.SyntaxKind.ThisKeyword)
+    );
+  };
+  const matchesUnprovenPrototype = (expression: ts.Expression): boolean =>
+    constructorAliases !== null &&
+    expressionCarriesUnprovenDynamicPrototype(
+      expression,
+      unprovenPrototypeAliases ?? new Set()
+    );
   let mutated = false;
   const visit = (node: ts.Node): void => {
     if (mutated) {
       return;
     }
+    const mutationTarget = memberMutationCallTarget(node);
+    if (
+      mutationTarget !== null &&
+      (matchesReceiver(mutationTarget) ||
+        matchesUnprovenPrototype(mutationTarget))
+    ) {
+      mutated = true;
+      return;
+    }
+    if (
+      ts.isCallExpression(node) &&
+      node.arguments.some(
+        (argument) => matchesReceiver(argument)
+      )
+    ) {
+      mutated = true;
+      return;
+    }
+    const assignedMemberName = ts.isBinaryExpression(node)
+      ? staticMemberAccessName(node.left)
+      : null;
     if (
       ts.isBinaryExpression(node) &&
       node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
       node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
-      ts.isPropertyAccessExpression(node.left) &&
-      node.left.name.text === methodName
+      (assignedMemberName === methodName || assignedMemberName === null) &&
+      (staticMemberAccessReceiver(node.left) !== null &&
+        (matchesReceiver(staticMemberAccessReceiver(node.left)!) ||
+          matchesUnprovenPrototype(staticMemberAccessReceiver(node.left)!)))
     ) {
-      const candidate = node.left.expression;
+      mutated = true;
+      return;
+    }
+    const deletedMemberName = ts.isDeleteExpression(node)
+      ? staticMemberAccessName(node.expression)
+      : null;
+    if (
+      ts.isDeleteExpression(node) &&
+      (deletedMemberName === methodName || deletedMemberName === null) &&
+      staticMemberAccessReceiver(node.expression) !== null &&
+      (matchesReceiver(staticMemberAccessReceiver(node.expression)!) ||
+        matchesUnprovenPrototype(staticMemberAccessReceiver(node.expression)!))
+    ) {
+      mutated = true;
+      return;
+    }
+    if (
+      owner !== null &&
+      node !== root &&
+      (ts.isClassDeclaration(node) || ts.isClassExpression(node))
+    ) {
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(root, visit);
+  byReceiver.set(cacheKey, mutated);
+  return mutated;
+}
+
+function constructorPrototypeMemberIsMutated(
+  sourceFile: ts.SourceFile,
+  constructorName: string,
+  memberName: string
+): boolean {
+  let byConstructorMember = constructorPrototypeMemberMutationCache.get(sourceFile);
+  if (byConstructorMember === undefined) {
+    byConstructorMember = new Map();
+    constructorPrototypeMemberMutationCache.set(sourceFile, byConstructorMember);
+  }
+  const cacheKey = `${constructorName}\u0000${memberName}`;
+  const cached = byConstructorMember.get(cacheKey);
+  if (cached !== undefined) return cached;
+  const constructorAliases = identifierAliases(sourceFile, constructorName);
+  const instanceAliases = constructorInstanceAliases(sourceFile, constructorAliases);
+  const prototypeAliases = constructorPrototypeAliases(
+    sourceFile,
+    constructorAliases,
+    instanceAliases
+  );
+  if (prototypeAliases.size > 0) {
+    byConstructorMember.set(cacheKey, true);
+    return true;
+  }
+  const matchesPrototype = (expression: ts.Expression): boolean =>
+    expressionMayBeConstructorPrototype(
+      expression,
+      constructorAliases,
+      prototypeAliases,
+      instanceAliases
+    );
+  let mutated = false;
+  const visit = (node: ts.Node): void => {
+    if (mutated) {
+      return;
+    }
+    const mutationTarget = memberMutationCallTarget(node);
+    if (mutationTarget !== null && matchesPrototype(mutationTarget)) {
+      mutated = true;
+      return;
+    }
+    if (
+      ts.isCallExpression(node) &&
+      node.arguments.some((argument) => matchesPrototype(argument))
+    ) {
+      mutated = true;
+      return;
+    }
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+    ) {
+      const receiver = staticMemberAccessReceiver(node.left);
+      const assignedMemberName = staticMemberAccessName(node.left);
       if (
-        (receiver.kind === ts.SyntaxKind.ThisKeyword && candidate.kind === ts.SyntaxKind.ThisKeyword) ||
-        (ts.isIdentifier(receiver) && ts.isIdentifier(candidate) && candidate.text === receiver.text)
+        matchesPrototype(node.left) ||
+        (receiver !== null &&
+          matchesPrototype(receiver) &&
+          (assignedMemberName === memberName || assignedMemberName === null))
+      ) {
+        mutated = true;
+        return;
+      }
+    }
+    if (ts.isDeleteExpression(node)) {
+      const receiver = staticMemberAccessReceiver(node.expression);
+      const deletedMemberName = staticMemberAccessName(node.expression);
+      if (
+        matchesPrototype(node.expression) ||
+        (receiver !== null &&
+          matchesPrototype(receiver) &&
+          (deletedMemberName === memberName || deletedMemberName === null))
       ) {
         mutated = true;
         return;
@@ -1644,7 +2870,339 @@ function receiverMemberIsMutated(
     ts.forEachChild(node, visit);
   };
   ts.forEachChild(sourceFile, visit);
+  byConstructorMember.set(cacheKey, mutated);
   return mutated;
+}
+
+interface RuntimeTaintedTypeScriptMemberSurface {
+  readonly typeSymbolId: string;
+  readonly memberName: string | null;
+  readonly memberKind: "static" | "instance";
+}
+
+function staticStringValue(expression: ts.Expression | undefined): string | null {
+  return expression !== undefined &&
+    (ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression))
+    ? expression.text
+    : null;
+}
+
+function runtimeTaintedMemberSurfaces(
+  sourceFile: ts.SourceFile,
+  typeSymbolsByDeclaration: ReadonlyMap<ts.ClassDeclaration | ts.ClassExpression, SymbolNode>
+): readonly RuntimeTaintedTypeScriptMemberSurface[] {
+  type Owner = ts.ClassDeclaration | ts.ClassExpression;
+  type OwnerMap = Map<string, Owner | null>;
+  const classAliases: OwnerMap = new Map();
+  const prototypeAliases: OwnerMap = new Map();
+  const instanceAliases: OwnerMap = new Map();
+  const factoryAliases: OwnerMap = new Map();
+  const setOwner = (map: OwnerMap, key: string, owner: Owner): boolean => {
+    const existing = map.get(key);
+    if (existing === owner || (existing === null && map.has(key))) {
+      return false;
+    }
+    map.set(key, existing === undefined ? owner : null);
+    return true;
+  };
+  const ownerFor = (map: OwnerMap, key: string | null): Owner | null =>
+    key === null ? null : (map.get(key) ?? null);
+  for (const owner of typeSymbolsByDeclaration.keys()) {
+    if (owner.name !== undefined) {
+      setOwner(classAliases, owner.name.text, owner);
+    }
+  }
+  const aliasNodes: ts.Node[] = [];
+  const collectAliasNodes = (node: ts.Node): void => {
+    aliasNodes.push(node);
+    ts.forEachChild(node, collectAliasNodes);
+  };
+  ts.forEachChild(sourceFile, collectAliasNodes);
+  const expressionInstanceOwner = (expression: ts.Expression): Owner | null => {
+    const current = transparentExpression(expression);
+    const path = staticExpressionPath(current);
+    const direct = ownerFor(instanceAliases, path);
+    if (direct !== null) {
+      return direct;
+    }
+    if (ts.isNewExpression(current)) {
+      return ownerFor(classAliases, staticExpressionPath(current.expression));
+    }
+    if (ts.isCallExpression(current)) {
+      return ownerFor(factoryAliases, staticExpressionPath(current.expression));
+    }
+    const nestedExpressions: ts.Expression[] = [];
+    if (ts.isObjectLiteralExpression(current)) {
+      for (const property of current.properties) {
+        if (ts.isPropertyAssignment(property)) nestedExpressions.push(property.initializer);
+        else if (ts.isShorthandPropertyAssignment(property)) nestedExpressions.push(property.name);
+        else if (ts.isSpreadAssignment(property)) nestedExpressions.push(property.expression);
+      }
+    } else if (ts.isArrayLiteralExpression(current)) {
+      nestedExpressions.push(
+        ...current.elements.filter((element): element is ts.Expression => !ts.isOmittedExpression(element))
+      );
+    } else if (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
+      // The direct full path was checked above. Do not infer that an arbitrary
+      // property value is the same instance merely because its receiver is.
+      return null;
+    } else if (ts.isConditionalExpression(current)) {
+      nestedExpressions.push(current.whenTrue, current.whenFalse);
+    } else if (
+      ts.isBinaryExpression(current) &&
+      (current.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken ||
+        current.operatorToken.kind === ts.SyntaxKind.CommaToken)
+    ) {
+      nestedExpressions.push(current.left, current.right);
+    }
+    const owners = nestedExpressions
+      .map(expressionInstanceOwner)
+      .filter((owner): owner is Owner => owner !== null);
+    return owners.length > 0 && owners.every((owner) => owner === owners[0])
+      ? (owners[0] ?? null)
+      : null;
+  };
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const visitAliases = (node: ts.Node): void => {
+      let left: ts.Identifier | undefined;
+      let right: ts.Expression | undefined;
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.initializer !== undefined
+      ) {
+        left = node.name;
+        right = node.initializer;
+      } else if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        ts.isIdentifier(node.left)
+      ) {
+        left = node.left;
+        right = node.right;
+      }
+      if (left !== undefined && right !== undefined) {
+        const rightPath = staticExpressionPath(right);
+        const classOwner = ownerFor(classAliases, rightPath);
+        if (classOwner !== null) changed = setOwner(classAliases, left.text, classOwner) || changed;
+        const prototypeOwner =
+          ownerFor(prototypeAliases, rightPath) ??
+          (staticMemberAccessName(right) === "prototype"
+            ? ownerFor(
+                classAliases,
+                staticExpressionPath(staticMemberAccessReceiver(right) ?? right)
+              )
+            : null);
+        if (prototypeOwner !== null) {
+          changed = setOwner(prototypeAliases, left.text, prototypeOwner) || changed;
+        }
+        const instanceOwner = expressionInstanceOwner(right);
+        if (instanceOwner !== null) {
+          changed = setOwner(instanceAliases, left.text, instanceOwner) || changed;
+        }
+        const initializer = transparentExpression(right);
+        if (ts.isObjectLiteralExpression(initializer)) {
+          for (const property of initializer.properties) {
+            const memberName = ts.isSpreadAssignment(property)
+              ? null
+              : staticPropertyName(property.name);
+            const memberExpression = ts.isPropertyAssignment(property)
+              ? property.initializer
+              : ts.isShorthandPropertyAssignment(property)
+                ? property.name
+                : ts.isSpreadAssignment(property)
+                  ? property.expression
+                  : undefined;
+            const memberOwner = memberExpression === undefined
+              ? null
+              : expressionInstanceOwner(memberExpression);
+            if (memberName !== null && memberOwner !== null) {
+              changed = setOwner(instanceAliases, `${left.text}.${memberName}`, memberOwner) || changed;
+            }
+          }
+        }
+        if (ts.isArrayLiteralExpression(initializer)) {
+          initializer.elements.forEach((element, index) => {
+            if (ts.isOmittedExpression(element)) return;
+            const memberOwner = expressionInstanceOwner(
+              ts.isSpreadElement(element) ? element.expression : element
+            );
+            if (memberOwner !== null) {
+              changed = setOwner(instanceAliases, `${left.text}.${index}`, memberOwner) || changed;
+            }
+          });
+        }
+      }
+      const factoryDeclaration =
+        ts.isFunctionDeclaration(node) ||
+        ts.isMethodDeclaration(node) ||
+        ts.isGetAccessorDeclaration(node) ||
+        ts.isArrowFunction(node) ||
+        ts.isFunctionExpression(node)
+          ? node
+          : null;
+      const factoryPath =
+        ts.isFunctionDeclaration(node) && node.name !== undefined
+          ? node.name.text
+          : (ts.isMethodDeclaration(node) || ts.isGetAccessorDeclaration(node)) &&
+              node.parent !== undefined &&
+              (ts.isClassDeclaration(node.parent) || ts.isClassExpression(node.parent)) &&
+              node.parent.name !== undefined
+            ? `${node.parent.name.text}.${staticPropertyName(node.name) ?? ""}`
+            : ts.isArrowFunction(node) || ts.isFunctionExpression(node)
+              ? ts.isVariableDeclaration(node.parent) && ts.isIdentifier(node.parent.name)
+                ? node.parent.name.text
+                : null
+              : null;
+      if (factoryDeclaration !== null && factoryPath !== null && factoryPath !== "") {
+        const bodies: ts.Expression[] = [];
+        if (ts.isArrowFunction(factoryDeclaration) && !ts.isBlock(factoryDeclaration.body)) {
+          bodies.push(factoryDeclaration.body);
+        } else if (factoryDeclaration.body !== undefined) {
+          const collectReturns = (current: ts.Node): void => {
+            if (current !== factoryDeclaration && ts.isFunctionLike(current)) return;
+            if (ts.isReturnStatement(current) && current.expression !== undefined) {
+              bodies.push(current.expression);
+              return;
+            }
+            ts.forEachChild(current, collectReturns);
+          };
+          ts.forEachChild(factoryDeclaration.body, collectReturns);
+        }
+        const owners = bodies
+          .map(expressionInstanceOwner)
+          .filter((owner): owner is Owner => owner !== null);
+        if (owners.length > 0 && owners.every((owner) => owner === owners[0])) {
+          changed = setOwner(factoryAliases, factoryPath, owners[0]!) || changed;
+        }
+      }
+    };
+    for (const node of aliasNodes) visitAliases(node);
+    for (let index = aliasNodes.length - 1; index >= 0; index -= 1) {
+      const node = aliasNodes[index];
+      if (node !== undefined) visitAliases(node);
+    }
+  }
+  const surfaces = new Map<string, RuntimeTaintedTypeScriptMemberSurface>();
+  const add = (
+    owner: Owner,
+    memberKind: "static" | "instance",
+    memberName: string | null
+  ): void => {
+    const typeSymbolId = typeSymbolsByDeclaration.get(owner)?.id;
+    if (typeSymbolId === undefined) return;
+    surfaces.set(`${typeSymbolId}\u0000${memberKind}\u0000${memberName ?? "*"}`, {
+      typeSymbolId,
+      memberKind,
+      memberName
+    });
+  };
+  const classify = (
+    expression: ts.Expression,
+    node: ts.Node
+  ): { readonly owner: Owner; readonly memberKind: "static" | "instance" } | null => {
+    const current = transparentExpression(expression);
+    if (current.kind === ts.SyntaxKind.ThisKeyword) {
+      const owner = nearestNamedClass(node);
+      return owner !== null && typeSymbolsByDeclaration.has(owner)
+        ? { owner, memberKind: "instance" }
+        : null;
+    }
+    const path = staticExpressionPath(current);
+    const instanceOwner = expressionInstanceOwner(current);
+    const prototypeOwner =
+      ownerFor(prototypeAliases, path) ??
+      (staticMemberAccessName(current) === "prototype"
+        ? ownerFor(
+            classAliases,
+            staticExpressionPath(staticMemberAccessReceiver(current) ?? current)
+          )
+        : null);
+    const staticOwner = ownerFor(classAliases, path);
+    const candidates = [
+      ...(instanceOwner === null ? [] : [{ owner: instanceOwner, memberKind: "instance" as const }]),
+      ...(prototypeOwner === null ? [] : [{ owner: prototypeOwner, memberKind: "instance" as const }]),
+      ...(staticOwner === null ? [] : [{ owner: staticOwner, memberKind: "static" as const }])
+    ].filter(
+      (candidate, index, all) =>
+        all.findIndex(
+          (other) => other.owner === candidate.owner && other.memberKind === candidate.memberKind
+        ) === index
+    );
+    return candidates.length === 1 ? (candidates[0] ?? null) : null;
+  };
+  const objectMemberNames = (expression: ts.Expression | undefined): readonly string[] | null => {
+    if (expression === undefined || !ts.isObjectLiteralExpression(transparentExpression(expression))) {
+      return null;
+    }
+    const literal = transparentExpression(expression) as ts.ObjectLiteralExpression;
+    const names = literal.properties.map((property) =>
+      ts.isSpreadAssignment(property) ? null : staticPropertyName(property.name)
+    );
+    return names.every((name): name is string => name !== null) ? names : null;
+  };
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+    ) {
+      const wholePrototype = classify(node.left, node);
+      if (staticMemberAccessName(node.left) === "prototype" && wholePrototype?.memberKind === "instance") {
+        add(wholePrototype.owner, "instance", null);
+      } else {
+        const receiver = staticMemberAccessReceiver(node.left);
+        const memberName = staticMemberAccessName(node.left);
+        const surface = receiver === null ? null : classify(receiver, node);
+        if (surface !== null) {
+          add(surface.owner, surface.memberKind, memberName);
+        }
+      }
+    }
+    if (ts.isDeleteExpression(node)) {
+      const receiver = staticMemberAccessReceiver(node.expression);
+      const memberName = staticMemberAccessName(node.expression);
+      const surface = receiver === null ? null : classify(receiver, node);
+      if (surface !== null) {
+        add(surface.owner, surface.memberKind, memberName);
+      }
+    }
+    if (ts.isCallExpression(node)) {
+      const target = memberMutationCallTarget(node);
+      const surface = target === null ? null : classify(target, node);
+      if (surface !== null) {
+        const method = staticMemberAccessName(node.expression);
+        if (method === "defineProperty" || method === "set") {
+          add(surface.owner, surface.memberKind, staticStringValue(node.arguments[1]));
+        } else if (method === "assign" || method === "defineProperties") {
+          const names = objectMemberNames(node.arguments[1]);
+          if (names === null) {
+            add(surface.owner, surface.memberKind, null);
+          } else {
+            for (const name of names) {
+              add(surface.owner, surface.memberKind, name);
+            }
+          }
+        } else {
+          add(surface.owner, surface.memberKind, null);
+        }
+      }
+      for (const argument of node.arguments) {
+        if (ts.isNewExpression(transparentExpression(argument))) {
+          continue;
+        }
+        const argumentSurface = classify(argument, node);
+        if (argumentSurface !== null && argument !== target) {
+          add(argumentSurface.owner, argumentSurface.memberKind, null);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(sourceFile, visit);
+  return [...surfaces.values()];
 }
 
 /**
@@ -1669,6 +3227,12 @@ function staticArraySortComparator(
     expression.questionDotToken !== undefined ||
     expression.name.text !== "sort" ||
     !ts.isIdentifier(expression.expression)
+  ) {
+    return null;
+  }
+  if (
+    receiverMemberIsMutated(sourceFile, expression.expression, "sort", node) ||
+    constructorPrototypeMemberIsMutated(sourceFile, "Array", "sort")
   ) {
     return null;
   }
@@ -1707,18 +3271,19 @@ function staticTypeScriptMemberCall(
     return null;
   }
   const receiver = access.expression;
-  if (receiverMemberIsMutated(sourceFile, receiver, access.name.text)) {
+  if (receiverMemberIsMutated(sourceFile, receiver, access.name.text, node)) {
     return null;
   }
 
   if (receiver.kind === ts.SyntaxKind.ThisKeyword) {
-    const receiverTypeName = staticThisReceiverTypeName(node);
-    return receiverTypeName === null
+    const receiverEvidence = staticThisReceiver(node);
+    return receiverEvidence === null
       ? null
       : {
           method: access.name,
-          receiverTypeName,
+          receiverTypeName: receiverEvidence.typeName,
           receiverBindingSpace: "type",
+          receiverMemberKind: receiverEvidence.memberKind,
           inlineParameterMember: false
         };
   }
@@ -1736,6 +3301,7 @@ function staticTypeScriptMemberCall(
       method: access.name,
       receiverTypeName,
       receiverBindingSpace: "value",
+      receiverMemberKind: "instance",
       inlineParameterMember: false
     };
   }
@@ -1756,6 +3322,7 @@ function staticTypeScriptMemberCall(
           method: access.name,
           receiverTypeName: receiverTypeName.text,
           receiverBindingSpace: "type",
+          receiverMemberKind: "instance",
           inlineParameterMember: false
         };
   }
@@ -1768,11 +3335,12 @@ function staticTypeScriptMemberCall(
   if (declaration === undefined) {
     return null;
   }
-  if (directValueImportSpecifier(declaration) !== null) {
+  if (ts.isClassDeclaration(declaration) || directValueImportSpecifier(declaration) !== null) {
     return {
       method: access.name,
       receiverTypeName: receiver.text,
       receiverBindingSpace: "value",
+      receiverMemberKind: "static",
       inlineParameterMember: false
     };
   }
@@ -1790,6 +3358,7 @@ function staticTypeScriptMemberCall(
       method: access.name,
       receiverTypeName: declaration.initializer.expression.text,
       receiverBindingSpace: "value",
+      receiverMemberKind: "instance",
       inlineParameterMember: false
     };
   }
@@ -1800,6 +3369,7 @@ function staticTypeScriptMemberCall(
         method: access.name,
         receiverTypeName: typeName.text,
         receiverBindingSpace: "type",
+        receiverMemberKind: "instance",
         inlineParameterMember: false
       };
     }
@@ -1819,6 +3389,7 @@ function staticTypeScriptMemberCall(
             method: access.name,
             receiverTypeName: null,
             receiverBindingSpace: null,
+            receiverMemberKind: "instance",
             inlineParameterMember: true
           }
         : null;
@@ -5226,7 +6797,7 @@ function joinNestRoutePath(controllerPath: string, methodPath: string): string {
   return parts.length === 0 ? "/" : `/${parts.join("/")}`;
 }
 
-function isStaticMethod(method: ts.MethodDeclaration): boolean {
+function isStaticMethod(method: ts.MethodDeclaration | ts.GetAccessorDeclaration): boolean {
   return (method as ModifierCarrier).modifiers?.some(
     (modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword
   ) ?? false;
@@ -6358,6 +7929,16 @@ export function extractFileFacts(
   const fastifyPluginCallbacks = collectScopedFastifyPluginCallbacks(sourceFile, routeReceiverBindings);
   const nestDecoratorBindings = collectScopedNestDecoratorBindings(sourceFile);
   const symbolsByDeclaration = new Map<ts.Node, SymbolNode>();
+  const decoratorTaintedTypeSymbolIds = new Set<string>();
+  const decoratorTaintedMemberSymbolIds = new Set<string>();
+  const staticTypeScriptMemberSymbolIds = new Set<string>();
+  const instanceTypeScriptMemberSymbolIds = new Set<string>();
+  const callableTypeScriptMemberSymbolIds = new Set<string>();
+  const runtimeTaintedTypeScriptMemberSurfaces: {
+    typeSymbolId: string;
+    memberName: string | null;
+    memberKind: "static" | "instance";
+  }[] = [];
   const ownerByNode = new Map<ts.Node, SymbolNode>();
   const reactRouterElementsFactoryRouteDeclarations = new Set<ReactRouterJsxRouteElement>();
   const fastifyPluginFacts: {
@@ -6410,18 +7991,26 @@ export function extractFileFacts(
    * into an unrelated outer callable.
    */
   function currentCallOwner(node: ts.Node): SymbolNode {
-    let callableAncestor: ts.Node | undefined = node;
+    let callableAncestor: ts.Node | undefined = node.parent;
     while (callableAncestor !== undefined && !ts.isSourceFile(callableAncestor)) {
-      if (
-        ts.isVariableDeclaration(callableAncestor) &&
-        callableAncestor.initializer !== undefined &&
-        (ts.isArrowFunction(callableAncestor.initializer) ||
-          ts.isFunctionExpression(callableAncestor.initializer))
-      ) {
-        const callableVariable = symbolsByDeclaration.get(callableAncestor);
-        if (callableVariable !== undefined) {
-          return callableVariable;
+      if (ts.isFunctionLike(callableAncestor)) {
+        if (
+          (ts.isArrowFunction(callableAncestor) || ts.isFunctionExpression(callableAncestor)) &&
+          ts.isVariableDeclaration(callableAncestor.parent) &&
+          callableAncestor.parent.initializer === callableAncestor
+        ) {
+          const callableVariable = symbolsByDeclaration.get(callableAncestor.parent);
+          if (callableVariable !== undefined) {
+            return callableVariable;
+          }
         }
+        const callable = symbolsByDeclaration.get(callableAncestor);
+        if (callable !== undefined) {
+          return callable;
+        }
+        // Anonymous callbacks without their own graph symbol execute within
+        // the nearest representable enclosing callable. Keep walking instead
+        // of assigning their calls to a temporary local initializer.
       }
       callableAncestor = callableAncestor.parent;
     }
@@ -6505,7 +8094,8 @@ export function extractFileFacts(
     callSemantics?: PendingReference["callSemantics"],
     callReceiverTypeName?: string,
     callReceiverTargetQualifiedName?: string,
-    callReceiverBindingSpace?: PendingReference["callReceiverBindingSpace"]
+    callReceiverBindingSpace?: PendingReference["callReceiverBindingSpace"],
+    callReceiverMemberKind?: PendingReference["callReceiverMemberKind"]
   ): PendingReference {
     const range = sourceRange(sourceFile, node);
     const reference: PendingReference = {
@@ -6528,6 +8118,7 @@ export function extractFileFacts(
         ? {}
         : { callReceiverTargetQualifiedName }),
       ...(callReceiverBindingSpace === undefined ? {} : { callReceiverBindingSpace }),
+      ...(callReceiverMemberKind === undefined ? {} : { callReceiverMemberKind }),
       ...(routeFramework === undefined ? {} : { routeFramework }),
       ...(routeRegistration === undefined ? {} : { routeRegistration }),
       ...(routePrefixChain === undefined ? {} : { routePrefixChain })
@@ -7146,6 +8737,44 @@ export function extractFileFacts(
         range: sourceRange(sourceFile, node)
       });
     }
+    if (
+      input.language === "typescript" &&
+      decoratorsFor(node).length > 0
+    ) {
+      if (declaredSymbol?.kind === "class") {
+        decoratorTaintedTypeSymbolIds.add(declaredSymbol.id);
+      } else if (declaredSymbol?.kind === "method" || declaredSymbol?.kind === "variable") {
+        decoratorTaintedMemberSymbolIds.add(declaredSymbol.id);
+      }
+      const owningTypeDeclaration = nearestNamedClass(node);
+      const owningType =
+        owningTypeDeclaration === null
+          ? undefined
+          : symbolsByDeclaration.get(owningTypeDeclaration);
+      if (owningType?.kind === "class") {
+        decoratorTaintedTypeSymbolIds.add(owningType.id);
+      }
+    }
+    if (
+      input.language === "typescript" &&
+      declaredSymbol !== null &&
+      (declaredSymbol.kind === "method" || declaredSymbol.kind === "variable") &&
+      (currentOwner().kind === "class" ||
+        currentOwner().kind === "interface" ||
+        (node.parent !== undefined && ts.isTypeLiteralNode(node.parent)))
+    ) {
+      const isStatic =
+        ts.canHaveModifiers(node) &&
+        ts.getModifiers(node)?.some(
+          (modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword
+        ) === true;
+      (isStatic ? staticTypeScriptMemberSymbolIds : instanceTypeScriptMemberSymbolIds).add(
+        declaredSymbol.id
+      );
+      if (isDirectlyCallableTypeScriptMember(node)) {
+        callableTypeScriptMemberSymbolIds.add(declaredSymbol.id);
+      }
+    }
     if (ts.isExportAssignment(node) && !node.isExportEquals && ts.isIdentifier(node.expression)) {
       exportBindings.push({
         localName: node.expression.text,
@@ -7306,7 +8935,8 @@ export function extractFileFacts(
           memberCall.inlineParameterMember
             ? `${currentCallOwner(node).qualifiedName}.${memberCall.method.text}`
             : undefined,
-          memberCall.receiverBindingSpace ?? undefined
+          memberCall.receiverBindingSpace ?? undefined,
+          memberCall.receiverMemberKind
         );
       }
     }
@@ -7319,6 +8949,24 @@ export function extractFileFacts(
   }
 
   ts.forEachChild(sourceFile, visit);
+
+  if (input.language === "typescript") {
+    const typeSymbolsByDeclaration = new Map<
+      ts.ClassDeclaration | ts.ClassExpression,
+      SymbolNode
+    >();
+    for (const [declaration, symbol] of symbolsByDeclaration) {
+      if (
+        symbol.kind === "class" &&
+        (ts.isClassDeclaration(declaration) || ts.isClassExpression(declaration))
+      ) {
+        typeSymbolsByDeclaration.set(declaration, symbol);
+      }
+    }
+    runtimeTaintedTypeScriptMemberSurfaces.push(
+      ...runtimeTaintedMemberSurfaces(sourceFile, typeSymbolsByDeclaration)
+    );
+  }
 
   const seenFrameworkRoutePluginReceivers = new Set<string>();
   for (const bindingsByName of routeReceiverBindings.byScopeId.values()) {
@@ -7630,6 +9278,14 @@ export function extractFileFacts(
     importBindings,
     exportBindings,
     reExportBindings,
+    typescriptFacts: {
+      decoratorTaintedTypeSymbolIds: [...decoratorTaintedTypeSymbolIds],
+      decoratorTaintedMemberSymbolIds: [...decoratorTaintedMemberSymbolIds],
+      staticMemberSymbolIds: [...staticTypeScriptMemberSymbolIds],
+      instanceMemberSymbolIds: [...instanceTypeScriptMemberSymbolIds],
+      callableMemberSymbolIds: [...callableTypeScriptMemberSymbolIds],
+      runtimeTaintedMemberSurfaces: runtimeTaintedTypeScriptMemberSurfaces
+    },
     nestRouteFacts,
     nestGraphqlFacts,
     fastifyPluginFacts,

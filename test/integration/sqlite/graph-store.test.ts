@@ -1007,7 +1007,19 @@ describe("SqliteGraphStore", () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();
     const firstSnapshot = snapshot([symbol("caller", "caller"), symbol("callee", "callee")]);
-    const firstFacts = persistedFacts(firstSnapshot);
+    const firstFacts = persistedFacts(firstSnapshot).map((facts) => ({
+      ...facts,
+      typescriptFacts: {
+        decoratorTaintedTypeSymbolIds: ["caller"],
+        decoratorTaintedMemberSymbolIds: ["callee"],
+        staticMemberSymbolIds: [],
+        instanceMemberSymbolIds: ["callee"],
+        callableMemberSymbolIds: ["callee"],
+        runtimeTaintedMemberSurfaces: [
+          { typeSymbolId: "caller", memberName: "run", memberKind: "instance" }
+        ]
+      }
+    }));
     const firstInputs = indexInputs("first");
     const firstWork = indexWork("full", "first");
 

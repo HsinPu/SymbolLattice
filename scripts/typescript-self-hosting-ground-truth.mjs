@@ -8,7 +8,7 @@ import ts from "typescript";
 
 import { SqliteGraphStore } from "../dist/infrastructure/sqlite/index.js";
 
-const BASELINE_COMMIT = "a3e44ecbcd05b31f3eeec428c0571bf1bba1ad29";
+const BASELINE_COMMIT = "cf413417315ac4fbcda7e6c738f22c34bf061228";
 const BENCHMARK_VERSION = "typescript-self-hosting-ground-truth-v1";
 const EXPECTED_POSITIVE_SLICES = Object.freeze({
   identities: 50,
@@ -93,6 +93,44 @@ function projectRelativePath(projectPath, fileName) {
 
 function sha256(content) {
   return createHash("sha256").update(content).digest("hex").toUpperCase();
+}
+
+export function buildCandidateBinding({
+  expectedBaseCommit,
+  actualBaseCommit,
+  trackedDiffSha1,
+  statusLines
+}) {
+  const normalizedStatus = statusLines.filter((line) => line.length >= 3);
+  const pathFor = (line) => {
+    const path = line.slice(3);
+    const renameSeparator = path.lastIndexOf(" -> ");
+    return renameSeparator === -1 ? path : path.slice(renameSeparator + 4);
+  };
+  const changedPaths = normalizedStatus
+    .filter((line) => !line.startsWith("??"))
+    .map(pathFor)
+    .sort(compareText);
+  const stagedPaths = normalizedStatus
+    .filter((line) => line[0] !== " " && line[0] !== "?")
+    .map(pathFor)
+    .sort(compareText);
+  const untrackedPaths = normalizedStatus
+    .filter((line) => line.startsWith("??"))
+    .map(pathFor)
+    .sort(compareText);
+  const baseCommitMatches = actualBaseCommit === expectedBaseCommit;
+  const validTrackedDiffSha1 = /^[0-9a-f]{40}$/u.test(trackedDiffSha1);
+  return {
+    expectedBaseCommit,
+    actualBaseCommit,
+    baseCommitMatches,
+    trackedDiffSha1,
+    changedPaths,
+    stagedPaths,
+    untrackedPaths,
+    candidateBound: baseCommitMatches && validTrackedDiffSha1 && untrackedPaths.length === 0
+  };
 }
 
 function compareText(left, right) {
@@ -853,6 +891,27 @@ async function main() {
     cwd: projectPath,
     encoding: "utf8"
   }).trim();
+  const trackedDiff = execFileSync(
+    "git",
+    ["-c", `safe.directory=${safeProjectPath}`, "diff", "HEAD", "--binary"],
+    { cwd: projectPath }
+  );
+  const trackedDiffSha1 = execFileSync("git", ["hash-object", "--stdin"], {
+    cwd: projectPath,
+    input: trackedDiff,
+    encoding: "utf8"
+  }).trim();
+  const statusLines = execFileSync(
+    "git",
+    ["-c", `safe.directory=${safeProjectPath}`, "status", "--short"],
+    { cwd: projectPath, encoding: "utf8" }
+  ).trimEnd().split(/\r?\n/u).filter(Boolean);
+  const candidate = buildCandidateBinding({
+    expectedBaseCommit: BASELINE_COMMIT,
+    actualBaseCommit: actualCommit,
+    trackedDiffSha1,
+    statusLines
+  });
   const scoreByCategory = Object.fromEntries(
     Object.entries(positiveTruths).map(([category, truths]) => {
       const categoryTp = truths.filter((truth) =>
@@ -869,12 +928,13 @@ async function main() {
       expectedCommit: BASELINE_COMMIT,
       actualCommit,
       commitMatches: actualCommit === BASELINE_COMMIT,
-      packageVersion: "0.419.0",
+      packageVersion: "0.419.1",
       generationId: bundle.status.generationId,
       indexedAt: bundle.status.indexedAt,
       extractorVersion: bundle.extractorVersion,
       resolverVersion: bundle.resolverVersion
     },
+    candidate,
     contract: {
       mode: options.mode,
       selectedFiles: SELECTED_FILES.length,
@@ -944,6 +1004,15 @@ async function main() {
       confirmedNonCallExpressionExactEdges: unexpectedCallExactEdges.length,
       unauditedExactEdges: unauditedExactEdges.length,
       complete: unauditedExactEdges.length === 0
+    },
+    acceptance: {
+      candidateBound: candidate.candidateBound,
+      scorePassed: fp.length === 0 && fn.length === 0,
+      negativeAssertionsPassed: negativeFalsePositives.length === 0,
+      auditComplete:
+        unauditedExactEdges.length === 0 &&
+        wrongSourceExactEdges.length === 0 &&
+        unexpectedCallExactEdges.length === 0
     }
   };
 
@@ -955,6 +1024,9 @@ async function main() {
     process.stdout.write(
       `${JSON.stringify({ output: options.output, score: result.score, audit: result.audit, oracleInventory: result.oracleInventory }, null, 2)}\n`
     );
+  }
+  if (!Object.values(result.acceptance).every(Boolean)) {
+    process.exitCode = 2;
   }
 }
 

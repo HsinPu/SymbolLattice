@@ -66,6 +66,66 @@ describe("TypeScript self-hosting relation depth", () => {
     expect(helperCall?.sourceId).not.toBe(subscribe?.id);
   });
 
+  it("attributes calls in a nested named function to that function instead of an outer arrow variable", () => {
+    const graph = snapshot({
+      "src/nested.ts": [
+        "function helper(): void {}",
+        "export const outer = (): void => {",
+        "  function inner(): void { helper(); }",
+        "  inner();",
+        "};"
+      ].join("\n")
+    });
+    const helper = graph.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/nested.ts#helper"
+    );
+    const outer = graph.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/nested.ts#outer"
+    );
+    const inner = graph.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/nested.ts#outer.inner"
+    );
+    const helperCalls = graph.edges.filter(
+      (edge) =>
+        edge.kind === "calls" &&
+        edge.targetId === helper?.id &&
+        edge.resolution === "exact"
+    );
+
+    expect(helperCalls).toHaveLength(1);
+    expect(helperCalls[0]?.sourceId).toBe(inner?.id);
+    expect(helperCalls[0]?.sourceId).not.toBe(outer?.id);
+  });
+
+  it("attributes anonymous callback calls to the nearest representable callable", () => {
+    const graph = snapshot({
+      "src/callback.ts": [
+        "function compareText(left: string, right: string): number {",
+        "  return left.localeCompare(right);",
+        "}",
+        "function pairCandidates(values: string[]): string[] {",
+        "  const ordered = [...values].sort((left, right) => compareText(left, right));",
+        "  return ordered;",
+        "}"
+      ].join("\n")
+    });
+    const compareText = graph.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/callback.ts#compareText"
+    );
+    const pairCandidates = graph.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/callback.ts#pairCandidates"
+    );
+    const compareCalls = graph.edges.filter(
+      (edge) =>
+        edge.kind === "calls" &&
+        edge.targetId === compareText?.id &&
+        edge.resolution === "exact"
+    );
+
+    expect(compareCalls).toHaveLength(1);
+    expect(compareCalls[0]?.sourceId).toBe(pairCandidates?.id);
+  });
+
   it("does not classify a callback argument as a direct call", () => {
     const facts = extractFileFacts({
       filePath: "src/sort.ts",
@@ -107,6 +167,34 @@ describe("TypeScript self-hosting relation depth", () => {
 
     expect(comparatorEdges).toHaveLength(1);
     expect(comparatorEdges[0]?.evidence?.ruleId).toBe("syntax.typescript.array-sort-comparator");
+  });
+
+  it.each([
+    "values.sort = (): never[] => [];",
+    "const alias = values; alias.sort = (): never[] => [];",
+    "declare function mutate(value: unknown): void; mutate(values);",
+    "Array.prototype.sort = function replacement(): never[] { return []; };",
+    'Object.defineProperty(Array.prototype, "sort", { value(): never[] { return []; } });'
+  ])("suppresses the Array.sort comparator edge after runtime mutation: %s", (mutation) => {
+    const graph = snapshot({
+      "src/mutated-sort.ts": [
+        "function compare(left: number, right: number): number { return left - right; }",
+        "export function sortValues(): void {",
+        "  const values = [];",
+        `  ${mutation}`,
+        "  values.sort(compare);",
+        "}"
+      ].join("\n")
+    });
+
+    expect(
+      graph.edges.filter(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.referenceName === "compare" &&
+          edge.resolution === "exact"
+      )
+    ).toEqual([]);
   });
 
   it("retains specialized comparator evidence for an imported Array.sort callback", () => {
@@ -171,7 +259,7 @@ describe("TypeScript self-hosting relation depth", () => {
     const graph = snapshot({
       "src/catalog.ts": [
         "export interface Callbacks { onChange(event: unknown): void; }",
-        "export class Catalog { scan(): void {} verifyFreshness(): void {} }"
+        "export class Catalog { scan(): void {} verifyFreshness(): object { return {}; } }"
       ].join("\n"),
       "src/consumer.ts": [
         'import { Catalog, type Callbacks } from "./catalog.js";',
@@ -181,11 +269,15 @@ describe("TypeScript self-hosting relation depth", () => {
         "    callbacks.onChange({});",
         "    const catalog = new Catalog();",
         "    catalog.scan();",
-        "    new Catalog().verifyFreshness();",
+        "    const freshness = new Catalog().verifyFreshness();",
+        "    observe(freshness);",
         "  }",
         "  private recordPath(): void {}",
         "}",
-        "export function rank(input: { filePath(value: unknown): string }): string {",
+        "declare function observe(value: unknown): void;",
+        "export function rank(input: { filePath(value: unknown): string; limit?: number }): string {",
+        "  const limit = input.limit ?? 1;",
+        "  void limit;",
         "  return input.filePath({});",
         "}"
       ].join("\n")
@@ -222,6 +314,346 @@ describe("TypeScript self-hosting relation depth", () => {
         '  stable["scan"]();',
         "  stable.scan = () => undefined;",
         "}"
+      ].join("\n")
+    });
+
+    expect(
+      graph.edges.filter(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.referenceName === "scan" &&
+          edge.resolution === "exact"
+      )
+    ).toEqual([]);
+  });
+
+  it("fails closed for member calls after indirect, prototype, or alias mutation", () => {
+    const graph = snapshot({
+      "src/catalog.ts": "export class Catalog { scan(): void {} }",
+      "src/consumer.ts": [
+        'import { Catalog } from "./catalog.js";',
+        "export function unsafe(): void {",
+        "  const assigned = new Catalog();",
+        "  Object.assign(assigned, { scan(): void {} });",
+        "  assigned.scan();",
+        "  Catalog.prototype.scan = (): void => undefined;",
+        "  new Catalog().scan();",
+        "  const aliased = new Catalog();",
+        "  const alias = aliased;",
+        "  alias.scan = (): void => undefined;",
+        "  aliased.scan();",
+        "}",
+        "export class NestedUnsafe {",
+        "  execute(): void {",
+        "    const nested = new Catalog();",
+        "    Object.assign(nested, { scan(): void {} });",
+        "    nested.scan();",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+
+    expect(
+      graph.edges.filter(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.referenceName === "scan" &&
+          edge.resolution === "exact"
+      )
+    ).toEqual([]);
+  });
+
+  it.each([
+    ["direct", "Catalog"],
+    ["parenthesized", "(Catalog)"],
+    ["as assertion", "Catalog as typeof Catalog"],
+    ["type assertion", "<typeof Catalog>Catalog"],
+    ["satisfies expression", "Catalog satisfies typeof Catalog"],
+    ["non-null assertion", "Catalog!"],
+    ["nested transparent", "((Catalog as typeof Catalog)!)"]
+  ])("fails closed when a %s constructor alias mutates the original prototype", (_label, aliasExpression) => {
+    const graph = snapshot({
+      "src/catalog.ts": [
+        "export class Catalog { scan(): void {} }",
+        `const CatalogAlias = ${aliasExpression};`,
+        "CatalogAlias.prototype.scan = function replacement(): void {};",
+        "export function run(): void { new Catalog().scan(); }"
+      ].join("\n")
+    });
+
+    expect(
+      graph.edges.filter(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.referenceName === "scan" &&
+          edge.resolution === "exact"
+      )
+    ).toEqual([]);
+  });
+
+  it.each([
+    ["parenthesized prototype", "(CatalogAlias).prototype.scan = function replacement(): void {};"],
+    ["asserted prototype", "(CatalogAlias as typeof Catalog).prototype.scan = function replacement(): void {};"],
+    ["non-null prototype", "CatalogAlias!.prototype.scan = function replacement(): void {};"],
+    [
+      "mutation call prototype",
+      'Object.defineProperty((CatalogAlias).prototype, "scan", { value(): void {} });'
+    ]
+  ])("fails closed for a %s mutation receiver", (_label, mutation) => {
+    const graph = snapshot({
+      "src/catalog.ts": [
+        "export class Catalog { scan(): void {} }",
+        "const CatalogAlias = Catalog;",
+        mutation,
+        "export function run(): void { new Catalog().scan(); }"
+      ].join("\n")
+    });
+
+    expect(
+      graph.edges.filter(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.referenceName === "scan" &&
+          edge.resolution === "exact"
+      )
+    ).toEqual([]);
+  });
+
+  it.each([
+    ["parenthesized instance", "(alias).scan = function replacement(): void {};"],
+    ["mutation call instance", "Object.assign((alias), { scan(): void {} });"]
+  ])("fails closed for a %s alias mutation receiver", (_label, mutation) => {
+    const graph = snapshot({
+      "src/catalog.ts": [
+        "export class Catalog { scan(): void {} }",
+        "export function run(): void {",
+        "  const original = new Catalog();",
+        "  const alias = original;",
+        `  ${mutation}`,
+        "  original.scan();",
+        "}"
+      ].join("\n")
+    });
+
+    expect(
+      graph.edges.filter(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.referenceName === "scan" &&
+          edge.resolution === "exact"
+      )
+    ).toEqual([]);
+  });
+
+  it.each([
+    ["computed prototype assignment", '(Alias)["prototype"].scan = function replacement(): void {};'],
+    [
+      "computed prototype mutation target",
+      'Object.defineProperty((Alias)["prototype"], "scan", { value(): void {} });'
+    ],
+    [
+      "computed mutation helper",
+      'Object["defineProperty"](Alias.prototype, "scan", { value(): void {} });'
+    ],
+    [
+      "computed Reflect mutation helper",
+      'Reflect["set"](Alias.prototype, "scan", function replacement(): void {});'
+    ],
+    [
+      "prototype object alias",
+      "const prototypeAlias = Alias.prototype; prototypeAlias.scan = function replacement(): void {};"
+    ],
+    [
+      "parenthesized whole prototype",
+      "(Alias.prototype).scan = function replacement(): void {};"
+    ],
+    [
+      "parenthesized prototype mutation target",
+      'Object.defineProperty((Alias.prototype), "scan", { value(): void {} });'
+    ],
+    [
+      "parenthesized prototype alias",
+      "const prototypeAlias = (Alias.prototype); prototypeAlias.scan = function replacement(): void {};"
+    ],
+    [
+      "unknown computed method",
+      'const method = "scan" as const; Alias.prototype[method] = function replacement(): void {};'
+    ],
+    [
+      "destructured prototype alias",
+      "const { prototype: prototypeAlias } = Alias; prototypeAlias.scan = function replacement(): void {};"
+    ],
+    [
+      "prototype passed to helper alias",
+      'const define = Object.defineProperty; define(Alias.prototype, "scan", { value(): void {} });'
+    ],
+    [
+      "assignment-destructured prototype alias",
+      "let prototypeAlias: any; ({ prototype: prototypeAlias } = Alias); prototypeAlias.scan = function replacement(): void {};"
+    ],
+    [
+      "computed prototype key",
+      'const prototypeKey = "prototype" as const; Alias[prototypeKey].scan = function replacement(): void {};'
+    ],
+    [
+      "asserted computed prototype key",
+      'const prototypeKey = "prototype" as string; (Alias as any)[prototypeKey].scan = function replacement(): void {};'
+    ],
+    [
+      "helper-derived prototype",
+      "function prototypeOf(ctor: typeof Catalog): Catalog { return ctor.prototype; } prototypeOf(Alias).scan = function replacement(): void {};"
+    ],
+    [
+      "computed prototype helper target",
+      'const prototypeKey = "prototype" as const; Object.defineProperty(Alias[prototypeKey], "scan", { value(): void {} });'
+    ],
+    [
+      "computed destructured prototype alias",
+      'const { ["prototype"]: prototypeAlias } = Alias; prototypeAlias.scan = function replacement(): void {};'
+    ],
+    [
+      "computed assignment-destructured prototype alias",
+      'let prototypeAlias: any; ({ ["prototype"]: prototypeAlias } = Alias); prototypeAlias.scan = function replacement(): void {};'
+    ],
+    [
+      "prototype retrieved from a constructed alias",
+      "Object.getPrototypeOf(new Alias()).scan = function replacement(): void {};"
+    ],
+    [
+      "aliased prototype retrieved from a constructed alias",
+      "const prototypeAlias = Object.getPrototypeOf(new Alias()); prototypeAlias.scan = function replacement(): void {};"
+    ],
+    [
+      "prototype descriptor value",
+      'Object.getOwnPropertyDescriptor(Alias, "prototype")!.value.scan = function replacement(): void {};'
+    ],
+    [
+      "prototype retrieved from an instance alias",
+      "const instance = new Alias(); Object.getPrototypeOf(instance).scan = function replacement(): void {};"
+    ],
+    [
+      "constructed alias __proto__ chain",
+      "(new Alias() as any).__proto__.scan = function replacement(): void {};"
+    ],
+    [
+      "constructed alias constructor prototype chain",
+      "(new Alias() as any).constructor.prototype.scan = function replacement(): void {};"
+    ],
+    [
+      "prototype retrieved from an object-carried instance",
+      "const holder = { instance: new Alias() }; Object.getPrototypeOf(holder.instance).scan = function replacement(): void {};"
+    ],
+    [
+      "prototype retrieved from an array-carried instance",
+      "const instances = [new Alias()]; Object.getPrototypeOf(instances[0]!).scan = function replacement(): void {};"
+    ],
+    [
+      "prototype retrieved from a helper-returned instance",
+      "function make(): Catalog { return new Alias(); } Object.getPrototypeOf(make()).scan = function replacement(): void {};"
+    ],
+    [
+      "prototype retrieved from an arrow-factory instance",
+      "const make = (): Catalog => new Alias(); Object.getPrototypeOf(make()).scan = function replacement(): void {};"
+    ],
+    [
+      "prototype retrieved from a function-expression factory instance",
+      "const make = function (): Catalog { return new Alias(); }; Object.getPrototypeOf(make()).scan = function replacement(): void {};"
+    ],
+    [
+      "prototype retrieved from an object-method factory instance",
+      "const factory = { make(): Catalog { return new Alias(); } }; Object.getPrototypeOf(factory.make()).scan = function replacement(): void {};"
+    ],
+    [
+      "prototype retrieved from a static-method factory instance",
+      "class Factory { static make(): Catalog { return new Alias(); } } Object.getPrototypeOf(Factory.make()).scan = function replacement(): void {};"
+    ],
+    [
+      "prototype retrieved from an object getter instance",
+      "const factory = { get instance(): Catalog { return new Alias(); } }; Object.getPrototypeOf(factory.instance).scan = function replacement(): void {};"
+    ],
+    [
+      "prototype retrieved from a static getter instance",
+      "class Factory { static get instance(): Catalog { return new Alias(); } } Object.getPrototypeOf(Factory.instance).scan = function replacement(): void {};"
+    ],
+    [
+      "prototype retrieved from an immediately invoked factory instance",
+      "Object.getPrototypeOf(((): Catalog => new Alias())()).scan = function replacement(): void {};"
+    ],
+    [
+      "prototype retrieved from a conditional factory instance",
+      "function make(): Catalog { return true ? new Alias() : new Alias(); } Object.getPrototypeOf(make()).scan = function replacement(): void {};"
+    ],
+    [
+      "prototype retrieved from a late-assigned property instance",
+      "const holder: { instance?: Catalog } = {}; holder.instance = new Alias(); Object.getPrototypeOf(holder.instance!).scan = function replacement(): void {};"
+    ],
+    [
+      "aliased dynamic prototype",
+      "const factory = { get instance(): Catalog { return new Alias(); } }; const proto = Object.getPrototypeOf(factory.instance); proto.scan = function replacement(): void {};"
+    ],
+    [
+      "assignment-aliased dynamic prototype",
+      "const factory = { get instance(): Catalog { return new Alias(); } }; let proto: any; proto = Object.getPrototypeOf(factory.instance); proto.scan = function replacement(): void {};"
+    ],
+    [
+      "object-carried dynamic prototype",
+      "const factory = { get instance(): Catalog { return new Alias(); } }; const holder = { proto: Object.getPrototypeOf(factory.instance) }; holder.proto.scan = function replacement(): void {};"
+    ],
+    [
+      "array-carried dynamic prototype",
+      "const factory = { get instance(): Catalog { return new Alias(); } }; const protos = [Object.getPrototypeOf(factory.instance)]; protos[0]!.scan = function replacement(): void {};"
+    ],
+    [
+      "late property-carried dynamic prototype",
+      "const factory = { get instance(): Catalog { return new Alias(); } }; const holder: any = {}; holder.proto = Object.getPrototypeOf(factory.instance); holder.proto.scan = function replacement(): void {};"
+    ],
+    [
+      "array-destructured dynamic prototype",
+      "const factory = { get instance(): Catalog { return new Alias(); } }; const [proto] = [Object.getPrototypeOf(factory.instance)]; proto.scan = function replacement(): void {};"
+    ],
+    [
+      "object-destructured dynamic prototype",
+      "const factory = { get instance(): Catalog { return new Alias(); } }; const { proto } = { proto: Object.getPrototypeOf(factory.instance) }; proto.scan = function replacement(): void {};"
+    ],
+    [
+      "nested-destructured dynamic prototype",
+      "const factory = { get instance(): Catalog { return new Alias(); } }; const { nested: { proto } } = { nested: { proto: Object.getPrototypeOf(factory.instance) } }; proto.scan = function replacement(): void {};"
+    ],
+    [
+      "array assignment-destructured dynamic prototype",
+      "const factory = { get instance(): Catalog { return new Alias(); } }; let proto: any; [proto] = [Object.getPrototypeOf(factory.instance)]; proto.scan = function replacement(): void {};"
+    ],
+    [
+      "object assignment-destructured dynamic prototype",
+      "const factory = { get instance(): Catalog { return new Alias(); } }; let proto: any; ({ proto } = { proto: Object.getPrototypeOf(factory.instance) }); proto.scan = function replacement(): void {};"
+    ],
+    [
+      "member assignment-destructured dynamic prototype",
+      "const factory = { get instance(): Catalog { return new Alias(); } }; const holder: any = {}; ({ proto: holder.proto } = { proto: Object.getPrototypeOf(factory.instance) }); holder.proto.scan = function replacement(): void {};"
+    ],
+    [
+      "conditional-expression dynamic prototype",
+      "const factory = { get instance(): Catalog { return new Alias(); } }; const proto = true ? Object.getPrototypeOf(factory.instance) : null; proto!.scan = function replacement(): void {};"
+    ],
+    [
+      "nullish-expression dynamic prototype",
+      "const factory = { get instance(): Catalog { return new Alias(); } }; const proto = null ?? Object.getPrototypeOf(factory.instance); proto.scan = function replacement(): void {};"
+    ],
+    [
+      "comma-expression dynamic prototype",
+      "const factory = { get instance(): Catalog { return new Alias(); } }; const proto = (0, Object.getPrototypeOf(factory.instance)); proto.scan = function replacement(): void {};"
+    ],
+    [
+      "logical-assignment dynamic prototype",
+      "const factory = { get instance(): Catalog { return new Alias(); } }; let proto: any; proto ??= Object.getPrototypeOf(factory.instance); proto.scan = function replacement(): void {};"
+    ]
+  ])("fails closed for a %s", (_label, mutation) => {
+    const graph = snapshot({
+      "src/catalog.ts": [
+        "export class Catalog { scan(): void {} }",
+        "const Alias = Catalog;",
+        mutation,
+        "export function run(): void { new Catalog().scan(); }"
       ].join("\n")
     });
 
@@ -347,6 +779,185 @@ describe("TypeScript self-hosting relation depth", () => {
         );
       })
     ).toBe(false);
+  });
+
+  it("keeps static and instance receiver-member identities separate", () => {
+    const graph = snapshot({
+      "src/catalog.ts": [
+        "export class Catalog {",
+        "  static scan(): void {}",
+        "  scan(): void {}",
+        "  static runStatic(): void { this.scan(); }",
+        "  runInstance(): void { this.scan(); }",
+        "}",
+        "export class ChildCatalog extends Catalog {}"
+      ].join("\n"),
+      "src/consumer.ts": [
+        'import { Catalog, ChildCatalog } from "./catalog.js";',
+        "export function valid(): void {",
+        "  Catalog.scan(); new Catalog().scan();",
+        "  ChildCatalog.scan(); new ChildCatalog().scan();",
+        "}"
+      ].join("\n"),
+      "src/static-only.ts": "export class StaticOnly { static scan(): void {} }",
+      "src/invalid-instance.ts": [
+        'import { StaticOnly } from "./static-only.js";',
+        "export function invalidInstance(): void { new StaticOnly().scan(); }"
+      ].join("\n"),
+      "src/instance-only.ts": "export class InstanceOnly { scan(): void {} }",
+      "src/invalid-static.ts": [
+        'import { InstanceOnly } from "./instance-only.js";',
+        "export function invalidStatic(): void { InstanceOnly.scan(); }"
+      ].join("\n")
+    });
+    const scanSymbols = graph.symbols.filter(
+      (symbol) => symbol.qualifiedName === "src/catalog.ts#Catalog.scan"
+    );
+    const exactCalls = graph.edges.filter(
+      (edge) =>
+        edge.kind === "calls" &&
+        edge.referenceName === "scan" &&
+        edge.resolution === "exact" &&
+        edge.evidence?.ruleId === "syntax.typescript.proven-receiver-member-call"
+    );
+    const callerName = (sourceId: string): string | undefined =>
+      graph.symbols.find((symbol) => symbol.id === sourceId)?.qualifiedName;
+
+    expect(scanSymbols).toHaveLength(2);
+    expect(exactCalls.filter((edge) => callerName(edge.sourceId) === "src/catalog.ts#Catalog.runStatic")).toHaveLength(1);
+    expect(exactCalls.filter((edge) => callerName(edge.sourceId) === "src/catalog.ts#Catalog.runInstance")).toHaveLength(1);
+    expect(exactCalls.filter((edge) => callerName(edge.sourceId) === "src/consumer.ts#valid")).toHaveLength(4);
+    expect(exactCalls.some((edge) => callerName(edge.sourceId) === "src/invalid-instance.ts#invalidInstance")).toBe(false);
+    expect(exactCalls.some((edge) => callerName(edge.sourceId) === "src/invalid-static.ts#invalidStatic")).toBe(false);
+  });
+
+  it("resolves only directly callable method and function-property members", () => {
+    const graph = snapshot({
+      "src/callable-properties.ts": [
+        "class Properties {",
+        "  callback: () => void = (): void => undefined;",
+        "  value = 1;",
+        "  get returned(): () => void { return (): void => undefined; }",
+        "  static staticCallback: () => void = (): void => undefined;",
+        "}",
+        "export function run(): void {",
+        "  const properties = new Properties();",
+        "  properties.callback();",
+        "  properties.value();",
+        "  properties.returned();",
+        "  Properties.staticCallback();",
+        "}"
+      ].join("\n")
+    });
+    const run = graph.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/callable-properties.ts#run"
+    );
+    const exactTargets = graph.edges
+      .filter(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.sourceId === run?.id &&
+          edge.resolution === "exact" &&
+          edge.evidence?.ruleId === "syntax.typescript.proven-receiver-member-call"
+      )
+      .map((edge) => graph.symbols.find((symbol) => symbol.id === edge.targetId)?.qualifiedName);
+
+    expect(exactTargets).toEqual(
+      expect.arrayContaining([
+        "src/callable-properties.ts#Properties.callback",
+        "src/callable-properties.ts#Properties.staticCallback"
+      ])
+    );
+    expect(exactTargets).toHaveLength(2);
+  });
+
+  it("does not resolve cross-file members mutated by their declaring class", () => {
+    const graph = snapshot({
+      "src/constructor-mutated.ts": [
+        "export class ConstructorMutated {",
+        "  constructor() { this.scan = (): void => undefined; }",
+        "  scan(): void {}",
+        "}"
+      ].join("\n"),
+      "src/prototype-mutated.ts": [
+        "export class PrototypeMutated { scan(): void {} }",
+        "PrototypeMutated.prototype.scan = (): void => undefined;"
+      ].join("\n"),
+      "src/static-mutated.ts": [
+        "export class StaticMutated { static scan(): void {} }",
+        "StaticMutated.scan = (): void => undefined;"
+      ].join("\n"),
+      "src/consumer-mutations.ts": [
+        'import { ConstructorMutated } from "./constructor-mutated.js";',
+        'import { PrototypeMutated } from "./prototype-mutated.js";',
+        'import { StaticMutated } from "./static-mutated.js";',
+        "export function run(): void {",
+        "  new ConstructorMutated().scan();",
+        "  new PrototypeMutated().scan();",
+        "  StaticMutated.scan();",
+        "}"
+      ].join("\n")
+    });
+    const run = graph.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/consumer-mutations.ts#run"
+    );
+
+    expect(
+      graph.edges.filter(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.sourceId === run?.id &&
+          edge.resolution === "exact" &&
+          edge.evidence?.ruleId === "syntax.typescript.proven-receiver-member-call"
+      )
+    ).toEqual([]);
+  });
+
+  it("does not resolve inherited members replaced by the receiving subclass", () => {
+    const graph = snapshot({
+      "src/base-mutated.ts": [
+        "export class BaseMutated {",
+        "  scan(): void {}",
+        "  static staticScan(): void {}",
+        "}"
+      ].join("\n"),
+      "src/child-mutated.ts": [
+        'import { BaseMutated } from "./base-mutated.js";',
+        "export class ChildMutated extends BaseMutated {",
+        '  constructor() { super(); Object.defineProperty(this, "scan", { value: (): void => undefined }); }',
+        "}",
+        "const ChildAlias = ChildMutated;",
+        "ChildAlias.staticScan = (): void => undefined;"
+      ].join("\n"),
+      "src/prototype-child-mutated.ts": [
+        'import { BaseMutated } from "./base-mutated.js";',
+        "export class PrototypeChildMutated extends BaseMutated {}",
+        "const inheritedPrototype = PrototypeChildMutated.prototype;",
+        "inheritedPrototype.scan = (): void => undefined;"
+      ].join("\n"),
+      "src/consumer-inherited-mutations.ts": [
+        'import { ChildMutated } from "./child-mutated.js";',
+        'import { PrototypeChildMutated } from "./prototype-child-mutated.js";',
+        "export function run(): void {",
+        "  new ChildMutated().scan();",
+        "  new PrototypeChildMutated().scan();",
+        "  ChildMutated.staticScan();",
+        "}"
+      ].join("\n")
+    });
+    const run = graph.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/consumer-inherited-mutations.ts#run"
+    );
+
+    expect(
+      graph.edges.filter(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.sourceId === run?.id &&
+          edge.resolution === "exact" &&
+          edge.evidence?.ruleId === "syntax.typescript.proven-receiver-member-call"
+      )
+    ).toEqual([]);
   });
 
   it("uses one exact acyclic heritage chain for typed parameter member calls and rejects ambiguity", () => {
@@ -494,5 +1105,148 @@ describe("TypeScript self-hosting relation depth", () => {
     ).toBe("value");
     expect(exactCalls.some((edge) => edge.targetId === valueScan?.id)).toBe(true);
     expect(exactCalls.some((edge) => edge.targetId === typeOnlyScan?.id)).toBe(false);
+  });
+
+  it("does not emit exact receiver-member calls through decorated methods or classes", () => {
+    const graph = snapshot({
+      "src/decorated.ts": [
+        "function replaceMethod(_target: object, _name: string, descriptor: PropertyDescriptor): PropertyDescriptor { return descriptor; }",
+        "function replaceClass<T extends new (...args: any[]) => object>(value: T): T { return value; }",
+        "function observeParameter(_target: object, _name: string | undefined, _index: number): void {}",
+        "class MethodDecorated { @replaceMethod scan(): void {} verify(): void {} }",
+        "@replaceClass class ClassDecorated { scan(): void {} }",
+        "class ParameterDecorated { verify(): void {} configure(@observeParameter _value: string): void {} }",
+        "class ConstructorParameterDecorated { constructor(@observeParameter _value: string) {} verify(): void {} }",
+        "class Plain { scan(): void {} }",
+        "class DecoratedBase { @replaceMethod scan(): void {} }",
+        "class InheritedDecoratedMethod extends DecoratedBase {}",
+        "@replaceClass class DecoratedChild extends Plain {}",
+        "export function runMethod(): void { new MethodDecorated().scan(); }",
+        "export function runOtherMethod(): void { new MethodDecorated().verify(); }",
+        "export function runClass(): void { new ClassDecorated().scan(); }",
+        "export function runParameterDecorated(): void { new ParameterDecorated().verify(); }",
+        "export function runConstructorParameterDecorated(): void { new ConstructorParameterDecorated(\"x\").verify(); }",
+        "export function runInheritedMethod(): void { new InheritedDecoratedMethod().scan(); }",
+        "export function runDecoratedChild(): void { new DecoratedChild().scan(); }",
+        "export function runPlain(): void { new Plain().scan(); }"
+      ].join("\n"),
+      "src/catalog.ts": [
+        "function replaceMethod(_target: object, _name: string, descriptor: PropertyDescriptor): PropertyDescriptor { return descriptor; }",
+        "export class Catalog { @replaceMethod scan(): void {} }"
+      ].join("\n"),
+      "src/consumer.ts": [
+        'import { Catalog } from "./catalog.js";',
+        "export function runImported(): void { new Catalog().scan(); }"
+      ].join("\n")
+    });
+    const exactMemberCalls = graph.edges.filter(
+      (edge) =>
+        edge.kind === "calls" &&
+        edge.resolution === "exact" &&
+        edge.evidence?.ruleId === "syntax.typescript.proven-receiver-member-call"
+    );
+    const exactCallerNames = exactMemberCalls.map(
+      (edge) => graph.symbols.find((symbol) => symbol.id === edge.sourceId)?.qualifiedName
+    );
+
+    expect(exactCallerNames).toContain("src/decorated.ts#runPlain");
+    expect(exactCallerNames).not.toContain("src/decorated.ts#runMethod");
+    expect(exactCallerNames).not.toContain("src/decorated.ts#runOtherMethod");
+    expect(exactCallerNames).not.toContain("src/decorated.ts#runClass");
+    expect(exactCallerNames).not.toContain("src/decorated.ts#runParameterDecorated");
+    expect(exactCallerNames).not.toContain("src/decorated.ts#runConstructorParameterDecorated");
+    expect(exactCallerNames).not.toContain("src/decorated.ts#runInheritedMethod");
+    expect(exactCallerNames).not.toContain("src/decorated.ts#runDecoratedChild");
+    expect(exactCallerNames).not.toContain("src/consumer.ts#runImported");
+  });
+
+  it.each<[string, readonly string[]]>([
+    ["object", ["const holder = { catalog };", "holder.catalog.scan = (): void => undefined;"]],
+    ["array", ["const holders = [catalog];", "holders[0]!.scan = (): void => undefined;"]],
+    [
+      "factory",
+      [
+        "function current(): Catalog { return catalog; }",
+        "current().scan = (): void => undefined;"
+      ]
+    ],
+    ["container escape", ["mutate({ catalog });"]],
+    [
+      "getter",
+      [
+        "const holder = { get current(): Catalog { return catalog; } };",
+        "holder.current.scan = (): void => undefined;"
+      ]
+    ],
+    ["IIFE", ["(() => catalog)().scan = (): void => undefined;"]]
+  ])("does not emit an exact call after a proven instance escapes through a %s carrier", (_label, mutation) => {
+    const graph = snapshot({
+      "src/instance-carrier.ts": [
+        "class Catalog { scan(): void {} }",
+        "declare function mutate(value: unknown): void;",
+        "export function run(): void {",
+        "  const catalog = new Catalog();",
+        ...mutation.map((statement) => `  ${statement}`),
+        "  catalog.scan();",
+        "}"
+      ].join("\n"),
+      "src/safe-instance.ts": [
+        "class SafeCatalog { scan(): void {} }",
+        "export function safe(): void { const safeCatalog = new SafeCatalog(); safeCatalog.scan(); }"
+      ].join("\n")
+    });
+    const exactScanCalls = graph.edges.filter(
+      (edge) => edge.kind === "calls" && edge.referenceName === "scan" && edge.resolution === "exact"
+    );
+    const exactCallerNames = exactScanCalls.map(
+      (edge) => graph.symbols.find((symbol) => symbol.id === edge.sourceId)?.qualifiedName
+    );
+
+    expect(exactCallerNames).toContain("src/safe-instance.ts#safe");
+    expect(exactCallerNames).not.toContain("src/instance-carrier.ts#run");
+  });
+
+  it("does not emit exact calls after this-bound receivers escape through aliases", () => {
+    const graph = snapshot({
+      "src/this-alias.ts": [
+        "class Catalog {",
+        "  scan(): void {}",
+        "  run(): void { const self = this; self.scan = (): void => undefined; this.scan(); }",
+        "}",
+        "class Dependency { execute(): void {} }",
+        "class Consumer {",
+        "  constructor(private readonly dependency: Dependency) {}",
+        "  run(): void {",
+        "    const holder = { dependency: this.dependency };",
+        "    holder.dependency.execute = (): void => undefined;",
+        "    this.dependency.execute();",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/safe-this.ts": [
+        "class SafeCatalog { scan(): void {} run(): void { this.scan(); } }",
+        "class SafeDependency { execute(): void {} }",
+        "class SafeConsumer {",
+        "  constructor(private readonly dependency: SafeDependency) {}",
+        "  run(): void { this.dependency.execute(); }",
+        "}"
+      ].join("\n")
+    });
+    const exactCalls = graph.edges.filter(
+      (edge) => edge.kind === "calls" && edge.resolution === "exact"
+    );
+    const callPairs = exactCalls.map((edge) => ({
+      source: graph.symbols.find((symbol) => symbol.id === edge.sourceId)?.qualifiedName,
+      target: graph.symbols.find((symbol) => symbol.id === edge.targetId)?.qualifiedName
+    }));
+
+    expect(callPairs).toEqual(
+      expect.arrayContaining([
+        { source: "src/safe-this.ts#SafeCatalog.run", target: "src/safe-this.ts#SafeCatalog.scan" },
+        { source: "src/safe-this.ts#SafeConsumer.run", target: "src/safe-this.ts#SafeDependency.execute" }
+      ])
+    );
+    expect(callPairs.some((pair) => pair.source === "src/this-alias.ts#Catalog.run")).toBe(false);
+    expect(callPairs.some((pair) => pair.source === "src/this-alias.ts#Consumer.run")).toBe(false);
   });
 });

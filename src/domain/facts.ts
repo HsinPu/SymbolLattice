@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v283";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v307";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v148";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v150";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -2565,6 +2565,25 @@ export interface ArtifactFacts {
   readonly importBindings: readonly ImportBinding[];
   readonly exportBindings: readonly ExportBinding[];
   readonly reExportBindings: readonly ReExportBinding[];
+  /** Omitted only by artifact facts persisted before the v0.419.1 TypeScript exact-call repair. */
+  readonly typescriptFacts?: {
+    /** Decorated classes whose runtime constructor/member surface may be replaced. */
+    readonly decoratorTaintedTypeSymbolIds: readonly string[];
+    /** Decorated methods/accessors/properties whose runtime value may be replaced. */
+    readonly decoratorTaintedMemberSymbolIds: readonly string[];
+    /** Members declared on the constructor value rather than its instances. */
+    readonly staticMemberSymbolIds: readonly string[];
+    /** Members declared on class/interface instances. */
+    readonly instanceMemberSymbolIds: readonly string[];
+    /** Methods or explicitly function-valued properties eligible as direct call targets. */
+    readonly callableMemberSymbolIds: readonly string[];
+    /** Runtime mutations on one class surface, including inherited member replacements. */
+    readonly runtimeTaintedMemberSurfaces: readonly {
+      readonly typeSymbolId: string;
+      readonly memberName: string | null;
+      readonly memberKind: "static" | "instance";
+    }[];
+  };
   /** Omitted only by artifact facts persisted before v0.17. */
   readonly nestRouteFacts?: NestRouteFacts;
   /** Omitted only by artifact facts persisted before v0.97. */
