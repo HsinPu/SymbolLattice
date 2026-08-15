@@ -10,6 +10,34 @@ import {
 } from "../../../src/cli/mcp-config.js";
 
 describe("MCP configuration generator", () => {
+  it("renders a global Codex entry that follows the MCP process working directory", () => {
+    const result = createMcpConfig("codex", {
+      projectPath: "C:/projects/installer-preview",
+      projectBinding: "runtime-working-directory"
+    });
+
+    expect(result.server).toEqual({
+      name: "symbol-lattice",
+      command: "symbol-lattice",
+      args: ["serve", "--mcp"]
+    });
+    expect(result.snippet).toBe(
+      '[mcp_servers.symbol_lattice]\ncommand = "symbol-lattice"\nargs = ["serve", "--mcp"]'
+    );
+    expect(result.notes).toContain(
+      "The Codex entry stores no fixed --project path; SymbolLattice resolves the project from the MCP process working directory."
+    );
+  });
+
+  it("limits runtime working-directory project binding to global Codex configuration", () => {
+    expect(() =>
+      createMcpConfig("claude", {
+        projectPath: "C:/projects/example",
+        projectBinding: "runtime-working-directory"
+      })
+    ).toThrow('Project binding "runtime-working-directory" is only supported for global Codex configuration.');
+  });
+
   it("renders a Codex TOML entry with an explicit project and the default auto-sync boundary", () => {
     const result = createMcpConfig("codex", { projectPath: "C:/projects/example" });
 

@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.419.1 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.420.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -37,14 +37,43 @@ node dist/cli/main.js find createOrder --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.419.1 TypeScript self-hosting evidence
+## Install for Codex (v0.420.0 candidate)
+
+Install the public CLI, then explicitly create an index in the repository where you want to use it:
+
+```bash
+npm install -g @hsinpu/symbol-lattice
+cd /path/to/project
+symbol-lattice init .
+```
+
+The Codex installer previews its plan by default and does not write anything:
+
+```bash
+symbol-lattice install codex
+symbol-lattice install codex --apply --yes
+symbol-lattice doctor codex
+```
+
+It jointly manages the `mcp_servers.symbol_lattice` table in global `~/.codex/config.toml` and the section bounded by `SYMBOL_LATTICE_START` / `SYMBOL_LATTICE_END` in global `~/.codex/AGENTS.md`. Existing files receive full backups before modification; if either file fails preflight or writing, installation stops or rolls back attempted changes.
+
+Removal is also preview-first and removes only SymbolLattice-owned content:
+
+```bash
+symbol-lattice uninstall codex
+symbol-lattice uninstall codex --apply --yes
+```
+
+The installer never creates or deletes a project index automatically. v0.420.0 passed isolated npm installation, MCP stdio cwd verification, and an on-device check from a new Codex task. That task loaded the SymbolLattice MCP server and resolved the current repository `C:\Users\win10\Desktop\Graph\symbol-lattice` as its project path.
+
+## TypeScript self-hosting evidence (carried forward from v0.419.1)
 
 This release work evaluates bounded, exact-safe relations in fixed TypeScript scopes. It does **not** claim complete TypeScript coverage or correctness for every TypeScript project, language feature, runtime path, or dynamic relation.
 
 - Stage 2 established 250 compiler-grounded positive truths and 100 negative assertions.
 - Stage 3 scored **TP 250 / FP 0 / FN 0** on that fixed corpus.
 - Stage 4's fixed A/B evaluation recorded 4/4 successful tasks for each arm, with no token-performance claim.
-- Stage 5 evaluated the MIT-licensed NestJS v11.1.16 tree at peeled commit `315e698…`: 1,659 TypeScript files and about 108,540 lines. Its fixed oracle scored **TP 300 / FP 0 / FN 0**, plus 150 negative assertions. The final fresh index reported 1,748 files, 18,125 symbols, 46,141 edges, and 15,394 pending references; the incremental checks passed 9/9 and the MCP check recorded zero fallbacks and zero worker crashes. The v0.419.1 candidate uses extractor v307 and resolver v150, and all figures above were regenerated from this candidate.
+- Stage 5 evaluated the MIT-licensed NestJS v11.1.16 tree at peeled commit `315e698…`: 1,659 TypeScript files and about 108,540 lines. Its fixed oracle scored **TP 300 / FP 0 / FN 0**, plus 150 negative assertions. The final fresh index reported 1,748 files, 18,125 symbols, 46,141 edges, and 15,394 pending references; the incremental checks passed 9/9 and the MCP check recorded zero fallbacks and zero worker crashes. These figures come from v0.419.1 extractor v307 and resolver v150; the v0.420.0 installer work does not change the analysis engine.
 
 The public npm aliases run the internal Stage 5 tools and deliberately require explicit project and output arguments:
 

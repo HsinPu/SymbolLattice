@@ -4038,4 +4038,95 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     );
     expect(output.notes).toContain("This command never deletes the selected configuration file.");
   });
+
+  it("exposes a Codex-only install preview without storing the current project path", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram({} as SymbolLatticeService).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "install",
+        "codex",
+        "--project",
+        "C:/installer-preview",
+        "--config",
+        "C:/symbol-lattice-stage1-no-write/config.toml",
+        "--instructions",
+        "C:/symbol-lattice-stage1-no-write/AGENTS.md"
+      ],
+      { from: "node" }
+    );
+
+    const output = JSON.parse(String(write.mock.calls[0]?.[0]));
+    expect(output).toMatchObject({
+      mode: "preview",
+      status: "ready",
+      target: "codex",
+      lifecycle: { mcpRequestHandlers: "read-only" }
+    });
+    expect(output.configuration.path).toBe(resolve("C:/symbol-lattice-stage1-no-write/config.toml"));
+    expect(output.instructions).toMatchObject({
+      path: resolve("C:/symbol-lattice-stage1-no-write/AGENTS.md"),
+      action: "create",
+      preservesOutsideOwnedSection: true
+    });
+    expect(output.transaction).toMatchObject({
+      preflight: "passed",
+      backups: "not-needed",
+      writes: "not-attempted",
+      consistent: true
+    });
+    expect(output.notes).toContain(
+      "The Codex entry stores no fixed --project path; SymbolLattice resolves the project from the MCP process working directory."
+    );
+  });
+
+  it("exposes Codex-only doctor and uninstall compatibility entry points", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram({} as SymbolLatticeService).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "doctor",
+        "codex",
+        "--config",
+        "C:/stage1-not-present/config.toml",
+        "--instructions",
+        "C:/stage1-not-present/AGENTS.md"
+      ],
+      { from: "node" }
+    );
+    const doctor = JSON.parse(String(write.mock.calls.at(-1)?.[0]));
+    expect(doctor).toMatchObject({ mode: "read-only", target: "codex" });
+    expect(doctor.expected.server.args).toEqual(["serve", "--mcp"]);
+    expect(doctor.instructions).toMatchObject({ action: "create" });
+
+    await createProgram({} as SymbolLatticeService).parseAsync(
+      [
+        "node",
+        "symbol-lattice",
+        "uninstall",
+        "codex",
+        "--config",
+        "C:/stage1-not-present/config.toml",
+        "--instructions",
+        "C:/stage1-not-present/AGENTS.md"
+      ],
+      { from: "node" }
+    );
+    const uninstall = JSON.parse(String(write.mock.calls.at(-1)?.[0]));
+    expect(uninstall).toMatchObject({ mode: "preview", status: "unchanged", target: "codex" });
+    expect(uninstall.instructions).toMatchObject({ action: "unchanged" });
+  });
+
+  it("rejects non-Codex targets from the simplified installation entry points", async () => {
+    await expect(
+      createProgram({} as SymbolLatticeService).parseAsync(
+        ["node", "symbol-lattice", "install", "claude"],
+        { from: "node" }
+      )
+    ).rejects.toThrow('The simplified installer currently supports only "codex".');
+  });
 });

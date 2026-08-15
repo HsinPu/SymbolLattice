@@ -1555,7 +1555,13 @@ describe("SymbolLattice MCP server", () => {
                         policy: { const: "explore-query-graph-mass-v2" },
                         maximumRelationships: { const: 32 },
                         maximumScore: { const: 120 },
-                        relationWeights: { type: "object" }
+                        relationWeights: {
+                          type: "object",
+                          properties: {
+                            accepts: { const: 8 },
+                            returns: { const: 8 }
+                          }
+                        }
                       }
                     },
                     graphExpansion: {
@@ -1580,6 +1586,13 @@ describe("SymbolLattice MCP server", () => {
                         maximumExpandedSymbols: { const: 16 },
                         maximumExpandedSymbolsPerFile: { const: 2 },
                         minimumRelationWeight: { const: 8 },
+                        relationWeights: {
+                          type: "object",
+                          properties: {
+                            accepts: { const: 8 },
+                            returns: { const: 8 }
+                          }
+                        },
                         seedFileCount: { minimum: 0, maximum: 16 },
                         seedSymbolCount: { minimum: 0, maximum: 32 },
                         visitedNodeCount: { minimum: 0, maximum: 1024 },
@@ -1620,7 +1633,13 @@ describe("SymbolLattice MCP server", () => {
                         maximumIterations: { const: 96 },
                         convergenceTolerance: { const: 1e-9 },
                         maximumScore: { const: 120 },
-                        relationWeights: { type: "object" },
+                        relationWeights: {
+                          type: "object",
+                          properties: {
+                            accepts: { const: 8 },
+                            returns: { const: 8 }
+                          }
+                        },
                         seedFileCount: { minimum: 0, maximum: 64 },
                         seedSymbolCount: { minimum: 0, maximum: 256 },
                         normalizedSeedWeight: { minimum: 0, maximum: 1 },
@@ -1676,7 +1695,13 @@ describe("SymbolLattice MCP server", () => {
                           score: { minimum: 0, maximum: 120 },
                           rankingContribution: { minimum: 0, maximum: 120 },
                           truncated: { type: "boolean" },
-                          relationCounts: { type: "object" }
+                          relationCounts: {
+                            type: "object",
+                            properties: {
+                              accepts: { minimum: 0 },
+                              returns: { minimum: 0 }
+                            }
+                          }
                         }
                       },
                       graphExpansion: {
@@ -1693,7 +1718,31 @@ describe("SymbolLattice MCP server", () => {
                           corroboratingSeedFileCount: { minimum: 0, maximum: 16 },
                           score: { minimum: 0, maximum: 180 },
                           rankingContribution: { minimum: 0, maximum: 180 },
-                          path: { type: "array", maxItems: 2 }
+                          path: {
+                            type: "array",
+                            maxItems: 2,
+                            items: {
+                              properties: {
+                                kind: {
+                                  enum: [
+                                    "contains",
+                                    "imports",
+                                    "exports",
+                                    "references",
+                                    "calls",
+                                    "accepts",
+                                    "returns",
+                                    "instantiates",
+                                    "overrides",
+                                    "routes",
+                                    "handles",
+                                    "extends",
+                                    "implements"
+                                  ]
+                                }
+                              }
+                            }
+                          }
                         }
                       },
                       graphDiffusion: {

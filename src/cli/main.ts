@@ -108,6 +108,11 @@ import {
   type McpServerSession
 } from "../mcp/index.js";
 import { SYMBOL_LATTICE_VERSION } from "../version.js";
+import {
+  createCodexDoctor,
+  createCodexInstall,
+  createCodexUninstall
+} from "./codex-setup.js";
 import { createMcpConfig, type McpConfigOptions } from "./mcp-config.js";
 import { createMcpDoctor } from "./mcp-doctor.js";
 import { createMcpInstall } from "./mcp-install.js";
@@ -264,6 +269,10 @@ interface McpUninstallCommandOptions extends McpDoctorCommandOptions {
   readonly apply?: boolean;
   readonly yes?: boolean;
   readonly backupDir?: string;
+}
+
+interface CodexSetupCommandOptions extends McpInstallCommandOptions {
+  readonly instructions?: string;
 }
 
 interface UpgradeCliOptions extends OutputOptions {
@@ -459,6 +468,20 @@ function createMcpCommandOptions(options: McpConfigCommandOptions): McpConfigOpt
           commandArgs: [resolve(fileURLToPath(import.meta.url))]
         }
       : {})
+  };
+}
+
+function requireSimplifiedCodexTarget(target: string): "codex" {
+  if (target !== "codex") {
+    throw new Error('The simplified installer currently supports only "codex".');
+  }
+  return "codex";
+}
+
+function createSimplifiedCodexMcpOptions(options: McpConfigCommandOptions): McpConfigOptions {
+  return {
+    ...createMcpCommandOptions(options),
+    projectBinding: "runtime-working-directory"
   };
 }
 
@@ -2110,6 +2133,96 @@ export function createProgram(
       const result = createMcpUninstall(target, {
         ...createMcpCommandOptions(options),
         ...(options.config === undefined ? {} : { configPath: options.config }),
+        ...(options.backupDir === undefined ? {} : { backupDirectory: options.backupDir }),
+        apply: options.apply ?? false,
+        yes: options.yes ?? false
+      });
+      render(result, options);
+    });
+
+  addJsonOption(addProjectOption(program.command("install <target>")))
+    .description("Preview or explicitly install SymbolLattice for one supported Agent")
+    .option("--config <path>", "Write this configuration file instead of the Agent's conventional destination")
+    .option("--instructions <path>", "Write this AGENTS.md file instead of Codex's global destination")
+    .option("--backup-dir <path>", "Directory for a full pre-write configuration backup")
+    .option("--apply", "Apply the displayed configuration plan (requires --yes)")
+    .option("--yes", "Acknowledge that an applied plan may modify both Codex-managed files")
+    .option("--no-auto-sync", "Install configuration with background incremental sync disabled")
+    .option(
+      "--no-diagnostic-journal",
+      "Install configuration with persistent auto-sync diagnostic journal writes disabled"
+    )
+    .option(
+      "--sync-interval <milliseconds>",
+      `Polling fallback interval for installed MCP auto-sync (${MIN_WATCH_INTERVAL_MS}-${MAX_WATCH_INTERVAL_MS})`,
+      parseWatchInterval
+    )
+    .option("--poll", "Install configuration that disables native filesystem-event acceleration")
+    .option("--source", "Install configuration that invokes this built CLI through the current Node executable")
+    .action((target: string, options: CodexSetupCommandOptions) => {
+      requireSimplifiedCodexTarget(target);
+      const result = createCodexInstall({
+        ...createSimplifiedCodexMcpOptions(options),
+        ...(options.config === undefined ? {} : { configPath: options.config }),
+        ...(options.instructions === undefined ? {} : { instructionsPath: options.instructions }),
+        ...(options.backupDir === undefined ? {} : { backupDirectory: options.backupDir }),
+        apply: options.apply ?? false,
+        yes: options.yes ?? false
+      });
+      render(result, options);
+    });
+
+  addJsonOption(addProjectOption(program.command("doctor <target>")))
+    .description("Diagnose one supported Agent installation without changing files")
+    .option("--config <path>", "Read this configuration file instead of the Agent's conventional destination")
+    .option("--instructions <path>", "Read this AGENTS.md file instead of Codex's global destination")
+    .option("--no-auto-sync", "Match a configuration with background incremental sync disabled")
+    .option(
+      "--no-diagnostic-journal",
+      "Match a configuration with persistent auto-sync diagnostic journal writes disabled"
+    )
+    .option(
+      "--sync-interval <milliseconds>",
+      `Match an MCP polling fallback interval (${MIN_WATCH_INTERVAL_MS}-${MAX_WATCH_INTERVAL_MS})`,
+      parseWatchInterval
+    )
+    .option("--poll", "Match a configuration that disables native filesystem-event acceleration")
+    .option("--source", "Check a configuration that invokes this built CLI through the current Node executable")
+    .action((target: string, options: CodexSetupCommandOptions) => {
+      requireSimplifiedCodexTarget(target);
+      const result = createCodexDoctor({
+        ...createSimplifiedCodexMcpOptions(options),
+        ...(options.config === undefined ? {} : { configPath: options.config }),
+        ...(options.instructions === undefined ? {} : { instructionsPath: options.instructions })
+      });
+      render(result, options);
+    });
+
+  addJsonOption(addProjectOption(program.command("uninstall <target>")))
+    .description("Preview or explicitly remove SymbolLattice from one supported Agent")
+    .option("--config <path>", "Update this configuration file instead of the Agent's conventional destination")
+    .option("--instructions <path>", "Update this AGENTS.md file instead of Codex's global destination")
+    .option("--backup-dir <path>", "Directory for a full pre-write configuration backup")
+    .option("--apply", "Apply the displayed removal plan (requires --yes)")
+    .option("--yes", "Acknowledge that an applied plan may modify both Codex-managed files")
+    .option("--no-auto-sync", "Match a configuration with background incremental sync disabled")
+    .option(
+      "--no-diagnostic-journal",
+      "Match a configuration with persistent auto-sync diagnostic journal writes disabled"
+    )
+    .option(
+      "--sync-interval <milliseconds>",
+      `Match an MCP polling fallback interval (${MIN_WATCH_INTERVAL_MS}-${MAX_WATCH_INTERVAL_MS})`,
+      parseWatchInterval
+    )
+    .option("--poll", "Match a configuration that disables native filesystem-event acceleration")
+    .option("--source", "Match a configuration that invokes this built CLI through the current Node executable")
+    .action((target: string, options: CodexSetupCommandOptions) => {
+      requireSimplifiedCodexTarget(target);
+      const result = createCodexUninstall({
+        ...createSimplifiedCodexMcpOptions(options),
+        ...(options.config === undefined ? {} : { configPath: options.config }),
+        ...(options.instructions === undefined ? {} : { instructionsPath: options.instructions }),
         ...(options.backupDir === undefined ? {} : { backupDirectory: options.backupDir }),
         apply: options.apply ?? false,
         yes: options.yes ?? false

@@ -341,7 +341,10 @@ function buildUninstallNotes(
   plan: UninstallPlan,
   didWrite: boolean
 ): readonly string[] {
-  const notes = ["This uninstaller never runs MCP, sync, or an Agent process."];
+  const notes = [
+    ...plan.expected.notes,
+    "This uninstaller never runs MCP, sync, or an Agent process."
+  ];
   if (mode === "preview") {
     notes.push("Preview only: no Agent configuration, backup, or project index has been written.");
     if (plan.action === "remove") {

@@ -14,15 +14,19 @@ export const MCP_CONFIG_TARGETS = [
 ] as const;
 
 export const MCP_CONFIG_LOCATIONS = ["global", "local"] as const;
+export const MCP_PROJECT_BINDINGS = ["explicit", "runtime-working-directory"] as const;
 
 export type McpConfigTarget = (typeof MCP_CONFIG_TARGETS)[number];
 export type McpConfigLocation = (typeof MCP_CONFIG_LOCATIONS)[number];
+export type McpProjectBinding = (typeof MCP_PROJECT_BINDINGS)[number];
 type McpConfigScope = McpConfigLocation | "not-applicable";
 type McpConfigFormat = "toml" | "json" | "jsonc" | "yaml";
 
 /** Options mirrored from `serve --mcp` so generated configuration is executable as-is. */
 export interface McpConfigOptions {
   readonly projectPath: string;
+  /** Controls whether the generated MCP entry pins one project or follows the Agent process working directory. */
+  readonly projectBinding?: McpProjectBinding;
   /** Target configuration scope. When omitted, each target chooses its safest supported default. */
   readonly location?: string;
   /** Overrides the PATH-based `symbol-lattice` executable for a source checkout. */
@@ -249,6 +253,7 @@ export function createMcpConfig(targetInput: string, options: McpConfigOptions):
   const definition = MCP_CONFIG_TARGET_REGISTRY[target];
   const location = resolveTargetLocation(target, definition, options.location);
   const projectPath = requireProjectPath(options.projectPath);
+  const projectBinding = resolveProjectBinding(target, location, options.projectBinding);
   const autoSync = options.autoSync ?? true;
   const diagnosticJournal = options.diagnosticJournal ?? true;
   const command = requireCommand(options.command ?? "symbol-lattice");
@@ -260,13 +265,15 @@ export function createMcpConfig(targetInput: string, options: McpConfigOptions):
     command,
     args: [
       ...commandArgs,
-      ...buildServeArgs({
-        ...options,
-        projectPath: projectArgument,
-        autoSync,
-        diagnosticJournal,
-        pluginModulePaths
-      })
+      ...buildServeArgs(
+        {
+          ...options,
+          autoSync,
+          diagnosticJournal,
+          pluginModulePaths
+        },
+        projectBinding === "runtime-working-directory" ? null : projectArgument
+      )
     ]
   };
   const context: McpConfigRenderContext = {
@@ -305,9 +312,28 @@ export function createMcpConfig(targetInput: string, options: McpConfigOptions):
         commandArgs.length > 0,
         pluginModulePaths.length
       ),
+      ...(projectBinding === "runtime-working-directory"
+        ? [
+            "The Codex entry stores no fixed --project path; SymbolLattice resolves the project from the MCP process working directory."
+          ]
+        : []),
       ...(definition.notes?.(context) ?? [])
     ]
   };
+}
+
+function resolveProjectBinding(
+  target: McpConfigTarget,
+  location: McpConfigScope,
+  requested: McpProjectBinding | undefined
+): McpProjectBinding {
+  const binding = requested ?? "explicit";
+  if (binding === "runtime-working-directory" && (target !== "codex" || location !== "global")) {
+    throw new Error(
+      'Project binding "runtime-working-directory" is only supported for global Codex configuration.'
+    );
+  }
+  return binding;
 }
 
 function destination(
@@ -374,8 +400,11 @@ function normalizePluginModulePaths(options: McpConfigOptions): readonly string[
   return Object.freeze(normalized);
 }
 
-function buildServeArgs(options: Required<Pick<McpConfigOptions, "projectPath">> & McpConfigOptions): string[] {
-  const args = ["serve", "--mcp", "--project", options.projectPath];
+function buildServeArgs(options: McpConfigOptions, projectPath: string | null): string[] {
+  const args = ["serve", "--mcp"];
+  if (projectPath !== null) {
+    args.push("--project", projectPath);
+  }
   if (options.force === true) {
     args.push("--force");
   }

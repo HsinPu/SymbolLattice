@@ -313,6 +313,7 @@ function renderInstallResult(
 
 function buildInstallNotes(mode: McpInstallMode, plan: InstallPlan, didWrite: boolean): readonly string[] {
   const notes = [
+    ...plan.expected.notes,
     "This installer never runs MCP, sync, or an Agent process."
   ];
   if (mode === "preview") {

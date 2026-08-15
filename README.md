@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.419.1 為開發者預覽版。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用。
+> v0.420.0 為開發者預覽版。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用。
 
 ## 這是什麼
 
@@ -37,14 +37,43 @@ node dist/cli/main.js find createOrder --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## v0.419.1 TypeScript 自我託管證據
+## 安裝到 Codex（v0.420.0 候選）
+
+先安裝公開 CLI，並在要使用的 repository 明確建立索引：
+
+```bash
+npm install -g @hsinpu/symbol-lattice
+cd /path/to/project
+symbol-lattice init .
+```
+
+Codex 安裝器預設只顯示計畫，不會寫入：
+
+```bash
+symbol-lattice install codex
+symbol-lattice install codex --apply --yes
+symbol-lattice doctor codex
+```
+
+它共同管理全域 `~/.codex/config.toml` 的 `mcp_servers.symbol_lattice` table，以及全域 `~/.codex/AGENTS.md` 中由 `SYMBOL_LATTICE_START`／`SYMBOL_LATTICE_END` 包住的區塊。既有檔案修改前會建立完整備份；任一檔案前置檢查或寫入失敗時，安裝會停止或回復已嘗試的變更。
+
+移除時也先預覽，且只移除 SymbolLattice 自己管理的內容：
+
+```bash
+symbol-lattice uninstall codex
+symbol-lattice uninstall codex --apply --yes
+```
+
+安裝器不會自動建立或刪除專案索引。v0.420.0 已通過隔離 npm 安裝、MCP stdio cwd，以及新 Codex task 的實機驗證；該 task 成功載入 SymbolLattice MCP，並把目前 repository `C:\Users\win10\Desktop\Graph\symbol-lattice` 解析為專案路徑。
+
+## TypeScript 自我託管證據（沿用 v0.419.1）
 
 本版工作只在固定 TypeScript 範圍評估限界、exact-safe 的關係；**不**主張所有 TypeScript 專案、語言特性、runtime 路徑或動態關係的完整涵蓋或正確性。
 
 - Stage 2 建立 250 個 compiler-grounded positive truths 與 100 個 negative assertions。
 - Stage 3 在該固定 corpus 得分為 **TP 250 / FP 0 / FN 0**。
 - Stage 4 的固定 A/B 評估中，兩個 arm 均為 4/4 任務成功；不提出 token 效能主張。
-- Stage 5 評估 MIT 授權、peeled commit `315e698…` 的 NestJS v11.1.16：1,659 個 TypeScript 檔案、約 108,540 行。固定 oracle 得分為 **TP 300 / FP 0 / FN 0**，另有 150 個 negative assertions。最終 fresh index 為 1,748 files、18,125 symbols、46,141 edges、15,394 pending references；incremental 檢查 9/9 通過，MCP 檢查為 0 fallback、0 worker crash。v0.419.1 的候選 extractor 為 v307，resolver 為 v150，以上數值均已由本候選重新產生。
+- Stage 5 評估 MIT 授權、peeled commit `315e698…` 的 NestJS v11.1.16：1,659 個 TypeScript 檔案、約 108,540 行。固定 oracle 得分為 **TP 300 / FP 0 / FN 0**，另有 150 個 negative assertions。最終 fresh index 為 1,748 files、18,125 symbols、46,141 edges、15,394 pending references；incremental 檢查 9/9 通過，MCP 檢查為 0 fallback、0 worker crash。這些數值來自 v0.419.1 的 extractor v307／resolver v150；v0.420.0 安裝器工作沒有改變分析引擎。
 
 下列公開 npm alias 可執行內部 Stage 5 工具，且刻意要求明確的 project 與 output 參數：
 
