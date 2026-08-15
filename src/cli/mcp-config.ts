@@ -29,7 +29,7 @@ export interface McpConfigOptions {
   readonly projectBinding?: McpProjectBinding;
   /** Target configuration scope. When omitted, each target chooses its safest supported default. */
   readonly location?: string;
-  /** Overrides the PATH-based `symbol-lattice` executable for a source checkout. */
+  /** Overrides the PATH-based `SymbolLattice` executable for a source checkout. */
   readonly command?: string;
   /** Prepended after `command`, before the generated `serve --mcp` arguments. */
   readonly commandArgs?: readonly string[];
@@ -57,7 +57,7 @@ export interface McpConfigResult {
     readonly selection?: string;
   };
   readonly server: {
-    readonly name: "symbol-lattice";
+    readonly name: "SymbolLattice";
     readonly command: string;
     readonly args: readonly string[];
   };
@@ -98,9 +98,9 @@ interface McpConfigTargetDefinition {
   readonly projectArgument?: (location: McpConfigScope, projectPath: string) => string;
 }
 
-const JSON_SERVER_KEY = "symbol-lattice";
-const TOML_SERVER_KEY = "symbol_lattice";
-const YAML_SERVER_KEY = "symbol_lattice";
+const JSON_SERVER_KEY = "SymbolLattice";
+const TOML_SERVER_KEY = "SymbolLattice";
+const YAML_SERVER_KEY = "SymbolLattice";
 const MAX_PLUGIN_MODULES = 16;
 
 /**
@@ -256,12 +256,12 @@ export function createMcpConfig(targetInput: string, options: McpConfigOptions):
   const projectBinding = resolveProjectBinding(target, location, options.projectBinding);
   const autoSync = options.autoSync ?? true;
   const diagnosticJournal = options.diagnosticJournal ?? true;
-  const command = requireCommand(options.command ?? "symbol-lattice");
+  const command = requireCommand(options.command ?? "SymbolLattice");
   const commandArgs = options.commandArgs ?? [];
   const pluginModulePaths = normalizePluginModulePaths(options);
   const projectArgument = definition.projectArgument?.(location, projectPath) ?? projectPath;
   const server = {
-    name: "symbol-lattice" as const,
+    name: "SymbolLattice" as const,
     command,
     args: [
       ...commandArgs,
@@ -517,7 +517,7 @@ function renderHermesYaml(server: McpServer): string {
     "platform_toolsets:",
     "  cli:",
     "    - hermes-cli",
-    "    - mcp-symbol-lattice"
+    "    - mcp-SymbolLattice"
   ].join("\n");
 }
 
@@ -538,10 +538,10 @@ function configurationNotes(
   ];
   if (autoSync) {
     notes.push(
-      "A separate local watcher can update the project-local .symbol-lattice index; add --no-auto-sync to opt out."
+      "A separate local watcher can update the project-local .SymbolLattice index; add --no-auto-sync to opt out."
     );
   } else {
-    notes.push("Auto-sync is disabled; run symbol-lattice sync explicitly when the graph needs refreshing.");
+    notes.push("Auto-sync is disabled; run SymbolLattice sync explicitly when the graph needs refreshing.");
   }
   if (autoSync && diagnosticJournal) {
     notes.push("Auto-sync diagnostic receipts can be stored in the project-local index.");

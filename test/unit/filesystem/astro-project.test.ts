@@ -9,7 +9,7 @@ import { FileSystemSourceCatalog } from "../../../src/infrastructure/filesystem/
 const temporaryProjectPaths: string[] = [];
 
 async function createProject(files: Readonly<Record<string, string>>): Promise<string> {
-  const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-astro-project-"));
+  const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-astro-project-"));
   temporaryProjectPaths.push(projectPath);
   await Promise.all(
     Object.entries(files).map(async ([relativePath, sourceText]) => {

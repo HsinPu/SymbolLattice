@@ -1152,7 +1152,7 @@ function renderError(error: unknown, json: boolean): void {
   if (json) {
     process.stderr.write(`${JSON.stringify({ error: { code, message } }, null, 2)}\n`);
   } else {
-    process.stderr.write(`symbol-lattice: ${code}: ${message}\n`);
+    process.stderr.write(`SymbolLattice: ${code}: ${message}\n`);
   }
 }
 
@@ -1274,7 +1274,7 @@ export function createProgram(
   };
   const program = new Command();
   program
-    .name("symbol-lattice")
+    .name("SymbolLattice")
     .description("Evidence-first local code intelligence across a multi-language, framework-aware catalog.")
     .version(SYMBOL_LATTICE_VERSION);
 
@@ -1373,7 +1373,7 @@ export function createProgram(
       if (!status.initialized) {
         throw new SymbolLatticeError(
           "MISSING_INDEX",
-          `No SymbolLattice index exists for ${projectPath}. Run "symbol-lattice init ${projectPath}" first.`
+          `No SymbolLattice index exists for ${projectPath}. Run "SymbolLattice init ${projectPath}" first.`
         );
       }
       if (options.allowExternalPlugin === true && (options.plugin ?? []).length === 0) {
@@ -1425,7 +1425,7 @@ export function createProgram(
       if (!status.initialized) {
         throw new SymbolLatticeError(
           "MISSING_INDEX",
-          `No SymbolLattice index exists for ${projectPath}. Run "symbol-lattice init ${projectPath}" first.`
+          `No SymbolLattice index exists for ${projectPath}. Run "SymbolLattice init ${projectPath}" first.`
         );
       }
       if (options.allowExternalPlugin === true && (options.plugin ?? []).length === 0) {

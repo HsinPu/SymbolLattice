@@ -1435,7 +1435,7 @@ export class SymbolLatticeService {
     if (!this.graphStore.isInitialized(projectPath)) {
       throw new SymbolLatticeError(
         "MISSING_INDEX",
-        `No SymbolLattice index exists for ${projectPath}. Run "symbol-lattice init ${projectPath}" first.`
+        `No SymbolLattice index exists for ${projectPath}. Run "SymbolLattice init ${projectPath}" first.`
       );
     }
 
@@ -1717,7 +1717,7 @@ export class SymbolLatticeService {
       if (activeGenerationId === null) {
         throw new SymbolLatticeError(
           "MISSING_INDEX",
-          `No active SymbolLattice generation exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+          `No active SymbolLattice generation exists for ${normalizedProjectPath}. Run "SymbolLattice init ${normalizedProjectPath}" first.`
         );
       }
       if (to.generation.generationId !== activeGenerationId) {
@@ -1779,21 +1779,21 @@ export class SymbolLatticeService {
     if (!graphBundle.status.initialized) {
       throw new SymbolLatticeError(
         "MISSING_INDEX",
-        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "SymbolLattice init ${normalizedProjectPath}" first.`
       );
     }
     const getActiveSourceSearchBundle = this.graphStore.getActiveSourceSearchBundle;
     if (typeof getActiveSourceSearchBundle !== "function") {
       throw new SymbolLatticeError(
         "SOURCE_SEARCH_UNAVAILABLE",
-        `The configured SymbolLattice graph store for ${normalizedProjectPath} does not expose persisted source search. Upgrade the adapter and run "symbol-lattice sync ${normalizedProjectPath}".`
+        `The configured SymbolLattice graph store for ${normalizedProjectPath} does not expose persisted source search. Upgrade the adapter and run "SymbolLattice sync ${normalizedProjectPath}".`
       );
     }
     const bundle = getActiveSourceSearchBundle.call(this.graphStore, normalizedProjectPath, request);
     if (bundle.sourceSearchVersion !== SOURCE_SEARCH_INDEX_VERSION) {
       throw new SymbolLatticeError(
         "SOURCE_SEARCH_UNAVAILABLE",
-        `The active SymbolLattice index for ${normalizedProjectPath} has no compatible persisted source-search projection. Run "symbol-lattice sync ${normalizedProjectPath}" to backfill it.`
+        `The active SymbolLattice index for ${normalizedProjectPath} has no compatible persisted source-search projection. Run "SymbolLattice sync ${normalizedProjectPath}" to backfill it.`
       );
     }
 
@@ -1842,7 +1842,7 @@ export class SymbolLatticeService {
     if (!initialBundle.status.initialized) {
       throw new SymbolLatticeError(
         "MISSING_INDEX",
-        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "SymbolLattice init ${normalizedProjectPath}" first.`
       );
     }
 
@@ -1850,7 +1850,7 @@ export class SymbolLatticeService {
     if (typeof getActiveSourceSearchBundle !== "function") {
       throw new SymbolLatticeError(
         "SOURCE_SEARCH_UNAVAILABLE",
-        `The configured SymbolLattice graph store for ${normalizedProjectPath} does not expose persisted source search. Upgrade the adapter and run "symbol-lattice sync ${normalizedProjectPath}".`
+        `The configured SymbolLattice graph store for ${normalizedProjectPath} does not expose persisted source search. Upgrade the adapter and run "SymbolLattice sync ${normalizedProjectPath}".`
       );
     }
     const bundle = getActiveSourceSearchBundle.call(
@@ -1861,7 +1861,7 @@ export class SymbolLatticeService {
     if (bundle.sourceSearchVersion !== SOURCE_SEARCH_INDEX_VERSION) {
       throw new SymbolLatticeError(
         "SOURCE_SEARCH_UNAVAILABLE",
-        `The active SymbolLattice index for ${normalizedProjectPath} has no compatible persisted source-search projection. Run "symbol-lattice sync ${normalizedProjectPath}" to backfill it.`
+        `The active SymbolLattice index for ${normalizedProjectPath} has no compatible persisted source-search projection. Run "SymbolLattice sync ${normalizedProjectPath}" to backfill it.`
       );
     }
 
@@ -2307,7 +2307,7 @@ export class SymbolLatticeService {
       if (!currentBundle.status.initialized) {
         throw new SymbolLatticeError(
           "MISSING_INDEX",
-          `No SymbolLattice index exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+          `No SymbolLattice index exists for ${normalizedProjectPath}. Run "SymbolLattice init ${normalizedProjectPath}" first.`
         );
       }
       const selection = resolveFileViewSelection(currentBundle.snapshot.files, normalizedFilePath);
@@ -2332,7 +2332,7 @@ export class SymbolLatticeService {
       }
       throw new SymbolLatticeError(
         "SOURCE_SEARCH_UNAVAILABLE",
-        `The active generation has no compatible persisted source for ${selection.file.path}. Run "symbol-lattice sync ${normalizedProjectPath}" to backfill it.`
+        `The active generation has no compatible persisted source for ${selection.file.path}. Run "SymbolLattice sync ${normalizedProjectPath}" to backfill it.`
       );
     }
     if (read === undefined) {
@@ -2610,7 +2610,7 @@ export class SymbolLatticeService {
     if (!bundle.status.initialized) {
       throw new SymbolLatticeError(
         "MISSING_INDEX",
-        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "SymbolLattice init ${normalizedProjectPath}" first.`
       );
     }
 
@@ -2710,7 +2710,7 @@ export class SymbolLatticeService {
     if (!initialBundle.status.initialized) {
       throw new SymbolLatticeError(
         "MISSING_INDEX",
-        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "SymbolLattice init ${normalizedProjectPath}" first.`
       );
     }
 
@@ -2733,7 +2733,7 @@ export class SymbolLatticeService {
     if (!graphBundle.status.initialized) {
       throw new SymbolLatticeError(
         "MISSING_INDEX",
-        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "SymbolLattice init ${normalizedProjectPath}" first.`
       );
     }
 
@@ -2911,7 +2911,7 @@ export class SymbolLatticeService {
     if (!graphBundle.status.initialized) {
       throw new SymbolLatticeError(
         "MISSING_INDEX",
-        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "SymbolLattice init ${normalizedProjectPath}" first.`
       );
     }
 
@@ -4846,7 +4846,7 @@ export class SymbolLatticeService {
     if (!bundle.status.initialized) {
       throw new SymbolLatticeError(
         "MISSING_INDEX",
-        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "SymbolLattice init ${normalizedProjectPath}" first.`
       );
     }
 
@@ -5167,7 +5167,7 @@ export class SymbolLatticeService {
     if (!activeBundle.status.initialized) {
       throw new SymbolLatticeError(
         "MISSING_INDEX",
-        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "symbol-lattice init ${normalizedProjectPath}" first.`
+        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "SymbolLattice init ${normalizedProjectPath}" first.`
       );
     }
   }
@@ -5229,7 +5229,7 @@ export class SymbolLatticeService {
     if (typeof readHistory !== "function") {
       throw new SymbolLatticeError(
         "GENERATION_HISTORY_UNAVAILABLE",
-        `The configured SymbolLattice graph store for ${projectPath} does not expose immutable retained-generation history. Upgrade the adapter and run "symbol-lattice sync ${projectPath}" to create future snapshots.`
+        `The configured SymbolLattice graph store for ${projectPath} does not expose immutable retained-generation history. Upgrade the adapter and run "SymbolLattice sync ${projectPath}" to create future snapshots.`
       );
     }
 
@@ -5238,12 +5238,12 @@ export class SymbolLatticeService {
       if (!this.graphStore.isInitialized(projectPath)) {
         throw new SymbolLatticeError(
           "MISSING_INDEX",
-          `No SymbolLattice index exists for ${projectPath}. Run "symbol-lattice init ${projectPath}" first.`
+          `No SymbolLattice index exists for ${projectPath}. Run "SymbolLattice init ${projectPath}" first.`
         );
       }
       throw new SymbolLatticeError(
         "GENERATION_HISTORY_UNAVAILABLE",
-        `A trustworthy retained-generation history is unavailable for ${projectPath}. The active generation may predate immutable snapshot retention; run "symbol-lattice sync ${projectPath}" to create a retained snapshot.`
+        `A trustworthy retained-generation history is unavailable for ${projectPath}. The active generation may predate immutable snapshot retention; run "SymbolLattice sync ${projectPath}" to create a retained snapshot.`
       );
     }
     return history;
@@ -5258,7 +5258,7 @@ export class SymbolLatticeService {
     if (typeof readComparison !== "function") {
       throw new SymbolLatticeError(
         "GENERATION_HISTORY_UNAVAILABLE",
-        `The configured SymbolLattice graph store for ${projectPath} does not expose atomic immutable retained-generation comparisons. Upgrade the adapter and run "symbol-lattice sync ${projectPath}" to create future snapshots.`
+        `The configured SymbolLattice graph store for ${projectPath} does not expose atomic immutable retained-generation comparisons. Upgrade the adapter and run "SymbolLattice sync ${projectPath}" to create future snapshots.`
       );
     }
 
@@ -5272,12 +5272,12 @@ export class SymbolLatticeService {
       if (!this.graphStore.isInitialized(projectPath)) {
         throw new SymbolLatticeError(
           "MISSING_INDEX",
-          `No SymbolLattice index exists for ${projectPath}. Run "symbol-lattice init ${projectPath}" first.`
+          `No SymbolLattice index exists for ${projectPath}. Run "SymbolLattice init ${projectPath}" first.`
         );
       }
       throw new SymbolLatticeError(
         "GENERATION_HISTORY_UNAVAILABLE",
-        `A trustworthy retained-generation comparison is unavailable for ${projectPath}. The active generation may predate immutable snapshot retention; run "symbol-lattice sync ${projectPath}" to create a retained snapshot.`
+        `A trustworthy retained-generation comparison is unavailable for ${projectPath}. The active generation may predate immutable snapshot retention; run "SymbolLattice sync ${projectPath}" to create a retained snapshot.`
       );
     }
     return comparison;

@@ -23,9 +23,9 @@ afterEach(() => {
 });
 
 function fixture(): { projectPath: string; entryPath: string } {
-  const projectPath = mkdtempSync(join(tmpdir(), "symbol-lattice-watch-start-"));
+  const projectPath = mkdtempSync(join(tmpdir(), "SymbolLattice-watch-start-"));
   temporaryDirectories.push(projectPath);
-  mkdirSync(join(projectPath, ".symbol-lattice"));
+  mkdirSync(join(projectPath, ".SymbolLattice"));
   const entryPath = join(projectPath, "main.mjs");
   writeFileSync(entryPath, "export {};\n", "utf8");
   return { projectPath, entryPath };

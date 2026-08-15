@@ -1361,18 +1361,18 @@ describe("SymbolLattice MCP server", () => {
       "C:/default-project",
       { readQueryExecutor: executor }
     );
-    const client = new Client({ name: "symbol-lattice-query-executor-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-query-executor-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     closeCallbacks.push(() => client.close(), () => server.close());
 
-    await client.callTool({ name: "symbol_lattice_explore", arguments: { query: "App" } });
+    await client.callTool({ name: "SymbolLattice_explore", arguments: { query: "App" } });
     await client.callTool({
-      name: "symbol_lattice_impact",
+      name: "SymbolLattice_impact",
       arguments: { reference: "src/handlers.ts#users" }
     });
-    await client.callTool({ name: "symbol_lattice_auto_sync_status", arguments: {} });
+    await client.callTool({ name: "SymbolLattice_auto_sync_status", arguments: {} });
 
     expect(dispatched).toEqual(["explore", "impact"]);
     expect(autoSyncCalls).toBe(1);
@@ -1411,18 +1411,18 @@ describe("SymbolLattice MCP server", () => {
         }
       }
     );
-    const client = new Client({ name: "symbol-lattice-query-pool-status-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-query-pool-status-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     closeCallbacks.push(() => client.close(), () => server.close());
 
     expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore",
-      "symbol_lattice_query_pool_status"
+      "SymbolLattice_explore",
+      "SymbolLattice_query_pool_status"
     ]);
 
-    const result = await client.callTool({ name: "symbol_lattice_query_pool_status", arguments: {} });
+    const result = await client.callTool({ name: "SymbolLattice_query_pool_status", arguments: {} });
     expect(result.isError).not.toBe(true);
     expect(result.structuredContent).toEqual(diagnostics);
     expect(statusCalls).toBe(1);
@@ -1455,7 +1455,7 @@ describe("SymbolLattice MCP server", () => {
       }
     };
     const server = createMcpServer(service, "C:/default-project");
-    const client = new Client({ name: "symbol-lattice-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
@@ -1463,11 +1463,11 @@ describe("SymbolLattice MCP server", () => {
 
     const tools = await client.listTools();
     expect(tools.tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore",
-      "symbol_lattice_search",
-      "symbol_lattice_explain_edge"
+      "SymbolLattice_explore",
+      "SymbolLattice_search",
+      "SymbolLattice_explain_edge"
     ]);
-    const exploreTool = tools.tools.find((tool) => tool.name === "symbol_lattice_explore");
+    const exploreTool = tools.tools.find((tool) => tool.name === "SymbolLattice_explore");
     expect(exploreTool?.outputSchema).toMatchObject({
       type: "object",
       properties: {
@@ -1857,7 +1857,7 @@ describe("SymbolLattice MCP server", () => {
     });
 
     const result = await client.callTool({
-      name: "symbol_lattice_explore",
+      name: "SymbolLattice_explore",
       arguments: { query: "missing", projectPath: "C:/chosen-project" }
     });
     expect(result.isError).not.toBe(true);
@@ -1870,7 +1870,7 @@ describe("SymbolLattice MCP server", () => {
     expect(exploreCalls).toEqual([{ projectPath: "C:/chosen-project", reference: "missing" }]);
 
     const search = await client.callTool({
-      name: "symbol_lattice_search",
+      name: "SymbolLattice_search",
       arguments: {
         query: "user",
         projectPath: "C:/chosen-project",
@@ -1893,7 +1893,7 @@ describe("SymbolLattice MCP server", () => {
     ]);
 
     const explanation = await client.callTool({
-      name: "symbol_lattice_explain_edge",
+      name: "SymbolLattice_explain_edge",
       arguments: { edgeId: "edge:caller-callee", projectPath: "C:/chosen-project" }
     });
     expect(explanation.isError).not.toBe(true);
@@ -1931,7 +1931,7 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/default-project"
     );
-    const client = new Client({ name: "symbol-lattice-auto-sync-status-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-auto-sync-status-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
@@ -1939,14 +1939,14 @@ describe("SymbolLattice MCP server", () => {
 
     const tools = await client.listTools();
     expect(tools.tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore",
-      "symbol_lattice_auto_sync_status",
-      "symbol_lattice_auto_sync_diagnostics",
-      "symbol_lattice_auto_sync_journal"
+      "SymbolLattice_explore",
+      "SymbolLattice_auto_sync_status",
+      "SymbolLattice_auto_sync_diagnostics",
+      "SymbolLattice_auto_sync_journal"
     ]);
 
     const result = await client.callTool({
-      name: "symbol_lattice_auto_sync_status",
+      name: "SymbolLattice_auto_sync_status",
       arguments: {}
     });
     expect(result.isError).not.toBe(true);
@@ -1961,7 +1961,7 @@ describe("SymbolLattice MCP server", () => {
     expect(statusCalls).toBe(1);
 
     const diagnostics = await client.callTool({
-      name: "symbol_lattice_auto_sync_diagnostics",
+      name: "SymbolLattice_auto_sync_diagnostics",
       arguments: { limit: 2 }
     });
     expect(diagnostics.isError).not.toBe(true);
@@ -1976,14 +1976,14 @@ describe("SymbolLattice MCP server", () => {
     expect(diagnosticCalls).toEqual([{ limit: 2 }]);
 
     const invalidDiagnostics = await client.callTool({
-      name: "symbol_lattice_auto_sync_diagnostics",
+      name: "SymbolLattice_auto_sync_diagnostics",
       arguments: { limit: 33 }
     });
     expect(invalidDiagnostics.isError).toBe(true);
     expect(diagnosticCalls).toEqual([{ limit: 2 }]);
 
     const journal = await client.callTool({
-      name: "symbol_lattice_auto_sync_journal",
+      name: "SymbolLattice_auto_sync_journal",
       arguments: { limit: 1 }
     });
     expect(journal.isError).not.toBe(true);
@@ -1997,7 +1997,7 @@ describe("SymbolLattice MCP server", () => {
     expect(journalCalls).toEqual([{ limit: 1 }]);
 
     const invalidJournal = await client.callTool({
-      name: "symbol_lattice_auto_sync_journal",
+      name: "SymbolLattice_auto_sync_journal",
       arguments: { limit: 129 }
     });
     expect(invalidJournal.isError).toBe(true);
@@ -2016,15 +2016,15 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/default-project"
     );
-    const client = new Client({ name: "symbol-lattice-status-only-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-status-only-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     closeCallbacks.push(() => client.close(), () => server.close());
 
     expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore",
-      "symbol_lattice_auto_sync_status"
+      "SymbolLattice_explore",
+      "SymbolLattice_auto_sync_status"
     ]);
   });
 
@@ -2040,15 +2040,15 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/default-project"
     );
-    const client = new Client({ name: "symbol-lattice-timeline-only-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-timeline-only-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     closeCallbacks.push(() => client.close(), () => server.close());
 
     expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore",
-      "symbol_lattice_auto_sync_diagnostics"
+      "SymbolLattice_explore",
+      "SymbolLattice_auto_sync_diagnostics"
     ]);
   });
 
@@ -2068,7 +2068,7 @@ describe("SymbolLattice MCP server", () => {
       }
     };
     const server = createMcpServer(service, "C:/default-project");
-    const client = new Client({ name: "symbol-lattice-impact-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-impact-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
@@ -2076,10 +2076,10 @@ describe("SymbolLattice MCP server", () => {
 
     const tools = await client.listTools();
     expect(tools.tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore",
-      "symbol_lattice_impact"
+      "SymbolLattice_explore",
+      "SymbolLattice_impact"
     ]);
-    const impactTool = tools.tools.find((tool) => tool.name === "symbol_lattice_impact");
+    const impactTool = tools.tools.find((tool) => tool.name === "SymbolLattice_impact");
     expect(impactTool?.annotations).toMatchObject({ readOnlyHint: true, idempotentHint: true });
     expect(impactTool?.inputSchema).toMatchObject({
       type: "object",
@@ -2101,7 +2101,7 @@ describe("SymbolLattice MCP server", () => {
     });
 
     const result = await client.callTool({
-      name: "symbol_lattice_impact",
+      name: "SymbolLattice_impact",
       arguments: {
         projectPath: "C:/chosen-project",
         reference: "src/handlers.ts#users",
@@ -2134,7 +2134,7 @@ describe("SymbolLattice MCP server", () => {
     ]);
 
     const defaults = await client.callTool({
-      name: "symbol_lattice_impact",
+      name: "SymbolLattice_impact",
       arguments: { reference: "src/handlers.ts#users" }
     });
     expect(defaults.isError).not.toBe(true);
@@ -2145,7 +2145,7 @@ describe("SymbolLattice MCP server", () => {
     });
 
     const invalidDepth = await client.callTool({
-      name: "symbol_lattice_impact",
+      name: "SymbolLattice_impact",
       arguments: { reference: "src/handlers.ts#users", maxDepth: 4 }
     });
     expect(invalidDepth.isError).toBe(true);
@@ -2164,7 +2164,7 @@ describe("SymbolLattice MCP server", () => {
       }
     };
     const server = createMcpServer(service, "C:/default-project");
-    const client = new Client({ name: "symbol-lattice-files-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-files-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
@@ -2172,10 +2172,10 @@ describe("SymbolLattice MCP server", () => {
 
     const tools = await client.listTools();
     expect(tools.tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore",
-      "symbol_lattice_files"
+      "SymbolLattice_explore",
+      "SymbolLattice_files"
     ]);
-    const filesTool = tools.tools.find((tool) => tool.name === "symbol_lattice_files");
+    const filesTool = tools.tools.find((tool) => tool.name === "SymbolLattice_files");
     expect(filesTool?.annotations).toMatchObject({ readOnlyHint: true, idempotentHint: true });
     expect(filesTool?.inputSchema).toMatchObject({
       type: "object",
@@ -2214,7 +2214,7 @@ describe("SymbolLattice MCP server", () => {
     });
 
     const result = await client.callTool({
-      name: "symbol_lattice_files",
+      name: "SymbolLattice_files",
       arguments: {
         projectPath: "C:/chosen-project",
         path: "src",
@@ -2262,41 +2262,41 @@ describe("SymbolLattice MCP server", () => {
     ]);
 
     const invalidLanguage = await client.callTool({
-      name: "symbol_lattice_files",
+      name: "SymbolLattice_files",
       arguments: { language: "not-a-language" }
     });
     expect(invalidLanguage.isError).toBe(true);
     expect(fileCalls).toHaveLength(1);
 
     const invalidLimit = await client.callTool({
-      name: "symbol_lattice_files",
+      name: "SymbolLattice_files",
       arguments: { limit: 101 }
     });
     expect(invalidLimit.isError).toBe(true);
     expect(fileCalls).toHaveLength(1);
 
     const invalidPattern = await client.callTool({
-      name: "symbol_lattice_files",
+      name: "SymbolLattice_files",
       arguments: { pattern: "x".repeat(257) }
     });
     expect(invalidPattern.isError).toBe(true);
     const invalidFormat = await client.callTool({
-      name: "symbol_lattice_files",
+      name: "SymbolLattice_files",
       arguments: { format: "yaml" }
     });
     expect(invalidFormat.isError).toBe(true);
     const invalidMaxDepth = await client.callTool({
-      name: "symbol_lattice_files",
+      name: "SymbolLattice_files",
       arguments: { maxDepth: 21 }
     });
     expect(invalidMaxDepth.isError).toBe(true);
     const invalidCursor = await client.callTool({
-      name: "symbol_lattice_files",
+      name: "SymbolLattice_files",
       arguments: { cursor: " " }
     });
     expect(invalidCursor.isError).toBe(true);
     const oversizedCursor = await client.callTool({
-      name: "symbol_lattice_files",
+      name: "SymbolLattice_files",
       arguments: { cursor: "a".repeat(2049) }
     });
     expect(oversizedCursor.isError).toBe(true);
@@ -2318,7 +2318,7 @@ describe("SymbolLattice MCP server", () => {
       }
     };
     const server = createMcpServer(service, "C:/default-project");
-    const client = new Client({ name: "symbol-lattice-routes-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-routes-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
@@ -2326,10 +2326,10 @@ describe("SymbolLattice MCP server", () => {
 
     const tools = await client.listTools();
     expect(tools.tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore",
-      "symbol_lattice_routes"
+      "SymbolLattice_explore",
+      "SymbolLattice_routes"
     ]);
-    const routeTool = tools.tools.find((tool) => tool.name === "symbol_lattice_routes");
+    const routeTool = tools.tools.find((tool) => tool.name === "SymbolLattice_routes");
     expect(routeTool?.annotations).toMatchObject({ readOnlyHint: true, idempotentHint: true });
     expect(routeTool?.inputSchema).toMatchObject({
       type: "object",
@@ -2353,7 +2353,7 @@ describe("SymbolLattice MCP server", () => {
     });
 
     const result = await client.callTool({
-      name: "symbol_lattice_routes",
+      name: "SymbolLattice_routes",
       arguments: {
         projectPath: "C:/chosen-project",
         method: "GET",
@@ -2386,7 +2386,7 @@ describe("SymbolLattice MCP server", () => {
     ]);
 
     const navigation = await client.callTool({
-      name: "symbol_lattice_routes",
+      name: "SymbolLattice_routes",
       arguments: { method: "NAVIGATE" }
     });
     expect(navigation.isError).not.toBe(true);
@@ -2402,21 +2402,21 @@ describe("SymbolLattice MCP server", () => {
     ]);
 
     const unsupportedMethod = await client.callTool({
-      name: "symbol_lattice_routes",
+      name: "SymbolLattice_routes",
       arguments: { method: "get" }
     });
     expect(unsupportedMethod.isError).toBe(true);
     expect(routeCalls).toHaveLength(2);
 
     const invalidPath = await client.callTool({
-      name: "symbol_lattice_routes",
+      name: "SymbolLattice_routes",
       arguments: { path: "api" }
     });
     expect(invalidPath.isError).toBe(true);
     expect(routeCalls).toHaveLength(2);
 
     const invalidDomain = await client.callTool({
-      name: "symbol_lattice_routes",
+      name: "SymbolLattice_routes",
       arguments: { domain: " " }
     });
     expect(invalidDomain.isError).toBe(true);
@@ -2432,14 +2432,14 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/default-project"
     );
-    const client = new Client({ name: "symbol-lattice-routes-legacy-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-routes-legacy-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     closeCallbacks.push(() => client.close(), () => server.close());
 
     expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore"
+      "SymbolLattice_explore"
     ]);
   });
 
@@ -2458,7 +2458,7 @@ describe("SymbolLattice MCP server", () => {
       }
     };
     const server = createMcpServer(service, "C:/default-project");
-    const client = new Client({ name: "symbol-lattice-entrypoints-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-entrypoints-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
@@ -2466,10 +2466,10 @@ describe("SymbolLattice MCP server", () => {
 
     const tools = await client.listTools();
     expect(tools.tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore",
-      "symbol_lattice_entrypoints"
+      "SymbolLattice_explore",
+      "SymbolLattice_entrypoints"
     ]);
-    const entrypointTool = tools.tools.find((tool) => tool.name === "symbol_lattice_entrypoints");
+    const entrypointTool = tools.tools.find((tool) => tool.name === "SymbolLattice_entrypoints");
     expect(entrypointTool?.annotations).toMatchObject({ readOnlyHint: true, idempotentHint: true });
     expect(entrypointTool?.inputSchema).toMatchObject({
       type: "object",
@@ -2492,7 +2492,7 @@ describe("SymbolLattice MCP server", () => {
     });
 
     const result = await client.callTool({
-      name: "symbol_lattice_entrypoints",
+      name: "SymbolLattice_entrypoints",
       arguments: {
         projectPath: "C:/chosen-project",
         transport: "graphql",
@@ -2519,7 +2519,7 @@ describe("SymbolLattice MCP server", () => {
     ]);
 
     const unsupportedTransport = await client.callTool({
-      name: "symbol_lattice_entrypoints",
+      name: "SymbolLattice_entrypoints",
       arguments: { transport: "http" }
     });
     expect(unsupportedTransport.isError).toBe(true);
@@ -2546,7 +2546,7 @@ describe("SymbolLattice MCP server", () => {
       }
     };
     const server = createMcpServer(service, "C:/default-project");
-    const client = new Client({ name: "symbol-lattice-hierarchy-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-hierarchy-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
@@ -2554,10 +2554,10 @@ describe("SymbolLattice MCP server", () => {
 
     const tools = await client.listTools();
     expect(tools.tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore",
-      "symbol_lattice_hierarchy"
+      "SymbolLattice_explore",
+      "SymbolLattice_hierarchy"
     ]);
-    const hierarchyTool = tools.tools.find((tool) => tool.name === "symbol_lattice_hierarchy");
+    const hierarchyTool = tools.tools.find((tool) => tool.name === "SymbolLattice_hierarchy");
     expect(hierarchyTool?.annotations).toMatchObject({ readOnlyHint: true, idempotentHint: true });
     expect(hierarchyTool?.inputSchema).toMatchObject({
       type: "object",
@@ -2579,7 +2579,7 @@ describe("SymbolLattice MCP server", () => {
     });
 
     const result = await client.callTool({
-      name: "symbol_lattice_hierarchy",
+      name: "SymbolLattice_hierarchy",
       arguments: {
         projectPath: "C:/chosen-project",
         reference: "src/base.ts#Base",
@@ -2604,7 +2604,7 @@ describe("SymbolLattice MCP server", () => {
     ]);
 
     const invalidLimit = await client.callTool({
-      name: "symbol_lattice_hierarchy",
+      name: "SymbolLattice_hierarchy",
       arguments: { reference: "Base", limit: 101 }
     });
     expect(invalidLimit.isError).toBe(true);
@@ -2627,18 +2627,18 @@ describe("SymbolLattice MCP server", () => {
       }
     };
     const server = createMcpServer(service, "C:/default-project");
-    const client = new Client({ name: "symbol-lattice-file-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-file-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     closeCallbacks.push(() => client.close(), () => server.close());
 
     expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore",
-      "symbol_lattice_file"
+      "SymbolLattice_explore",
+      "SymbolLattice_file"
     ]);
     const result = await client.callTool({
-      name: "symbol_lattice_file",
+      name: "SymbolLattice_file",
       arguments: {
         filePath: "src/routes.ts",
         projectPath: "C:/chosen-project",
@@ -2674,7 +2674,7 @@ describe("SymbolLattice MCP server", () => {
       }
     };
     const server = createMcpServer(service, "C:/default-project");
-    const client = new Client({ name: "symbol-lattice-node-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-node-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
@@ -2682,10 +2682,10 @@ describe("SymbolLattice MCP server", () => {
 
     const listedTools = (await client.listTools()).tools;
     expect(listedTools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore",
-      "symbol_lattice_node"
+      "SymbolLattice_explore",
+      "SymbolLattice_node"
     ]);
-    const nodeTool = listedTools.find((tool) => tool.name === "symbol_lattice_node");
+    const nodeTool = listedTools.find((tool) => tool.name === "SymbolLattice_node");
     expect(nodeTool?.outputSchema).toMatchObject({
       type: "object",
       properties: {
@@ -2711,7 +2711,7 @@ describe("SymbolLattice MCP server", () => {
     });
 
     const result = await client.callTool({
-      name: "symbol_lattice_node",
+      name: "SymbolLattice_node",
       arguments: { query: "src/users.ts#userById", projectPath: "C:/chosen-project" }
     });
 
@@ -2728,7 +2728,7 @@ describe("SymbolLattice MCP server", () => {
       source: { filePath: "src/users.ts", truncated: false }
     });
     const defaultProjectResult = await client.callTool({
-      name: "symbol_lattice_node",
+      name: "SymbolLattice_node",
       arguments: { query: "symbol:users:userById" }
     });
     expect(defaultProjectResult.isError).not.toBe(true);
@@ -2766,20 +2766,20 @@ describe("SymbolLattice MCP server", () => {
       }
     };
     const server = createMcpServer(service, "C:/default-project");
-    const client = new Client({ name: "symbol-lattice-history-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-history-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     closeCallbacks.push(() => client.close(), () => server.close());
 
     expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore",
-      "symbol_lattice_history",
-      "symbol_lattice_diff"
+      "SymbolLattice_explore",
+      "SymbolLattice_history",
+      "SymbolLattice_diff"
     ]);
 
     const history = await client.callTool({
-      name: "symbol_lattice_history",
+      name: "SymbolLattice_history",
       arguments: { projectPath: "C:/chosen-project", limit: 2 }
     });
     expect(history.isError).not.toBe(true);
@@ -2795,7 +2795,7 @@ describe("SymbolLattice MCP server", () => {
     ]);
 
     const diff = await client.callTool({
-      name: "symbol_lattice_diff",
+      name: "SymbolLattice_diff",
       arguments: {
         projectPath: "C:/chosen-project",
         fromGenerationId: "generation:old",
@@ -2846,7 +2846,7 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/default-project"
     );
-    const client = new Client({ name: "symbol-lattice-context-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-context-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
@@ -2854,13 +2854,13 @@ describe("SymbolLattice MCP server", () => {
 
     const tools = await client.listTools();
     expect(tools.tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore",
-      "symbol_lattice_context"
+      "SymbolLattice_explore",
+      "SymbolLattice_context"
     ]);
-    expect(tools.tools.find((tool) => tool.name === "symbol_lattice_explore")).toMatchObject({
+    expect(tools.tools.find((tool) => tool.name === "SymbolLattice_explore")).toMatchObject({
       inputSchema: { properties: { sourceSessionMode: { enum: ["deduplicate", "full"] } } }
     });
-    expect(tools.tools.find((tool) => tool.name === "symbol_lattice_context")).toMatchObject({
+    expect(tools.tools.find((tool) => tool.name === "SymbolLattice_context")).toMatchObject({
       inputSchema: {
         properties: {
           sourceCharacterBudget: { minimum: 2_048, maximum: 64_000 },
@@ -2870,7 +2870,7 @@ describe("SymbolLattice MCP server", () => {
     });
 
     const result = await client.callTool({
-      name: "symbol_lattice_context",
+      name: "SymbolLattice_context",
       arguments: {
         projectPath: "C:/chosen-project",
         references: ["src/entry.ts#entry", "src/target.ts#target"],
@@ -2992,18 +2992,18 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/default-project"
     );
-    const client = new Client({ name: "symbol-lattice-explore-context-session-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-explore-context-session-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     closeCallbacks.push(() => client.close(), () => server.close());
 
     const first = await client.callTool({
-      name: "symbol_lattice_explore",
+      name: "SymbolLattice_explore",
       arguments: { query: symbol.qualifiedName }
     });
     const second = await client.callTool({
-      name: "symbol_lattice_context",
+      name: "SymbolLattice_context",
       arguments: { references: [symbol.qualifiedName] }
     });
 
@@ -3049,7 +3049,7 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/default-project"
     );
-    const client = new Client({ name: "symbol-lattice-investigate-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-investigate-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
@@ -3057,10 +3057,10 @@ describe("SymbolLattice MCP server", () => {
 
     const tools = await client.listTools();
     expect(tools.tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore",
-      "symbol_lattice_investigate"
+      "SymbolLattice_explore",
+      "SymbolLattice_investigate"
     ]);
-    expect(tools.tools.find((tool) => tool.name === "symbol_lattice_investigate")).toMatchObject({
+    expect(tools.tools.find((tool) => tool.name === "SymbolLattice_investigate")).toMatchObject({
       inputSchema: {
         properties: {
           sourceRenderMode: {
@@ -3088,7 +3088,7 @@ describe("SymbolLattice MCP server", () => {
     });
 
     const result = await client.callTool({
-      name: "symbol_lattice_investigate",
+      name: "SymbolLattice_investigate",
       arguments: {
         projectPath: "C:/chosen-project",
         query: "user",
@@ -3185,14 +3185,14 @@ describe("SymbolLattice MCP server", () => {
       "C:/default-project",
       { readQueryExecutor }
     );
-    const client = new Client({ name: "symbol-lattice-session-source-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-session-source-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     closeCallbacks.push(() => client.close(), () => server.close());
 
     const tools = await client.listTools();
-    expect(tools.tools.find((tool) => tool.name === "symbol_lattice_investigate")).toMatchObject({
+    expect(tools.tools.find((tool) => tool.name === "SymbolLattice_investigate")).toMatchObject({
       inputSchema: {
         properties: {
           sourceSessionMode: { enum: ["deduplicate", "full"] }
@@ -3201,11 +3201,11 @@ describe("SymbolLattice MCP server", () => {
     });
 
     const first = await client.callTool({
-      name: "symbol_lattice_investigate",
+      name: "SymbolLattice_investigate",
       arguments: { query: "user" }
     });
     const second = await client.callTool({
-      name: "symbol_lattice_investigate",
+      name: "SymbolLattice_investigate",
       arguments: { query: "user" }
     });
     const firstContent = first.structuredContent as {
@@ -3254,22 +3254,22 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/default-project"
     );
-    const client = new Client({ name: "symbol-lattice-cross-tool-source-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-cross-tool-source-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     closeCallbacks.push(() => client.close(), () => server.close());
 
     const node = await client.callTool({
-      name: "symbol_lattice_node",
+      name: "SymbolLattice_node",
       arguments: { query: "src/users.ts#userById" }
     });
     const investigate = await client.callTool({
-      name: "symbol_lattice_investigate",
+      name: "SymbolLattice_investigate",
       arguments: { query: "userById" }
     });
     const file = await client.callTool({
-      name: "symbol_lattice_file",
+      name: "SymbolLattice_file",
       arguments: { filePath: "src/users.ts", offset: 1, limit: 1 }
     });
 
@@ -3321,18 +3321,18 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/default-project"
     );
-    const client = new Client({ name: "symbol-lattice-partial-source-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-partial-source-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     closeCallbacks.push(() => client.close(), () => server.close());
 
     await client.callTool({
-      name: "symbol_lattice_node",
+      name: "SymbolLattice_node",
       arguments: { query: "src/users.ts#userById" }
     });
     const file = await client.callTool({
-      name: "symbol_lattice_file",
+      name: "SymbolLattice_file",
       arguments: { filePath: "src/users.ts", offset: 1, limit: 1 }
     });
 
@@ -3373,18 +3373,18 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/default-project"
     );
-    const client = new Client({ name: "symbol-lattice-crlf-source-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-crlf-source-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     closeCallbacks.push(() => client.close(), () => server.close());
 
     await client.callTool({
-      name: "symbol_lattice_node",
+      name: "SymbolLattice_node",
       arguments: { query: "src/users.ts#userById" }
     });
     const file = await client.callTool({
-      name: "symbol_lattice_file",
+      name: "SymbolLattice_file",
       arguments: { filePath: "src/users.ts", offset: 1, limit: 2 }
     });
 
@@ -3419,7 +3419,7 @@ describe("SymbolLattice MCP server", () => {
     };
     const sessions = await Promise.all(["first", "second"].map(async (name) => {
       const server = createMcpServer(service, "C:/default-project");
-      const client = new Client({ name: `symbol-lattice-${name}-session`, version: "1.0.0" });
+      const client = new Client({ name: `SymbolLattice-${name}-session`, version: "1.0.0" });
       const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
       await server.connect(serverTransport);
       await client.connect(clientTransport);
@@ -3428,7 +3428,7 @@ describe("SymbolLattice MCP server", () => {
     }));
 
     const responses = await Promise.all(sessions.map((client) => client.callTool({
-      name: "symbol_lattice_investigate",
+      name: "SymbolLattice_investigate",
       arguments: { query: "user" }
     })));
 
@@ -3469,7 +3469,7 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/default-project"
     );
-    const client = new Client({ name: "symbol-lattice-affected-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-affected-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
@@ -3477,12 +3477,12 @@ describe("SymbolLattice MCP server", () => {
 
     const tools = await client.listTools();
     expect(tools.tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore",
-      "symbol_lattice_affected"
+      "SymbolLattice_explore",
+      "SymbolLattice_affected"
     ]);
 
     const result = await client.callTool({
-      name: "symbol_lattice_affected",
+      name: "SymbolLattice_affected",
       arguments: {
         projectPath: "C:/chosen-project",
         filePaths: ["src/math.ts", "tests/math.spec.ts"],
@@ -3535,7 +3535,7 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/default-project"
     );
-    const client = new Client({ name: "symbol-lattice-affected-git-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-affected-git-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
@@ -3543,12 +3543,12 @@ describe("SymbolLattice MCP server", () => {
 
     const tools = await client.listTools();
     expect(tools.tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore",
-      "symbol_lattice_affected_git"
+      "SymbolLattice_explore",
+      "SymbolLattice_affected_git"
     ]);
 
     const result = await client.callTool({
-      name: "symbol_lattice_affected_git",
+      name: "SymbolLattice_affected_git",
       arguments: {
         projectPath: "C:/chosen-project",
         baseRef: "origin/main",
@@ -3577,7 +3577,7 @@ describe("SymbolLattice MCP server", () => {
     ]);
 
     const invalidBaseResult = await client.callTool({
-      name: "symbol_lattice_affected_git",
+      name: "SymbolLattice_affected_git",
       arguments: { baseRef: " origin/main" }
     });
     expect(invalidBaseResult.isError).toBe(true);
@@ -3601,13 +3601,13 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/default-project"
     );
-    const unavailableClient = new Client({ name: "symbol-lattice-git-disabled-test", version: "1.0.0" });
+    const unavailableClient = new Client({ name: "SymbolLattice-git-disabled-test", version: "1.0.0" });
     const [unavailableServerTransport, unavailableClientTransport] = InMemoryTransport.createLinkedPair();
     await unavailableServer.connect(unavailableServerTransport);
     await unavailableClient.connect(unavailableClientTransport);
     closeCallbacks.push(() => unavailableClient.close(), () => unavailableServer.close());
     expect((await unavailableClient.listTools()).tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore"
+      "SymbolLattice_explore"
     ]);
   });
 
@@ -3642,19 +3642,19 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/default-project"
     );
-    const client = new Client({ name: "symbol-lattice-git-hunks-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-git-hunks-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     closeCallbacks.push(() => client.close(), () => server.close());
 
     expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore",
-      "symbol_lattice_git_hunks"
+      "SymbolLattice_explore",
+      "SymbolLattice_git_hunks"
     ]);
 
     const result = await client.callTool({
-      name: "symbol_lattice_git_hunks",
+      name: "SymbolLattice_git_hunks",
       arguments: {
         projectPath: "C:/chosen-project",
         baseRef: "origin/main",
@@ -3676,7 +3676,7 @@ describe("SymbolLattice MCP server", () => {
     ]);
 
     const invalidBaseResult = await client.callTool({
-      name: "symbol_lattice_git_hunks",
+      name: "SymbolLattice_git_hunks",
       arguments: { baseRef: " origin/main" }
     });
     expect(invalidBaseResult.isError).toBe(true);
@@ -3701,13 +3701,13 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/default-project"
     );
-    const unavailableClient = new Client({ name: "symbol-lattice-git-hunks-disabled-test", version: "1.0.0" });
+    const unavailableClient = new Client({ name: "SymbolLattice-git-hunks-disabled-test", version: "1.0.0" });
     const [unavailableServerTransport, unavailableClientTransport] = InMemoryTransport.createLinkedPair();
     await unavailableServer.connect(unavailableServerTransport);
     await unavailableClient.connect(unavailableClientTransport);
     closeCallbacks.push(() => unavailableClient.close(), () => unavailableServer.close());
     expect((await unavailableClient.listTools()).tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore"
+      "SymbolLattice_explore"
     ]);
   });
 
@@ -3723,7 +3723,7 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/default-project"
     );
-    const client = new Client({ name: "symbol-lattice-pre-search-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-pre-search-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
@@ -3731,8 +3731,8 @@ describe("SymbolLattice MCP server", () => {
 
     const tools = await client.listTools();
     expect(tools.tools.map((tool) => tool.name)).toEqual([
-      "symbol_lattice_explore",
-      "symbol_lattice_explain_edge"
+      "SymbolLattice_explore",
+      "SymbolLattice_explain_edge"
     ]);
   });
 
@@ -3745,14 +3745,14 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/default-project"
     );
-    const client = new Client({ name: "symbol-lattice-legacy-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-legacy-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     closeCallbacks.push(() => client.close(), () => server.close());
 
     const tools = await client.listTools();
-    expect(tools.tools.map((tool) => tool.name)).toEqual(["symbol_lattice_explore"]);
+    expect(tools.tools.map((tool) => tool.name)).toEqual(["SymbolLattice_explore"]);
   });
 
   it("accepts a legacy explore response that omits source availability", async () => {
@@ -3764,14 +3764,14 @@ describe("SymbolLattice MCP server", () => {
       },
       "C:/default-project"
     );
-    const client = new Client({ name: "symbol-lattice-legacy-provenance-test", version: "1.0.0" });
+    const client = new Client({ name: "SymbolLattice-legacy-provenance-test", version: "1.0.0" });
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
     closeCallbacks.push(() => client.close(), () => server.close());
 
     const result = await client.callTool({
-      name: "symbol_lattice_explore",
+      name: "SymbolLattice_explore",
       arguments: { query: "missing" }
     });
 
@@ -3787,7 +3787,7 @@ describe("SymbolLattice MCP server", () => {
     const response = await runExploreTool(
       {
         async explore(): Promise<ExploreResult> {
-          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+          throw new SymbolLatticeError("MISSING_INDEX", "Run SymbolLattice init first.");
         }
       },
       "C:/project",
@@ -3801,7 +3801,7 @@ describe("SymbolLattice MCP server", () => {
   it("returns automatic sync status errors without indexing", async () => {
     const response = await runAutoSyncStatusTool({
       async autoSyncStatus(): Promise<AutoSyncStatusResult> {
-        throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+        throw new SymbolLatticeError("MISSING_INDEX", "Run SymbolLattice init first.");
       }
     });
 
@@ -3812,7 +3812,7 @@ describe("SymbolLattice MCP server", () => {
   it("returns automatic sync diagnostic errors without indexing", async () => {
     const response = await runAutoSyncDiagnosticsTool({
       async autoSyncDiagnostics(): Promise<AutoSyncDiagnosticsResult> {
-        throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+        throw new SymbolLatticeError("MISSING_INDEX", "Run SymbolLattice init first.");
       }
     });
 
@@ -3823,7 +3823,7 @@ describe("SymbolLattice MCP server", () => {
   it("returns durable automatic sync journal errors without indexing", async () => {
     const response = await runAutoSyncDiagnosticJournalTool({
       async autoSyncJournal(): Promise<AutoSyncDiagnosticJournalResult> {
-        throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+        throw new SymbolLatticeError("MISSING_INDEX", "Run SymbolLattice init first.");
       }
     });
 
@@ -3835,7 +3835,7 @@ describe("SymbolLattice MCP server", () => {
     const response = await runNodeTool(
       {
         async node(): Promise<NodeResult> {
-          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+          throw new SymbolLatticeError("MISSING_INDEX", "Run SymbolLattice init first.");
         }
       },
       "C:/project",
@@ -3850,7 +3850,7 @@ describe("SymbolLattice MCP server", () => {
     const response = await runContextTool(
       {
         async context(): Promise<ContextResult> {
-          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+          throw new SymbolLatticeError("MISSING_INDEX", "Run SymbolLattice init first.");
         }
       },
       "C:/project",
@@ -3865,7 +3865,7 @@ describe("SymbolLattice MCP server", () => {
     const response = await runAffectedTestsTool(
       {
         async affectedTests(): Promise<AffectedTestsResult> {
-          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+          throw new SymbolLatticeError("MISSING_INDEX", "Run SymbolLattice init first.");
         }
       },
       "C:/project",
@@ -3922,7 +3922,7 @@ describe("SymbolLattice MCP server", () => {
     const response = await runSearchTool(
       {
         async search(): Promise<SearchResult> {
-          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+          throw new SymbolLatticeError("MISSING_INDEX", "Run SymbolLattice init first.");
         }
       },
       "C:/project",
@@ -3937,7 +3937,7 @@ describe("SymbolLattice MCP server", () => {
     const response = await runInvestigateTool(
       {
         async investigate(): Promise<InvestigateResult> {
-          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+          throw new SymbolLatticeError("MISSING_INDEX", "Run SymbolLattice init first.");
         }
       },
       "C:/project",
@@ -3952,7 +3952,7 @@ describe("SymbolLattice MCP server", () => {
     const response = await runImpactTool(
       {
         async impact(): Promise<ImpactResult> {
-          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+          throw new SymbolLatticeError("MISSING_INDEX", "Run SymbolLattice init first.");
         }
       },
       "C:/project",
@@ -3967,7 +3967,7 @@ describe("SymbolLattice MCP server", () => {
     const response = await runFilesTool(
       {
         async files(): Promise<FilesResult> {
-          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+          throw new SymbolLatticeError("MISSING_INDEX", "Run SymbolLattice init first.");
         }
       },
       "C:/project",
@@ -3982,7 +3982,7 @@ describe("SymbolLattice MCP server", () => {
     const response = await runRoutesTool(
       {
         async routes(): Promise<RoutesResult> {
-          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+          throw new SymbolLatticeError("MISSING_INDEX", "Run SymbolLattice init first.");
         }
       },
       "C:/project",
@@ -3997,7 +3997,7 @@ describe("SymbolLattice MCP server", () => {
     const response = await runEntrypointsTool(
       {
         async entrypoints(): Promise<EntrypointsResult> {
-          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+          throw new SymbolLatticeError("MISSING_INDEX", "Run SymbolLattice init first.");
         }
       },
       "C:/project",
@@ -4012,7 +4012,7 @@ describe("SymbolLattice MCP server", () => {
     const response = await runHierarchyTool(
       {
         async hierarchy(): Promise<HierarchyResult> {
-          throw new SymbolLatticeError("MISSING_INDEX", "Run symbol-lattice init first.");
+          throw new SymbolLatticeError("MISSING_INDEX", "Run SymbolLattice init first.");
         }
       },
       "C:/project",

@@ -25,7 +25,7 @@ const BODY_SOURCE = [
 ].join("\n");
 
 async function createInlineProject(files: Readonly<Record<string, string>>): Promise<string> {
-  const projectPath = await mkdtemp(resolve(tmpdir(), "symbol-lattice-ada-project-"));
+  const projectPath = await mkdtemp(resolve(tmpdir(), "SymbolLattice-ada-project-"));
   temporaryDirectories.push(projectPath);
   await Promise.all(
     Object.entries(files).map(async ([relativePath, sourceText]) => {

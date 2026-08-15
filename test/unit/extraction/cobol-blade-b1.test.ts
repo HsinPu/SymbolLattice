@@ -33,7 +33,7 @@ async function createBladeProject(
     ["resources/views/layouts/app.blade.php", "<main>{{ $slot }}</main>\n"]
   ])
 ): Promise<string> {
-  const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-cobol-blade-b1-"));
+  const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-cobol-blade-b1-"));
   temporaryDirectories.push(projectPath);
   for (const [relativePath, sourceText] of files) {
     const filePath = resolve(projectPath, ...relativePath.split("/"));

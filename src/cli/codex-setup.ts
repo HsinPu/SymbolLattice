@@ -471,7 +471,7 @@ function writeBackup(sourcePath: string, backupPath: string): void {
 function writeAtomically(path: string, text: string): void {
   const existingMode = existsSync(path) ? statSync(path).mode & 0o777 : null;
   mkdirSync(dirname(path), { recursive: true });
-  const temporaryPath = `${path}.symbol-lattice-${process.pid}-${randomUUID()}.tmp`;
+  const temporaryPath = `${path}.SymbolLattice-${process.pid}-${randomUUID()}.tmp`;
   try {
     writeFileSync(
       temporaryPath,

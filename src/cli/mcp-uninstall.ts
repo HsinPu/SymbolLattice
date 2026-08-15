@@ -442,22 +442,22 @@ function removeHermesYaml(text: string): string {
   if (!isObject(root.mcp_servers)) {
     throw new Error("Hermes mcp_servers must be an object before an owned entry can be removed.");
   }
-  if (!Object.hasOwn(root.mcp_servers, "symbol_lattice")) {
+  if (!Object.hasOwn(root.mcp_servers, "SymbolLattice")) {
     throw new Error("The selected Hermes mcp_servers object has no owned SymbolLattice entry to remove.");
   }
-  document.deleteIn(["mcp_servers", "symbol_lattice"]);
+  document.deleteIn(["mcp_servers", "SymbolLattice"]);
   return ensureTrailingNewline(document.toString());
 }
 
 function removeCodexToml(text: string): string {
   const lineEnding = text.includes("\r\n") ? "\r\n" : "\n";
   const lines = text.split(/\r\n|\r|\n/u);
-  const ranges = findTomlSectionRanges(lines, "mcp_servers.symbol_lattice");
+  const ranges = findTomlSectionRanges(lines, "mcp_servers.SymbolLattice");
   if (ranges.length !== 1) {
     throw new Error(
       ranges.length === 0
-        ? "Codex TOML has no conventional mcp_servers.symbol_lattice section to remove."
-        : "Codex TOML contains duplicate mcp_servers.symbol_lattice sections."
+        ? "Codex TOML has no conventional mcp_servers.SymbolLattice section to remove."
+        : "Codex TOML contains duplicate mcp_servers.SymbolLattice sections."
     );
   }
   assertUnambiguousCodexMcpShape(lines);
@@ -470,7 +470,7 @@ function removeCodexToml(text: string): string {
 }
 
 /**
- * The uninstaller owns only the conventional `[mcp_servers.symbol_lattice]`
+ * The uninstaller owns only the conventional `[mcp_servers.SymbolLattice]`
  * table. Equivalent-looking inline, quoted, dotted-key, and array forms are
  * refused so a removal never has to guess which user-owned TOML to edit.
  */
@@ -491,15 +491,15 @@ function assertUnambiguousCodexMcpShape(lines: readonly string[]): void {
       continue;
     }
     if (header !== undefined) {
-      if (looksLikeSymbolLatticeMcpPath(header) && header !== "mcp_servers.symbol_lattice") {
+      if (looksLikeSymbolLatticeMcpPath(header) && header !== "mcp_servers.SymbolLattice") {
         throw new Error("Codex TOML uses a non-conventional SymbolLattice MCP table that cannot be safely removed.");
       }
       inMcpServersTable = header === "mcp_servers";
       continue;
     }
     if (
-      /^mcp_servers\s*(?:\.\s*(?:symbol_lattice|["']symbol_lattice["']))?\s*=/u.test(withoutComment) ||
-      (inMcpServersTable && /^symbol_lattice\s*=/u.test(withoutComment))
+      /^mcp_servers\s*(?:\.\s*(?:SymbolLattice|["']SymbolLattice["']))?\s*=/u.test(withoutComment) ||
+      (inMcpServersTable && /^SymbolLattice\s*=/u.test(withoutComment))
     ) {
       throw new Error("Codex TOML uses an inline or dotted SymbolLattice MCP entry that cannot be safely removed.");
     }
@@ -535,7 +535,7 @@ function stripTomlComment(line: string): string {
 }
 
 function looksLikeSymbolLatticeMcpPath(value: string): boolean {
-  return /\bmcp_servers\s*\.\s*(?:symbol_lattice|["']symbol_lattice["'])(?=$|[^A-Za-z0-9_])/u.test(value);
+  return /\bmcp_servers\s*\.\s*(?:SymbolLattice|["']SymbolLattice["'])(?=$|[^A-Za-z0-9_])/u.test(value);
 }
 
 function findTomlSectionRanges(
@@ -579,7 +579,7 @@ function nextBackupPath(
 
 function resolveBackupDirectory(value: string | undefined, projectPath: string): string {
   if (value === undefined) {
-    return join(resolve(projectPath), ".symbol-lattice", "mcp-backups");
+    return join(resolve(projectPath), ".SymbolLattice", "mcp-backups");
   }
   if (value.trim().length === 0) {
     throw new Error("Expected a non-empty --backup-dir path.");
@@ -597,7 +597,7 @@ function writeBackup(sourcePath: string, backupPath: string): void {
 function writeAtomically(path: string, text: string): void {
   const existingMode = existsSync(path) ? statSync(path).mode & 0o777 : null;
   mkdirSync(dirname(path), { recursive: true });
-  const temporaryPath = `${path}.symbol-lattice-${process.pid}-${randomUUID()}.tmp`;
+  const temporaryPath = `${path}.SymbolLattice-${process.pid}-${randomUUID()}.tmp`;
   try {
     writeFileSync(
       temporaryPath,

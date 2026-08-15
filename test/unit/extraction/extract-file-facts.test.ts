@@ -3858,7 +3858,7 @@ describe("source extraction", () => {
       sourceText: [
         "from sanic import Sanic as App",
         "",
-        "app = App(\"symbol-lattice\")",
+        "app = App(\"SymbolLattice\")",
         "",
         "@app.get(\"/health\", name=\"health\")",
         "async def health(request):",
@@ -3953,7 +3953,7 @@ describe("source extraction", () => {
       sourceText: [
         "from sanic import Sanic",
         "",
-        "app = Sanic(\"symbol-lattice\")",
+        "app = Sanic(\"SymbolLattice\")",
         "",
         "@app.get(dynamic_path)",
         "async def dynamic_path_handler(request):",
@@ -3999,7 +3999,7 @@ describe("source extraction", () => {
       sourceText: [
         "from sanic import Blueprint as Router, Sanic as App",
         "",
-        "app = App(\"symbol-lattice\")",
+        "app = App(\"SymbolLattice\")",
         "api = Router(\"api\", url_prefix=\"/api\")",
         "",
         "app.blueprint(api, url_prefix=\"/v1\")",
@@ -4077,7 +4077,7 @@ describe("source extraction", () => {
       sourceText: [
         "from sanic import Blueprint as Router, Sanic as App",
         "",
-        "app = App(\"symbol-lattice\")",
+        "app = App(\"SymbolLattice\")",
         "users = Router(\"users\", url_prefix=\"/users\")",
         "reports = Router(\"reports\", url_prefix=\"/reports\")",
         "api = Router.group(users, reports, url_prefix=\"/api\")",
@@ -4133,7 +4133,7 @@ describe("source extraction", () => {
       sourceText: [
         "from sanic import Blueprint as Router, Sanic as App",
         "",
-        "app = App(\"symbol-lattice\")",
+        "app = App(\"SymbolLattice\")",
         "users = Router(\"users\", url_prefix=\"/users\")",
         "reports = Router(\"reports\", url_prefix=\"/reports\")",
         "content = Router.group(users, url_prefix=\"/content\")",
@@ -4190,7 +4190,7 @@ describe("source extraction", () => {
       sourceText: [
         "from sanic import Blueprint as Router, Sanic as App",
         "",
-        "app = App(\"symbol-lattice\")",
+        "app = App(\"SymbolLattice\")",
         "users = Router(\"users\", url_prefix=\"/users\")",
         "public = Router.group(users, url_prefix=\"/public\", name_prefix=\"public\")",
         "admin = Router.group(users, url_prefix=\"/admin\", name_prefix=\"admin\")",
@@ -4243,7 +4243,7 @@ describe("source extraction", () => {
       sourceText: [
         "from sanic import Blueprint, Sanic",
         "",
-        "app = Sanic(\"symbol-lattice\")",
+        "app = Sanic(\"SymbolLattice\")",
         "users = Blueprint(\"users\", url_prefix=\"/users\")",
         "unknown = object()",
         "api = Blueprint.group(users, unknown, url_prefix=\"/api\")",
@@ -4266,7 +4266,7 @@ describe("source extraction", () => {
       sourceText: [
         "from sanic import Blueprint, Sanic",
         "",
-        "app = Sanic(\"symbol-lattice\")",
+        "app = Sanic(\"SymbolLattice\")",
         "users = Blueprint(\"users\", url_prefix=\"/users\")",
         "public = Blueprint.group(users, url_prefix=\"/public\")",
         "admin = Blueprint.group(users, url_prefix=\"/admin\")",
@@ -4309,7 +4309,7 @@ describe("source extraction", () => {
       sourceText: [
         "from sanic import Blueprint, Sanic",
         "",
-        "app = Sanic(\"symbol-lattice\")",
+        "app = Sanic(\"SymbolLattice\")",
         "users = Blueprint(\"users\", url_prefix=\"/users\")",
         "content = Blueprint.group(users, url_prefix=\"/content\")",
         "api = Blueprint.group(content, users, url_prefix=\"/api\")",
@@ -4332,7 +4332,7 @@ describe("source extraction", () => {
       sourceText: [
         "from sanic import Blueprint, Sanic",
         "",
-        "app = Sanic(\"symbol-lattice\")",
+        "app = Sanic(\"SymbolLattice\")",
         "dynamic_prefix = \"/dynamic\"",
         "dynamic = Blueprint(\"dynamic\", url_prefix=dynamic_prefix)",
         "app.blueprint(dynamic)",
@@ -4417,7 +4417,7 @@ describe("source extraction", () => {
       sourceText: [
         "from sanic import Sanic as App",
         "from .routes.catalog import catalog as catalog_blueprint",
-        "app = App(\"symbol-lattice\")",
+        "app = App(\"SymbolLattice\")",
         "app.blueprint(catalog_blueprint, url_prefix=\"/v1\")"
       ].join("\n")
     });
@@ -4535,7 +4535,7 @@ describe("source extraction", () => {
       sourceText: [
         "from sanic import Sanic",
         "from ..routes.catalog import catalog",
-        "app = Sanic(\"symbol-lattice\")",
+        "app = Sanic(\"SymbolLattice\")",
         "app.blueprint(catalog)",
         "",
         "from .routes.catalog import catalog as catalog_blueprint",
@@ -18935,7 +18935,7 @@ describe("source extraction", () => {
         "  helper = value: value;",
         "  internal = import ./internal.nix;",
         "in rec {",
-        "  package = { name = \"symbol-lattice\"; };",
+        "  package = { name = \"SymbolLattice\"; };",
         "  build = args: import ./build.nix;",
         "  nested.value = { };",
         "  inherit lib;",
@@ -19233,7 +19233,7 @@ describe("source extraction", () => {
       sourceText: [
         "# direct scalar settings",
         "---",
-        "service: symbol-lattice",
+        "service: SymbolLattice",
         "port: 3000",
         'owner: "HsinPu"',
         "metadata:",
@@ -19276,7 +19276,7 @@ describe("source extraction", () => {
         "feature:",
         "  enabled: true",
         "app:",
-        "  name: symbol-lattice",
+        "  name: SymbolLattice",
         "  password: top-secret",
         "limits:",
         "  request-timeout: 30",

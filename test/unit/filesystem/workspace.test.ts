@@ -22,7 +22,7 @@ function compareText(left: string, right: string): number {
 }
 
 async function createProject(files: Readonly<Record<string, string>>): Promise<string> {
-  const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-workspace-"));
+  const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-workspace-"));
   temporaryProjectPaths.push(projectPath);
 
   await Promise.all(

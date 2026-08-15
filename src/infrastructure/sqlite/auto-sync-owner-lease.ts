@@ -8,7 +8,7 @@ import {
   type AutoSyncOwnerLeaseResult
 } from "../../application/index.js";
 
-const INDEX_DIRECTORY_NAME = ".symbol-lattice";
+const INDEX_DIRECTORY_NAME = ".SymbolLattice";
 const INDEX_DATABASE_FILE_NAME = "index.sqlite";
 export const AUTO_SYNC_OWNER_LEASE_FILE_NAME = "auto-sync-owner.sqlite";
 
@@ -32,7 +32,7 @@ export class SqliteAutoSyncOwnerLease implements AutoSyncOwnerLease {
     if (!existsSync(this.indexPath())) {
       throw new SymbolLatticeError(
         "MISSING_INDEX",
-        `No SymbolLattice index exists for ${this.projectPath}. Run "symbol-lattice init ${this.projectPath}" first.`
+        `No SymbolLattice index exists for ${this.projectPath}. Run "SymbolLattice init ${this.projectPath}" first.`
       );
     }
 

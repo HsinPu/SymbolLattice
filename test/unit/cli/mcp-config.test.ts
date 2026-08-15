@@ -17,12 +17,12 @@ describe("MCP configuration generator", () => {
     });
 
     expect(result.server).toEqual({
-      name: "symbol-lattice",
-      command: "symbol-lattice",
+      name: "SymbolLattice",
+      command: "SymbolLattice",
       args: ["serve", "--mcp"]
     });
     expect(result.snippet).toBe(
-      '[mcp_servers.symbol_lattice]\ncommand = "symbol-lattice"\nargs = ["serve", "--mcp"]'
+      '[mcp_servers.SymbolLattice]\ncommand = "SymbolLattice"\nargs = ["serve", "--mcp"]'
     );
     expect(result.notes).toContain(
       "The Codex entry stores no fixed --project path; SymbolLattice resolves the project from the MCP process working directory."
@@ -47,12 +47,12 @@ describe("MCP configuration generator", () => {
       destination: {
         path: "~/.codex/config.toml",
         format: "toml",
-        entry: "mcp_servers.symbol_lattice",
+        entry: "mcp_servers.SymbolLattice",
         scope: "global"
       },
       server: {
-        name: "symbol-lattice",
-        command: "symbol-lattice",
+        name: "SymbolLattice",
+        command: "SymbolLattice",
         args: ["serve", "--mcp", "--project", "C:/projects/example"]
       },
       lifecycle: {
@@ -66,10 +66,10 @@ describe("MCP configuration generator", () => {
       }
     });
     expect(result.snippet).toBe(
-      '[mcp_servers.symbol_lattice]\ncommand = "symbol-lattice"\nargs = ["serve", "--mcp", "--project", "C:/projects/example"]'
+      '[mcp_servers.SymbolLattice]\ncommand = "SymbolLattice"\nargs = ["serve", "--mcp", "--project", "C:/projects/example"]'
     );
     expect(result.notes).toContain(
-      "A separate local watcher can update the project-local .symbol-lattice index; add --no-auto-sync to opt out."
+      "A separate local watcher can update the project-local .SymbolLattice index; add --no-auto-sync to opt out."
     );
   });
 
@@ -82,15 +82,15 @@ describe("MCP configuration generator", () => {
       destination: {
         path: join("C:/projects/example", ".mcp.json"),
         format: "json",
-        entry: "mcpServers.symbol-lattice",
+        entry: "mcpServers.SymbolLattice",
         scope: "local"
       }
     });
     expect(JSON.parse(result.snippet)).toEqual({
       mcpServers: {
-        "symbol-lattice": {
+        "SymbolLattice": {
           type: "stdio",
-          command: "symbol-lattice",
+          command: "SymbolLattice",
           args: ["serve", "--mcp", "--project", "C:/projects/example"]
         }
       }
@@ -129,16 +129,16 @@ describe("MCP configuration generator", () => {
       destination: {
         path: join("/workspace/example", "opencode.jsonc"),
         format: "jsonc",
-        entry: "mcp.symbol-lattice",
+        entry: "mcp.SymbolLattice",
         scope: "local"
       }
     });
     expect(JSON.parse(result.snippet)).toEqual({
       $schema: "https://opencode.ai/config.json",
       mcp: {
-        "symbol-lattice": {
+        "SymbolLattice": {
           type: "local",
-          command: ["symbol-lattice", "serve", "--mcp", "--project", "/workspace/example"],
+          command: ["SymbolLattice", "serve", "--mcp", "--project", "/workspace/example"],
           enabled: true
         }
       }
@@ -175,7 +175,7 @@ describe("MCP configuration generator", () => {
       format: "json",
       scope: "global"
     });
-    expect(JSON.parse(gemini.snippet).mcpServers["symbol-lattice"]).toMatchObject({ type: "stdio" });
+    expect(JSON.parse(gemini.snippet).mcpServers["SymbolLattice"]).toMatchObject({ type: "stdio" });
 
     expect(kiro.destination).toMatchObject({
       path: join("/workspace/example", ".kiro", "settings", "mcp.json"),
@@ -189,16 +189,16 @@ describe("MCP configuration generator", () => {
     expect(hermes.destination).toMatchObject({
       path: "$HERMES_HOME/config.yaml",
       format: "yaml",
-      entry: "mcp_servers.symbol_lattice",
+      entry: "mcp_servers.SymbolLattice",
       scope: "global"
     });
-    expect(hermes.snippet).toContain("mcp_servers:\n  symbol_lattice:");
-    expect(hermes.snippet).toContain("    - mcp-symbol-lattice");
+    expect(hermes.snippet).toContain("mcp_servers:\n  SymbolLattice:");
+    expect(hermes.snippet).toContain("    - mcp-SymbolLattice");
     expect(hermes.notes).toContain("$HERMES_HOME defaults to ~/.hermes when it is not set.");
     expect(parseYaml(hermes.snippet)).toMatchObject({
       mcp_servers: {
-        symbol_lattice: {
-          command: "symbol-lattice",
+        SymbolLattice: {
+          command: "SymbolLattice",
           args: ["serve", "--mcp", "--project", "/workspace/example"],
           timeout: 120,
           connect_timeout: 60,
@@ -206,7 +206,7 @@ describe("MCP configuration generator", () => {
         }
       },
       platform_toolsets: {
-        cli: ["hermes-cli", "mcp-symbol-lattice"]
+        cli: ["hermes-cli", "mcp-SymbolLattice"]
       }
     });
 
@@ -215,8 +215,8 @@ describe("MCP configuration generator", () => {
       format: "json",
       scope: "global"
     });
-    expect(JSON.parse(antigravity.snippet).mcpServers["symbol-lattice"]).toEqual({
-      command: "symbol-lattice",
+    expect(JSON.parse(antigravity.snippet).mcpServers["SymbolLattice"]).toEqual({
+      command: "SymbolLattice",
       args: ["serve", "--mcp", "--project", "/workspace/example"]
     });
   });
@@ -233,8 +233,8 @@ describe("MCP configuration generator", () => {
 
     expect(JSON.parse(result.snippet)).toEqual({
       mcpServers: {
-        "symbol-lattice": {
-          command: "symbol-lattice",
+        "SymbolLattice": {
+          command: "SymbolLattice",
           args: [
             "serve",
             "--mcp",
@@ -258,7 +258,7 @@ describe("MCP configuration generator", () => {
       disableFlag: "--no-auto-sync"
     });
     expect(result.notes).toContain(
-      "Auto-sync is disabled; run symbol-lattice sync explicitly when the graph needs refreshing."
+      "Auto-sync is disabled; run SymbolLattice sync explicitly when the graph needs refreshing."
     );
   });
 
@@ -266,14 +266,14 @@ describe("MCP configuration generator", () => {
     const result = createMcpConfig("codex", {
       projectPath: "/workspace/example",
       command: "node",
-      commandArgs: ["/tools/symbol-lattice/dist/cli/main.js"]
+      commandArgs: ["/tools/SymbolLattice/dist/cli/main.js"]
     });
 
     expect(result.server).toEqual({
-      name: "symbol-lattice",
+      name: "SymbolLattice",
       command: "node",
       args: [
-        "/tools/symbol-lattice/dist/cli/main.js",
+        "/tools/SymbolLattice/dist/cli/main.js",
         "serve",
         "--mcp",
         "--project",

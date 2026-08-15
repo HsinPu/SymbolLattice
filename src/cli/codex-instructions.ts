@@ -6,11 +6,11 @@ export const CODEX_INSTRUCTIONS_END = "<!-- SYMBOL_LATTICE_END -->";
 export const CODEX_INSTRUCTIONS_BLOCK = `${CODEX_INSTRUCTIONS_START}
 ## SymbolLattice
 
-When a repository root contains a \`.symbol-lattice\` directory:
+When a repository root contains a \`.SymbolLattice\` directory:
 
-- Use the \`symbol_lattice_explore\` MCP tool before grep, find, or broad file reads when locating or understanding code.
-- If MCP is unavailable, use \`symbol-lattice explore "<question>"\` from the repository root.
-- If \`.symbol-lattice\` is absent, do not create an index automatically; indexing remains the user's decision.
+- Use the \`SymbolLattice_explore\` MCP tool before grep, find, or broad file reads when locating or understanding code.
+- If MCP is unavailable, use \`SymbolLattice explore "<question>"\` from the repository root.
+- If \`.SymbolLattice\` is absent, do not create an index automatically; indexing remains the user's decision.
 ${CODEX_INSTRUCTIONS_END}`;
 
 export type CodexInstructionsOperation = "install" | "uninstall";
@@ -232,7 +232,7 @@ function standaloneLineOccurrences(text: string, value: string): number[] {
 function nextBackupPath(path: string, options: CodexInstructionsPlanOptions): string {
   const directory =
     options.backupDirectory === undefined
-      ? join(resolve(options.projectPath), ".symbol-lattice", "mcp-backups")
+      ? join(resolve(options.projectPath), ".SymbolLattice", "mcp-backups")
       : resolve(requireNonEmpty(options.backupDirectory, "backup directory"));
   const timestamp = (options.now ?? new Date()).toISOString().replaceAll(":", "-").replaceAll(".", "-");
   const prefix = `${timestamp}-codex-${basename(path)}`;

@@ -27,7 +27,7 @@ const fixturePath = join(
 );
 
 async function createFixtureProject(): Promise<string> {
-  const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-watch-events-"));
+  const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-watch-events-"));
   temporaryDirectories.push(projectPath);
   await cp(fixturePath, projectPath, { recursive: true });
   return projectPath;

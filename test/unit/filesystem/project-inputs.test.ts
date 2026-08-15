@@ -14,7 +14,7 @@ import {
 const temporaryDirectories: string[] = [];
 
 async function createProject(): Promise<string> {
-  const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-inputs-"));
+  const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-inputs-"));
   temporaryDirectories.push(projectPath);
   return projectPath;
 }
@@ -87,7 +87,7 @@ describe("project index inputs", () => {
       },
       {
         kind: "configuration-discovery",
-        path: ".symbol-lattice/configuration-candidates.json",
+        path: ".SymbolLattice/configuration-candidates.json",
         state: "present",
         contentHash: expect.stringMatching(/^[a-f0-9]{64}$/u)
       }
@@ -109,7 +109,7 @@ describe("project index inputs", () => {
         },
         {
           kind: "configuration-discovery",
-          path: ".symbol-lattice/configuration-candidates.json",
+          path: ".SymbolLattice/configuration-candidates.json",
           state: "present",
           contentHash: expect.stringMatching(/^[a-f0-9]{64}$/u)
         }

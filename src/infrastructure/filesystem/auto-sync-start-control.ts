@@ -18,7 +18,7 @@ import {
   type AutoSyncStartResult
 } from "../../application/index.js";
 
-const INDEX_DIRECTORY_NAME = ".symbol-lattice";
+const INDEX_DIRECTORY_NAME = ".SymbolLattice";
 const DEFAULT_POLL_INTERVAL_MS = 100;
 const DEFAULT_WAIT_TIMEOUT_MS = 5_000;
 export const MANAGED_AUTO_SYNC_HOST_ID_ENV = "SYMBOL_LATTICE_MANAGED_HOST_ID";

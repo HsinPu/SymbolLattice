@@ -10,7 +10,7 @@ import {
   type AutoSyncDiagnosticJournalResult
 } from "../../application/index.js";
 
-const INDEX_DIRECTORY_NAME = ".symbol-lattice";
+const INDEX_DIRECTORY_NAME = ".SymbolLattice";
 const INDEX_DATABASE_FILE_NAME = "index.sqlite";
 export const AUTO_SYNC_DIAGNOSTIC_JOURNAL_FILE_NAME = "auto-sync-diagnostics.sqlite";
 

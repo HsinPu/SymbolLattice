@@ -15,7 +15,7 @@ import { SqliteGraphStore } from "../../../src/infrastructure/sqlite/index.js";
 const temporaryDirectories: string[] = [];
 
 async function createProject(files: Readonly<Record<string, string>>): Promise<string> {
-  const projectPath = await mkdtemp(resolve(tmpdir(), "symbol-lattice-context-allocation-"));
+  const projectPath = await mkdtemp(resolve(tmpdir(), "SymbolLattice-context-allocation-"));
   temporaryDirectories.push(projectPath);
   await Promise.all(Object.entries(files).map(async ([filePath, sourceText]) => {
     const absolutePath = resolve(projectPath, ...filePath.split("/"));

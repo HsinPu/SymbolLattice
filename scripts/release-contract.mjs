@@ -5,7 +5,7 @@ import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const PACKAGE_NAME = "@hsinpu/symbol-lattice";
+const PACKAGE_NAME = "@hsinpu/symbollattice";
 const REPOSITORY = "HsinPu/SymbolLattice";
 const REPOSITORY_URL = "git+https://github.com/HsinPu/SymbolLattice.git";
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
@@ -17,14 +17,14 @@ const ARGUMENT_NAMES = new Map([
   ["--output-dir", "outputDirectory"]
 ]);
 
-export function expectedNpmTarballName(packageName, version) {
+export function expectedReleaseTarballName(packageName, version) {
   if (typeof packageName !== "string" || !/^@?[a-z0-9][a-z0-9._/-]*$/.test(packageName)) {
     throw new Error("Release package name is invalid.");
   }
   if (typeof version !== "string" || !SEMVER.test(version)) {
     throw new Error("Release package version is not valid SemVer.");
   }
-  return `${packageName.replace(/^@/, "").replaceAll("/", "-")}-${version}.tgz`;
+  return `SymbolLattice-${version}.tgz`;
 }
 
 export function validateReleaseIdentity(identity) {
@@ -89,7 +89,7 @@ export async function createReleaseContract(options) {
     commit: options.commit
   });
 
-  const expectedFilename = expectedNpmTarballName(packageJson.name, packageJson.version);
+  const expectedFilename = expectedReleaseTarballName(packageJson.name, packageJson.version);
   const filename = basename(tarballPath);
   if (filename !== expectedFilename) {
     throw new Error(`Release tarball filename must be ${expectedFilename}; found ${filename}.`);

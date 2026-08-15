@@ -76,7 +76,7 @@ describe("project filesystem watch events", () => {
     expect(shouldTriggerProjectWatchEvent("src/index.ts")).toBe(true);
     expect(shouldTriggerProjectWatchEvent("tsconfig.json")).toBe(true);
     expect(shouldTriggerProjectWatchEvent("src\\node_modules\\library\\index.js")).toBe(false);
-    expect(shouldTriggerProjectWatchEvent(".symbol-lattice/state.db")).toBe(false);
+    expect(shouldTriggerProjectWatchEvent(".SymbolLattice/state.db")).toBe(false);
     expect(shouldTriggerProjectWatchEvent("node_modules")).toBe(false);
     expect(shouldTriggerProjectWatchEvent(null)).toBe(true);
   });
@@ -137,7 +137,7 @@ describe("project filesystem watch events", () => {
 
     handle.emitChange("node_modules/library/index.js");
     handle.emitChange("src\\node_modules\\library\\index.js");
-    handle.emitChange(".symbol-lattice\\state.db");
+    handle.emitChange(".SymbolLattice\\state.db");
     handle.emitChange("coverage/report.json");
     handle.emitChange("dist\\output.js");
 

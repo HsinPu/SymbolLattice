@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 function project(): string {
-  const directory = mkdtempSync(join(tmpdir(), "symbol-lattice-host-registry-"));
+  const directory = mkdtempSync(join(tmpdir(), "SymbolLattice-host-registry-"));
   temporaryDirectories.push(directory);
   return directory;
 }
@@ -76,7 +76,7 @@ describe("project-local auto-sync host registry", () => {
 
   it("ignores malformed records without deleting them during read-only inspection", () => {
     const root = project();
-    const directory = join(root, ".symbol-lattice", AUTO_SYNC_HOST_DIRECTORY_NAME);
+    const directory = join(root, ".SymbolLattice", AUTO_SYNC_HOST_DIRECTORY_NAME);
     mkdirSync(directory, { recursive: true });
     const malformed = join(directory, "malformed.json");
     writeFileSync(malformed, "{not-json}\n", "utf8");
@@ -89,7 +89,7 @@ describe("project-local auto-sync host registry", () => {
 
   it("does not parse or delete a record that exceeds the fixed read bound", () => {
     const root = project();
-    const directory = join(root, ".symbol-lattice", AUTO_SYNC_HOST_DIRECTORY_NAME);
+    const directory = join(root, ".SymbolLattice", AUTO_SYNC_HOST_DIRECTORY_NAME);
     mkdirSync(directory, { recursive: true });
     const oversized = join(directory, `${HOST_ID}.json`);
     writeFileSync(oversized, "x".repeat(16 * 1024 + 1), "utf8");

@@ -15,7 +15,7 @@ import {
   type UpgradePreviewResult
 } from "./upgrade.js";
 
-const PACKAGE_NAME = "@hsinpu/symbol-lattice";
+const PACKAGE_NAME = "@hsinpu/symbollattice";
 const RELEASE_REPOSITORY = "HsinPu/SymbolLattice";
 const RELEASE_REPOSITORY_URL = `https://github.com/${RELEASE_REPOSITORY}`;
 const ATTESTATIONS_ENDPOINT = `https://api.github.com/repos/${RELEASE_REPOSITORY}/attestations`;
@@ -258,7 +258,7 @@ export function verifyDownloadedUpgradeRelease(input: {
   readonly attestationEndpoint: string;
 }): UpgradeVerificationEvidence {
   const filename = basename(new URL(input.tarballUrl).pathname);
-  const expectedFilename = `hsinpu-symbol-lattice-${input.targetVersion}.tgz`;
+  const expectedFilename = `SymbolLattice-${input.targetVersion}.tgz`;
   if (filename !== expectedFilename) {
     throw new Error(`Release tarball filename mismatch: expected ${expectedFilename}.`);
   }
@@ -308,7 +308,7 @@ export async function installVerifiedUpgradeRelease(
   targetVersion: string,
   release: VerifiedUpgradeRelease
 ): Promise<NonNullable<UpgradeApplyResult["installation"]>> {
-  const stagingDirectory = await mkdtemp(join(tmpdir(), "symbol-lattice-upgrade-"));
+  const stagingDirectory = await mkdtemp(join(tmpdir(), "SymbolLattice-upgrade-"));
   const tarballPath = join(stagingDirectory, release.evidence.artifact.filename);
   try {
     await writeFile(tarballPath, release.tarball, { flag: "wx", mode: 0o600 });
@@ -407,7 +407,7 @@ async function fetchBoundedAsset(
     const response = await fetchImplementation(endpoint, {
       headers: {
         Accept: "application/octet-stream, application/json",
-        "User-Agent": "symbol-lattice-upgrade-verifier",
+        "User-Agent": "SymbolLattice-upgrade-verifier",
         "X-GitHub-Api-Version": "2022-11-28"
       },
       redirect: "follow",

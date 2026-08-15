@@ -72,17 +72,17 @@ function uninstallDependencies(
 
 function healthyRuntimeFiles(projectPath: string): Record<string, string> {
   return {
-    [join(projectPath, ".symbol-lattice", "index.sqlite")]: "SQLite format 3\u0000",
-    [join("C:", "tools", "symbol-lattice.CMD")]: "@echo off"
+    [join(projectPath, ".SymbolLattice", "index.sqlite")]: "SQLite format 3\u0000",
+    [join("C:", "tools", "SymbolLattice.CMD")]: "@echo off"
   };
 }
 
 function standardJson(projectPath: string): string {
   return JSON.stringify({
     mcpServers: {
-      "symbol-lattice": {
+      "SymbolLattice": {
         type: "stdio",
-        command: "symbol-lattice",
+        command: "SymbolLattice",
         args: ["serve", "--mcp", "--project", projectPath]
       }
     }
@@ -105,9 +105,9 @@ describe("MCP preview-first uninstaller", () => {
     const files = healthyRuntimeFiles(projectPath);
     files[configPath] = JSON.stringify({
       mcpServers: {
-        "symbol-lattice": {
+        "SymbolLattice": {
           type: "stdio",
-          command: "symbol-lattice",
+          command: "SymbolLattice",
           args: ["serve", "--mcp", "--project", projectPath],
           token: "must-not-appear"
         },
@@ -168,7 +168,7 @@ describe("MCP preview-first uninstaller", () => {
     const original = JSON.stringify({
       mcpServers: {
         other: { command: "other", args: ["serve"] },
-        "symbol-lattice": { type: "stdio", command: "older-symbol-lattice", args: ["serve"] }
+        "SymbolLattice": { type: "stdio", command: "older-SymbolLattice", args: ["serve"] }
       },
       retained: true
     });
@@ -236,7 +236,7 @@ describe("MCP preview-first uninstaller", () => {
     const virtual = createVirtualFiles(files);
     const concurrentText = JSON.stringify({
       mcpServers: {
-        "symbol-lattice": { command: "newer-symbol-lattice", args: ["serve"] },
+        "SymbolLattice": { command: "newer-SymbolLattice", args: ["serve"] },
         other: { command: "concurrent-agent" }
       }
     });
@@ -328,9 +328,9 @@ describe("MCP preview-first uninstaller", () => {
     files[configPath] = `{
   // Keep this comment and this server.
   "mcp": {
-    "symbol-lattice": {
+    "SymbolLattice": {
       "type": "local",
-      "command": ["symbol-lattice", "serve", "--mcp", "--project", ${JSON.stringify(projectPath)}],
+      "command": ["SymbolLattice", "serve", "--mcp", "--project", ${JSON.stringify(projectPath)}],
       "enabled": true,
     },
     "other": {
@@ -355,7 +355,7 @@ describe("MCP preview-first uninstaller", () => {
     });
     expect(virtual.files[configPath]).toContain("// Keep this comment and this server.");
     expect(virtual.files[configPath]).toContain('"other"');
-    expect(virtual.files[configPath]).not.toContain('"symbol-lattice"');
+    expect(virtual.files[configPath]).not.toContain('"SymbolLattice"');
     expect(
       createMcpDoctor(
         "opencode",
@@ -374,8 +374,8 @@ describe("MCP preview-first uninstaller", () => {
       "[mcp_servers.other]",
       'command = "other"',
       "",
-      "[mcp_servers.symbol_lattice]",
-      'command = "symbol-lattice"',
+      "[mcp_servers.SymbolLattice]",
+      'command = "SymbolLattice"',
       `args = ["serve", "--mcp", "--project", ${JSON.stringify(projectPath)}]`,
       "",
       "[features]",
@@ -395,7 +395,7 @@ describe("MCP preview-first uninstaller", () => {
     });
     expect(virtual.files[configPath]).toContain("[mcp_servers.other]");
     expect(virtual.files[configPath]).toContain("[features]");
-    expect(virtual.files[configPath]).not.toContain("[mcp_servers.symbol_lattice]");
+    expect(virtual.files[configPath]).not.toContain("[mcp_servers.SymbolLattice]");
     expect(
       createMcpDoctor(
         "codex",
@@ -411,12 +411,12 @@ describe("MCP preview-first uninstaller", () => {
     const configPath = join(homeDirectory, ".codex", "config.toml");
     const files = healthyRuntimeFiles(projectPath);
     files[configPath] = [
-      "[mcp_servers.symbol_lattice]",
-      'command = "symbol-lattice"',
+      "[mcp_servers.SymbolLattice]",
+      'command = "SymbolLattice"',
       `args = ["serve", "--mcp", "--project", ${JSON.stringify(projectPath)}]`,
       "",
       "[mcp_servers]",
-      'symbol_lattice = { command = "other", args = ["serve"] }'
+      'SymbolLattice = { command = "other", args = ["serve"] }'
     ].join("\n");
     const virtual = createVirtualFiles(files);
 
@@ -442,8 +442,8 @@ describe("MCP preview-first uninstaller", () => {
     const files = healthyRuntimeFiles(projectPath);
     files[configPath] = [
       "mcp_servers:",
-      "  symbol_lattice:",
-      "    command: symbol-lattice",
+      "  SymbolLattice:",
+      "    command: SymbolLattice",
       "    args:",
       "      - serve",
       "      - --mcp",
@@ -457,7 +457,7 @@ describe("MCP preview-first uninstaller", () => {
       "platform_toolsets:",
       "  cli:",
       "    - hermes-cli",
-      "    - mcp-symbol-lattice"
+      "    - mcp-SymbolLattice"
     ].join("\n");
     const virtual = createVirtualFiles(files);
 
@@ -476,8 +476,8 @@ describe("MCP preview-first uninstaller", () => {
       strategy: "yaml-document-remove"
     });
     expect(written.mcp_servers.other).toEqual({ command: "other" });
-    expect(written.mcp_servers.symbol_lattice).toBeUndefined();
-    expect(written.platform_toolsets.cli).toEqual(["hermes-cli", "mcp-symbol-lattice"]);
+    expect(written.mcp_servers.SymbolLattice).toBeUndefined();
+    expect(written.platform_toolsets.cli).toEqual(["hermes-cli", "mcp-SymbolLattice"]);
   });
 
   it("requires an explicit generic JSON configuration path and never writes without one", () => {
@@ -526,7 +526,7 @@ describe("MCP preview-first uninstaller", () => {
   it.runIf(process.platform !== "win32")(
     "preserves a private POSIX mode on both an existing configuration and its backup",
     () => {
-      const directory = mkdtempSync(join(tmpdir(), "symbol-lattice-mcp-uninstall-"));
+      const directory = mkdtempSync(join(tmpdir(), "SymbolLattice-mcp-uninstall-"));
       temporaryDirectories.push(directory);
       const projectPath = join(directory, "project");
       const configPath = join(directory, "agent", "mcp.json");

@@ -3150,7 +3150,7 @@ export function createMcpServer(
   defaultProjectPath: string,
   options: CreateMcpServerOptions = {}
 ): McpServer {
-  const server = new McpServer({ name: "symbol-lattice", version: SYMBOL_LATTICE_VERSION });
+  const server = new McpServer({ name: "SymbolLattice", version: SYMBOL_LATTICE_VERSION });
   const readQueryExecutor = options.readQueryExecutor;
   const investigateSourceSession = new McpInvestigateSourceSession({
     maximumProjects: MCP_INVESTIGATE_SOURCE_SESSION_LIMITS.maximumProjects,
@@ -3162,7 +3162,7 @@ export function createMcpServer(
   });
 
   server.registerTool(
-    "symbol_lattice_explore",
+    "SymbolLattice_explore",
     {
       title: "Explore a SymbolLattice code graph",
       description:
@@ -3189,7 +3189,7 @@ export function createMcpServer(
   const queryPoolStatusService = options.queryPoolStatusService ?? null;
   if (queryPoolStatusService !== null) {
     server.registerTool(
-      "symbol_lattice_query_pool_status",
+      "SymbolLattice_query_pool_status",
       {
         title: "Inspect SymbolLattice MCP query-pool health",
         description:
@@ -3208,7 +3208,7 @@ export function createMcpServer(
   const autoSyncStatusService = supportsAutoSyncStatus(service) ? service : null;
   if (autoSyncStatusService !== null) {
     server.registerTool(
-      "symbol_lattice_auto_sync_status",
+      "SymbolLattice_auto_sync_status",
       {
         title: "Inspect SymbolLattice MCP auto-sync health",
         description:
@@ -3227,7 +3227,7 @@ export function createMcpServer(
   const autoSyncDiagnosticsService = supportsAutoSyncDiagnostics(service) ? service : null;
   if (autoSyncDiagnosticsService !== null) {
     server.registerTool(
-      "symbol_lattice_auto_sync_diagnostics",
+      "SymbolLattice_auto_sync_diagnostics",
       {
         title: "Inspect SymbolLattice MCP auto-sync diagnostics",
         description:
@@ -3254,7 +3254,7 @@ export function createMcpServer(
   const autoSyncDiagnosticJournalService = supportsAutoSyncDiagnosticJournal(service) ? service : null;
   if (autoSyncDiagnosticJournalService !== null) {
     server.registerTool(
-      "symbol_lattice_auto_sync_journal",
+      "SymbolLattice_auto_sync_journal",
       {
         title: "Inspect durable SymbolLattice auto-sync history",
         description:
@@ -3282,7 +3282,7 @@ export function createMcpServer(
   const nodeService = supportsNode(service) ? service : null;
   if (nodeService !== null) {
     server.registerTool(
-      "symbol_lattice_node",
+      "SymbolLattice_node",
       {
         title: "Retrieve an exact SymbolLattice node",
         description:
@@ -3310,7 +3310,7 @@ export function createMcpServer(
   const contextService = supportsContext(service) ? service : null;
   if (contextService !== null) {
     server.registerTool(
-      "symbol_lattice_context",
+      "SymbolLattice_context",
       {
         title: "Build a bounded SymbolLattice context pack",
         description:
@@ -3377,7 +3377,7 @@ export function createMcpServer(
   const affectedTestsService = supportsAffectedTests(service) ? service : null;
   if (affectedTestsService !== null) {
     server.registerTool(
-      "symbol_lattice_affected",
+      "SymbolLattice_affected",
       {
         title: "Select affected tests from a SymbolLattice generation",
         description:
@@ -3427,7 +3427,7 @@ export function createMcpServer(
   const gitAffectedTestsService = supportsGitAffectedTests(service) ? service : null;
   if (gitAffectedTestsService !== null) {
     server.registerTool(
-      "symbol_lattice_affected_git",
+      "SymbolLattice_affected_git",
       {
         title: "Select affected tests from a local Git change set",
         description:
@@ -3483,7 +3483,7 @@ export function createMcpServer(
   const gitHunksService = supportsGitHunks(service) ? service : null;
   if (gitHunksService !== null) {
     server.registerTool(
-      "symbol_lattice_git_hunks",
+      "SymbolLattice_git_hunks",
       {
         title: "Attribute immutable local Git hunks to declarations",
         description:
@@ -3524,7 +3524,7 @@ export function createMcpServer(
   const searchService = supportsSearch(service) ? service : null;
   if (searchService !== null) {
     server.registerTool(
-      "symbol_lattice_search",
+      "SymbolLattice_search",
       {
         title: "Search an indexed SymbolLattice generation",
         description:
@@ -3552,7 +3552,7 @@ export function createMcpServer(
   const investigateService = supportsInvestigate(service) ? service : null;
   if (investigateService !== null) {
     server.registerTool(
-      "symbol_lattice_investigate",
+      "SymbolLattice_investigate",
       {
         title: "Investigate one question through a SymbolLattice generation",
         description:
@@ -3649,7 +3649,7 @@ export function createMcpServer(
   const impactService = supportsImpact(service) ? service : null;
   if (impactService !== null) {
     server.registerTool(
-      "symbol_lattice_impact",
+      "SymbolLattice_impact",
       {
         title: "Inspect bounded SymbolLattice reverse impact",
         description:
@@ -3688,7 +3688,7 @@ export function createMcpServer(
   const filesService = supportsFiles(service) ? service : null;
   if (filesService !== null) {
     server.registerTool(
-      "symbol_lattice_files",
+      "SymbolLattice_files",
       {
         title: "List indexed files from a SymbolLattice generation",
         description:
@@ -3730,7 +3730,7 @@ export function createMcpServer(
   const fileViewService = supportsFileView(service) ? service : null;
   if (fileViewService !== null) {
     server.registerTool(
-      "symbol_lattice_file",
+      "SymbolLattice_file",
       {
         title: "Read one persisted SymbolLattice source file",
         description:
@@ -3761,7 +3761,7 @@ export function createMcpServer(
   const routesService = supportsRoutes(service) ? service : null;
   if (routesService !== null) {
     server.registerTool(
-      "symbol_lattice_routes",
+      "SymbolLattice_routes",
       {
         title: "List routes from a SymbolLattice generation",
         description:
@@ -3810,11 +3810,11 @@ export function createMcpServer(
   const entrypointsService = supportsEntrypoints(service) ? service : null;
   if (entrypointsService !== null) {
     server.registerTool(
-      "symbol_lattice_entrypoints",
+      "SymbolLattice_entrypoints",
       {
         title: "List non-HTTP entrypoints from a SymbolLattice generation",
         description:
-          "Lists bounded persisted GraphQL, microservice, and WebSocket entrypoint facts with exact handler evidence from an existing SymbolLattice index. HTTP routes remain available through symbol_lattice_routes. This tool never creates or refreshes an index.",
+          "Lists bounded persisted GraphQL, microservice, and WebSocket entrypoint facts with exact handler evidence from an existing SymbolLattice index. HTTP routes remain available through SymbolLattice_routes. This tool never creates or refreshes an index.",
         inputSchema: {
           projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
           transport: z
@@ -3854,7 +3854,7 @@ export function createMcpServer(
   const hierarchyService = supportsHierarchy(service) ? service : null;
   if (hierarchyService !== null) {
     server.registerTool(
-      "symbol_lattice_hierarchy",
+      "SymbolLattice_hierarchy",
       {
         title: "Inspect direct TypeScript declaration hierarchy",
         description:
@@ -3886,7 +3886,7 @@ export function createMcpServer(
   const generationHistoryService = supportsGenerationHistory(service) ? service : null;
   if (generationHistoryService !== null) {
     server.registerTool(
-      "symbol_lattice_history",
+      "SymbolLattice_history",
       {
         title: "List retained SymbolLattice graph generations",
         description:
@@ -3917,7 +3917,7 @@ export function createMcpServer(
   const generationDiffService = supportsGenerationDiff(service) ? service : null;
   if (generationDiffService !== null) {
     server.registerTool(
-      "symbol_lattice_diff",
+      "SymbolLattice_diff",
       {
         title: "Compare retained SymbolLattice graph generations",
         description:
@@ -3959,7 +3959,7 @@ export function createMcpServer(
   const explainEdgeService = supportsExplainEdge(service) ? service : null;
   if (explainEdgeService !== null) {
     server.registerTool(
-      "symbol_lattice_explain_edge",
+      "SymbolLattice_explain_edge",
       {
         title: "Explain a SymbolLattice graph edge",
         description:

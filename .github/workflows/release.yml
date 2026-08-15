@@ -56,12 +56,18 @@ jobs:
           mkdir release
           npm pack --json --silent --pack-destination release > "$RUNNER_TEMP/pack.json"
           node --input-type=module - "$RUNNER_TEMP/pack.json" >> "$GITHUB_OUTPUT" <<'NODE'
-          import { readFileSync } from "node:fs";
+          import { readFileSync, renameSync } from "node:fs";
           const result = JSON.parse(readFileSync(process.argv[2], "utf8"));
           if (!Array.isArray(result) || result.length !== 1 || typeof result[0]?.filename !== "string") {
             throw new Error("npm pack did not return exactly one artifact filename.");
           }
-          process.stdout.write(`filename=${result[0].filename}\n`);
+          const version = process.env.GITHUB_REF_NAME?.replace(/^v/, "");
+          if (typeof version !== "string" || version.length === 0) {
+            throw new Error("The release tag does not provide an artifact version.");
+          }
+          const filename = `SymbolLattice-${version}.tgz`;
+          renameSync(`release/${result[0].filename}`, `release/${filename}`);
+          process.stdout.write(`filename=${filename}\n`);
           NODE
 
       - name: Create checksum and release manifest
@@ -78,10 +84,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          install_prefix="$RUNNER_TEMP/symbol-lattice-install"
+          install_prefix="$RUNNER_TEMP/SymbolLattice-install"
           tarball_path="$GITHUB_WORKSPACE/release/${{ steps.pack.outputs.filename }}"
           npm install --prefix "$install_prefix" "$tarball_path"
-          installed_version="$("$install_prefix/node_modules/.bin/symbol-lattice" --version)"
+          installed_version="$("$install_prefix/node_modules/.bin/SymbolLattice" --version)"
           test "$installed_version" = "${GITHUB_REF_NAME#v}"
 
       - name: Attest release artifacts

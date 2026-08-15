@@ -10,7 +10,7 @@ const TAGS_ENDPOINT = `https://api.github.com/repos/${RELEASE_REPOSITORY}/tags?p
 const RELEASE_ENDPOINTS = [RELEASE_ENDPOINT, TAGS_ENDPOINT] as const;
 const RELEASE_TIMEOUT_MS = 5_000;
 const MAX_RELEASE_RESPONSE_BYTES = 64 * 1024;
-const PACKAGE_NAME = "@hsinpu/symbol-lattice";
+const PACKAGE_NAME = "@hsinpu/symbollattice";
 const RELEASE_DOWNLOAD_BASE = `https://github.com/${RELEASE_REPOSITORY}/releases/download`;
 
 interface ParsedVersion {
@@ -259,7 +259,7 @@ async function fetchBoundedGithubJson(endpoint: string, signal: AbortSignal): Pr
   const response = await fetch(endpoint, {
     headers: {
       Accept: "application/vnd.github+json",
-      "User-Agent": "symbol-lattice-upgrade-preview",
+      "User-Agent": "SymbolLattice-upgrade-preview",
       "X-GitHub-Api-Version": "2022-11-28"
     },
     redirect: "error",
@@ -299,7 +299,7 @@ async function readBoundedResponseText(response: Response): Promise<string> {
 }
 
 function releaseArtifacts(version: string): UpgradePreviewResult["release"]["artifacts"] {
-  const filename = `hsinpu-symbol-lattice-${version}.tgz`;
+  const filename = `SymbolLattice-${version}.tgz`;
   const base = `${RELEASE_DOWNLOAD_BASE}/v${version}/${filename}`;
   return {
     tarball: base,
@@ -347,7 +347,7 @@ function buildInstallationPlan(installation: UpgradeInstallation, tarballUrl: st
     case "npx":
       return {
         steps: [
-          { command: "npx", args: ["--yes", "--package", tarballUrl, "symbol-lattice", "--version"] }
+          { command: "npx", args: ["--yes", "--package", tarballUrl, "SymbolLattice", "--version"] }
         ],
         diagnostics: [
           `The ${PACKAGE_NAME} registry package remains private; this command runs the immutable GitHub Release tarball without changing the current installation.`

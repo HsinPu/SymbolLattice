@@ -18,7 +18,7 @@ afterEach(async () => {
 
 describe("filesystem source catalog freshness", () => {
   it("proves an unchanged project from source and bounded configuration identities", async () => {
-    const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-source-catalog-"));
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-source-catalog-"));
     temporaryDirectories.push(projectPath);
     await mkdir(join(projectPath, "src"), { recursive: true });
     await writeFile(join(projectPath, "package.json"), "{\"private\":true}\n", "utf8");
@@ -72,7 +72,7 @@ describe("filesystem source catalog freshness", () => {
   });
 
   it("fails closed to a full project-input check for an index without discovery identity", async () => {
-    const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-source-catalog-legacy-"));
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-source-catalog-legacy-"));
     temporaryDirectories.push(projectPath);
     await mkdir(join(projectPath, "src"), { recursive: true });
     await writeFile(join(projectPath, "src", "entry.ts"), "export const answer = 42;\n", "utf8");

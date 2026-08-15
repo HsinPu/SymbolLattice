@@ -48,9 +48,11 @@ describe("GitHub release workflow", () => {
     expect(commands).toContain('git fetch --force --no-tags origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"');
     expect(commands).toContain('git cat-file -t "$GITHUB_REF_NAME"');
     expect(commands).toContain("npm run release:contract");
+    expect(commands).toContain('const filename = `SymbolLattice-${version}.tgz`');
+    expect(commands).toContain("renameSync(`release/${result[0].filename}`, `release/${filename}`)");
     expect(commands).toContain('tarball_path="$GITHUB_WORKSPACE/release/${{ steps.pack.outputs.filename }}"');
     expect(commands).toContain("npm install --prefix");
-    expect(commands).toContain('"$install_prefix/node_modules/.bin/symbol-lattice" --version');
+    expect(commands).toContain('"$install_prefix/node_modules/.bin/SymbolLattice" --version');
     expect(commands).toContain("gh release create");
     expect(commands).toContain('upgrade "${GITHUB_REF_NAME#v}" --verify --json');
     expect(commands).toContain("for attempt in 1 2 3 4 5 6");

@@ -76,18 +76,18 @@ const configuredFixturePath = join(
   "fixtures",
   "configured-project"
 );
-const INDEX_DIRECTORY_NAME = ".symbol-lattice";
+const INDEX_DIRECTORY_NAME = ".SymbolLattice";
 const DATABASE_FILE_NAME = "index.sqlite";
 
 async function createFixtureProject(sourcePath = fixturePath): Promise<string> {
-  const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-service-"));
+  const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-service-"));
   temporaryDirectories.push(projectPath);
   await cp(sourcePath, projectPath, { recursive: true });
   return projectPath;
 }
 
 async function createInlineProject(files: Readonly<Record<string, string>>): Promise<string> {
-  const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-service-inline-"));
+  const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-service-inline-"));
   temporaryDirectories.push(projectPath);
   await Promise.all(
     Object.entries(files).map(async ([relativePath, sourceText]) => {
@@ -236,7 +236,7 @@ function raceStatus(generationId: string): IndexStatus {
     initialized: true,
     stale: false,
     staleReasons: [],
-    projectPath: "C:/symbol-lattice-race-project",
+    projectPath: "C:/SymbolLattice-race-project",
     indexedAt: "2026-07-29T00:00:00.000Z",
     generationId,
     counts: { files: 1, symbols: 1, edges: 0, pendingReferences: 0 }
@@ -599,7 +599,7 @@ describe("SymbolLatticeService", () => {
   });
 
   it("uses exactly one atomic comparison bundle for a retained-generation diff", async () => {
-    const projectPath = resolve("C:/symbol-lattice-race-project");
+    const projectPath = resolve("C:/SymbolLattice-race-project");
     const fromGenerationId = "generation:from";
     const toGenerationId = "generation:to";
     const { graphStore, comparisonRequests } = createAtomicComparisonOnlyGraphStore(
@@ -11114,7 +11114,7 @@ describe("SymbolLatticeService", () => {
     );
     const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
 
-    const exploration = await service.explore("C:/symbol-lattice-race-project", "raceTarget");
+    const exploration = await service.explore("C:/SymbolLattice-race-project", "raceTarget");
 
     expect(exploration).toMatchObject({
       status: { generationId: "generation:B" },
@@ -11150,7 +11150,7 @@ describe("SymbolLatticeService", () => {
     );
     const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
 
-    const exploration = await service.explore("C:/symbol-lattice-race-project", "raceTarget");
+    const exploration = await service.explore("C:/SymbolLattice-race-project", "raceTarget");
 
     expect(exploration).toMatchObject({
       status: { generationId: "generation:C" },
@@ -11187,7 +11187,7 @@ describe("SymbolLatticeService", () => {
     const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
 
     const exploration = await service.explore(
-      "C:/symbol-lattice-race-project",
+      "C:/SymbolLattice-race-project",
       "trace raceTarget flow"
     );
 
@@ -11234,7 +11234,7 @@ describe("SymbolLatticeService", () => {
     );
     const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
 
-    const result = await service.context("C:/symbol-lattice-race-project", ["raceTarget"]);
+    const result = await service.context("C:/SymbolLattice-race-project", ["raceTarget"]);
 
     expect(result).toMatchObject({
       status: { generationId: "generation:C" },
@@ -12771,7 +12771,7 @@ describe("SymbolLatticeService", () => {
       );
       const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
 
-      const result = await service.node("C:/symbol-lattice-race-project", corruptedSymbol.qualifiedName);
+      const result = await service.node("C:/SymbolLattice-race-project", corruptedSymbol.qualifiedName);
 
       expect(result).toMatchObject({
         match: { status: "exact", symbol: { id: corruptedSymbol.id } },
@@ -12876,7 +12876,7 @@ describe("SymbolLatticeService", () => {
     );
     const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
 
-    const result = await service.node("C:/symbol-lattice-race-project", "raceTarget");
+    const result = await service.node("C:/SymbolLattice-race-project", "raceTarget");
 
     expect(result).toMatchObject({
       status: { generationId: "generation:B" },
@@ -14262,7 +14262,7 @@ describe("SymbolLatticeService", () => {
       "api/main.py": [
         "from sanic import Sanic",
         "",
-        "app = Sanic(\"symbol-lattice\")",
+        "app = Sanic(\"SymbolLattice\")",
         "",
         "@app.get(\"/health\")",
         "async def health(request):",
@@ -14326,7 +14326,7 @@ describe("SymbolLatticeService", () => {
       "api/main.py": [
         "from sanic import Blueprint, Sanic",
         "",
-        "app = Sanic(\"symbol-lattice\")",
+        "app = Sanic(\"SymbolLattice\")",
         "api = Blueprint(\"api\", url_prefix=\"/api\")",
         "",
         "app.blueprint(api)",
@@ -14393,7 +14393,7 @@ describe("SymbolLatticeService", () => {
       "api/main.py": [
         "from sanic import Blueprint, Sanic",
         "",
-        "app = Sanic(\"symbol-lattice\")",
+        "app = Sanic(\"SymbolLattice\")",
         "users = Blueprint(\"users\", url_prefix=\"/users\")",
         "reports = Blueprint(\"reports\", url_prefix=\"/reports\")",
         "api = Blueprint.group(users, reports, url_prefix=\"/api\")",
@@ -14450,7 +14450,7 @@ describe("SymbolLatticeService", () => {
       "api/main.py": [
         "from sanic import Blueprint, Sanic",
         "",
-        "app = Sanic(\"symbol-lattice\")",
+        "app = Sanic(\"SymbolLattice\")",
         "users = Blueprint(\"users\", url_prefix=\"/users\")",
         "reports = Blueprint(\"reports\", url_prefix=\"/reports\")",
         "content = Blueprint.group(users, url_prefix=\"/content\")",
@@ -14510,7 +14510,7 @@ describe("SymbolLatticeService", () => {
       "api/main.py": [
         "from sanic import Blueprint, Sanic",
         "",
-        "app = Sanic(\"symbol-lattice\")",
+        "app = Sanic(\"SymbolLattice\")",
         "users = Blueprint(\"users\", url_prefix=\"/users\")",
         "public = Blueprint.group(users, url_prefix=\"/public\", name_prefix=\"public\")",
         "admin = Blueprint.group(users, url_prefix=\"/admin\", name_prefix=\"admin\")",
@@ -14576,7 +14576,7 @@ describe("SymbolLatticeService", () => {
       "app/main.py": [
         "from sanic import Sanic as App",
         "from .routes.catalog import catalog as catalog_blueprint",
-        "app = App(\"symbol-lattice\")",
+        "app = App(\"SymbolLattice\")",
         "app.blueprint(catalog_blueprint, url_prefix=\"/v1\")"
       ].join("\n")
     });
@@ -14668,7 +14668,7 @@ describe("SymbolLatticeService", () => {
       "app/main.py": [
         "from sanic import Sanic as App",
         "from .routes.api import api as api_group",
-        "app = App(\"symbol-lattice\")",
+        "app = App(\"SymbolLattice\")",
         "app.blueprint(api_group, url_prefix=\"/v1\")"
       ].join("\n")
     });
@@ -14758,7 +14758,7 @@ describe("SymbolLatticeService", () => {
         "from sanic import Sanic as App",
         "from .routes.public import public as public_group",
         "from .routes.admin import admin as admin_group",
-        "app = App(\"symbol-lattice\")",
+        "app = App(\"SymbolLattice\")",
         "app.blueprint(public_group, url_prefix=\"/v1\")",
         "app.blueprint(admin_group, url_prefix=\"/v2\")"
       ].join("\n")
@@ -14817,7 +14817,7 @@ describe("SymbolLatticeService", () => {
         "from sanic import Sanic as App",
         "from .routes.public import public as public_group",
         "from .routes.admin import admin as admin_group",
-        "app = App(\"symbol-lattice\")",
+        "app = App(\"SymbolLattice\")",
         "app.blueprint(public_group, url_prefix=\"/v1\")",
         "app.blueprint(admin_group, url_prefix=\"/v2\")"
       ].join("\n")
@@ -14857,7 +14857,7 @@ describe("SymbolLatticeService", () => {
       "app/main.py": [
         "from sanic import Sanic as App",
         "from .routes.alpha import alpha as alpha_group",
-        "app = App(\"symbol-lattice\")",
+        "app = App(\"SymbolLattice\")",
         "app.blueprint(alpha_group, url_prefix=\"/v1\")"
       ].join("\n")
     });
@@ -14901,7 +14901,7 @@ describe("SymbolLatticeService", () => {
         "from sanic import Sanic as App",
         "from .routes import public_api as api_group",
         "from .health import status_blueprint",
-        "app = App(\"symbol-lattice\")",
+        "app = App(\"SymbolLattice\")",
         "app.blueprint(api_group, url_prefix=\"/v1\")",
         "app.blueprint(status_blueprint, url_prefix=\"/v2\")"
       ].join("\n")
@@ -14961,7 +14961,7 @@ describe("SymbolLatticeService", () => {
       "app/main.py": [
         "from sanic import Sanic as App",
         "from .routes import public_api",
-        "app = App(\"symbol-lattice\")",
+        "app = App(\"SymbolLattice\")",
         "app.blueprint(public_api, url_prefix=\"/v1\")"
       ].join("\n")
     });
@@ -27349,7 +27349,7 @@ describe("SymbolLatticeService", () => {
         "  inherit lib;",
         "}"
       ].join("\n"),
-      "nix/package.nix": "{ name = \"symbol-lattice\"; }\n"
+      "nix/package.nix": "{ name = \"SymbolLattice\"; }\n"
     });
     const graphStore = new SqliteGraphStore();
     const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
@@ -27494,7 +27494,7 @@ describe("SymbolLatticeService", () => {
   it("indexes YAML top-level scalar keys and retains YAML source-search filtering", async () => {
     const projectPath = await createInlineProject({
       "config/settings.yml": [
-        "service: symbol-lattice",
+        "service: SymbolLattice",
         "port: 3000",
         "metadata:",
         "  team: graph"
@@ -27584,7 +27584,7 @@ describe("SymbolLatticeService", () => {
         "spring.datasource.password=database-secret"
       ].join("\n"),
       "config/application-dev.properties": "feature.enabled=false\n",
-      "config/bootstrap-prod.properties": "app.name=symbol-lattice\n",
+      "config/bootstrap-prod.properties": "app.name=SymbolLattice\n",
       "src/config/AppConfig.java": [
         "import org.springframework.beans.factory.annotation.Value;",
         "",
@@ -27766,7 +27766,7 @@ describe("SymbolLatticeService", () => {
         "    password: yaml-secret"
       ].join("\n"),
       "config/application-dev.yaml": ["feature:", "  enabled: false"].join("\n"),
-      "config/bootstrap-prod.yml": ["app:", "  name: symbol-lattice"].join("\n"),
+      "config/bootstrap-prod.yml": ["app:", "  name: SymbolLattice"].join("\n"),
       "config/application.properties": "shared.mode=properties\n",
       "src/config/YamlConfig.java": [
         "import org.springframework.beans.factory.annotation.Value;",
@@ -27975,7 +27975,7 @@ describe("SymbolLatticeService", () => {
         "    password: kotlin-secret"
       ].join("\n"),
       "config/application-dev.yaml": ["feature:", "  enabled: false"].join("\n"),
-      "config/bootstrap.properties": "app.name=symbol-lattice\n",
+      "config/bootstrap.properties": "app.name=SymbolLattice\n",
       "src/config/KotlinConfig.kt": [
         "import org.springframework.beans.factory.annotation.Value",
         "",

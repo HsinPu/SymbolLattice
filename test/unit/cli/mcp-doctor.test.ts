@@ -53,9 +53,9 @@ function doctorDependencies(
 function standardJson(projectPath: string): string {
   return JSON.stringify({
     mcpServers: {
-      "symbol-lattice": {
+      "SymbolLattice": {
         type: "stdio",
-        command: "symbol-lattice",
+        command: "SymbolLattice",
         args: ["serve", "--mcp", "--project", projectPath]
       }
     }
@@ -65,8 +65,8 @@ function standardJson(projectPath: string): string {
 function commandArgsJson(projectPath: string): string {
   return JSON.stringify({
     mcpServers: {
-      "symbol-lattice": {
-        command: "symbol-lattice",
+      "SymbolLattice": {
+        command: "SymbolLattice",
         args: ["serve", "--mcp", "--project", projectPath]
       }
     }
@@ -75,8 +75,8 @@ function commandArgsJson(projectPath: string): string {
 
 function healthyRuntimeFiles(projectPath: string, homeDirectory: string): Record<string, string> {
   return {
-    [join(projectPath, ".symbol-lattice", "index.sqlite")]: "SQLite format 3\u0000",
-    [join("C:", "tools", "symbol-lattice.CMD")]: "@echo off"
+    [join(projectPath, ".SymbolLattice", "index.sqlite")]: "SQLite format 3\u0000",
+    [join("C:", "tools", "SymbolLattice.CMD")]: "@echo off"
   };
 }
 
@@ -106,12 +106,12 @@ describe("MCP doctor", () => {
         status: "matches",
         path: join(projectPath, ".mcp.json"),
         source: "target-default",
-        entry: "mcpServers.symbol-lattice"
+        entry: "mcpServers.SymbolLattice"
       },
       runtime: {
-        command: "symbol-lattice",
+        command: "SymbolLattice",
         status: "available",
-        resolvedPath: join("C:", "tools", "symbol-lattice.CMD")
+        resolvedPath: join("C:", "tools", "SymbolLattice.CMD")
       },
       project: {
         path: projectPath,
@@ -153,9 +153,9 @@ describe("MCP doctor", () => {
 
     files[configPath] = JSON.stringify({
       mcpServers: {
-        "symbol-lattice": {
+        "SymbolLattice": {
           type: "stdio",
-          command: "symbol-lattice",
+          command: "SymbolLattice",
           args: ["serve"]
         }
       }
@@ -176,9 +176,9 @@ describe("MCP doctor", () => {
     files[join(projectPath, "opencode.jsonc")] = `{
       // OpenCode allows comments and trailing commas.
       "mcp": {
-        "symbol-lattice": {
+        "SymbolLattice": {
           "type": "local",
-          "command": ["symbol-lattice", "serve", "--mcp", "--project", ${JSON.stringify(projectPath)}],
+          "command": ["SymbolLattice", "serve", "--mcp", "--project", ${JSON.stringify(projectPath)}],
           "enabled": true,
         },
       },
@@ -202,9 +202,9 @@ describe("MCP doctor", () => {
     const configPath = join(homeDirectory, ".config", "opencode", "opencode.json");
     files[configPath] = JSON.stringify({
       mcp: {
-        "symbol-lattice": {
+        "SymbolLattice": {
           type: "local",
-          command: ["symbol-lattice", "serve", "--mcp", "--project", projectPath],
+          command: ["SymbolLattice", "serve", "--mcp", "--project", projectPath],
           enabled: true
         }
       }
@@ -230,8 +230,8 @@ describe("MCP doctor", () => {
     const homeDirectory = join("C:", "home", "user");
     const files = healthyRuntimeFiles(projectPath, homeDirectory);
     files[join(homeDirectory, ".codex", "config.toml")] = [
-      "[mcp_servers.symbol_lattice]",
-      "command = 'symbol-lattice' # local executable",
+      "[mcp_servers.SymbolLattice]",
+      "command = 'SymbolLattice' # local executable",
       "args = [",
       '  "serve",',
       '  "--mcp", # transport',
@@ -257,8 +257,8 @@ describe("MCP doctor", () => {
     const files = healthyRuntimeFiles(projectPath, homeDirectory);
     files[join(homeDirectory, ".hermes", "config.yaml")] = [
       "mcp_servers:",
-      "  symbol_lattice:",
-      '    command: "symbol-lattice"',
+      "  SymbolLattice:",
+      '    command: "SymbolLattice"',
       "    args:",
       '      - "serve"',
       '      - "--mcp"',
@@ -270,7 +270,7 @@ describe("MCP doctor", () => {
       "platform_toolsets:",
       "  cli:",
       "    - hermes-cli",
-      "    - mcp-symbol-lattice"
+      "    - mcp-SymbolLattice"
     ].join("\n");
     const virtual = createVirtualFiles(files);
 
@@ -339,12 +339,12 @@ describe("MCP doctor", () => {
     const entrypoint = join("C:", "checkout", "dist", "cli", "main.js");
     const configPath = join("C:", "configs", "mcp.json");
     const files = {
-      [join(projectPath, ".symbol-lattice", "index.sqlite")]: "SQLite format 3\u0000",
+      [join(projectPath, ".SymbolLattice", "index.sqlite")]: "SQLite format 3\u0000",
       [nodePath]: "node executable",
       [entrypoint]: "built cli",
       [configPath]: JSON.stringify({
         mcpServers: {
-          "symbol-lattice": {
+          "SymbolLattice": {
             command: nodePath,
             args: [entrypoint, "serve", "--mcp", "--project", projectPath]
           }

@@ -113,7 +113,7 @@ const OBJECTIVE_C_HEADER_END = /^[ \t]*@end[ \t]*$/mu;
  */
 export const HARD_EXCLUDED_DIRECTORY_NAMES: ReadonlySet<string> = new Set([
   ".git",
-  ".symbol-lattice",
+  ".SymbolLattice",
   "coverage",
   "dist",
   "node_modules"

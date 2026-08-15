@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.420.0 is a developer preview. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.symbol-lattice` index; add `--no-auto-sync` to disable it.
+> v0.421.0 is a breaking developer preview with new package, CLI, MCP, and index names. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.SymbolLattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -27,7 +27,7 @@ Requires Node.js `>=22.13 <25` and npm.
 
 ```bash
 git clone https://github.com/HsinPu/SymbolLattice.git
-cd symbol-lattice
+cd SymbolLattice
 npm install
 npm run build
 
@@ -42,29 +42,58 @@ node dist/cli/main.js explore "Trace createOrder to persistence" --project /path
 Install the public CLI, then explicitly create an index in the repository where you want to use it:
 
 ```bash
-npm install -g @hsinpu/symbol-lattice
+npm install -g @hsinpu/symbollattice
 cd /path/to/project
-symbol-lattice init .
+SymbolLattice init .
 ```
 
 The Codex installer previews its plan by default and does not write anything:
 
 ```bash
-symbol-lattice install codex
-symbol-lattice install codex --apply --yes
-symbol-lattice doctor codex
+SymbolLattice install codex
+SymbolLattice install codex --apply --yes
+SymbolLattice doctor codex
 ```
 
-It jointly manages the `mcp_servers.symbol_lattice` table in global `~/.codex/config.toml` and the section bounded by `SYMBOL_LATTICE_START` / `SYMBOL_LATTICE_END` in global `~/.codex/AGENTS.md`. Existing files receive full backups before modification; if either file fails preflight or writing, installation stops or rolls back attempted changes.
+It jointly manages the `mcp_servers.SymbolLattice` table in global `~/.codex/config.toml` and the section bounded by `SYMBOL_LATTICE_START` / `SYMBOL_LATTICE_END` in global `~/.codex/AGENTS.md`. Existing files receive full backups before modification; if either file fails preflight or writing, installation stops or rolls back attempted changes.
 
 Removal is also preview-first and removes only SymbolLattice-owned content:
 
 ```bash
-symbol-lattice uninstall codex
-symbol-lattice uninstall codex --apply --yes
+SymbolLattice uninstall codex
+SymbolLattice uninstall codex --apply --yes
 ```
 
-The installer never creates or deletes a project index automatically. v0.420.0 passed isolated npm installation, MCP stdio cwd verification, and an on-device check from a new Codex task. That task loaded the SymbolLattice MCP server and resolved the active repository as its project path.
+The installer never creates or deletes a project index automatically. Restart Codex or open a new task after installation so the new MCP configuration is loaded.
+
+## Upgrading from v0.420.0 or earlier
+
+v0.421.0 does not provide aliases for the old names and does not read the old index. Use this order:
+
+```bash
+# Remove the old Codex MCP configuration while the old CLI is still available
+symbol-lattice uninstall codex --apply --yes
+
+# Replace the global npm package
+npm uninstall -g @hsinpu/symbol-lattice
+npm install -g @hsinpu/symbollattice
+
+# Install the new Codex configuration and create a new index in each project
+SymbolLattice install codex --apply --yes
+cd /path/to/project
+SymbolLattice init .
+SymbolLattice doctor codex
+```
+
+| Previous surface | v0.421.0 |
+| --- | --- |
+| npm package | `@hsinpu/symbollattice` |
+| CLI | `SymbolLattice` |
+| Codex MCP entry | `mcp_servers.SymbolLattice` |
+| MCP tools | `SymbolLattice_*` |
+| Project index | `.SymbolLattice` |
+
+If the old CLI is no longer available, remove the old MCP table from `~/.codex/config.toml` manually before running the new installer. The old `.symbol-lattice` directory is never deleted automatically; retain it for rollback until the new `.SymbolLattice` queries are verified, then clean it up manually.
 
 ## MCP
 

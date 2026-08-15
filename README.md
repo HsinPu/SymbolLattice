@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.420.0 為開發者預覽版。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.symbol-lattice` 索引。加入 `--no-auto-sync` 可停用。
+> v0.421.0 為不相容的開發者預覽版，已全面改用新的 package、CLI、MCP 與索引名稱。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
 
 ## 這是什麼
 
@@ -27,7 +27,7 @@ SymbolLattice 掃描本機 repository、保存程式碼圖，並以 CLI/MCP 提�
 
 ```bash
 git clone https://github.com/HsinPu/SymbolLattice.git
-cd symbol-lattice
+cd SymbolLattice
 npm install
 npm run build
 
@@ -42,29 +42,58 @@ node dist/cli/main.js explore "Trace createOrder to persistence" --project /path
 先安裝公開 CLI，並在要使用的 repository 明確建立索引：
 
 ```bash
-npm install -g @hsinpu/symbol-lattice
+npm install -g @hsinpu/symbollattice
 cd /path/to/project
-symbol-lattice init .
+SymbolLattice init .
 ```
 
 Codex 安裝器預設只顯示計畫，不會寫入：
 
 ```bash
-symbol-lattice install codex
-symbol-lattice install codex --apply --yes
-symbol-lattice doctor codex
+SymbolLattice install codex
+SymbolLattice install codex --apply --yes
+SymbolLattice doctor codex
 ```
 
-它共同管理全域 `~/.codex/config.toml` 的 `mcp_servers.symbol_lattice` table，以及全域 `~/.codex/AGENTS.md` 中由 `SYMBOL_LATTICE_START`／`SYMBOL_LATTICE_END` 包住的區塊。既有檔案修改前會建立完整備份；任一檔案前置檢查或寫入失敗時，安裝會停止或回復已嘗試的變更。
+它共同管理全域 `~/.codex/config.toml` 的 `mcp_servers.SymbolLattice` table，以及全域 `~/.codex/AGENTS.md` 中由 `SYMBOL_LATTICE_START`／`SYMBOL_LATTICE_END` 包住的區塊。既有檔案修改前會建立完整備份；任一檔案前置檢查或寫入失敗時，安裝會停止或回復已嘗試的變更。
 
 移除時也先預覽，且只移除 SymbolLattice 自己管理的內容：
 
 ```bash
-symbol-lattice uninstall codex
-symbol-lattice uninstall codex --apply --yes
+SymbolLattice uninstall codex
+SymbolLattice uninstall codex --apply --yes
 ```
 
-安裝器不會自動建立或刪除專案索引。v0.420.0 已通過隔離 npm 安裝、MCP stdio cwd，以及新 Codex task 的實機驗證；該 task 成功載入 SymbolLattice MCP，並把執行中的 repository 正確解析為專案路徑。
+安裝器不會自動建立或刪除專案索引。安裝完成後，請重新啟動 Codex 或開啟新的 task，讓新的 MCP 設定生效。
+
+## 從 v0.420.0 或更早版本升級
+
+v0.421.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
+
+```bash
+# 仍可執行舊 CLI 時，先移除舊 Codex MCP 設定
+symbol-lattice uninstall codex --apply --yes
+
+# 更換全域 npm 套件
+npm uninstall -g @hsinpu/symbol-lattice
+npm install -g @hsinpu/symbollattice
+
+# 安裝新 Codex 設定，並在每個專案建立新索引
+SymbolLattice install codex --apply --yes
+cd /path/to/project
+SymbolLattice init .
+SymbolLattice doctor codex
+```
+
+| 舊項目 | v0.421.0 |
+| --- | --- |
+| npm package | `@hsinpu/symbollattice` |
+| CLI | `SymbolLattice` |
+| Codex MCP entry | `mcp_servers.SymbolLattice` |
+| MCP tools | `SymbolLattice_*` |
+| 專案索引 | `.SymbolLattice` |
+
+如果舊 CLI 已不存在，請先從 `~/.codex/config.toml` 手動移除舊 MCP table，再執行新安裝器。舊 `.symbol-lattice` 不會被自動刪除；先保留作回復用途，確認新 `.SymbolLattice` 查詢正常後再自行清理。
 
 ## MCP
 

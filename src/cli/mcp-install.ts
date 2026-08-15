@@ -449,11 +449,11 @@ function updateHermesYaml(text: string, expected: McpConfigResult["server"]): st
   if (existingCli !== undefined && (!Array.isArray(existingCli) || !existingCli.every((item) => typeof item === "string"))) {
     throw new Error("Hermes platform_toolsets.cli must be a string list before it can be safely updated.");
   }
-  const cliToolset = existingCli === undefined ? ["hermes-cli", "mcp-symbol-lattice"] : [...existingCli];
-  if (!cliToolset.includes("mcp-symbol-lattice")) {
-    cliToolset.push("mcp-symbol-lattice");
+  const cliToolset = existingCli === undefined ? ["hermes-cli", "mcp-SymbolLattice"] : [...existingCli];
+  if (!cliToolset.includes("mcp-SymbolLattice")) {
+    cliToolset.push("mcp-SymbolLattice");
   }
-  document.setIn(["mcp_servers", "symbol_lattice"], {
+  document.setIn(["mcp_servers", "SymbolLattice"], {
     command: expected.command,
     args: [...expected.args],
     timeout: 120,
@@ -467,9 +467,9 @@ function updateHermesYaml(text: string, expected: McpConfigResult["server"]): st
 function updateCodexToml(text: string, snippet: string): string {
   const lineEnding = text.includes("\r\n") ? "\r\n" : "\n";
   const lines = text.split(/\r\n|\r|\n/u);
-  const ranges = findTomlSectionRanges(lines, "mcp_servers.symbol_lattice");
+  const ranges = findTomlSectionRanges(lines, "mcp_servers.SymbolLattice");
   if (ranges.length > 1) {
-    throw new Error("Codex TOML contains duplicate mcp_servers.symbol_lattice sections.");
+    throw new Error("Codex TOML contains duplicate mcp_servers.SymbolLattice sections.");
   }
   assertUnambiguousCodexMcpShape(lines);
   const replacement = snippet.split("\n");
@@ -488,7 +488,7 @@ function updateCodexToml(text: string, snippet: string): string {
 }
 
 /**
- * The installer owns only the conventional `[mcp_servers.symbol_lattice]`
+ * The installer owns only the conventional `[mcp_servers.SymbolLattice]`
  * table. TOML has equivalent-looking inline, quoted, dotted-key, and array
  * forms that cannot be safely merged by this intentionally narrow updater.
  * Refuse those forms instead of risking a conflicting second declaration.
@@ -510,15 +510,15 @@ function assertUnambiguousCodexMcpShape(lines: readonly string[]): void {
       continue;
     }
     if (header !== undefined) {
-      if (looksLikeSymbolLatticeMcpPath(header) && header !== "mcp_servers.symbol_lattice") {
+      if (looksLikeSymbolLatticeMcpPath(header) && header !== "mcp_servers.SymbolLattice") {
         throw new Error("Codex TOML uses a non-conventional SymbolLattice MCP table that cannot be safely merged.");
       }
       inMcpServersTable = header === "mcp_servers";
       continue;
     }
     if (
-      /^mcp_servers\s*(?:\.\s*(?:symbol_lattice|["']symbol_lattice["']))?\s*=/u.test(withoutComment) ||
-      (inMcpServersTable && /^symbol_lattice\s*=/u.test(withoutComment))
+      /^mcp_servers\s*(?:\.\s*(?:SymbolLattice|["']SymbolLattice["']))?\s*=/u.test(withoutComment) ||
+      (inMcpServersTable && /^SymbolLattice\s*=/u.test(withoutComment))
     ) {
       throw new Error("Codex TOML uses an inline or dotted SymbolLattice MCP entry that cannot be safely merged.");
     }
@@ -554,7 +554,7 @@ function stripTomlComment(line: string): string {
 }
 
 function looksLikeSymbolLatticeMcpPath(value: string): boolean {
-  return /\bmcp_servers\s*\.\s*(?:symbol_lattice|["']symbol_lattice["'])(?=$|[^A-Za-z0-9_])/u.test(value);
+  return /\bmcp_servers\s*\.\s*(?:SymbolLattice|["']SymbolLattice["'])(?=$|[^A-Za-z0-9_])/u.test(value);
 }
 
 function findTomlSectionRanges(
@@ -598,7 +598,7 @@ function nextBackupPath(
 
 function resolveBackupDirectory(value: string | undefined, projectPath: string): string {
   if (value === undefined) {
-    return join(resolve(projectPath), ".symbol-lattice", "mcp-backups");
+    return join(resolve(projectPath), ".SymbolLattice", "mcp-backups");
   }
   if (value.trim().length === 0) {
     throw new Error("Expected a non-empty --backup-dir path.");
@@ -616,7 +616,7 @@ function writeBackup(sourcePath: string, backupPath: string): void {
 function writeAtomically(path: string, text: string): void {
   const existingMode = existsSync(path) ? statSync(path).mode & 0o777 : null;
   mkdirSync(dirname(path), { recursive: true });
-  const temporaryPath = `${path}.symbol-lattice-${process.pid}-${randomUUID()}.tmp`;
+  const temporaryPath = `${path}.SymbolLattice-${process.pid}-${randomUUID()}.tmp`;
   try {
     writeFileSync(
       temporaryPath,

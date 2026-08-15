@@ -14,7 +14,7 @@ import type { UpgradeInstallation, UpgradePreviewResult } from "../../../src/cli
 
 const COMMIT = "a".repeat(40);
 const VERSION = "0.256.0";
-const FILENAME = `hsinpu-symbol-lattice-${VERSION}.tgz`;
+const FILENAME = `SymbolLattice-${VERSION}.tgz`;
 const TARBALL_URL = `https://github.com/HsinPu/SymbolLattice/releases/download/v${VERSION}/${FILENAME}`;
 
 describe("verified release upgrade execution", () => {
@@ -55,7 +55,7 @@ describe("verified release upgrade execution", () => {
         sha256: fixture.sha256
       },
       manifest: {
-        packageName: "@hsinpu/symbol-lattice",
+        packageName: "@hsinpu/symbollattice",
         packageVersion: VERSION,
         releaseTag: `v${VERSION}`,
         releaseCommit: COMMIT,
@@ -259,12 +259,12 @@ describe("verified release upgrade execution", () => {
 });
 
 function releaseFixture() {
-  const tarball = Buffer.from("verified-symbol-lattice-tarball");
+  const tarball = Buffer.from("verified-SymbolLattice-tarball");
   const sha256 = createHash("sha256").update(tarball).digest("hex");
   const manifestText = JSON.stringify({
     schemaVersion: 1,
     package: {
-      name: "@hsinpu/symbol-lattice",
+      name: "@hsinpu/symbollattice",
       version: VERSION,
       private: true
     },

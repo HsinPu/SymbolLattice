@@ -9,7 +9,7 @@ import { FileSystemSourceCatalog } from "../../../src/infrastructure/filesystem/
 const temporaryProjectPaths: string[] = [];
 
 async function createProject(files: Readonly<Record<string, string>>): Promise<string> {
-  const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-cargo-workspace-"));
+  const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-cargo-workspace-"));
   temporaryProjectPaths.push(projectPath);
 
   await Promise.all(
@@ -379,7 +379,7 @@ describe("Cargo workspace crate module resolution", () => {
       expect.arrayContaining([
         expect.objectContaining({
           kind: "cargo-workspace-member-glob",
-          path: ".symbol-lattice/cargo-workspace-members.json",
+          path: ".SymbolLattice/cargo-workspace-members.json",
           state: "present"
         })
       ])

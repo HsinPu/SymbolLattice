@@ -14,7 +14,7 @@ const temporaryDirectories: string[] = [];
 const RUST_FILE_IMPORT_RULE = "project.rust.crate.direct-module.named-import-file";
 
 async function createInlineProject(files: Readonly<Record<string, string>>): Promise<string> {
-  const projectPath = await mkdtemp(resolve(tmpdir(), "symbol-lattice-rust-project-"));
+  const projectPath = await mkdtemp(resolve(tmpdir(), "SymbolLattice-rust-project-"));
   temporaryDirectories.push(projectPath);
   await Promise.all(
     Object.entries(files).map(async ([relativePath, sourceText]) => {

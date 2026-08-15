@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 function project(): string {
-  const directory = mkdtempSync(join(tmpdir(), "symbol-lattice-restart-control-"));
+  const directory = mkdtempSync(join(tmpdir(), "SymbolLattice-restart-control-"));
   temporaryDirectories.push(directory);
   return directory;
 }
@@ -79,9 +79,9 @@ function registry(
 function command(suffix = "a"): AutoSyncStartCommand {
   return {
     executable: "C:/node/node.exe",
-    arguments: ["C:/symbol-lattice/main.js", "watch", "C:/project", "--json"],
+    arguments: ["C:/SymbolLattice/main.js", "watch", "C:/project", "--json"],
     workingDirectory: "C:/project",
-    logPath: "C:/project/.symbol-lattice/auto-sync-host.log",
+    logPath: "C:/project/.SymbolLattice/auto-sync-host.log",
     pluginModulePaths: ["C:/project/plugin.mjs"],
     integrity: {
       entrySha256: suffix.repeat(64),

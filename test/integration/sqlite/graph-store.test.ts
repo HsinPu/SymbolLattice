@@ -23,11 +23,11 @@ import { SqliteGraphStore } from "../../../src/infrastructure/sqlite/index.js";
 
 const temporaryDirectories: string[] = [];
 const persistentReadStores: SqliteGraphStore[] = [];
-const INDEX_DIRECTORY_NAME = ".symbol-lattice";
+const INDEX_DIRECTORY_NAME = ".SymbolLattice";
 const DATABASE_FILE_NAME = "index.sqlite";
 
 async function temporaryProject(): Promise<string> {
-  const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-store-"));
+  const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-store-"));
   temporaryDirectories.push(projectPath);
   return projectPath;
 }

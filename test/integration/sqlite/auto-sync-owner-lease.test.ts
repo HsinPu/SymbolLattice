@@ -12,9 +12,9 @@ import {
 const temporaryDirectories: string[] = [];
 
 async function createIndexedProject(): Promise<string> {
-  const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-auto-sync-owner-"));
+  const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-auto-sync-owner-"));
   temporaryDirectories.push(projectPath);
-  const indexDirectory = join(projectPath, ".symbol-lattice");
+  const indexDirectory = join(projectPath, ".SymbolLattice");
   await mkdir(indexDirectory, { recursive: true });
   await writeFile(join(indexDirectory, "index.sqlite"), "placeholder");
   return projectPath;
@@ -37,7 +37,7 @@ describe("SQLite auto-sync owner lease", () => {
     if (acquired.state !== "owned") {
       throw new Error("Expected the first auto-sync owner lease acquisition to succeed.");
     }
-    await expect(access(join(projectPath, ".symbol-lattice", AUTO_SYNC_OWNER_LEASE_FILE_NAME))).resolves.toBeUndefined();
+    await expect(access(join(projectPath, ".SymbolLattice", AUTO_SYNC_OWNER_LEASE_FILE_NAME))).resolves.toBeUndefined();
 
     const unavailable = contender.acquire();
     expect(unavailable).toMatchObject({
@@ -56,11 +56,11 @@ describe("SQLite auto-sync owner lease", () => {
   });
 
   it("does not create an owner database when no graph index exists", async () => {
-    const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-auto-sync-owner-uninitialized-"));
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-auto-sync-owner-uninitialized-"));
     temporaryDirectories.push(projectPath);
     const lease = new SqliteAutoSyncOwnerLease(projectPath);
 
-    expect(() => lease.acquire()).toThrow('Run "symbol-lattice init');
-    await expect(access(join(projectPath, ".symbol-lattice"))).rejects.toThrow();
+    expect(() => lease.acquire()).toThrow('Run "SymbolLattice init');
+    await expect(access(join(projectPath, ".SymbolLattice"))).rejects.toThrow();
   });
 });

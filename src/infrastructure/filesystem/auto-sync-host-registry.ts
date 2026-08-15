@@ -22,7 +22,7 @@ import {
   type AutoSyncHostRegistryResult
 } from "../../application/index.js";
 
-const INDEX_DIRECTORY_NAME = ".symbol-lattice";
+const INDEX_DIRECTORY_NAME = ".SymbolLattice";
 export const AUTO_SYNC_HOST_DIRECTORY_NAME = "auto-sync-hosts";
 const MAX_HOST_RECORD_BYTES = 16 * 1024;
 const HOST_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

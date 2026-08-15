@@ -11,7 +11,7 @@ import {
 } from "./discovery.js";
 
 export const CONFIGURATION_DISCOVERY_INPUT_PATH =
-  ".symbol-lattice/configuration-candidates.json";
+  ".SymbolLattice/configuration-candidates.json";
 export const CONFIGURATION_DISCOVERY_POLICY = "configuration-candidates-v1" as const;
 
 const CONFIGURATION_CANDIDATE_NAMES: ReadonlySet<string> = new Set([

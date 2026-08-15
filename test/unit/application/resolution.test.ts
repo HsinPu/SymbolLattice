@@ -31,7 +31,7 @@ function languageForPath(relativePath: string): SourceDocument["language"] {
 async function createConfiguredProject(
   files: Readonly<Record<string, string>>
 ): Promise<{ readonly projectPath: string; readonly sourceDocuments: readonly SourceDocument[] }> {
-  const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-resolution-"));
+  const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-resolution-"));
   temporaryProjectPaths.push(projectPath);
   await Promise.all(
     Object.entries(files).map(async ([relativePath, sourceText]) => {

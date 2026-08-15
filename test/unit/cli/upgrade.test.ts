@@ -42,9 +42,9 @@ describe("preview-only release upgrade planning", () => {
         source: "explicit-version",
         networkRequested: false,
         artifacts: {
-          tarball: "https://github.com/HsinPu/SymbolLattice/releases/download/v0.254.0/hsinpu-symbol-lattice-0.254.0.tgz",
-          checksum: "https://github.com/HsinPu/SymbolLattice/releases/download/v0.254.0/hsinpu-symbol-lattice-0.254.0.tgz.sha256",
-          manifest: "https://github.com/HsinPu/SymbolLattice/releases/download/v0.254.0/hsinpu-symbol-lattice-0.254.0.tgz.manifest.json"
+          tarball: "https://github.com/HsinPu/SymbolLattice/releases/download/v0.254.0/SymbolLattice-0.254.0.tgz",
+          checksum: "https://github.com/HsinPu/SymbolLattice/releases/download/v0.254.0/SymbolLattice-0.254.0.tgz.sha256",
+          manifest: "https://github.com/HsinPu/SymbolLattice/releases/download/v0.254.0/SymbolLattice-0.254.0.tgz.manifest.json"
         }
       },
       mutation: {
@@ -86,7 +86,7 @@ describe("preview-only release upgrade planning", () => {
         args: [
           "install",
           "--global",
-          "https://github.com/HsinPu/SymbolLattice/releases/download/v0.255.0/hsinpu-symbol-lattice-0.255.0.tgz"
+          "https://github.com/HsinPu/SymbolLattice/releases/download/v0.255.0/SymbolLattice-0.255.0.tgz"
         ]
       }
     ]);
@@ -168,7 +168,7 @@ describe("preview-only release upgrade planning", () => {
 
     expect(
       detectUpgradeInstallation({
-        entryPath: "C:/Users/me/AppData/Roaming/npm/node_modules/@hsinpu/symbol-lattice/dist/cli/main.js",
+        entryPath: "C:/Users/me/AppData/Roaming/npm/node_modules/@hsinpu/symbollattice/dist/cli/main.js",
         cwd: "C:/repo",
         platform: "win32"
       })
@@ -176,7 +176,7 @@ describe("preview-only release upgrade planning", () => {
 
     expect(
       detectUpgradeInstallation({
-        entryPath: "C:/repo/node_modules/@hsinpu/symbol-lattice/dist/cli/main.js",
+        entryPath: "C:/repo/node_modules/@hsinpu/symbollattice/dist/cli/main.js",
         cwd: "C:/repo",
         platform: "win32"
       })
@@ -184,7 +184,7 @@ describe("preview-only release upgrade planning", () => {
 
     expect(
       detectUpgradeInstallation({
-        entryPath: "C:/Users/me/AppData/Local/npm-cache/_npx/hash/node_modules/@hsinpu/symbol-lattice/dist/cli/main.js",
+        entryPath: "C:/Users/me/AppData/Local/npm-cache/_npx/hash/node_modules/@hsinpu/symbollattice/dist/cli/main.js",
         cwd: "C:/repo",
         platform: "win32"
       })
@@ -192,13 +192,13 @@ describe("preview-only release upgrade planning", () => {
 
     expect(
       detectUpgradeInstallation({
-        entryPath: "C:/portable/symbol-lattice.js",
+        entryPath: "C:/portable/SymbolLattice.js",
         cwd: "C:/repo",
         platform: "win32"
       })
     ).toEqual({
       kind: "unknown",
-      reason: "Unrecognized installation layout at C:/portable/symbol-lattice.js."
+      reason: "Unrecognized installation layout at C:/portable/SymbolLattice.js."
     });
   });
 
@@ -214,7 +214,7 @@ describe("preview-only release upgrade planning", () => {
       "https://api.github.com/repos/HsinPu/SymbolLattice/releases/latest",
       expect.objectContaining({
         redirect: "error",
-        headers: expect.objectContaining({ "User-Agent": "symbol-lattice-upgrade-preview" })
+        headers: expect.objectContaining({ "User-Agent": "SymbolLattice-upgrade-preview" })
       })
     );
   });

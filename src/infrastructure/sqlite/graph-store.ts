@@ -47,7 +47,7 @@ import type {
   ReplaceProjectFactsInput
 } from "../../ports/graph-store.js";
 
-const INDEX_DIRECTORY_NAME = ".symbol-lattice";
+const INDEX_DIRECTORY_NAME = ".SymbolLattice";
 const DATABASE_FILE_NAME = "index.sqlite";
 const INDEXED_AT_META_KEY = "indexed_at";
 const ACTIVE_GENERATION_ID_META_KEY = "active_generation_id";

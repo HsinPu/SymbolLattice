@@ -68,12 +68,12 @@ import { SYMBOL_LATTICE_VERSION } from "../../../src/version.js";
 
 describe("CLI entrypoint detection", () => {
   it("recognizes npm's Unix bin symlink through its real target", () => {
-    const binPath = resolve(".test-cli-install", "node_modules", ".bin", "symbol-lattice");
+    const binPath = resolve(".test-cli-install", "node_modules", ".bin", "SymbolLattice");
     const modulePath = resolve(
       ".test-cli-install",
       "node_modules",
       "@hsinpu",
-      "symbol-lattice",
+      "SymbolLattice",
       "dist",
       "cli",
       "main.js"
@@ -642,7 +642,7 @@ function generationDiffResult(): GenerationDiffResult {
   };
 }
 
-describe("symbol-lattice search CLI", () => {
+describe("SymbolLattice search CLI", () => {
   it("forwards bounded source-search filters and renders the stable JSON result", async () => {
     const calls: Array<{ projectPath: string; query: string; options: SearchOptions }> = [];
     const result = searchResult();
@@ -661,7 +661,7 @@ describe("symbol-lattice search CLI", () => {
     await createProgram(service).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "search",
         "  User Token  ",
         "--project",
@@ -702,7 +702,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "health", "--language", "rust", "--json"],
+      ["node", "SymbolLattice", "search", "health", "--language", "rust", "--json"],
       { from: "node" }
     );
 
@@ -731,7 +731,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "health", "--language", "java", "--json"],
+      ["node", "SymbolLattice", "search", "health", "--language", "java", "--json"],
       { from: "node" }
     );
 
@@ -760,7 +760,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "users", "--language", "php", "--json"],
+      ["node", "SymbolLattice", "search", "users", "--language", "php", "--json"],
       { from: "node" }
     );
 
@@ -789,7 +789,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "health", "--language", "c", "--json"],
+      ["node", "SymbolLattice", "search", "health", "--language", "c", "--json"],
       { from: "node" }
     );
 
@@ -818,7 +818,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "health", "--language", "vue", "--json"],
+      ["node", "SymbolLattice", "search", "health", "--language", "vue", "--json"],
       { from: "node" }
     );
 
@@ -847,7 +847,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "catalog", "--language", "svelte", "--json"],
+      ["node", "SymbolLattice", "search", "catalog", "--language", "svelte", "--json"],
       { from: "node" }
     );
 
@@ -876,7 +876,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "catalog", "--language", "astro", "--json"],
+      ["node", "SymbolLattice", "search", "catalog", "--language", "astro", "--json"],
       { from: "node" }
     );
 
@@ -905,7 +905,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "catalog", "--language", "razor", "--json"],
+      ["node", "SymbolLattice", "search", "catalog", "--language", "razor", "--json"],
       { from: "node" }
     );
 
@@ -934,7 +934,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "catalog", "--language", "arkts", "--json"],
+      ["node", "SymbolLattice", "search", "catalog", "--language", "arkts", "--json"],
       { from: "node" }
     );
 
@@ -963,7 +963,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "instance", "--language", "terraform", "--json"],
+      ["node", "SymbolLattice", "search", "instance", "--language", "terraform", "--json"],
       { from: "node" }
     );
 
@@ -992,7 +992,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "product-card", "--language", "liquid", "--json"],
+      ["node", "SymbolLattice", "search", "product-card", "--language", "liquid", "--json"],
       { from: "node" }
     );
 
@@ -1021,7 +1021,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "Token", "--language", "solidity", "--json"],
+      ["node", "SymbolLattice", "search", "Token", "--language", "solidity", "--json"],
       { from: "node" }
     );
 
@@ -1050,7 +1050,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "OrderService", "--language", "cfml", "--json"],
+      ["node", "SymbolLattice", "search", "OrderService", "--language", "cfml", "--json"],
       { from: "node" }
     );
 
@@ -1079,7 +1079,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "package", "--language", "nix", "--json"],
+      ["node", "SymbolLattice", "search", "package", "--language", "nix", "--json"],
       { from: "node" }
     );
 
@@ -1108,7 +1108,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "Worker", "--language", "vbnet", "--json"],
+      ["node", "SymbolLattice", "search", "Worker", "--language", "vbnet", "--json"],
       { from: "node" }
     );
 
@@ -1137,7 +1137,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "health", "--language", "cpp", "--json"],
+      ["node", "SymbolLattice", "search", "health", "--language", "cpp", "--json"],
       { from: "node" }
     );
 
@@ -1166,7 +1166,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "health", "--language", "csharp", "--json"],
+      ["node", "SymbolLattice", "search", "health", "--language", "csharp", "--json"],
       { from: "node" }
     );
 
@@ -1195,7 +1195,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "health", "--language", "ruby", "--json"],
+      ["node", "SymbolLattice", "search", "health", "--language", "ruby", "--json"],
       { from: "node" }
     );
 
@@ -1224,7 +1224,7 @@ describe("symbol-lattice search CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "search", "health", "--language", "kotlin", "--json"],
+      ["node", "SymbolLattice", "search", "health", "--language", "kotlin", "--json"],
       { from: "node" }
     );
 
@@ -1245,14 +1245,14 @@ describe("symbol-lattice search CLI", () => {
 
     await expect(
       program.parseAsync(
-        ["node", "symbol-lattice", "search", "user", "--limit", "101"],
+        ["node", "SymbolLattice", "search", "user", "--limit", "101"],
         { from: "node" }
       )
     ).rejects.toThrow("Expected an integer between 1 and 100");
   });
 });
 
-describe("symbol-lattice investigate CLI", () => {
+describe("SymbolLattice investigate CLI", () => {
   it("forwards persisted-source, selection, and graph-context bounds as one read-only request", async () => {
     const calls: Array<{ projectPath: string; query: string; options: InvestigateOptions }> = [];
     const result = investigateResult();
@@ -1271,7 +1271,7 @@ describe("symbol-lattice investigate CLI", () => {
     await createProgram(service).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "investigate",
         "  User Token  ",
         "--project",
@@ -1331,7 +1331,7 @@ describe("symbol-lattice investigate CLI", () => {
 
     await expect(
       program.parseAsync(
-        ["node", "symbol-lattice", "investigate", "user", "--symbol-limit", "9"],
+        ["node", "SymbolLattice", "investigate", "user", "--symbol-limit", "9"],
         { from: "node" }
       )
     ).rejects.toThrow("Expected an integer between 1 and 8");
@@ -1343,7 +1343,7 @@ describe("symbol-lattice investigate CLI", () => {
 
     await expect(
       program.parseAsync(
-        ["node", "symbol-lattice", "investigate", "user", "--ranking", "semantic"],
+        ["node", "SymbolLattice", "investigate", "user", "--ranking", "semantic"],
         { from: "node" }
       )
     ).rejects.toThrow("Expected one of: lexical, structure, impact, topology");
@@ -1355,7 +1355,7 @@ describe("symbol-lattice investigate CLI", () => {
 
     await expect(
       program.parseAsync(
-        ["node", "symbol-lattice", "investigate", "user", "--source-character-budget", "2047"],
+        ["node", "SymbolLattice", "investigate", "user", "--source-character-budget", "2047"],
         { from: "node" }
       )
     ).rejects.toThrow("Expected an integer between 2048 and 64000");
@@ -1367,14 +1367,14 @@ describe("symbol-lattice investigate CLI", () => {
 
     await expect(
       program.parseAsync(
-        ["node", "symbol-lattice", "investigate", "user", "--source-render-mode", "summary"],
+        ["node", "SymbolLattice", "investigate", "user", "--source-render-mode", "summary"],
         { from: "node" }
       )
     ).rejects.toThrow("Expected one of: adaptive, prefix, focused, signature, multi");
   });
 });
 
-describe("symbol-lattice persisted file-view CLI", () => {
+describe("SymbolLattice persisted file-view CLI", () => {
   it("forwards the bounded source window and structural-only selection", async () => {
     const calls: Array<{ projectPath: string; filePath: string; options: FileViewOptions }> = [];
     const result = fileViewResult();
@@ -1393,7 +1393,7 @@ describe("symbol-lattice persisted file-view CLI", () => {
     await createProgram(service).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "file",
         "src/routes.ts",
         "--project",
@@ -1464,7 +1464,7 @@ describe("symbol-lattice persisted file-view CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "file", "routes.ts", "--offset", "2", "--limit", "2"],
+      ["node", "SymbolLattice", "file", "routes.ts", "--offset", "2", "--limit", "2"],
       { from: "node" }
     );
 
@@ -1526,7 +1526,7 @@ describe("symbol-lattice persisted file-view CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "file", "application.yaml"],
+      ["node", "SymbolLattice", "file", "application.yaml"],
       { from: "node" }
     );
 
@@ -1562,7 +1562,7 @@ describe("symbol-lattice persisted file-view CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "file", "src/routes.ts"],
+      ["node", "SymbolLattice", "file", "src/routes.ts"],
       { from: "node" }
     );
 
@@ -1573,7 +1573,7 @@ describe("symbol-lattice persisted file-view CLI", () => {
   });
 });
 
-describe("symbol-lattice v0.258 files CLI", () => {
+describe("SymbolLattice v0.258 files CLI", () => {
   it("forwards persisted file filters, positional project selection, and stable JSON without mutating", async () => {
     const calls: Array<{ projectPath: string; options: FilesOptions }> = [];
     const mutationCalls: string[] = [];
@@ -1598,7 +1598,7 @@ describe("symbol-lattice v0.258 files CLI", () => {
     await createProgram(service).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "files",
         "C:/positional-project",
         "--project",
@@ -1654,7 +1654,7 @@ describe("symbol-lattice v0.258 files CLI", () => {
     program.exitOverride();
 
     await expect(
-      program.parseAsync(["node", "symbol-lattice", "files", ...arguments_], {
+      program.parseAsync(["node", "SymbolLattice", "files", ...arguments_], {
         from: "node"
       })
     ).rejects.toThrow(message);
@@ -1662,7 +1662,7 @@ describe("symbol-lattice v0.258 files CLI", () => {
   });
 });
 
-describe("symbol-lattice v0.14 routes CLI", () => {
+describe("SymbolLattice v0.14 routes CLI", () => {
   it("forwards route filters, positional project selection, and stable JSON without mutating", async () => {
     const calls: Array<{ projectPath: string; options: RoutesOptions }> = [];
     const mutationCalls: string[] = [];
@@ -1687,7 +1687,7 @@ describe("symbol-lattice v0.14 routes CLI", () => {
     await createProgram(service).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "routes",
         "C:/positional-project",
         "--project",
@@ -1726,7 +1726,7 @@ describe("symbol-lattice v0.14 routes CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "routes", "--project", "C:/project", "--method", "NAVIGATE"],
+      ["node", "SymbolLattice", "routes", "--project", "C:/project", "--method", "NAVIGATE"],
       { from: "node" }
     );
 
@@ -1747,7 +1747,7 @@ describe("symbol-lattice v0.14 routes CLI", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "routes", "--project", "C:/project", "--method", "CONNECT"],
+      ["node", "SymbolLattice", "routes", "--project", "C:/project", "--method", "CONNECT"],
       { from: "node" }
     );
 
@@ -1768,7 +1768,7 @@ describe("symbol-lattice v0.14 routes CLI", () => {
     program.exitOverride();
 
     await expect(
-      program.parseAsync(["node", "symbol-lattice", "routes", ...arguments_], {
+      program.parseAsync(["node", "SymbolLattice", "routes", ...arguments_], {
         from: "node"
       })
     ).rejects.toThrow(message);
@@ -1776,7 +1776,7 @@ describe("symbol-lattice v0.14 routes CLI", () => {
   });
 });
 
-describe("symbol-lattice v0.18 entrypoints CLI", () => {
+describe("SymbolLattice v0.18 entrypoints CLI", () => {
   it("forwards transport entrypoint filters and renders stable JSON without mutating", async () => {
     const calls: Array<{ projectPath: string; options: EntrypointsOptions }> = [];
     const mutationCalls: string[] = [];
@@ -1804,7 +1804,7 @@ describe("symbol-lattice v0.18 entrypoints CLI", () => {
     await createProgram(service).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "entrypoints",
         "C:/positional-project",
         "--project",
@@ -1843,7 +1843,7 @@ describe("symbol-lattice v0.18 entrypoints CLI", () => {
     program.exitOverride();
 
     await expect(
-      program.parseAsync(["node", "symbol-lattice", "entrypoints", ...arguments_], {
+      program.parseAsync(["node", "SymbolLattice", "entrypoints", ...arguments_], {
         from: "node"
       })
     ).rejects.toThrow(message);
@@ -1851,7 +1851,7 @@ describe("symbol-lattice v0.18 entrypoints CLI", () => {
   });
 });
 
-describe("symbol-lattice v0.15 hierarchy CLI", () => {
+describe("SymbolLattice v0.15 hierarchy CLI", () => {
   it("forwards a bounded direct hierarchy request and renders stable JSON without mutating", async () => {
     const calls: Array<{ projectPath: string; reference: string; options: HierarchyOptions }> = [];
     const mutationCalls: string[] = [];
@@ -1880,7 +1880,7 @@ describe("symbol-lattice v0.15 hierarchy CLI", () => {
     await createProgram(service).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "hierarchy",
         "src/base.ts#Base",
         "--project",
@@ -1909,7 +1909,7 @@ describe("symbol-lattice v0.15 hierarchy CLI", () => {
     program.exitOverride();
 
     await expect(
-      program.parseAsync(["node", "symbol-lattice", "hierarchy", "Base", "--limit", "101"], {
+      program.parseAsync(["node", "SymbolLattice", "hierarchy", "Base", "--limit", "101"], {
         from: "node"
       })
     ).rejects.toThrow("Expected an integer between 1 and 100");
@@ -1917,7 +1917,7 @@ describe("symbol-lattice v0.15 hierarchy CLI", () => {
   });
 });
 
-describe("symbol-lattice v0.11 retained-generation CLI", () => {
+describe("SymbolLattice v0.11 retained-generation CLI", () => {
   it("forwards a bounded history request and renders the stable JSON result", async () => {
     const calls: Array<{ projectPath: string; options: GenerationHistoryOptions }> = [];
     const result = generationHistoryResult();
@@ -1935,7 +1935,7 @@ describe("symbol-lattice v0.11 retained-generation CLI", () => {
     await createProgram(service).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "history",
         "C:/chosen-project",
         "--limit",
@@ -1973,7 +1973,7 @@ describe("symbol-lattice v0.11 retained-generation CLI", () => {
     await createProgram(service).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "diff",
         "generation:old",
         "C:/chosen-project",
@@ -2005,8 +2005,8 @@ describe("symbol-lattice v0.11 retained-generation CLI", () => {
       program.exitOverride();
       const command =
         rangeCase[0] === "history"
-          ? ["node", "symbol-lattice", "history", "--limit", rangeCase[1]]
-          : ["node", "symbol-lattice", "diff", rangeCase[1], "--limit", rangeCase[2]];
+          ? ["node", "SymbolLattice", "history", "--limit", rangeCase[1]]
+          : ["node", "SymbolLattice", "diff", rangeCase[1], "--limit", rangeCase[2]];
 
       await expect(program.parseAsync(command, { from: "node" })).rejects.toThrow(
         "Expected an integer between 1 and 100"
@@ -2015,7 +2015,7 @@ describe("symbol-lattice v0.11 retained-generation CLI", () => {
   }
 });
 
-describe("symbol-lattice v0.5 context and impact CLI", () => {
+describe("SymbolLattice v0.5 context and impact CLI", () => {
   it("forwards bounded context options, references, project selection, and JSON output", async () => {
     const calls: Array<{
       projectPath: string;
@@ -2038,7 +2038,7 @@ describe("symbol-lattice v0.5 context and impact CLI", () => {
     await createProgram(service).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "context",
         "src/consumer.ts#calculate",
         "src/math.ts#add",
@@ -2094,7 +2094,7 @@ describe("symbol-lattice v0.5 context and impact CLI", () => {
 
       await expect(
         program.parseAsync(
-          ["node", "symbol-lattice", "context", "src/example.ts#one", rangeCase[0], rangeCase[1]],
+          ["node", "SymbolLattice", "context", "src/example.ts#one", rangeCase[0], rangeCase[1]],
           { from: "node" }
         )
       ).rejects.toThrow(rangeCase[2]);
@@ -2119,7 +2119,7 @@ describe("symbol-lattice v0.5 context and impact CLI", () => {
     await createProgram(service).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "impact",
         "src/math.ts#add",
         "--project",
@@ -2158,7 +2158,7 @@ describe("symbol-lattice v0.5 context and impact CLI", () => {
     vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "impact", "src/math.ts#add", "--depth", "2"],
+      ["node", "SymbolLattice", "impact", "src/math.ts#add", "--depth", "2"],
       { from: "node" }
     );
 
@@ -2182,14 +2182,14 @@ describe("symbol-lattice v0.5 context and impact CLI", () => {
 
     await expect(
       program.parseAsync(
-        ["node", "symbol-lattice", "impact", "src/math.ts#add", "--limit", "101"],
+        ["node", "SymbolLattice", "impact", "src/math.ts#add", "--limit", "101"],
         { from: "node" }
       )
     ).rejects.toThrow("Expected an integer between 1 and 100");
   });
 });
 
-describe("symbol-lattice v0.6 affected-test CLI", () => {
+describe("SymbolLattice v0.6 affected-test CLI", () => {
   it("parses Git-style stdin file lists without blank records", () => {
     expect(parseAffectedStdin("src/math.ts\r\ntest/math.test.ts\n\n")).toEqual([
       "src/math.ts",
@@ -2219,7 +2219,7 @@ describe("symbol-lattice v0.6 affected-test CLI", () => {
     await createProgram(service).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "affected",
         "src/math.ts",
         "tests/math.spec.ts",
@@ -2263,7 +2263,7 @@ describe("symbol-lattice v0.6 affected-test CLI", () => {
     await createProgram(service).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "affected",
         "--working-tree",
         "--path-prefix",
@@ -2304,7 +2304,7 @@ describe("symbol-lattice v0.6 affected-test CLI", () => {
     vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await createProgram(service).parseAsync(
-      ["node", "symbol-lattice", "affected", "--base", "origin/main", "--project", "C:/chosen-project"],
+      ["node", "SymbolLattice", "affected", "--base", "origin/main", "--project", "C:/chosen-project"],
       { from: "node" }
     );
 
@@ -2327,7 +2327,7 @@ describe("symbol-lattice v0.6 affected-test CLI", () => {
       program.exitOverride();
 
       await expect(
-        program.parseAsync(["node", "symbol-lattice", "affected", ...conflictCase], {
+        program.parseAsync(["node", "SymbolLattice", "affected", ...conflictCase], {
           from: "node"
         })
       ).rejects.toThrow(/Git selection|either "--working-tree"|"--path-prefix" requires/u);
@@ -2349,7 +2349,7 @@ describe("symbol-lattice v0.6 affected-test CLI", () => {
 
       await expect(
         program.parseAsync(
-          ["node", "symbol-lattice", "affected", "src/math.ts", rangeCase[0], rangeCase[1]],
+          ["node", "SymbolLattice", "affected", "src/math.ts", rangeCase[0], rangeCase[1]],
           { from: "node" }
         )
       ).rejects.toThrow(rangeCase[2]);
@@ -2357,7 +2357,7 @@ describe("symbol-lattice v0.6 affected-test CLI", () => {
   }
 });
 
-describe("symbol-lattice v0.13 node CLI", () => {
+describe("SymbolLattice v0.13 node CLI", () => {
   it("forwards the reference and project path and renders the stable JSON result", async () => {
     const calls: Array<{ projectPath: string; reference: string }> = [];
     const result: NodeResult = {
@@ -2386,7 +2386,7 @@ describe("symbol-lattice v0.13 node CLI", () => {
     await createProgram(service).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "node",
         "src/math.ts#add",
         "--project",
@@ -2410,13 +2410,13 @@ describe("symbol-lattice v0.13 node CLI", () => {
     nodeCommand?.exitOverride();
 
     await expect(
-      program.parseAsync(["node", "symbol-lattice", "node"], { from: "node" })
+      program.parseAsync(["node", "SymbolLattice", "node"], { from: "node" })
     ).rejects.toThrow(/missing required argument/u);
     expect(node).not.toHaveBeenCalled();
   });
 });
 
-describe("symbol-lattice v0.12 immutable Git hunk CLI", () => {
+describe("SymbolLattice v0.12 immutable Git hunk CLI", () => {
   it("forwards the required base ref, positional project, and bounded limit", async () => {
     const calls: Array<{ projectPath: string; baseRef: string; options: GitHunksOptions }> = [];
     const result = gitHunksResult();
@@ -2435,7 +2435,7 @@ describe("symbol-lattice v0.12 immutable Git hunk CLI", () => {
     await createProgram(service).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "git-hunks",
         "C:/chosen-project",
         "--base",
@@ -2465,14 +2465,14 @@ describe("symbol-lattice v0.12 immutable Git hunk CLI", () => {
 
     await expect(
       program.parseAsync(
-        ["node", "symbol-lattice", "git-hunks", "--base", "origin/main", "--limit", "101"],
+        ["node", "SymbolLattice", "git-hunks", "--base", "origin/main", "--limit", "101"],
         { from: "node" }
       )
     ).rejects.toThrow("Expected an integer between 1 and 100");
   });
 });
 
-describe("symbol-lattice v0.253 explicit plugin module CLI", () => {
+describe("SymbolLattice v0.253 explicit plugin module CLI", () => {
   it("creates a plugin-bound service only for an explicit indexing command", async () => {
     const factoryCalls: PluginServiceFactoryOptions[] = [];
     const init = vi.fn(async () => resultStatus());
@@ -2492,7 +2492,7 @@ describe("symbol-lattice v0.253 explicit plugin module CLI", () => {
     ).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "init",
         "C:/chosen-project",
         "--plugin",
@@ -2523,7 +2523,7 @@ describe("symbol-lattice v0.253 explicit plugin module CLI", () => {
     await createProgram(undefined, async () => undefined, mcpRunner, pluginServiceFactory).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "serve",
         "--mcp",
         "--project",
@@ -2553,7 +2553,7 @@ describe("symbol-lattice v0.253 explicit plugin module CLI", () => {
     await createProgram({} as SymbolLatticeService).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "mcp-config",
         "codex",
         "--project",
@@ -2595,14 +2595,14 @@ describe("symbol-lattice v0.253 explicit plugin module CLI", () => {
 
     await expect(
       program.parseAsync(
-        ["node", "symbol-lattice", "mcp-config", "codex", "--allow-external-plugin"],
+        ["node", "SymbolLattice", "mcp-config", "codex", "--allow-external-plugin"],
         { from: "node" }
       )
     ).rejects.toMatchObject<Partial<SymbolLatticeError>>({ code: "INVALID_PLUGIN_MODULE" });
   });
 });
 
-describe("symbol-lattice v0.256 verified upgrade CLI", () => {
+describe("SymbolLattice v0.256 verified upgrade CLI", () => {
   it("forwards an explicit target and check mode to the planner", async () => {
     const result: UpgradePreviewResult = {
       schemaVersion: 1,
@@ -2641,7 +2641,7 @@ describe("symbol-lattice v0.256 verified upgrade CLI", () => {
       undefined,
       planner
     ).parseAsync(
-      ["node", "symbol-lattice", "upgrade", "v0.254.0", "--check", "--json"],
+      ["node", "SymbolLattice", "upgrade", "v0.254.0", "--check", "--json"],
       { from: "node" }
     );
 
@@ -2663,7 +2663,7 @@ describe("symbol-lattice v0.256 verified upgrade CLI", () => {
     ).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "upgrade",
         "0.255.4",
         "--apply",
@@ -2686,7 +2686,7 @@ describe("symbol-lattice v0.256 verified upgrade CLI", () => {
   });
 });
 
-describe("symbol-lattice read-only watch status CLI", () => {
+describe("SymbolLattice read-only watch status CLI", () => {
   it("combines live index freshness with bounded durable watcher evidence without mutating the index", async () => {
     const getStatus = vi.fn(async (): Promise<SearchResult["status"]> => resultStatus());
     const init = vi.fn();
@@ -2714,7 +2714,7 @@ describe("symbol-lattice read-only watch status CLI", () => {
     ).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "watch-status",
         "C:/chosen-project",
         "--limit",
@@ -2773,7 +2773,7 @@ describe("symbol-lattice read-only watch status CLI", () => {
       undefined,
       undefined,
       () => ({ append: vi.fn(), diagnostics })
-    ).parseAsync(["node", "symbol-lattice", "watch-status", "--limit", "1"], {
+    ).parseAsync(["node", "SymbolLattice", "watch-status", "--limit", "1"], {
       from: "node"
     });
 
@@ -2798,7 +2798,7 @@ describe("symbol-lattice read-only watch status CLI", () => {
     program.exitOverride();
 
     await expect(
-      program.parseAsync(["node", "symbol-lattice", "watch-status", "--limit", "129"], {
+      program.parseAsync(["node", "SymbolLattice", "watch-status", "--limit", "129"], {
         from: "node"
       })
     ).rejects.toThrow("Expected an integer between 1 and 128");
@@ -2823,7 +2823,7 @@ describe("symbol-lattice read-only watch status CLI", () => {
     ).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "watch-stop",
         "123e4567-e89b-42d3-a456-426614174000",
         "C:/chosen-project",
@@ -2874,7 +2874,7 @@ describe("symbol-lattice read-only watch status CLI", () => {
     ).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "watch-start",
         "C:/chosen-project",
         "--interval",
@@ -2946,7 +2946,7 @@ describe("symbol-lattice read-only watch status CLI", () => {
     ).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "watch-restart",
         "123e4567-e89b-42d3-a456-426614174000",
         "C:/chosen-project",
@@ -2998,7 +2998,7 @@ describe("symbol-lattice read-only watch status CLI", () => {
   });
 });
 
-describe("symbol-lattice v0.10 foreground watch CLI", () => {
+describe("SymbolLattice v0.10 foreground watch CLI", () => {
   it("forwards the bounded interval and force flag, enables native events, and renders compact NDJSON receipts", async () => {
     const calls: ForegroundWatchOptions[] = [];
     const service = {} as SymbolLatticeService;
@@ -3029,7 +3029,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     await createProgram(service, watchRunner).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "watch",
         "--project",
         "C:/chosen-project",
@@ -3062,7 +3062,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     };
 
     await createProgram(service, watchRunner).parseAsync(
-      ["node", "symbol-lattice", "watch", "--project", "C:/chosen-project", "--poll"],
+      ["node", "SymbolLattice", "watch", "--project", "C:/chosen-project", "--poll"],
       { from: "node" }
     );
 
@@ -3075,7 +3075,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     program.exitOverride();
 
     await expect(
-      program.parseAsync(["node", "symbol-lattice", "watch", "--interval", "249"], {
+      program.parseAsync(["node", "SymbolLattice", "watch", "--interval", "249"], {
         from: "node"
       })
     ).rejects.toThrow("Watch interval must be an integer between 250 and 60000 milliseconds.");
@@ -3728,7 +3728,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     await createProgram({} as SymbolLatticeService, async () => undefined, mcpRunner).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "serve",
         "--mcp",
         "--project",
@@ -3744,7 +3744,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     await createProgram({} as SymbolLatticeService, async () => undefined, mcpRunner).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "serve",
         "--mcp",
         "--project",
@@ -3781,7 +3781,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     await createProgram({} as SymbolLatticeService).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "mcp-config",
         "codex",
         "--project",
@@ -3800,7 +3800,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
       target: "codex",
       destination: { path: "~/.codex/config.toml", format: "toml" },
       server: {
-        command: "symbol-lattice",
+        command: "SymbolLattice",
         args: [
           "serve",
           "--mcp",
@@ -3822,7 +3822,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
         }
       }
     });
-    expect(output.snippet).toContain('[mcp_servers.symbol_lattice]');
+    expect(output.snippet).toContain('[mcp_servers.SymbolLattice]');
   });
 
   it("prints only the requested copy-and-paste MCP snippet", async () => {
@@ -3831,7 +3831,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     await createProgram({} as SymbolLatticeService).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "mcp-config",
         "codex",
         "--project",
@@ -3842,7 +3842,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     );
 
     expect(write).toHaveBeenCalledWith(
-      `[mcp_servers.symbol_lattice]\ncommand = "symbol-lattice"\nargs = ["serve", "--mcp", "--project", ${JSON.stringify(resolve("C:/chosen-project"))}]\n`
+      `[mcp_servers.SymbolLattice]\ncommand = "SymbolLattice"\nargs = ["serve", "--mcp", "--project", ${JSON.stringify(resolve("C:/chosen-project"))}]\n`
     );
   });
 
@@ -3852,7 +3852,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     await createProgram({} as SymbolLatticeService).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "mcp-config",
         "cursor",
         "--project",
@@ -3870,7 +3870,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
       destination: { path: "~/.cursor/mcp.json", format: "json", scope: "global" },
       server: { args: ["serve", "--mcp", "--project", "${workspaceFolder}"] }
     });
-    expect(JSON.parse(output.snippet).mcpServers["symbol-lattice"]).toMatchObject({ type: "stdio" });
+    expect(JSON.parse(output.snippet).mcpServers["SymbolLattice"]).toMatchObject({ type: "stdio" });
   });
 
   it("runs the read-only MCP doctor with the same expected lifecycle controls as mcp-config", async () => {
@@ -3879,7 +3879,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     await createProgram({} as SymbolLatticeService).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "mcp-doctor",
         "generic-json",
         "--project",
@@ -3903,11 +3903,11 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
       configuration: {
         status: "missing",
         source: "override",
-        entry: "mcpServers.symbol-lattice"
+        entry: "mcpServers.SymbolLattice"
       },
       expected: {
         server: {
-          command: "symbol-lattice",
+          command: "SymbolLattice",
           args: [
             "serve",
             "--mcp",
@@ -3939,13 +3939,13 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     await createProgram({} as SymbolLatticeService).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "mcp-install",
         "generic-json",
         "--project",
         "C:/chosen-project",
         "--config",
-        "C:/symbol-lattice-test-no-write/mcp.json",
+        "C:/SymbolLattice-test-no-write/mcp.json",
         "--no-auto-sync",
         "--no-diagnostic-journal",
         "--sync-interval",
@@ -3991,13 +3991,13 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     await createProgram({} as SymbolLatticeService).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "mcp-uninstall",
         "generic-json",
         "--project",
         "C:/chosen-project",
         "--config",
-        "C:/symbol-lattice-test-no-write/mcp.json",
+        "C:/SymbolLattice-test-no-write/mcp.json",
         "--no-auto-sync",
         "--no-diagnostic-journal",
         "--sync-interval",
@@ -4045,15 +4045,15 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     await createProgram({} as SymbolLatticeService).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "install",
         "codex",
         "--project",
         "C:/installer-preview",
         "--config",
-        "C:/symbol-lattice-stage1-no-write/config.toml",
+        "C:/SymbolLattice-stage1-no-write/config.toml",
         "--instructions",
-        "C:/symbol-lattice-stage1-no-write/AGENTS.md"
+        "C:/SymbolLattice-stage1-no-write/AGENTS.md"
       ],
       { from: "node" }
     );
@@ -4065,9 +4065,9 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
       target: "codex",
       lifecycle: { mcpRequestHandlers: "read-only" }
     });
-    expect(output.configuration.path).toBe(resolve("C:/symbol-lattice-stage1-no-write/config.toml"));
+    expect(output.configuration.path).toBe(resolve("C:/SymbolLattice-stage1-no-write/config.toml"));
     expect(output.instructions).toMatchObject({
-      path: resolve("C:/symbol-lattice-stage1-no-write/AGENTS.md"),
+      path: resolve("C:/SymbolLattice-stage1-no-write/AGENTS.md"),
       action: "create",
       preservesOutsideOwnedSection: true
     });
@@ -4088,7 +4088,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     await createProgram({} as SymbolLatticeService).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "doctor",
         "codex",
         "--config",
@@ -4106,7 +4106,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
     await createProgram({} as SymbolLatticeService).parseAsync(
       [
         "node",
-        "symbol-lattice",
+        "SymbolLattice",
         "uninstall",
         "codex",
         "--config",
@@ -4124,7 +4124,7 @@ describe("symbol-lattice v0.10 foreground watch CLI", () => {
   it("rejects non-Codex targets from the simplified installation entry points", async () => {
     await expect(
       createProgram({} as SymbolLatticeService).parseAsync(
-        ["node", "symbol-lattice", "install", "claude"],
+        ["node", "SymbolLattice", "install", "claude"],
         { from: "node" }
       )
     ).rejects.toThrow('The simplified installer currently supports only "codex".');

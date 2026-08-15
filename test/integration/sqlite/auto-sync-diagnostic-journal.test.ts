@@ -16,9 +16,9 @@ import {
 const temporaryDirectories: string[] = [];
 
 async function createIndexedProject(): Promise<string> {
-  const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-auto-sync-journal-"));
+  const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-auto-sync-journal-"));
   temporaryDirectories.push(projectPath);
-  const indexDirectory = join(projectPath, ".symbol-lattice");
+  const indexDirectory = join(projectPath, ".SymbolLattice");
   await mkdir(indexDirectory, { recursive: true });
   await writeFile(join(indexDirectory, "index.sqlite"), "placeholder");
   return projectPath;
@@ -95,7 +95,7 @@ describe("SQLite auto-sync diagnostic journal", () => {
   }, 120_000);
 
   it("does not create a diagnostic directory for an uninitialized project", async () => {
-    const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-auto-sync-uninitialized-"));
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-auto-sync-uninitialized-"));
     temporaryDirectories.push(projectPath);
     const journal = new SqliteAutoSyncDiagnosticJournal(projectPath);
 
@@ -108,14 +108,14 @@ describe("SQLite auto-sync diagnostic journal", () => {
       events: []
     });
     await expect(
-      import("node:fs/promises").then(({ access }) => access(join(projectPath, ".symbol-lattice")))
+      import("node:fs/promises").then(({ access }) => access(join(projectPath, ".SymbolLattice")))
     ).rejects.toThrow();
   });
 
   it("reports malformed durable data without exposing partial events", async () => {
     const projectPath = await createIndexedProject();
     await writeFile(
-      join(projectPath, ".symbol-lattice", AUTO_SYNC_DIAGNOSTIC_JOURNAL_FILE_NAME),
+      join(projectPath, ".SymbolLattice", AUTO_SYNC_DIAGNOSTIC_JOURNAL_FILE_NAME),
       "not a SQLite database"
     );
     const journal = new SqliteAutoSyncDiagnosticJournal(projectPath, { writable: false });

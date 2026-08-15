@@ -32,7 +32,7 @@ afterEach(async () => {
 
 describe("loadSymbolLatticePluginModules", () => {
   it("loads and fingerprints all three plugin kinds from one explicit in-project module", async () => {
-    const projectPath = await temporaryDirectory("symbol-lattice-plugin-project-");
+    const projectPath = await temporaryDirectory("SymbolLattice-plugin-project-");
     await writeModule(
       projectPath,
       "plugins.mjs",
@@ -72,7 +72,7 @@ describe("loadSymbolLatticePluginModules", () => {
   });
 
   it("accepts a CommonJS default manifest", async () => {
-    const projectPath = await temporaryDirectory("symbol-lattice-plugin-cjs-");
+    const projectPath = await temporaryDirectory("SymbolLattice-plugin-cjs-");
     await writeModule(
       projectPath,
       "plugin.cjs",
@@ -93,8 +93,8 @@ describe("loadSymbolLatticePluginModules", () => {
   });
 
   it("rejects an external module unless the caller explicitly trusts it", async () => {
-    const projectPath = await temporaryDirectory("symbol-lattice-plugin-root-");
-    const externalPath = await temporaryDirectory("symbol-lattice-plugin-external-");
+    const projectPath = await temporaryDirectory("SymbolLattice-plugin-root-");
+    const externalPath = await temporaryDirectory("SymbolLattice-plugin-external-");
     const modulePath = await writeModule(
       externalPath,
       "plugin.mjs",
@@ -124,7 +124,7 @@ describe("loadSymbolLatticePluginModules", () => {
     ["empty manifest", `export default { schemaVersion: 1 };\n`],
     ["non-array field", `export default { schemaVersion: 1, frameworkFactPlugins: {} };\n`]
   ])("rejects %s", async (_label, source) => {
-    const projectPath = await temporaryDirectory("symbol-lattice-plugin-invalid-");
+    const projectPath = await temporaryDirectory("SymbolLattice-plugin-invalid-");
     await writeModule(projectPath, "plugin.mjs", source);
 
     await expect(
@@ -133,7 +133,7 @@ describe("loadSymbolLatticePluginModules", () => {
   });
 
   it("rejects duplicate real paths and unsupported module extensions", async () => {
-    const projectPath = await temporaryDirectory("symbol-lattice-plugin-paths-");
+    const projectPath = await temporaryDirectory("SymbolLattice-plugin-paths-");
     const source = `export default {
       schemaVersion: 1,
       frameworkFactPlugins: [{
@@ -155,7 +155,7 @@ describe("loadSymbolLatticePluginModules", () => {
   });
 
   it("enforces the bounded module count before importing anything", async () => {
-    const projectPath = await temporaryDirectory("symbol-lattice-plugin-count-");
+    const projectPath = await temporaryDirectory("SymbolLattice-plugin-count-");
     await expect(
       loadSymbolLatticePluginModules({
         projectPath,
@@ -168,7 +168,7 @@ describe("loadSymbolLatticePluginModules", () => {
   });
 
   it("wraps registry validation failures in the stable CLI error contract", async () => {
-    const projectPath = await temporaryDirectory("symbol-lattice-plugin-registry-");
+    const projectPath = await temporaryDirectory("SymbolLattice-plugin-registry-");
     await writeModule(
       projectPath,
       "plugin.mjs",

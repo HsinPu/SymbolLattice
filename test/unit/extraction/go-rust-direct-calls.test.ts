@@ -14,7 +14,7 @@ import { SqliteGraphStore } from "../../../src/infrastructure/sqlite/index.js";
 const temporaryDirectories: string[] = [];
 
 async function createPersistedProject(relativePath: string, sourceText: string): Promise<string> {
-  const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-go-rust-calls-"));
+  const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-go-rust-calls-"));
   temporaryDirectories.push(projectPath);
   const filePath = resolve(projectPath, ...relativePath.split("/"));
   await mkdir(resolve(filePath, ".."), { recursive: true });

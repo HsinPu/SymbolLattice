@@ -72,17 +72,17 @@ function installDependencies(
 
 function healthyRuntimeFiles(projectPath: string): Record<string, string> {
   return {
-    [join(projectPath, ".symbol-lattice", "index.sqlite")]: "SQLite format 3\u0000",
-    [join("C:", "tools", "symbol-lattice.CMD")]: "@echo off"
+    [join(projectPath, ".SymbolLattice", "index.sqlite")]: "SQLite format 3\u0000",
+    [join("C:", "tools", "SymbolLattice.CMD")]: "@echo off"
   };
 }
 
 function standardJson(projectPath: string): string {
   return JSON.stringify({
     mcpServers: {
-      "symbol-lattice": {
+      "SymbolLattice": {
         type: "stdio",
-        command: "symbol-lattice",
+        command: "SymbolLattice",
         args: ["serve", "--mcp", "--project", projectPath]
       }
     }
@@ -183,9 +183,9 @@ describe("MCP preview-first installer", () => {
     expect(JSON.parse(virtual.files[configPath] ?? "")).toEqual({
       mcpServers: {
         other: { command: "other", args: ["serve"] },
-        "symbol-lattice": {
+        "SymbolLattice": {
           type: "stdio",
-          command: "symbol-lattice",
+          command: "SymbolLattice",
           args: ["serve", "--mcp", "--project", projectPath]
         }
       },
@@ -287,7 +287,7 @@ describe("MCP preview-first installer", () => {
       "[mcp_servers.other]",
       'command = "other"',
       "",
-      "[mcp_servers.symbol_lattice]",
+      "[mcp_servers.SymbolLattice]",
       'command = "old"',
       'args = ["serve"]',
       "",
@@ -324,7 +324,7 @@ describe("MCP preview-first installer", () => {
     const files = healthyRuntimeFiles(projectPath);
     files[configPath] = [
       "[mcp_servers]",
-      'symbol_lattice = { command = "old", args = ["serve"] }'
+      'SymbolLattice = { command = "old", args = ["serve"] }'
     ].join("\n");
     const virtual = createVirtualFiles(files);
 
@@ -373,8 +373,8 @@ describe("MCP preview-first installer", () => {
       strategy: "yaml-document-upsert"
     });
     expect(written.mcp_servers.other).toEqual({ command: "other" });
-    expect(written.mcp_servers.symbol_lattice).toMatchObject({ command: "symbol-lattice", enabled: true });
-    expect(written.platform_toolsets.cli).toEqual(["hermes-cli", "mcp-symbol-lattice"]);
+    expect(written.mcp_servers.SymbolLattice).toMatchObject({ command: "SymbolLattice", enabled: true });
+    expect(written.platform_toolsets.cli).toEqual(["hermes-cli", "mcp-SymbolLattice"]);
     expect(
       createMcpDoctor(
         "hermes",
@@ -430,7 +430,7 @@ describe("MCP preview-first installer", () => {
   it.runIf(process.platform !== "win32")(
     "preserves a private POSIX mode on both an existing configuration and its backup",
     () => {
-      const directory = mkdtempSync(join(tmpdir(), "symbol-lattice-mcp-install-"));
+      const directory = mkdtempSync(join(tmpdir(), "SymbolLattice-mcp-install-"));
       temporaryDirectories.push(directory);
       const projectPath = join(directory, "project");
       const configPath = join(directory, "agent", "mcp.json");

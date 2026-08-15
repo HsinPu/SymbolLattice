@@ -12,7 +12,7 @@ import {
 const PROJECT = resolve("C:/projects/example");
 const CONFIG = resolve("C:/users/example/.codex/config.toml");
 const INSTRUCTIONS = resolve("C:/users/example/.codex/AGENTS.md");
-const BACKUPS = resolve("C:/backups/symbol-lattice");
+const BACKUPS = resolve("C:/backups/SymbolLattice");
 const NOW = new Date("2026-08-15T11:00:00.000Z");
 
 class MemoryFileSystem implements CodexSetupFileSystem {
@@ -96,7 +96,7 @@ describe("Codex two-file setup", () => {
       transaction: { backups: "created", writes: "completed", rollback: "not-needed", consistent: true }
     });
     expect(fs.files.get(CONFIG)).toContain("[mcp_servers.other]");
-    expect(fs.files.get(CONFIG)).toContain("[mcp_servers.symbol_lattice]");
+    expect(fs.files.get(CONFIG)).toContain("[mcp_servers.SymbolLattice]");
     expect(fs.files.get(CONFIG)).toContain('args = ["serve", "--mcp"]');
     expect(fs.files.get(INSTRUCTIONS)).toContain("# Personal instructions");
     expect(fs.files.get(INSTRUCTIONS)).toContain("<!-- SYMBOL_LATTICE_START -->");
@@ -163,7 +163,7 @@ describe("Codex two-file setup", () => {
     const fs = new MemoryFileSystem();
     fs.files.set(
       CONFIG,
-      '[mcp_servers.other]\ncommand = "other"\nargs = []\n\n[mcp_servers.symbol_lattice]\ncommand = "symbol-lattice"\nargs = ["serve", "--mcp"]\n'
+      '[mcp_servers.other]\ncommand = "other"\nargs = []\n\n[mcp_servers.SymbolLattice]\ncommand = "SymbolLattice"\nargs = ["serve", "--mcp"]\n'
     );
     fs.files.set(
       INSTRUCTIONS,
@@ -181,7 +181,7 @@ describe("Codex two-file setup", () => {
     expect(fs.exists(CONFIG)).toBe(true);
     expect(fs.exists(INSTRUCTIONS)).toBe(true);
     expect(fs.files.get(CONFIG)).toContain("[mcp_servers.other]");
-    expect(fs.files.get(CONFIG)).not.toContain("mcp_servers.symbol_lattice");
+    expect(fs.files.get(CONFIG)).not.toContain("mcp_servers.SymbolLattice");
     expect(fs.files.get(INSTRUCTIONS)).toBe("before\n\nafter\n");
     expect(result.notes).not.toContain(
       "Preview only: no Agent configuration, backup, or project index has been written."

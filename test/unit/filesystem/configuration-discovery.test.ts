@@ -11,7 +11,7 @@ import { discoverConfigurationCandidateInput } from "../../../src/infrastructure
 const temporaryDirectories: string[] = [];
 
 async function createProject(): Promise<string> {
-  const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-config-discovery-"));
+  const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-config-discovery-"));
   temporaryDirectories.push(projectPath);
   return projectPath;
 }
@@ -53,7 +53,7 @@ describe("configuration discovery identity", () => {
 
     expect(input).toMatchObject({
       kind: "configuration-discovery",
-      path: ".symbol-lattice/configuration-candidates.json",
+      path: ".SymbolLattice/configuration-candidates.json",
       state: "present"
     });
     expect(input.contentHash).toMatch(/^[a-f0-9]{64}$/u);
@@ -114,7 +114,7 @@ describe("configuration discovery identity", () => {
       { kind: "jsconfig", path: "jsconfig.json", state: "absent", contentHash: null },
       {
         kind: "cargo-workspace-member-glob",
-        path: ".symbol-lattice/cargo-workspace-members.json",
+        path: ".SymbolLattice/cargo-workspace-members.json",
         state: "present",
         contentHash: hashSource("virtual")
       }

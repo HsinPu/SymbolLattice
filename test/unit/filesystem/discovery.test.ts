@@ -19,7 +19,7 @@ import {
 const temporaryDirectories: string[] = [];
 
 async function createProject(): Promise<string> {
-  const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-"));
+  const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-"));
   temporaryDirectories.push(projectPath);
   return projectPath;
 }
@@ -482,7 +482,7 @@ describe("source discovery", () => {
 
   it("never traverses hard-excluded directories, even when gitignore negates them", async () => {
     const projectPath = await createProject();
-    const hardExcludedDirectories = [".git", ".symbol-lattice", "coverage", "dist", "node_modules"];
+    const hardExcludedDirectories = [".git", ".SymbolLattice", "coverage", "dist", "node_modules"];
 
     await writeFile(
       join(projectPath, ".gitignore"),

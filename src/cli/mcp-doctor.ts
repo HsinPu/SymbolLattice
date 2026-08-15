@@ -116,7 +116,7 @@ export function createMcpDoctor(
   const selected = selectConfiguration(expected, options, fileSystem, homeDirectory, environment);
   const configuration = inspectConfiguration(expected, selected, fileSystem);
   const runtime = inspectRuntime(expected.server, options.commandArgs, fileSystem, environment, platform);
-  const indexDatabasePath = join(projectPath, ".symbol-lattice", "index.sqlite");
+  const indexDatabasePath = join(projectPath, ".SymbolLattice", "index.sqlite");
   const indexStatus: McpDoctorIndexStatus = fileSystem.exists(indexDatabasePath) ? "present" : "missing";
   const overall =
     configuration.status === "matches" &&
@@ -383,9 +383,9 @@ function inspectHermesYaml(text: string, expected: McpConfigResult["server"]): C
   if (!isRecord(mcpServers)) {
     return notConfigured("mcp_servers");
   }
-  const server = mcpServers.symbol_lattice;
+  const server = mcpServers.SymbolLattice;
   if (!isRecord(server)) {
-    return notConfigured("mcp_servers.symbol_lattice");
+    return notConfigured("mcp_servers.SymbolLattice");
   }
   const toolsets = isRecord(root.platform_toolsets) ? root.platform_toolsets.cli : undefined;
   const mismatches = [
@@ -394,15 +394,15 @@ function inspectHermesYaml(text: string, expected: McpConfigResult["server"]): C
     ...(server.timeout === 120 ? [] : ["timeout"]),
     ...(server.connect_timeout === 60 ? [] : ["connect_timeout"]),
     ...(server.enabled === true ? [] : ["enabled"]),
-    ...(Array.isArray(toolsets) && toolsets.includes("mcp-symbol-lattice") ? [] : ["platform_toolsets.cli"])
+    ...(Array.isArray(toolsets) && toolsets.includes("mcp-SymbolLattice") ? [] : ["platform_toolsets.cli"])
   ];
   return mismatches.length === 0 ? matches() : different(mismatches);
 }
 
 function inspectCodexToml(text: string, expected: McpConfigResult["server"]): ConfigurationInspection {
-  const section = extractTomlSection(text, "mcp_servers.symbol_lattice");
+  const section = extractTomlSection(text, "mcp_servers.SymbolLattice");
   if (section === null) {
-    return notConfigured("mcp_servers.symbol_lattice");
+    return notConfigured("mcp_servers.SymbolLattice");
   }
   const command = readTomlAssignment(section, "command");
   const args = readTomlAssignment(section, "args");

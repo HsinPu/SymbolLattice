@@ -567,7 +567,7 @@ class ForegroundWatch implements ForegroundWatchSession {
     if (!status.initialized) {
       throw new SymbolLatticeError(
         "MISSING_INDEX",
-        `No SymbolLattice index exists for ${this.options.projectPath}. Run "symbol-lattice init ${this.options.projectPath}" first.`
+        `No SymbolLattice index exists for ${this.options.projectPath}. Run "SymbolLattice init ${this.options.projectPath}" first.`
       );
     }
 

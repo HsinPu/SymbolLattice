@@ -55,7 +55,7 @@ export interface CargoWorkspaceProjectModuleResolver {
 
 const RUST_CRATE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 const CARGO_WORKSPACE_INHERITANCE_FIELDS = new Set(["workspace", "optional", "features"]);
-const CARGO_WORKSPACE_MEMBER_GLOB_INPUT_PATH = ".symbol-lattice/cargo-workspace-members.json";
+const CARGO_WORKSPACE_MEMBER_GLOB_INPUT_PATH = ".SymbolLattice/cargo-workspace-members.json";
 
 function configurationError(path: string, message: string): ProjectConfigurationError {
   return new ProjectConfigurationError(`Invalid Cargo workspace configuration at ${path}: ${message}`);

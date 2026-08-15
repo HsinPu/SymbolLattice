@@ -26,7 +26,7 @@ import {
   type AutoSyncStopResult
 } from "../../application/index.js";
 
-const INDEX_DIRECTORY_NAME = ".symbol-lattice";
+const INDEX_DIRECTORY_NAME = ".SymbolLattice";
 export const AUTO_SYNC_STOP_REQUEST_DIRECTORY_NAME = "auto-sync-stop-requests";
 const MAX_STOP_REQUEST_BYTES = 4 * 1024;
 const DEFAULT_POLL_INTERVAL_MS = 100;

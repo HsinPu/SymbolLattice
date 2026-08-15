@@ -34,7 +34,7 @@ function successfulResponseText(response) {
     .join("\n");
 }
 
-const projectPath = await mkdtemp(join(tmpdir(), "symbol-lattice-mcp-worker-generation-"));
+const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-mcp-worker-generation-"));
 let pool = null;
 
 try {
@@ -115,7 +115,7 @@ try {
     JSON.stringify(
       {
         schemaVersion: 1,
-        verification: "symbol-lattice-mcp-worker-generation",
+        verification: "SymbolLattice-mcp-worker-generation",
         fixture: { sourceFiles: 1, lifecycle: "temporary-and-removed" },
         generations: {
           firstPublished: firstStatus.generationId,

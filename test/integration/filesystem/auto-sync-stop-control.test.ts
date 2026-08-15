@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 function project(): string {
-  const directory = mkdtempSync(join(tmpdir(), "symbol-lattice-stop-control-"));
+  const directory = mkdtempSync(join(tmpdir(), "SymbolLattice-stop-control-"));
   temporaryDirectories.push(directory);
   return directory;
 }
@@ -52,7 +52,7 @@ describe("cooperative auto-sync stop control", () => {
       mutation: { performed: false }
     });
     expect(plan.approval).toMatch(/^watch-stop:[0-9a-f]{64}$/);
-    expect(existsSync(join(root, ".symbol-lattice", "auto-sync-stop-requests"))).toBe(false);
+    expect(existsSync(join(root, ".SymbolLattice", "auto-sync-stop-requests"))).toBe(false);
   });
 
   it("fails closed for a missing, stale, unverifiable, or incompatible host", () => {
@@ -86,7 +86,7 @@ describe("cooperative auto-sync stop control", () => {
     await expect(control.execute(HOST_ID)).resolves.toMatchObject({ mode: "preview" });
     await expect(control.execute(HOST_ID, { apply: true, approval: approval ?? undefined })).rejects.toMatchObject({ code: "STOP_CONFIRMATION_REQUIRED" });
     await expect(control.execute(HOST_ID, { apply: true, yes: true, approval: "watch-stop:wrong" })).rejects.toMatchObject({ code: "STOP_APPROVAL_INVALID" });
-    expect(existsSync(join(root, ".symbol-lattice", "auto-sync-stop-requests"))).toBe(false);
+    expect(existsSync(join(root, ".SymbolLattice", "auto-sync-stop-requests"))).toBe(false);
   });
 
   it("lets only the matching host consume a short-lived request and returns an attributed receipt", async () => {
@@ -132,7 +132,7 @@ describe("cooperative auto-sync stop control", () => {
     await expect(
       control.execute(HOST_ID, { apply: true, yes: true, approval: approval ?? undefined })
     ).rejects.toMatchObject({ code: "STOP_APPROVAL_INVALID" });
-    expect(existsSync(join(root, ".symbol-lattice", "auto-sync-stop-requests"))).toBe(false);
+    expect(existsSync(join(root, ".SymbolLattice", "auto-sync-stop-requests"))).toBe(false);
   });
 
   it("returns a bounded timeout receipt and removes its own unacknowledged request", async () => {
@@ -155,7 +155,7 @@ describe("cooperative auto-sync stop control", () => {
     });
     expect(
       existsSync(
-        join(root, ".symbol-lattice", "auto-sync-stop-requests", `${HOST_ID}.json`)
+        join(root, ".SymbolLattice", "auto-sync-stop-requests", `${HOST_ID}.json`)
       )
     ).toBe(false);
   });
