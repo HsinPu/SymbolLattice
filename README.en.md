@@ -26,7 +26,7 @@ Relationships that cannot be proven exactly remain unresolved or pending instead
 Requires Node.js `>=22.13 <25` and npm.
 
 ```bash
-git clone https://github.com/HsinPu/symbol-lattice.git
+git clone https://github.com/HsinPu/SymbolLattice.git
 cd symbol-lattice
 npm install
 npm run build

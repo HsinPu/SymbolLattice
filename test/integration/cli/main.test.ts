@@ -2612,10 +2612,10 @@ describe("symbol-lattice v0.256 verified upgrade CLI", () => {
       targetVersion: "0.254.0",
       release: {
         source: "explicit-version",
-        repository: "HsinPu/symbol-lattice",
+        repository: "HsinPu/SymbolLattice",
         endpoints: [
-          "https://api.github.com/repos/HsinPu/symbol-lattice/releases/latest",
-          "https://api.github.com/repos/HsinPu/symbol-lattice/tags?per_page=100"
+          "https://api.github.com/repos/HsinPu/SymbolLattice/releases/latest",
+          "https://api.github.com/repos/HsinPu/SymbolLattice/tags?per_page=100"
         ],
         networkRequested: false
       },

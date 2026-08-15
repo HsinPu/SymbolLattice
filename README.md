@@ -26,7 +26,7 @@ SymbolLattice 掃描本機 repository、保存程式碼圖，並以 CLI/MCP 提�
 需要 Node.js `>=22.13 <25` 與 npm。
 
 ```bash
-git clone https://github.com/HsinPu/symbol-lattice.git
+git clone https://github.com/HsinPu/SymbolLattice.git
 cd symbol-lattice
 npm install
 npm run build

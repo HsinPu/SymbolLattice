@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { SYMBOL_LATTICE_VERSION } from "../version.js";
 
-const RELEASE_REPOSITORY = "HsinPu/symbol-lattice";
+const RELEASE_REPOSITORY = "HsinPu/SymbolLattice";
 const RELEASE_ENDPOINT = `https://api.github.com/repos/${RELEASE_REPOSITORY}/releases/latest`;
 const TAGS_ENDPOINT = `https://api.github.com/repos/${RELEASE_REPOSITORY}/tags?per_page=100`;
 const RELEASE_ENDPOINTS = [RELEASE_ENDPOINT, TAGS_ENDPOINT] as const;

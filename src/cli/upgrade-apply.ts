@@ -16,7 +16,7 @@ import {
 } from "./upgrade.js";
 
 const PACKAGE_NAME = "@hsinpu/symbol-lattice";
-const RELEASE_REPOSITORY = "HsinPu/symbol-lattice";
+const RELEASE_REPOSITORY = "HsinPu/SymbolLattice";
 const RELEASE_REPOSITORY_URL = `https://github.com/${RELEASE_REPOSITORY}`;
 const ATTESTATIONS_ENDPOINT = `https://api.github.com/repos/${RELEASE_REPOSITORY}/attestations`;
 const MAX_TARBALL_BYTES = 32 * 1024 * 1024;

@@ -6,8 +6,8 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const PACKAGE_NAME = "@hsinpu/symbol-lattice";
-const REPOSITORY = "HsinPu/symbol-lattice";
-const REPOSITORY_URL = "git+https://github.com/HsinPu/symbol-lattice.git";
+const REPOSITORY = "HsinPu/SymbolLattice";
+const REPOSITORY_URL = "git+https://github.com/HsinPu/SymbolLattice.git";
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const REQUIRED_ARGUMENTS = ["tag", "commit", "tarballPath", "outputDirectory"];
 const ARGUMENT_NAMES = new Map([

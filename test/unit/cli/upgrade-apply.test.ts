@@ -15,7 +15,7 @@ import type { UpgradeInstallation, UpgradePreviewResult } from "../../../src/cli
 const COMMIT = "a".repeat(40);
 const VERSION = "0.256.0";
 const FILENAME = `hsinpu-symbol-lattice-${VERSION}.tgz`;
-const TARBALL_URL = `https://github.com/HsinPu/symbol-lattice/releases/download/v${VERSION}/${FILENAME}`;
+const TARBALL_URL = `https://github.com/HsinPu/SymbolLattice/releases/download/v${VERSION}/${FILENAME}`;
 
 describe("verified release upgrade execution", () => {
   it("bypasses the Windows shell by resolving npm's JavaScript entrypoint", () => {
@@ -59,12 +59,12 @@ describe("verified release upgrade execution", () => {
         packageVersion: VERSION,
         releaseTag: `v${VERSION}`,
         releaseCommit: COMMIT,
-        repository: "HsinPu/symbol-lattice"
+        repository: "HsinPu/SymbolLattice"
       },
       attestation: {
         source: "github-artifact-attestations-api",
         endpoint: fixture.attestationEndpoint,
-        workflowInvocationId: "https://github.com/HsinPu/symbol-lattice/actions/runs/123/attempts/1"
+        workflowInvocationId: "https://github.com/HsinPu/SymbolLattice/actions/runs/123/attempts/1"
       }
     });
   });
@@ -271,7 +271,7 @@ function releaseFixture() {
     release: {
       tag: `v${VERSION}`,
       commit: COMMIT,
-      repository: "HsinPu/symbol-lattice",
+      repository: "HsinPu/SymbolLattice",
       channel: "github-release-tarball"
     },
     artifact: {
@@ -285,7 +285,7 @@ function releaseFixture() {
       requiresNode: ">=22.13 <25"
     }
   });
-  const attestationEndpoint = `https://api.github.com/repos/HsinPu/symbol-lattice/attestations/sha256:${sha256}`;
+  const attestationEndpoint = `https://api.github.com/repos/HsinPu/SymbolLattice/attestations/sha256:${sha256}`;
   return {
     targetVersion: VERSION,
     tarballUrl: TARBALL_URL,
@@ -313,17 +313,17 @@ function attestationPayload(input: {
         externalParameters: {
           workflow: {
             ref: `refs/tags/v${input.version}`,
-            repository: "https://github.com/HsinPu/symbol-lattice"
+            repository: "https://github.com/HsinPu/SymbolLattice"
           }
         },
         resolvedDependencies: [{
-          uri: `git+https://github.com/HsinPu/symbol-lattice@refs/tags/v${input.version}`,
+          uri: `git+https://github.com/HsinPu/SymbolLattice@refs/tags/v${input.version}`,
           digest: { gitCommit: input.commit }
         }]
       },
       runDetails: {
         metadata: {
-          invocationId: "https://github.com/HsinPu/symbol-lattice/actions/runs/123/attempts/1"
+          invocationId: "https://github.com/HsinPu/SymbolLattice/actions/runs/123/attempts/1"
         }
       }
     }
@@ -348,10 +348,10 @@ function upgradePreview(installation: UpgradeInstallation): UpgradePreviewResult
     targetVersion: VERSION,
     release: {
       source: "explicit-version",
-      repository: "HsinPu/symbol-lattice",
+      repository: "HsinPu/SymbolLattice",
       endpoints: [
-        "https://api.github.com/repos/HsinPu/symbol-lattice/releases/latest",
-        "https://api.github.com/repos/HsinPu/symbol-lattice/tags?per_page=100"
+        "https://api.github.com/repos/HsinPu/SymbolLattice/releases/latest",
+        "https://api.github.com/repos/HsinPu/SymbolLattice/tags?per_page=100"
       ],
       networkRequested: false,
       artifacts: {

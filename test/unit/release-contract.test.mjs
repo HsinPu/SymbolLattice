@@ -28,7 +28,7 @@ async function fixture() {
     private: true,
     repository: {
       type: "git",
-      url: "git+https://github.com/HsinPu/symbol-lattice.git"
+      url: "git+https://github.com/HsinPu/SymbolLattice.git"
     }
   }));
   const tarballPath = join(outputDirectory, "hsinpu-symbol-lattice-0.255.0.tgz");
@@ -48,7 +48,7 @@ describe("GitHub release artifact contract", () => {
       packageName: "@hsinpu/symbol-lattice",
       packageVersion: "0.255.0",
       packagePrivate: true,
-      repositoryUrl: "git+https://github.com/HsinPu/symbol-lattice.git",
+      repositoryUrl: "git+https://github.com/HsinPu/SymbolLattice.git",
       runtimeVersion: "0.255.0",
       tag: "v0.255.0",
       commit: "a".repeat(40)
@@ -65,7 +65,7 @@ describe("GitHub release artifact contract", () => {
         packageName: "@hsinpu/symbol-lattice",
         packageVersion: "0.255.0",
         packagePrivate: true,
-        repositoryUrl: "git+https://github.com/HsinPu/symbol-lattice.git",
+        repositoryUrl: "git+https://github.com/HsinPu/SymbolLattice.git",
         runtimeVersion: "0.255.0",
         tag: "v0.255.0",
         commit: "a".repeat(40),
@@ -96,7 +96,7 @@ describe("GitHub release artifact contract", () => {
       release: {
         tag: "v0.255.0",
         commit: "0123456789abcdef0123456789abcdef01234567",
-        repository: "HsinPu/symbol-lattice",
+        repository: "HsinPu/SymbolLattice",
         channel: "github-release-tarball"
       },
       artifact: {

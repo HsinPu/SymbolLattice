@@ -42,9 +42,9 @@ describe("preview-only release upgrade planning", () => {
         source: "explicit-version",
         networkRequested: false,
         artifacts: {
-          tarball: "https://github.com/HsinPu/symbol-lattice/releases/download/v0.254.0/hsinpu-symbol-lattice-0.254.0.tgz",
-          checksum: "https://github.com/HsinPu/symbol-lattice/releases/download/v0.254.0/hsinpu-symbol-lattice-0.254.0.tgz.sha256",
-          manifest: "https://github.com/HsinPu/symbol-lattice/releases/download/v0.254.0/hsinpu-symbol-lattice-0.254.0.tgz.manifest.json"
+          tarball: "https://github.com/HsinPu/SymbolLattice/releases/download/v0.254.0/hsinpu-symbol-lattice-0.254.0.tgz",
+          checksum: "https://github.com/HsinPu/SymbolLattice/releases/download/v0.254.0/hsinpu-symbol-lattice-0.254.0.tgz.sha256",
+          manifest: "https://github.com/HsinPu/SymbolLattice/releases/download/v0.254.0/hsinpu-symbol-lattice-0.254.0.tgz.manifest.json"
         }
       },
       mutation: {
@@ -78,7 +78,7 @@ describe("preview-only release upgrade planning", () => {
     expect(result.release).toMatchObject({
       source: "github-catalog",
       networkRequested: true,
-      repository: "HsinPu/symbol-lattice"
+      repository: "HsinPu/SymbolLattice"
     });
     expect(result.installation.steps).toEqual([
       {
@@ -86,7 +86,7 @@ describe("preview-only release upgrade planning", () => {
         args: [
           "install",
           "--global",
-          "https://github.com/HsinPu/symbol-lattice/releases/download/v0.255.0/hsinpu-symbol-lattice-0.255.0.tgz"
+          "https://github.com/HsinPu/SymbolLattice/releases/download/v0.255.0/hsinpu-symbol-lattice-0.255.0.tgz"
         ]
       }
     ]);
@@ -211,7 +211,7 @@ describe("preview-only release upgrade planning", () => {
 
     await expect(resolveLatestGithubRelease()).resolves.toBe("0.254.0");
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.github.com/repos/HsinPu/symbol-lattice/releases/latest",
+      "https://api.github.com/repos/HsinPu/SymbolLattice/releases/latest",
       expect.objectContaining({
         redirect: "error",
         headers: expect.objectContaining({ "User-Agent": "symbol-lattice-upgrade-preview" })
@@ -234,7 +234,7 @@ describe("preview-only release upgrade planning", () => {
     await expect(resolveLatestGithubRelease()).resolves.toBe("0.254.0");
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "https://api.github.com/repos/HsinPu/symbol-lattice/tags?per_page=100",
+      "https://api.github.com/repos/HsinPu/SymbolLattice/tags?per_page=100",
       expect.objectContaining({ redirect: "error" })
     );
   });

@@ -5,12 +5,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/HsinPu/symbol-lattice.git"
+    "url": "git+https://github.com/HsinPu/SymbolLattice.git"
   },
   "bugs": {
-    "url": "https://github.com/HsinPu/symbol-lattice/issues"
+    "url": "https://github.com/HsinPu/SymbolLattice/issues"
   },
-  "homepage": "https://github.com/HsinPu/symbol-lattice#readme",
+  "homepage": "https://github.com/HsinPu/SymbolLattice#readme",
   "type": "module",
   "private": true,
   "bin": {
