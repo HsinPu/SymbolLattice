@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.427.0 是從官方 GitHub 固定版本安裝的開發者預覽版；SymbolLattice 尚未發布到 npm Registry。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
+> v0.428.0 是從官方 GitHub 固定版本安裝的開發者預覽版；SymbolLattice 尚未發布到 npm Registry。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
 
 ## 這是什麼
 
@@ -21,7 +21,7 @@ SymbolLattice 掃描本機 repository、保存程式碼圖，並以 CLI/MCP 提�
 
 無法精確證明的關係會保留為 unresolved 或 pending，而不會成為錯誤的 exact edge。
 
-v0.427.0 強化 JavaScript／Node.js 深度：新增 `.cjs` 探索與模組候選、保守 CommonJS class／literal `require()`、正確的函式內 `new` 歸屬，以及來源可證明的 Express router prefix、Fastify plugin prefix 與本地 named handler route。固定 ESLint v10.4.0、Express v5.2.1、Fastify v5.10.0，由獨立 Espree oracle 抽樣驗證 identity、containment、call、instantiation、heritage 共 TP 245／FP 0／FN 0；另有 150 個 shadow、rebind、computed 與 member 負向案例。相對 self-require、inline handler、動態 mount、重複／循環 router、動態 `require()` 與 runtime middleware dispatch 不會被猜成 exact。
+v0.428.0 新增 JSP 深度掃描：支援 `.jsp`、`.jspf`、`.jspx`、`.tag`、`.tagx`，建立 directive、taglib、element、attribute、靜態 EL path 與 template reference 的來源證據；literal include／forward／tag-file 目標只有在可證明的 web root 或相對位置中且專案內唯一時才成為 exact。固定 Apache Tomcat 11.0.25、JSPWiki 2.12.3 與 Liferay 7.4.3.132-ga132 做大型來源驗證；獨立 oracle 在 Tomcat 嚴格子集驗證 553 個 resource identities 與 553 個 containment edges，合計 TP 1,106／FP 0／FN 0，另有 200 個 malformed 負向案例。動態路徑、任意 EL 運算式、重複 taglib prefix、停用 EL、未平衡標記、scriptlet 內 Java 語意，以及 JSP 與 Spring／MyBatis／Java runtime 的跨語言關係不會被猜成 exact。
 
 ## 快速開始
 
@@ -97,7 +97,7 @@ SymbolLattice uninstall codex --apply --yes
 
 ## 從 v0.420.0 或更早版本升級
 
-v0.427.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
+v0.428.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
 
 ```bash
 # 仍可執行舊 CLI 時，先移除舊 Codex MCP 設定
@@ -113,7 +113,7 @@ SymbolLattice init .
 SymbolLattice doctor codex
 ```
 
-| 舊項目 | v0.427.0 |
+| 舊項目 | v0.428.0 |
 | --- | --- |
 | npm package | `@hsinpu/symbollattice` |
 | CLI | `SymbolLattice` |

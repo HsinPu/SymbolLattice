@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v319";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v322";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v154";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v155";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -2339,6 +2339,39 @@ export interface TwigFacts {
   readonly templateReferences: readonly TwigTemplateReferenceFact[];
 }
 
+/** Direct literal JSP project-resource reference kinds retained for project resolution. */
+export type JspTemplateReferenceKind =
+  | "include-directive"
+  | "include-action"
+  | "forward-action"
+  | "tag-file";
+
+/** One locally declared JSP tag-library prefix with a literal URI or tag directory when proven. */
+export interface JspTaglibFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly prefix: string;
+  readonly uri?: string;
+  readonly tagDir?: string;
+  readonly range: SourceRange;
+}
+
+/** One complete direct literal JSP resource reference with bounded candidate paths. */
+export interface JspTemplateReferenceFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly kind: JspTemplateReferenceKind;
+  readonly targetFilePaths: readonly string[];
+  readonly referenceName: string;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only JSP facts resolved only after the complete indexed file catalog is available. */
+export interface JspFacts {
+  readonly taglibs: readonly JspTaglibFact[];
+  readonly templateReferences: readonly JspTemplateReferenceFact[];
+}
+
 /** Direct literal Laravel Blade view directive kinds retained for project-local resolution. */
 export type BladeTemplateReferenceKind = "extends" | "include" | "component" | "each";
 
@@ -2639,6 +2672,8 @@ export interface ArtifactFacts {
   readonly solidityFacts?: SolidityFacts;
   /** Omitted only by artifact facts persisted before v0.71. */
   readonly twigFacts?: TwigFacts;
+  /** Omitted only by artifact facts persisted before v0.428.0. */
+  readonly jspFacts?: JspFacts;
   /** Omitted only by artifact facts persisted before v0.72. */
   readonly bladeFacts?: BladeFacts;
   /** Omitted only by artifact facts persisted before v0.168. */

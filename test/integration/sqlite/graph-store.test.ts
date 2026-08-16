@@ -1018,6 +1018,33 @@ describe("SqliteGraphStore", () => {
         runtimeTaintedMemberSurfaces: [
           { typeSymbolId: "caller", memberName: "run", memberKind: "instance" }
         ]
+      },
+      jspFacts: {
+        taglibs: [
+          {
+            sourceId: "caller",
+            filePath: "sample.ts",
+            prefix: "ui",
+            tagDir: "/WEB-INF/tags",
+            range: {
+              start: { line: 1, column: 1 },
+              end: { line: 1, column: 10 }
+            }
+          }
+        ],
+        templateReferences: [
+          {
+            sourceId: "caller",
+            filePath: "sample.ts",
+            kind: "tag-file" as const,
+            targetFilePaths: ["WEB-INF/tags/card.tag"],
+            referenceName: "tag-file WEB-INF/tags/card.tag",
+            range: {
+              start: { line: 1, column: 1 },
+              end: { line: 1, column: 10 }
+            }
+          }
+        ]
       }
     }));
     const firstInputs = indexInputs("first");

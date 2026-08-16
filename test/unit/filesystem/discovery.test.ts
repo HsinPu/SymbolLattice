@@ -41,6 +41,14 @@ describe("source discovery", () => {
     expect(getSourceLanguage("web/legacy.HTM")).toBe("html");
   });
 
+  it("routes the JSP page, document, fragment, and tag-file family to the JSP extractor", () => {
+    expect(getSourceLanguage("web/index.jsp")).toBe("jsp");
+    expect(getSourceLanguage("web/layout.JSPF")).toBe("jsp");
+    expect(getSourceLanguage("web/document.jspx")).toBe("jsp");
+    expect(getSourceLanguage("WEB-INF/tags/card.tag")).toBe("jsp");
+    expect(getSourceLanguage("WEB-INF/tags/card.tagx")).toBe("jsp");
+  });
+
   it("routes CSS files to the CSS extractor", () => {
     expect(getSourceLanguage("web/site.css")).toBe("css");
     expect(getSourceLanguage("web/PRINT.CSS")).toBe("css");
@@ -194,6 +202,7 @@ describe("source discovery", () => {
     await writeFile(join(projectPath, "src", "q.astro"), "<main />\n", "utf8");
     await writeFile(join(projectPath, "src", "r.razor"), "<main />\n", "utf8");
     await writeFile(join(projectPath, "src", "r.cshtml"), "@page \"/\"\n", "utf8");
+    await writeFile(join(projectPath, "src", "r.jsp"), "<main />\n", "utf8");
     await writeFile(join(projectPath, "src", "s.ets"), "@Component struct App {}\n", "utf8");
     await writeFile(join(projectPath, "src", "s.sh"), "deploy() { :; }\n", "utf8");
     await writeFile(join(projectPath, "src", "t.tf"), "resource \"aws_s3_bucket\" \"assets\" {}\n", "utf8");
@@ -256,6 +265,7 @@ describe("source discovery", () => {
       "src/p.svelte",
       "src/q.astro",
       "src/r.cshtml",
+      "src/r.jsp",
       "src/r.razor",
       "src/s.ets",
       "src/s.sh",
@@ -314,6 +324,7 @@ describe("source discovery", () => {
       "svelte",
       "astro",
       "razor",
+      "jsp",
       "razor",
       "arkts",
       "shell",

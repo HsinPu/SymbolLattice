@@ -45,6 +45,7 @@ import { extractZigFileFacts } from "./zig.js";
 import { extractYamlFileFacts } from "./yaml.js";
 import { extractXmlFileFacts } from "./xml.js";
 import { extractHtmlFileFacts } from "./html.js";
+import { extractJspFileFacts } from "./jsp.js";
 import { extractCssFileFacts } from "./css.js";
 import { extractPropertiesFileFacts } from "./properties.js";
 import { extractLiquidFileFacts } from "./liquid.js";
@@ -7987,6 +7988,9 @@ export function extractFileFacts(
   }
   if (input.language === "html") {
     return extractHtmlFileFacts({ ...input, language: "html" });
+  }
+  if (input.language === "jsp") {
+    return extractJspFileFacts({ ...input, language: "jsp" });
   }
   if (input.language === "css") {
     return extractCssFileFacts({ ...input, language: "css" });

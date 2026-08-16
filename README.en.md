@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.427.0 is a developer preview installed from a fixed revision of the official GitHub repository; SymbolLattice is not published to the npm Registry. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.SymbolLattice` index; add `--no-auto-sync` to disable it.
+> v0.428.0 is a developer preview installed from a fixed revision of the official GitHub repository; SymbolLattice is not published to the npm Registry. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.SymbolLattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -21,7 +21,7 @@ SymbolLattice scans a local repository, persists a code graph, and exposes CLI/M
 
 Relationships that cannot be proven exactly remain unresolved or pending instead of becoming false exact edges.
 
-v0.427.0 deepens JavaScript and Node.js support with `.cjs` discovery and module candidates, conservative CommonJS classes and literal `require()` bindings, correct ownership for function-local `new` expressions, and source-proven Express router prefixes, Fastify plugin prefixes, and local named-handler routes. An independent Espree oracle sampled identities, containment, calls, instantiations, and heritage across fixed ESLint v10.4.0, Express v5.2.1, and Fastify v5.10.0 sources for TP 245 / FP 0 / FN 0, plus 150 shadowing, rebinding, computed, and member negatives. Relative self-requires, inline handlers, dynamic mounts, duplicate or cyclic routers, dynamic `require()`, and runtime middleware dispatch are not guessed as exact.
+v0.428.0 adds deep JSP scanning for `.jsp`, `.jspf`, `.jspx`, `.tag`, and `.tagx`, with source-backed directives, taglibs, elements, attributes, static EL paths, and template references. Literal include, forward, and tag-file targets become exact only within a proven web root or relative location and when the project has one unique target. Fixed Apache Tomcat 11.0.25, JSPWiki 2.12.3, and Liferay 7.4.3.132-ga132 sources provide large-project coverage; an independent strict-subset oracle verified 553 resource identities and 553 containment edges in Tomcat for a combined TP 1,106 / FP 0 / FN 0, plus 200 malformed negatives. Dynamic paths, arbitrary EL expressions, duplicate taglib prefixes, disabled EL, unbalanced markup, Java semantics inside scriptlets, and cross-language JSP-to-Spring/MyBatis/Java runtime links are not guessed as exact.
 
 ## Quick start
 
@@ -97,7 +97,7 @@ The installer never creates or deletes a project index automatically. Restart Co
 
 ## Upgrading from v0.420.0 or earlier
 
-v0.427.0 does not provide aliases for the old names and does not read the old index. Use this order:
+v0.428.0 does not provide aliases for the old names and does not read the old index. Use this order:
 
 ```bash
 # Remove the old Codex MCP configuration while the old CLI is still available
@@ -113,7 +113,7 @@ SymbolLattice init .
 SymbolLattice doctor codex
 ```
 
-| Previous surface | v0.427.0 |
+| Previous surface | v0.428.0 |
 | --- | --- |
 | npm package | `@hsinpu/symbollattice` |
 | CLI | `SymbolLattice` |

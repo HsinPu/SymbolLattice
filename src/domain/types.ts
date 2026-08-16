@@ -208,6 +208,7 @@ export const ARTIFACT_LANGUAGES = [
   "yaml",
   "xml",
   "html",
+  "jsp",
   "css",
   "properties",
   "shell",
