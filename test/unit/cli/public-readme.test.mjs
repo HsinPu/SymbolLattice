@@ -24,11 +24,15 @@ describe("public SymbolLattice installation documentation", () => {
     ]) {
       const [primary, migration] = readme.split(upgradeHeading);
       expect(migration).toBeDefined();
-      expect(primary).toContain("npm install -g @hsinpu/symbollattice");
+      expect(primary).toContain("https://github.com/HsinPu/SymbolLattice.git");
+      expect(primary).toContain("install.ps1");
+      expect(primary).toContain("-Ref");
+      expect(primary).toContain("-Apply -Yes");
       expect(primary).toContain("SymbolLattice install codex --apply --yes");
       expect(primary).toContain("SymbolLattice doctor codex");
       expect(primary).toContain("mcp_servers.SymbolLattice");
       expect(primary).toContain(".SymbolLattice");
+      expect(primary).not.toContain("npm install -g @hsinpu/symbollattice");
       expect(primary).not.toContain("@hsinpu/symbol-lattice");
       expect(primary).not.toContain("symbol-lattice uninstall");
       expect(primary).not.toContain(".symbol-lattice");
@@ -36,7 +40,8 @@ describe("public SymbolLattice installation documentation", () => {
 
       expect(migration).toContain("symbol-lattice uninstall codex --apply --yes");
       expect(migration).toContain("npm uninstall -g @hsinpu/symbol-lattice");
-      expect(migration).toContain("npm install -g @hsinpu/symbollattice");
+      expect(migration).toContain("GitHub");
+      expect(migration).not.toContain("npm install -g @hsinpu/symbollattice");
       expect(migration).toContain("SymbolLattice init .");
     }
 

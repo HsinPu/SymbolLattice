@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.421.0 為不相容的開發者預覽版，已全面改用新的 package、CLI、MCP 與索引名稱。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
+> v0.422.0 是從官方 GitHub 固定版本安裝的開發者預覽版；SymbolLattice 尚未發布到 npm Registry。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
 
 ## 這是什麼
 
@@ -28,7 +28,7 @@ SymbolLattice 掃描本機 repository、保存程式碼圖，並以 CLI/MCP 提�
 ```bash
 git clone https://github.com/HsinPu/SymbolLattice.git
 cd SymbolLattice
-npm install
+npm ci
 npm run build
 
 node dist/cli/main.js init /path/to/project
@@ -37,17 +37,44 @@ node dist/cli/main.js find createOrder --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## 安裝到 Codex
+## 從 GitHub 安裝 CLI
 
-先安裝公開 CLI，並在要使用的 repository 明確建立索引：
+需要 Git、Node.js `>=22.13 <25`、npm 與 Windows PowerShell 5.1 或 PowerShell 7。請先在 GitHub 選擇完整 40 字元 commit 或版本 tag，不接受 `main`、`HEAD` 或其他浮動 branch。
 
-```bash
-npm install -g @hsinpu/symbollattice
-cd /path/to/project
+```powershell
+$ref = "<FULL_40_CHARACTER_COMMIT_OR_VX.Y.Z>"
+$bootstrap = Join-Path ([IO.Path]::GetTempPath()) ("SymbolLattice-bootstrap-" + [guid]::NewGuid().ToString("N"))
+
+try {
+    git clone --filter=blob:none --no-checkout https://github.com/HsinPu/SymbolLattice.git $bootstrap
+    git -C $bootstrap fetch --depth 1 origin $ref
+    git -C $bootstrap checkout --detach FETCH_HEAD
+
+    # 先預覽；確認來源、npm prefix 與執行步驟，不會寫入
+    & (Join-Path $bootstrap "install.ps1") -Ref $ref
+
+    # 確認後才安裝到目前使用者的 npm global prefix
+    & (Join-Path $bootstrap "install.ps1") -Ref $ref -Apply -Yes
+}
+finally {
+    if (Test-Path -LiteralPath $bootstrap) {
+        Remove-Item -LiteralPath $bootstrap -Recurse -Force
+    }
+}
+```
+
+來源安裝器會再次 Clone 固定 ref 到自己的唯一暫存 workspace，驗證 origin、commit、lockfile、type check、build、pack、隔離 CLI／MCP，再以可回復流程安裝全域 CLI。成功會清除該 workspace；失敗會回復全域安裝並保留診斷 workspace。它不修改 Codex 設定，也不建立專案索引。
+
+安裝 CLI 後，在要使用的 repository 明確建立索引：
+
+```powershell
+cd C:\path\to\project
 SymbolLattice init .
 ```
 
-Codex 安裝器預設只顯示計畫，不會寫入：
+## 安裝到 Codex
+
+Codex 安裝器同樣預設只顯示計畫，不會寫入：
 
 ```bash
 SymbolLattice install codex
@@ -68,15 +95,14 @@ SymbolLattice uninstall codex --apply --yes
 
 ## 從 v0.420.0 或更早版本升級
 
-v0.421.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
+v0.422.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
 
 ```bash
 # 仍可執行舊 CLI 時，先移除舊 Codex MCP 設定
 symbol-lattice uninstall codex --apply --yes
 
-# 更換全域 npm 套件
+# 移除舊 npm 套件，再依上方「從 GitHub 安裝 CLI」安裝固定版本
 npm uninstall -g @hsinpu/symbol-lattice
-npm install -g @hsinpu/symbollattice
 
 # 安裝新 Codex 設定，並在每個專案建立新索引
 SymbolLattice install codex --apply --yes
@@ -85,7 +111,7 @@ SymbolLattice init .
 SymbolLattice doctor codex
 ```
 
-| 舊項目 | v0.421.0 |
+| 舊項目 | v0.422.0 |
 | --- | --- |
 | npm package | `@hsinpu/symbollattice` |
 | CLI | `SymbolLattice` |

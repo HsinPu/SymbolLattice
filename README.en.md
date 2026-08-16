@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.421.0 is a breaking developer preview with new package, CLI, MCP, and index names. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.SymbolLattice` index; add `--no-auto-sync` to disable it.
+> v0.422.0 is a developer preview installed from a fixed revision of the official GitHub repository; SymbolLattice is not published to the npm Registry. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.SymbolLattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -28,7 +28,7 @@ Requires Node.js `>=22.13 <25` and npm.
 ```bash
 git clone https://github.com/HsinPu/SymbolLattice.git
 cd SymbolLattice
-npm install
+npm ci
 npm run build
 
 node dist/cli/main.js init /path/to/project
@@ -37,17 +37,44 @@ node dist/cli/main.js find createOrder --project /path/to/project --json
 node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
 ```
 
-## Install for Codex
+## Install the CLI from GitHub
 
-Install the public CLI, then explicitly create an index in the repository where you want to use it:
+Requires Git, Node.js `>=22.13 <25`, npm, and Windows PowerShell 5.1 or PowerShell 7. Select a full 40-character commit or a version tag on GitHub first; floating refs such as `main` and `HEAD` are rejected.
 
-```bash
-npm install -g @hsinpu/symbollattice
-cd /path/to/project
+```powershell
+$ref = "<FULL_40_CHARACTER_COMMIT_OR_VX.Y.Z>"
+$bootstrap = Join-Path ([IO.Path]::GetTempPath()) ("SymbolLattice-bootstrap-" + [guid]::NewGuid().ToString("N"))
+
+try {
+    git clone --filter=blob:none --no-checkout https://github.com/HsinPu/SymbolLattice.git $bootstrap
+    git -C $bootstrap fetch --depth 1 origin $ref
+    git -C $bootstrap checkout --detach FETCH_HEAD
+
+    # Preview the source, npm prefix, and steps without writing anything
+    & (Join-Path $bootstrap "install.ps1") -Ref $ref
+
+    # Install into the current user's npm global prefix only after review
+    & (Join-Path $bootstrap "install.ps1") -Ref $ref -Apply -Yes
+}
+finally {
+    if (Test-Path -LiteralPath $bootstrap) {
+        Remove-Item -LiteralPath $bootstrap -Recurse -Force
+    }
+}
+```
+
+The source installer clones the fixed ref again into its own unique workspace, verifies origin, commit, lockfile, type check, build, package, isolated CLI, and MCP, then installs the global CLI with rollback protection. It removes that workspace on success and retains diagnostics after a rolled-back failure. It does not edit Codex configuration or create a project index.
+
+After installing the CLI, explicitly create an index in the repository where you want to use it:
+
+```powershell
+cd C:\path\to\project
 SymbolLattice init .
 ```
 
-The Codex installer previews its plan by default and does not write anything:
+## Install for Codex
+
+The Codex installer also previews its plan by default and does not write anything:
 
 ```bash
 SymbolLattice install codex
@@ -68,15 +95,14 @@ The installer never creates or deletes a project index automatically. Restart Co
 
 ## Upgrading from v0.420.0 or earlier
 
-v0.421.0 does not provide aliases for the old names and does not read the old index. Use this order:
+v0.422.0 does not provide aliases for the old names and does not read the old index. Use this order:
 
 ```bash
 # Remove the old Codex MCP configuration while the old CLI is still available
 symbol-lattice uninstall codex --apply --yes
 
-# Replace the global npm package
+# Remove the old npm package, then use "Install the CLI from GitHub" above
 npm uninstall -g @hsinpu/symbol-lattice
-npm install -g @hsinpu/symbollattice
 
 # Install the new Codex configuration and create a new index in each project
 SymbolLattice install codex --apply --yes
@@ -85,7 +111,7 @@ SymbolLattice init .
 SymbolLattice doctor codex
 ```
 
-| Previous surface | v0.421.0 |
+| Previous surface | v0.422.0 |
 | --- | --- |
 | npm package | `@hsinpu/symbollattice` |
 | CLI | `SymbolLattice` |
