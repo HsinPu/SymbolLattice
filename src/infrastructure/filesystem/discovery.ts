@@ -91,6 +91,8 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
   [".yaml", "yaml"],
   [".yml", "yaml"],
   [".xml", "xml"],
+  [".html", "html"],
+  [".htm", "html"],
   [".properties", "properties"],
   [".sh", "shell"],
   [".bash", "shell"],

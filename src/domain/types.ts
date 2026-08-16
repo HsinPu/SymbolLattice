@@ -207,6 +207,7 @@ export const ARTIFACT_LANGUAGES = [
   "zig",
   "yaml",
   "xml",
+  "html",
   "properties",
   "shell",
   "sql",

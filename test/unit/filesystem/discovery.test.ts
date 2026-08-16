@@ -36,6 +36,11 @@ afterEach(async () => {
 });
 
 describe("source discovery", () => {
+  it("routes HTML and HTM files to the HTML extractor", () => {
+    expect(getSourceLanguage("web/index.html")).toBe("html");
+    expect(getSourceLanguage("web/legacy.HTM")).toBe("html");
+  });
+
   it("bounds full source reads for large repositories", async () => {
     const projectPath = resolve("bounded-source-project");
     const sourcePaths = Array.from(

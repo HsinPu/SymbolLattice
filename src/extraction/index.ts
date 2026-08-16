@@ -44,6 +44,7 @@ import { extractVbnetFileFacts } from "./vbnet.js";
 import { extractZigFileFacts } from "./zig.js";
 import { extractYamlFileFacts } from "./yaml.js";
 import { extractXmlFileFacts } from "./xml.js";
+import { extractHtmlFileFacts } from "./html.js";
 import { extractPropertiesFileFacts } from "./properties.js";
 import { extractLiquidFileFacts } from "./liquid.js";
 import { extractTwigFileFacts } from "./twig.js";
@@ -7742,6 +7743,9 @@ export function extractFileFacts(
   }
   if (input.language === "xml") {
     return extractXmlFileFacts({ ...input, language: "xml" });
+  }
+  if (input.language === "html") {
+    return extractHtmlFileFacts({ ...input, language: "html" });
   }
   if (input.language === "properties") {
     return extractPropertiesFileFacts({ ...input, language: "properties" });
