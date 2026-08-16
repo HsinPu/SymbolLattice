@@ -25,7 +25,7 @@ describe("HTML project indexing", () => {
     await mkdir(join(projectPath, "web"), { recursive: true });
     await writeFile(
       join(projectPath, "web", "index.html"),
-      "<!doctype html><html><body><main><h1>Welcome</h1></main></body></html>\n",
+      '<!doctype html><html lang="en"><body><main id="app"><h1>Welcome</h1><h3>Details</h3><img></main></body></html>\n',
       "utf8"
     );
     const store = new SqliteGraphStore();
@@ -36,13 +36,18 @@ describe("HTML project indexing", () => {
       .getArtifactFacts(projectPath)
       .find((facts) => facts.filePath === "web/index.html");
     const result = await service.find(projectPath, "web/index.html#html-element:html[1]/body[1]/main[1]");
+    const attributeResult = await service.find(projectPath, "html-attribute:id=app");
+    const diagnosticResult = await service.find(projectPath, "diagnostic:image-missing-alt");
 
     expect(status).toMatchObject({ initialized: true, stale: false });
     expect(htmlFacts).toMatchObject({
       language: "html",
       symbols: expect.arrayContaining([
         expect.objectContaining({ name: "html", kind: "resource" }),
-        expect.objectContaining({ name: "main", kind: "resource" })
+        expect.objectContaining({ name: "main", kind: "resource" }),
+        expect.objectContaining({ name: "id=app", kind: "resource" }),
+        expect.objectContaining({ name: "landmark:main", kind: "resource" }),
+        expect.objectContaining({ name: "diagnostic:image-missing-alt", kind: "resource" })
       ]),
       edges: expect.arrayContaining([
         expect.objectContaining({
@@ -55,6 +60,12 @@ describe("HTML project indexing", () => {
     });
     expect(result.symbols).toContainEqual(
       expect.objectContaining({ name: "main", kind: "resource", filePath: "web/index.html" })
+    );
+    expect(attributeResult.symbols).toContainEqual(
+      expect.objectContaining({ name: "id=app", filePath: "web/index.html" })
+    );
+    expect(diagnosticResult.symbols).toContainEqual(
+      expect.objectContaining({ name: "diagnostic:image-missing-alt", filePath: "web/index.html" })
     );
   });
 });

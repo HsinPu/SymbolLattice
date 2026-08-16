@@ -9,6 +9,20 @@ const VOID_ELEMENTS = new Set([
 ]);
 const RAW_ELEMENTS = new Set(["script", "style", "textarea", "title"]);
 const TAG_NAME = /^[A-Za-z][A-Za-z0-9:-]*/u;
+const ATTRIBUTE_NAME = /^[A-Za-z_:][A-Za-z0-9_.:-]*/u;
+const STATIC_ATTRIBUTES = new Set([
+  "alt", "autofocus", "checked", "class", "disabled", "formnovalidate", "hidden", "id",
+  "lang", "multiple", "name", "novalidate", "open", "placeholder", "readonly", "required",
+  "role", "scope", "selected", "title", "type", "value"
+]);
+const BOOLEAN_ATTRIBUTES = new Set([
+  "autofocus", "checked", "disabled", "formnovalidate", "hidden", "multiple", "novalidate",
+  "open", "readonly", "required", "selected"
+]);
+const INTERACTIVE_CONTROLS = new Set(["button", "input", "select", "textarea"]);
+const MAX_ATTRIBUTES = 256;
+const MAX_ATTRIBUTE_NAME = 256;
+const MAX_ATTRIBUTE_VALUE = 4096;
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex").toUpperCase();
@@ -36,12 +50,83 @@ function closingTag(source, name, start) {
   return match === null ? null : { start: match.index, end: match.index + match[0].length };
 }
 
+function strictAttributes(tagSource, tagName) {
+  let text = tagSource.slice(1 + tagName.length, -1).trim();
+  if (text.endsWith("/")) text = text.slice(0, -1).trimEnd();
+  const attributes = [];
+  let offset = 0;
+  while (offset < text.length) {
+    while (/\s/u.test(text[offset] ?? "")) offset += 1;
+    if (offset >= text.length) break;
+    const nameMatch = ATTRIBUTE_NAME.exec(text.slice(offset));
+    if (nameMatch === null) return null;
+    const name = nameMatch[0].toLowerCase();
+    offset += nameMatch[0].length;
+    while (/\s/u.test(text[offset] ?? "")) offset += 1;
+    let value = null;
+    if (text[offset] === "=") {
+      offset += 1;
+      while (/\s/u.test(text[offset] ?? "")) offset += 1;
+      const quote = text[offset];
+      if (quote === '"' || quote === "'") {
+        const end = text.indexOf(quote, offset + 1);
+        if (end < 0) return null;
+        value = text.slice(offset + 1, end);
+        offset = end + 1;
+      } else {
+        const match = /^[^\s"'`=<>]+/u.exec(text.slice(offset));
+        if (match === null) return null;
+        value = match[0];
+        offset += match[0].length;
+      }
+    }
+    attributes.push({ name, value });
+  }
+  return attributes.length <= MAX_ATTRIBUTES && attributes.every((attribute) =>
+    attribute.name.length <= MAX_ATTRIBUTE_NAME && (attribute.value?.length ?? 0) <= MAX_ATTRIBUTE_VALUE
+  ) ? attributes : null;
+}
+
+function isStatic(attribute) {
+  return attribute.value === null || !/(?:\{\{|\}\}|\{%|%\}|<%|%>|\$\{)/u.test(attribute.value);
+}
+
+function isInteractiveControl(node) {
+  if (!INTERACTIVE_CONTROLS.has(node.name)) return false;
+  if (node.attributes.some((attribute) => attribute.name === "disabled" || attribute.name === "hidden")) return false;
+  if (node.name !== "input") return true;
+  const type = node.attributes.find((attribute) => attribute.name === "type");
+  if (type === undefined) return true;
+  return isStatic(type) && type.value !== null && type.value.toLowerCase() !== "hidden";
+}
+
+function isExposed(name) {
+  return STATIC_ATTRIBUTES.has(name) || name.startsWith("aria-") || name.startsWith("data-");
+}
+
+function semantic(name, parentName) {
+  if (/^h[1-6]$/u.test(name)) return `heading:${name}`;
+  if (["header", "footer"].includes(name)) return parentName === "body" ? `landmark:${name}` : `section:${name}`;
+  if (["nav", "main", "aside"].includes(name)) return `landmark:${name}`;
+  if (name === "form") return "form:form";
+  if (["input", "select", "textarea", "button", "output"].includes(name)) return `form-control:${name}`;
+  if (["table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption"].includes(name)) return `table:${name}`;
+  if (["ul", "ol", "li", "dl", "dt", "dd"].includes(name)) return `list:${name}`;
+  return null;
+}
+
 /** Independent strict-subset scanner: explicit nesting only, no browser recovery. */
 export function strictHtmlTruth(filePath, source) {
-  const root = { qualifiedName: filePath, counts: new Map() };
+  const root = { name: filePath, qualifiedName: filePath, counts: new Map(), children: [] };
   const stack = [root];
-  const identities = [];
+  const resources = [];
   const containments = [];
+  const nodes = [];
+  const addResource = (node, type, name) => {
+    const qualifiedName = `${node.qualifiedName}#html-${type}:${name}`;
+    resources.push(qualifiedName);
+    containments.push(`${node.qualifiedName}->${qualifiedName}`);
+  };
   let offset = 0;
   while (offset < source.length) {
     const opening = source.indexOf("<", offset);
@@ -76,6 +161,8 @@ export function strictHtmlTruth(filePath, source) {
     const end = tagEnd(source, opening + match[0].length);
     if (end === null) return null;
     const name = match[1].toLowerCase();
+    const attributes = strictAttributes(source.slice(opening, end), match[1]);
+    if (attributes === null) return null;
     const parent = stack.at(-1);
     if (parent === undefined) return null;
     const ordinal = (parent.counts.get(name) ?? 0) + 1;
@@ -83,13 +170,22 @@ export function strictHtmlTruth(filePath, source) {
     const parentPath = parent.path ?? "";
     const path = parentPath.length === 0 ? `${name}[${ordinal}]` : `${parentPath}/${name}[${ordinal}]`;
     const qualifiedName = `${filePath}#html-element:${path}`;
-    identities.push(qualifiedName);
+    resources.push(qualifiedName);
     containments.push(`${parent.qualifiedName}->${qualifiedName}`);
+    const node = { name, path, qualifiedName, counts: new Map(), attributes, children: [] };
+    parent.children.push(node);
+    nodes.push(node);
+    for (const attribute of attributes) {
+      if (isExposed(attribute.name) && isStatic(attribute)) {
+        addResource(node, "attribute", attribute.value === null ? attribute.name : `${attribute.name}=${attribute.value}`);
+      }
+    }
+    const classification = semantic(name, parent.name);
+    if (classification !== null) addResource(node, "semantic", classification);
     const beforeClose = source.slice(opening, end - 1).trimEnd();
     const selfClosing = beforeClose.endsWith("/");
     if (selfClosing && !VOID_ELEMENTS.has(name)) return null;
     if (!VOID_ELEMENTS.has(name)) {
-      const node = { name, path, qualifiedName, counts: new Map() };
       stack.push(node);
       if (RAW_ELEMENTS.has(name)) {
         const close = closingTag(source, name, end);
@@ -101,7 +197,59 @@ export function strictHtmlTruth(filePath, source) {
     }
     offset = end;
   }
-  return stack.length === 1 ? { identities, containments } : null;
+  if (stack.length !== 1) return null;
+
+  const htmlNode = nodes.find((node) => node.name === "html");
+  const htmlLang = htmlNode?.attributes.find((attribute) => attribute.name === "lang");
+  if (htmlNode !== undefined && (htmlLang === undefined || (isStatic(htmlLang) && (htmlLang.value ?? "").trim() === ""))) {
+    addResource(htmlNode, "diagnostic", "diagnostic:html-missing-lang");
+  }
+  const ids = new Map();
+  const descendants = (node, expected) => node.children.some((child) => child.name === expected || descendants(child, expected));
+  for (const node of nodes) {
+    const seen = new Set();
+    for (const attribute of node.attributes) {
+      if (seen.has(attribute.name)) addResource(node, "diagnostic", `diagnostic:duplicate-attribute:${attribute.name}`);
+      seen.add(attribute.name);
+      if (BOOLEAN_ATTRIBUTES.has(attribute.name) && isStatic(attribute) && attribute.value !== null && attribute.value !== "" && attribute.value.toLowerCase() !== attribute.name) {
+        addResource(node, "diagnostic", `diagnostic:boolean-attribute-invalid-value:${attribute.name}`);
+      }
+      if (attribute.name === "id" && isStatic(attribute) && attribute.value !== null && attribute.value.trim() !== "") {
+        const entries = ids.get(attribute.value) ?? [];
+        entries.push(node);
+        ids.set(attribute.value, entries);
+      }
+    }
+    const role = node.attributes.find((attribute) => attribute.name === "role");
+    if (isInteractiveControl(node) && role !== undefined && isStatic(role) && role.value !== null && ["none", "presentation"].includes(role.value.toLowerCase())) {
+      addResource(node, "diagnostic", "diagnostic:presentational-role-on-form-control");
+    }
+    const hidden = node.attributes.find((attribute) => attribute.name === "aria-hidden");
+    if (isInteractiveControl(node) && hidden !== undefined && isStatic(hidden) && hidden.value?.toLowerCase() === "true") {
+      addResource(node, "diagnostic", "diagnostic:aria-hidden-interactive-control");
+    }
+    if (node.name === "img" && !node.attributes.some((attribute) => attribute.name === "alt")) {
+      addResource(node, "diagnostic", "diagnostic:image-missing-alt");
+    }
+    if (node.name === "ul" || node.name === "ol") {
+      const invalid = node.children.find((child) => !["li", "script", "template"].includes(child.name));
+      if (invalid !== undefined) addResource(node, "diagnostic", `diagnostic:list-invalid-direct-child:${invalid.name}`);
+    }
+    if (node.name === "table" && !descendants(node, "tr")) {
+      addResource(node, "diagnostic", "diagnostic:table-missing-row");
+    }
+  }
+  for (const [id, entries] of ids) {
+    for (const node of entries.slice(1)) addResource(node, "diagnostic", `diagnostic:duplicate-id:${id}`);
+  }
+  let prior = null;
+  for (const node of nodes) {
+    if (!/^h[1-6]$/u.test(node.name)) continue;
+    const level = Number(node.name.slice(1));
+    if (prior !== null && level > prior + 1) addResource(node, "diagnostic", `diagnostic:heading-level-skip:h${prior}-to-h${level}`);
+    prior = level;
+  }
+  return { resources, containments };
 }
 
 function sourceFiles(root) {
@@ -149,15 +297,15 @@ export async function runOracle({ sourceRoot, projectRoot, sourceCommit }) {
     const contents = readFileSync(absolute, "utf8");
     manifest.update(filePath).update("\0").update(sha256(contents)).update("\n");
     const truth = strictHtmlTruth(filePath, contents);
-    if (truth !== null && truth.identities.length > 0 && truth.identities.length <= 100) {
+    if (truth !== null && truth.resources.length > 0 && truth.resources.length <= 300) {
       selected.push({ filePath, ...truth });
     }
   }
   const selectedPaths = new Set(selected.map(({ filePath }) => filePath));
   const symbolsById = new Map(bundle.snapshot.symbols.map((symbol) => [symbol.id, symbol]));
-  const expectedIdentities = selected.flatMap(({ identities }) => identities);
+  const expectedResources = selected.flatMap(({ resources }) => resources);
   const expectedContainments = selected.flatMap(({ containments }) => containments);
-  const actualIdentities = bundle.snapshot.symbols
+  const actualResources = bundle.snapshot.symbols
     .filter((symbol) => selectedPaths.has(symbol.filePath) && symbol.kind === "resource")
     .map((symbol) => symbol.qualifiedName);
   const actualContainments = bundle.snapshot.edges
@@ -167,24 +315,24 @@ export async function runOracle({ sourceRoot, projectRoot, sourceCommit }) {
       const targetSymbol = symbolsById.get(edge.targetId);
       return `${sourceSymbol?.qualifiedName ?? edge.sourceId}->${targetSymbol?.qualifiedName ?? edge.targetId}`;
     });
-  const identityScore = scoreSets(expectedIdentities, actualIdentities);
+  const resourceScore = scoreSets(expectedResources, actualResources);
   const containmentScore = scoreSets(expectedContainments, actualContainments);
   const score = {
-    tp: identityScore.tp + containmentScore.tp,
-    fp: identityScore.fp + containmentScore.fp,
-    fn: identityScore.fn + containmentScore.fn
+    tp: resourceScore.tp + containmentScore.tp,
+    fp: resourceScore.fp + containmentScore.fp,
+    fn: resourceScore.fn + containmentScore.fn
   };
-  const quota = { minimumSelectedFiles: 20, minimumIdentities: 300, minimumContainments: 300 };
-  const quotaMet = selected.length >= quota.minimumSelectedFiles && expectedIdentities.length >= quota.minimumIdentities && expectedContainments.length >= quota.minimumContainments;
+  const quota = { minimumSelectedFiles: 20, minimumResources: 1_000, minimumContainments: 1_000 };
+  const quotaMet = selected.length >= quota.minimumSelectedFiles && expectedResources.length >= quota.minimumResources && expectedContainments.length >= quota.minimumContainments;
   return {
     schemaVersion: 1,
-    benchmark: "symbollattice-html-large-project-correctness-v1",
+    benchmark: "symbollattice-html-large-project-correctness-v2",
     productVersion: SYMBOL_LATTICE_VERSION,
     extractorVersion: bundle.extractorVersion,
     source: { root: source, commit: sourceCommit, htmlFiles: files.length, contentManifestSha256: manifest.digest("hex").toUpperCase() },
     selection: { strictSubsetFiles: selected.length, excludedFiles: files.length - selected.length, selectedPathsSha256: sha256(selected.map(({ filePath }) => filePath).join("\n")), examples: selected.slice(0, 20).map(({ filePath }) => filePath) },
     quota,
-    scores: { identities: identityScore, containment: containmentScore, combined: score },
+    scores: { resources: resourceScore, containment: containmentScore, combined: score },
     acceptance: { quotaMet, status: quotaMet && score.fp === 0 && score.fn === 0 ? "pass" : "fail" }
   };
 }

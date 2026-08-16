@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.424.0 是從官方 GitHub 固定版本安裝的開發者預覽版；SymbolLattice 尚未發布到 npm Registry。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
+> v0.425.0 是從官方 GitHub 固定版本安裝的開發者預覽版；SymbolLattice 尚未發布到 npm Registry。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
 
 ## 這是什麼
 
@@ -21,7 +21,7 @@ SymbolLattice 掃描本機 repository、保存程式碼圖，並以 CLI/MCP 提�
 
 無法精確證明的關係會保留為 unresolved 或 pending，而不會成為錯誤的 exact edge。
 
-v0.424.0 新增 `.html`／`.htm` 基本掃描：保留可由原始碼嚴格證明的 HTML element identity 與直接 containment。固定 MDN Learning Area commit 的 534 個嚴格子集合檔案共驗證 18,924 個 truth，結果為 TP 18,924／FP 0／FN 0。依賴瀏覽器錯誤修復、結束標籤省略或不完整結構的頁面只保留 file symbol；attribute、資源連結、DOM runtime、內嵌 JavaScript/CSS 與 JSP 關係尚未宣稱。
+v0.425.0 加深 `.html`／`.htm`：除 element identity 與直接 containment，還保留 bounded 靜態 attribute、heading／landmark／form／table／list 語意，以及 duplicate id、heading 跳級、缺少 alt／lang、table／list 結構、boolean attribute 與保守 ARIA 衝突等本地診斷。固定 MDN Learning Area 的 537 個嚴格子集合檔案，由獨立 v2 oracle 驗證 16,234 個 resources 與 16,234 個 containment，合計 TP 32,468／FP 0／FN 0；這些本地線索不等於完整 WCAG 合規。模板值與不確定語法不會變成 exact。資源 URL、CSS、JavaScript、後端、JSP 與跨語言關係仍不在本版範圍。
 
 ## 快速開始
 
@@ -97,7 +97,7 @@ SymbolLattice uninstall codex --apply --yes
 
 ## 從 v0.420.0 或更早版本升級
 
-v0.424.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
+v0.425.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
 
 ```bash
 # 仍可執行舊 CLI 時，先移除舊 Codex MCP 設定
@@ -113,7 +113,7 @@ SymbolLattice init .
 SymbolLattice doctor codex
 ```
 
-| 舊項目 | v0.424.0 |
+| 舊項目 | v0.425.0 |
 | --- | --- |
 | npm package | `@hsinpu/symbollattice` |
 | CLI | `SymbolLattice` |

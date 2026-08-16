@@ -37,10 +37,57 @@ const HTML_VOID_ELEMENTS: ReadonlySet<string> = new Set([
   "wbr"
 ]);
 const HTML_TAG_NAME = /^[A-Za-z][A-Za-z0-9:-]*$/u;
+const HTML_ATTRIBUTE_NAME = /^[A-Za-z_:][A-Za-z0-9_.:-]*$/u;
+const HTML_STATIC_ATTRIBUTE_NAMES: ReadonlySet<string> = new Set([
+  "alt",
+  "autofocus",
+  "checked",
+  "class",
+  "disabled",
+  "formnovalidate",
+  "hidden",
+  "id",
+  "lang",
+  "multiple",
+  "name",
+  "novalidate",
+  "open",
+  "placeholder",
+  "readonly",
+  "required",
+  "role",
+  "scope",
+  "selected",
+  "title",
+  "type",
+  "value"
+]);
+const HTML_BOOLEAN_ATTRIBUTE_NAMES: ReadonlySet<string> = new Set([
+  "autofocus",
+  "checked",
+  "disabled",
+  "formnovalidate",
+  "hidden",
+  "multiple",
+  "novalidate",
+  "open",
+  "readonly",
+  "required",
+  "selected"
+]);
+const HTML_INTERACTIVE_FORM_CONTROLS: ReadonlySet<string> = new Set([
+  "button",
+  "input",
+  "select",
+  "textarea"
+]);
 const HTML_RCDATA_ELEMENTS: ReadonlySet<string> = new Set(["textarea", "title"]);
 const HTML_RAW_TEXT_ELEMENTS: ReadonlySet<string> = new Set(["script", "style"]);
 export const MAXIMUM_HTML_ELEMENT_DEPTH = 256;
 export const MAXIMUM_HTML_ELEMENTS = 10_000;
+export const MAXIMUM_HTML_ATTRIBUTES_PER_ELEMENT = 256;
+export const MAXIMUM_HTML_ATTRIBUTE_NAME_LENGTH = 256;
+export const MAXIMUM_HTML_ATTRIBUTE_VALUE_LENGTH = 4_096;
 
 function tagEndOffset(sourceText: string, startOffset: number): number | null {
   let quote: '"' | "'" | null = null;
@@ -194,6 +241,149 @@ function staticElementName(node: SgNode): string | null {
   return directTagName(node, "start_tag") ?? directTagName(node, "self_closing_tag");
 }
 
+interface StaticHtmlAttribute {
+  readonly name: string;
+  readonly value: string | null;
+  readonly node: SgNode;
+}
+
+function startTag(node: SgNode): SgNode | null {
+  const tags = directChildren(node).filter(
+    (child) => child.kind() === "start_tag" || child.kind() === "self_closing_tag"
+  );
+  return tags.length === 1 ? tags[0] ?? null : null;
+}
+
+function staticAttributeValue(node: SgNode): string | null {
+  const valueNode = directChildren(node).find(
+    (child) => child.kind() === "quoted_attribute_value" || child.kind() === "attribute_value"
+  );
+  if (valueNode === undefined) {
+    return null;
+  }
+  const text = valueNode.text();
+  if (
+    valueNode.kind() === "quoted_attribute_value" &&
+    text.length >= 2 &&
+    ((text.startsWith('"') && text.endsWith('"')) ||
+      (text.startsWith("'") && text.endsWith("'")))
+  ) {
+    return text.slice(1, -1);
+  }
+  return text;
+}
+
+function staticAttributes(node: SgNode): readonly StaticHtmlAttribute[] {
+  const tag = startTag(node);
+  if (tag === null) {
+    return [];
+  }
+  const attributes: StaticHtmlAttribute[] = [];
+  for (const attributeNode of directChildren(tag).filter((child) => child.kind() === "attribute")) {
+    const nameNodes = directChildren(attributeNode).filter(
+      (child) => child.kind() === "attribute_name"
+    );
+    if (nameNodes.length !== 1 || nameNodes[0] === undefined) {
+      continue;
+    }
+    const name = nameNodes[0].text().toLowerCase();
+    if (!HTML_ATTRIBUTE_NAME.test(name)) {
+      continue;
+    }
+    attributes.push({ name, value: staticAttributeValue(attributeNode), node: attributeNode });
+  }
+  return attributes;
+}
+
+function isExposedStaticAttribute(name: string): boolean {
+  return (
+    HTML_STATIC_ATTRIBUTE_NAMES.has(name) || name.startsWith("aria-") || name.startsWith("data-")
+  );
+}
+
+function hasTemplateAttributeSyntax(value: string): boolean {
+  return /(?:\{\{|\}\}|\{%|%\}|<%|%>|\$\{)/u.test(value);
+}
+
+function isProvenStaticAttribute(attribute: StaticHtmlAttribute): boolean {
+  return attribute.value === null || !hasTemplateAttributeSyntax(attribute.value);
+}
+
+function isProvenInteractiveFormControl(
+  elementName: string,
+  attributes: readonly StaticHtmlAttribute[]
+): boolean {
+  if (!HTML_INTERACTIVE_FORM_CONTROLS.has(elementName)) {
+    return false;
+  }
+  if (attributes.some((attribute) => attribute.name === "disabled" || attribute.name === "hidden")) {
+    return false;
+  }
+  if (elementName !== "input") {
+    return true;
+  }
+  const type = attributes.find((attribute) => attribute.name === "type");
+  if (type === undefined) {
+    return true;
+  }
+  return (
+    isProvenStaticAttribute(type) &&
+    type.value !== null &&
+    type.value.toLowerCase() !== "hidden"
+  );
+}
+
+function semanticClassification(elementName: string, parentElementName: string): string | null {
+  if (/^h[1-6]$/u.test(elementName)) {
+    return `heading:${elementName}`;
+  }
+  if (["header", "footer"].includes(elementName)) {
+    return parentElementName === "body" ? `landmark:${elementName}` : `section:${elementName}`;
+  }
+  if (["nav", "main", "aside"].includes(elementName)) {
+    return `landmark:${elementName}`;
+  }
+  if (elementName === "form") {
+    return "form:form";
+  }
+  if (["input", "select", "textarea", "button", "output"].includes(elementName)) {
+    return `form-control:${elementName}`;
+  }
+  if (["table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption"].includes(elementName)) {
+    return `table:${elementName}`;
+  }
+  if (["ul", "ol", "li", "dl", "dt", "dd"].includes(elementName)) {
+    return `list:${elementName}`;
+  }
+  return null;
+}
+
+function directElementNames(node: SgNode): readonly string[] {
+  const names: string[] = [];
+  for (const child of directChildren(node)) {
+    if (!HTML_ELEMENT_KINDS.has(String(child.kind()))) {
+      continue;
+    }
+    const name = staticElementName(child);
+    if (name !== null) {
+      names.push(name);
+    }
+  }
+  return names;
+}
+
+function hasDescendantElement(node: SgNode, expectedName: string): boolean {
+  for (const child of directChildren(node)) {
+    if (!HTML_ELEMENT_KINDS.has(String(child.kind()))) {
+      continue;
+    }
+    if (staticElementName(child) === expectedName || hasDescendantElement(child, expectedName)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function hasValidHtmlStructure(
   node: SgNode,
   state: { elementCount: number },
@@ -214,6 +404,17 @@ function hasValidHtmlStructure(
     }
     const name = staticElementName(node);
     if (name === null) {
+      return false;
+    }
+    const attributes = staticAttributes(node);
+    if (
+      attributes.length > MAXIMUM_HTML_ATTRIBUTES_PER_ELEMENT ||
+      attributes.some(
+        (attribute) =>
+          attribute.name.length > MAXIMUM_HTML_ATTRIBUTE_NAME_LENGTH ||
+          (attribute.value?.length ?? 0) > MAXIMUM_HTML_ATTRIBUTE_VALUE_LENGTH
+      )
+    ) {
       return false;
     }
     const selfClosing = directChildren(node).some((child) => child.kind() === "self_closing_tag");
@@ -294,6 +495,13 @@ export function extractHtmlFileFacts(input: HtmlExtractFileFactsInput): Artifact
   }
   const symbols: SymbolNode[] = [file];
   const edges: GraphEdge[] = [];
+  const elementRecords: Array<{
+    readonly name: string;
+    readonly node: SgNode;
+    readonly symbol: SymbolNode;
+    readonly attributes: readonly StaticHtmlAttribute[];
+    readonly addDiagnostic: (name: string, range: SourceRange) => void;
+  }> = [];
 
   function visitChildren(parentNode: SgNode, parentSymbol: SymbolNode, parentPath: string): void {
     const siblingOrdinals = new Map<string, number>();
@@ -349,11 +557,201 @@ export function extractHtmlFileFacts(input: HtmlExtractFileFactsInput): Artifact
           candidateSymbolIds: [symbol.id]
         }
       });
+      const childResourceOrdinals = new Map<string, number>();
+      const addElementResource = (
+        resourceName: string,
+        resourceType: "attribute" | "semantic" | "diagnostic",
+        resourceRange: SourceRange,
+        ruleId: string
+      ): void => {
+        const identity = `${resourceType}:${resourceName}`;
+        const declarationOrdinal = childResourceOrdinals.get(identity) ?? 0;
+        childResourceOrdinals.set(identity, declarationOrdinal + 1);
+        const resourceQualifiedName = `${qualifiedName}#html-${resourceType}:${resourceName}`;
+        const resource: SymbolNode = {
+          id: createSymbolId({
+            filePath: input.filePath,
+            qualifiedName: resourceQualifiedName,
+            kind: "resource",
+            declarationOrdinal
+          }),
+          name: resourceName,
+          qualifiedName: resourceQualifiedName,
+          kind: "resource",
+          filePath: input.filePath,
+          range: resourceRange,
+          isExported: false,
+          declarationOrdinal
+        };
+        symbols.push(resource);
+        edges.push({
+          id: createEdgeId({
+            sourceId: symbol.id,
+            targetId: resource.id,
+            kind: "contains",
+            line: resourceRange.start.line,
+            column: resourceRange.start.column,
+            referenceName: resource.name
+          }),
+          sourceId: symbol.id,
+          targetId: resource.id,
+          kind: "contains",
+          filePath: input.filePath,
+          range: resourceRange,
+          resolution: "exact",
+          confidence: 1,
+          referenceName: resource.name,
+          evidence: { ruleId, stage: "syntax", candidateSymbolIds: [resource.id] }
+        });
+      };
+      for (const attribute of staticAttributes(child)) {
+        if (isExposedStaticAttribute(attribute.name) && isProvenStaticAttribute(attribute)) {
+          addElementResource(
+            attribute.value === null ? attribute.name : `${attribute.name}=${attribute.value}`,
+            "attribute",
+            sourceRange(attribute.node),
+            "syntax.html.static-attribute"
+          );
+        }
+      }
+      const semantic = semanticClassification(name, parentSymbol.name);
+      if (semantic !== null) {
+        addElementResource(semantic, "semantic", range, "syntax.html.element-semantic");
+      }
+      const attributes = staticAttributes(child);
+      elementRecords.push({
+        name,
+        node: child,
+        symbol,
+        attributes,
+        addDiagnostic: (diagnosticName, diagnosticRange) =>
+          addElementResource(
+            diagnosticName,
+            "diagnostic",
+            diagnosticRange,
+            "syntax.html.local-diagnostic"
+          )
+      });
       visitChildren(child, symbol, path);
     }
   }
 
   visitChildren(root, file, "");
+
+  const htmlElement = elementRecords.find((record) => record.name === "html");
+  const htmlLang = htmlElement?.attributes.find((attribute) => attribute.name === "lang");
+  if (
+    htmlElement !== undefined &&
+    (htmlLang === undefined ||
+      (isProvenStaticAttribute(htmlLang) && (htmlLang.value ?? "").trim() === ""))
+  ) {
+    htmlElement.addDiagnostic("diagnostic:html-missing-lang", htmlElement.symbol.range);
+  }
+
+  const ids = new Map<string, StaticHtmlAttribute[]>();
+  for (const record of elementRecords) {
+    const seenAttributes = new Set<string>();
+    for (const attribute of record.attributes) {
+      if (seenAttributes.has(attribute.name)) {
+        record.addDiagnostic(
+          `diagnostic:duplicate-attribute:${attribute.name}`,
+          sourceRange(attribute.node)
+        );
+      }
+      seenAttributes.add(attribute.name);
+      if (
+        HTML_BOOLEAN_ATTRIBUTE_NAMES.has(attribute.name) &&
+        isProvenStaticAttribute(attribute) &&
+        attribute.value !== null &&
+        attribute.value !== "" &&
+        attribute.value.toLowerCase() !== attribute.name
+      ) {
+        record.addDiagnostic(
+          `diagnostic:boolean-attribute-invalid-value:${attribute.name}`,
+          sourceRange(attribute.node)
+        );
+      }
+      if (
+        attribute.name === "id" &&
+        isProvenStaticAttribute(attribute) &&
+        attribute.value !== null &&
+        attribute.value.trim() !== ""
+      ) {
+        const entries = ids.get(attribute.value) ?? [];
+        entries.push(attribute);
+        ids.set(attribute.value, entries);
+      }
+    }
+    const role = record.attributes.find((attribute) => attribute.name === "role");
+    if (
+      isProvenInteractiveFormControl(record.name, record.attributes) &&
+      role !== undefined &&
+      isProvenStaticAttribute(role) &&
+      role.value !== null &&
+      ["none", "presentation"].includes(role.value.toLowerCase())
+    ) {
+      record.addDiagnostic(
+        "diagnostic:presentational-role-on-form-control",
+        sourceRange(role.node)
+      );
+    }
+    const ariaHidden = record.attributes.find((attribute) => attribute.name === "aria-hidden");
+    if (
+      isProvenInteractiveFormControl(record.name, record.attributes) &&
+      ariaHidden !== undefined &&
+      isProvenStaticAttribute(ariaHidden) &&
+      ariaHidden?.value?.toLowerCase() === "true"
+    ) {
+      record.addDiagnostic(
+        "diagnostic:aria-hidden-interactive-control",
+        sourceRange(ariaHidden.node)
+      );
+    }
+    if (record.name === "img" && !record.attributes.some((attribute) => attribute.name === "alt")) {
+      record.addDiagnostic("diagnostic:image-missing-alt", record.symbol.range);
+    }
+    if (
+      (record.name === "ul" || record.name === "ol") &&
+      directElementNames(record.node).some(
+        (childName) => !["li", "script", "template"].includes(childName)
+      )
+    ) {
+      const childName = directElementNames(record.node).find(
+        (candidate) => !["li", "script", "template"].includes(candidate)
+      );
+      if (childName !== undefined) {
+        record.addDiagnostic(
+          `diagnostic:list-invalid-direct-child:${childName}`,
+          record.symbol.range
+        );
+      }
+    }
+    if (record.name === "table" && !hasDescendantElement(record.node, "tr")) {
+      record.addDiagnostic("diagnostic:table-missing-row", record.symbol.range);
+    }
+  }
+
+  for (const [id, attributes] of ids) {
+    for (const attribute of attributes.slice(1)) {
+      const record = elementRecords.find((candidate) => candidate.attributes.includes(attribute));
+      record?.addDiagnostic(`diagnostic:duplicate-id:${id}`, sourceRange(attribute.node));
+    }
+  }
+
+  let previousHeadingLevel: number | null = null;
+  for (const record of elementRecords) {
+    if (!/^h[1-6]$/u.test(record.name)) {
+      continue;
+    }
+    const level = Number(record.name.slice(1));
+    if (previousHeadingLevel !== null && level > previousHeadingLevel + 1) {
+      record.addDiagnostic(
+        `diagnostic:heading-level-skip:h${previousHeadingLevel}-to-h${level}`,
+        record.symbol.range
+      );
+    }
+    previousHeadingLevel = level;
+  }
   return {
     symbols,
     edges,

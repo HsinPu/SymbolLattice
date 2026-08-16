@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.424.0 is a developer preview installed from a fixed revision of the official GitHub repository; SymbolLattice is not published to the npm Registry. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.SymbolLattice` index; add `--no-auto-sync` to disable it.
+> v0.425.0 is a developer preview installed from a fixed revision of the official GitHub repository; SymbolLattice is not published to the npm Registry. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.SymbolLattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -21,7 +21,7 @@ SymbolLattice scans a local repository, persists a code graph, and exposes CLI/M
 
 Relationships that cannot be proven exactly remain unresolved or pending instead of becoming false exact edges.
 
-v0.424.0 adds basic `.html` / `.htm` scanning for source-proven HTML element identities and direct containment. Across 534 strict-subset files from a fixed MDN Learning Area commit, 18,924 truths score TP 18,924 / FP 0 / FN 0. Pages that require browser error recovery, omitted end tags, or incomplete structure retain only their file symbol. Attributes, resource links, runtime DOM behavior, embedded JavaScript/CSS, and JSP relationships are not claimed yet.
+v0.425.0 deepens `.html` / `.htm` scanning beyond element identity and direct containment with bounded static attributes; heading, landmark, form, table, and list semantics; and local diagnostics for duplicate IDs, heading skips, missing alt/lang, table/list structure, boolean attributes, and conservative ARIA conflicts. On 537 strict-subset files from a fixed MDN Learning Area commit, an independent v2 oracle verified 16,234 resources and 16,234 containment edges for a combined TP 32,468 / FP 0 / FN 0; these local signals are not a claim of complete WCAG conformance. Template values and uncertain syntax never become exact. Resource URLs, CSS, JavaScript, backends, JSP, and cross-language relations remain out of scope.
 
 ## Quick start
 
@@ -97,7 +97,7 @@ The installer never creates or deletes a project index automatically. Restart Co
 
 ## Upgrading from v0.420.0 or earlier
 
-v0.424.0 does not provide aliases for the old names and does not read the old index. Use this order:
+v0.425.0 does not provide aliases for the old names and does not read the old index. Use this order:
 
 ```bash
 # Remove the old Codex MCP configuration while the old CLI is still available
@@ -113,7 +113,7 @@ SymbolLattice init .
 SymbolLattice doctor codex
 ```
 
-| Previous surface | v0.424.0 |
+| Previous surface | v0.425.0 |
 | --- | --- |
 | npm package | `@hsinpu/symbollattice` |
 | CLI | `SymbolLattice` |
