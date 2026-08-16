@@ -19,6 +19,8 @@ const SOURCE_FILE_EXTENSIONS = [
   ".ts",
   ".tsx",
   ".js",
+  ".mjs",
+  ".cjs",
   ".jsx",
   ".vue",
   ".svelte",

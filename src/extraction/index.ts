@@ -3798,6 +3798,39 @@ function isElysiaRouteReceiverInitializer(
   );
 }
 
+function directCommonJsFrameworkFactoryKind(
+  sourceFile: ts.SourceFile,
+  declaration: ts.VariableDeclaration
+): Extract<RouteBindingKind, "express-default-factory" | "fastify-default-factory"> | null {
+  const initializer = declaration.initializer;
+  const argument =
+    initializer !== undefined && ts.isCallExpression(initializer)
+      ? initializer.arguments[0]
+      : undefined;
+  const commonJsFile = sourceFile.fileName.toLowerCase().endsWith(".cjs");
+  if (
+    !ts.isIdentifier(declaration.name) ||
+    !isConstVariableDeclaration(declaration) ||
+    initializer === undefined ||
+    !ts.isCallExpression(initializer) ||
+    initializer.questionDotToken !== undefined ||
+    !ts.isIdentifier(initializer.expression) ||
+    initializer.expression.text !== "require" ||
+    initializer.arguments.length !== 1 ||
+    argument === undefined ||
+    !ts.isStringLiteral(argument) ||
+    hasDirectSourceBinding(sourceFile, "require") ||
+    hasEcmaScriptModuleSyntax(sourceFile) ||
+    (!commonJsFile && !hasUseStrictDirective(sourceFile))
+  ) {
+    return null;
+  }
+  if (argument.text === "express") {
+    return "express-default-factory";
+  }
+  return argument.text === "fastify" ? "fastify-default-factory" : null;
+}
+
 function frameworkRoutePluginForImport(
   declaration: ts.ImportDeclaration,
   factoryExport: string,
@@ -4070,6 +4103,21 @@ function directAssignmentTargetIdentifier(expression: ts.Expression): ts.Identif
   return ts.isIdentifier(target) ? target : null;
 }
 
+function assignmentTargetRootIdentifier(expression: ts.Expression): ts.Identifier | null {
+  let target = expression;
+  while (
+    ts.isParenthesizedExpression(target) ||
+    ts.isAsExpression(target) ||
+    ts.isTypeAssertionExpression(target) ||
+    ts.isNonNullExpression(target) ||
+    ts.isPropertyAccessExpression(target) ||
+    ts.isElementAccessExpression(target)
+  ) {
+    target = target.expression;
+  }
+  return ts.isIdentifier(target) ? target : null;
+}
+
 /**
  * A callback parameter is writable, unlike the immutable root Fastify receiver.
  * Do not classify it as a framework receiver when its own lexical body replaces it.
@@ -4123,7 +4171,8 @@ function hasStableFastifyPluginReceiver(
 function hasStableFastifyLocalPluginBinding(
   sourceFile: ts.SourceFile,
   declaration: ts.FunctionDeclaration | ts.VariableDeclaration,
-  bindings: ScopedRouteReceiverBindings
+  bindings: ScopedRouteReceiverBindings,
+  rejectMemberMutation = false
 ): boolean {
   let stable = true;
   const isDeclarationBinding = (identifier: ts.Identifier): boolean =>
@@ -4137,7 +4186,9 @@ function hasStableFastifyLocalPluginBinding(
       ts.isBinaryExpression(node) &&
       isAssignmentOperatorKind(node.operatorToken.kind)
     ) {
-      const target = directAssignmentTargetIdentifier(node.left);
+      const target =
+        directAssignmentTargetIdentifier(node.left) ??
+        (rejectMemberMutation ? assignmentTargetRootIdentifier(node.left) : null);
       if (target !== null && isDeclarationBinding(target)) {
         stable = false;
         return;
@@ -4147,7 +4198,9 @@ function hasStableFastifyLocalPluginBinding(
       (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
       (node.operator === ts.SyntaxKind.PlusPlusToken || node.operator === ts.SyntaxKind.MinusMinusToken)
     ) {
-      const target = directAssignmentTargetIdentifier(node.operand);
+      const target =
+        directAssignmentTargetIdentifier(node.operand) ??
+        (rejectMemberMutation ? assignmentTargetRootIdentifier(node.operand) : null);
       if (target !== null && isDeclarationBinding(target)) {
         stable = false;
         return;
@@ -4166,6 +4219,49 @@ function hasStableFastifyLocalPluginBinding(
   ts.forEachChild(sourceFile, visit);
 
   return stable;
+}
+
+const SAFE_EXPRESS_FACTORY_METHODS = new Set([
+  "Router",
+  "json",
+  "raw",
+  "static",
+  "text",
+  "urlencoded"
+]);
+
+function hasOnlySafeCommonJsFrameworkFactoryReferences(
+  sourceFile: ts.SourceFile,
+  declaration: ts.VariableDeclaration,
+  kind: Extract<RouteBindingKind, "express-default-factory" | "fastify-default-factory">,
+  bindings: ScopedRouteReceiverBindings
+): boolean {
+  let safe = true;
+  const isDeclarationBinding = (identifier: ts.Identifier): boolean =>
+    visibleRouteBinding(sourceFile, identifier, bindings)?.declaration === declaration;
+  const visit = (node: ts.Node): void => {
+    if (!safe) return;
+    if (ts.isIdentifier(node) && isDeclarationBinding(node)) {
+      if (node === declaration.name) return;
+      const parent = node.parent;
+      if (ts.isCallExpression(parent) && parent.expression === node) return;
+      if (
+        kind === "express-default-factory" &&
+        ts.isPropertyAccessExpression(parent) &&
+        parent.expression === node &&
+        SAFE_EXPRESS_FACTORY_METHODS.has(parent.name.text) &&
+        ts.isCallExpression(parent.parent) &&
+        parent.parent.expression === parent
+      ) {
+        return;
+      }
+      safe = false;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(sourceFile, visit);
+  return safe;
 }
 
 interface StaticLocalFastifyPluginCallback {
@@ -4490,7 +4586,12 @@ function collectScopedRouteReceiverBindings(
     if (ts.isVariableDeclaration(node)) {
       const names = bindingNames(node.name);
       const scopeId = variableBindingScopeId(sourceFile, node);
-      addScopedValueBinding(byScopeId, scopeId, names, node);
+      addScopedValueBinding(
+        byScopeId,
+        scopeId,
+        names,
+        node
+      );
     }
 
     if (
@@ -4646,6 +4747,55 @@ function collectScopedRouteReceiverBindings(
     ts.forEachChild(node, collectRootReceivers);
   }
 
+  function classifyCommonJsFrameworkFactories(): void {
+    for (const bindings of byScopeId.values()) {
+      for (const candidates of bindings.values()) {
+        for (const binding of candidates) {
+          if (!ts.isVariableDeclaration(binding.declaration)) continue;
+          const kind = directCommonJsFrameworkFactoryKind(sourceFile, binding.declaration);
+          const initializer = binding.declaration.initializer;
+          if (
+            kind !== null &&
+            initializer !== undefined &&
+            ts.isCallExpression(initializer) &&
+            ts.isIdentifier(initializer.expression) &&
+            visibleRouteBinding(sourceFile, initializer.expression, { byScopeId }) === undefined
+          ) {
+            binding.kind = kind;
+          }
+        }
+      }
+    }
+  }
+
+  function invalidateMutableFrameworkFactories(): void {
+    for (const bindings of byScopeId.values()) {
+      for (const candidates of bindings.values()) {
+        for (const binding of candidates) {
+          if (
+            (binding.kind === "express-default-factory" ||
+              binding.kind === "fastify-default-factory") &&
+            ts.isVariableDeclaration(binding.declaration) &&
+            (!hasStableFastifyLocalPluginBinding(
+                sourceFile,
+                binding.declaration,
+                { byScopeId },
+                true
+              ) ||
+              !hasOnlySafeCommonJsFrameworkFactoryReferences(
+                sourceFile,
+                binding.declaration,
+                binding.kind,
+                { byScopeId }
+              ))
+          ) {
+            binding.kind = "other";
+          }
+        }
+      }
+    }
+  }
+
   function collectPluginReceivers(): boolean {
     let changed = false;
     const visit = (node: ts.Node): void => {
@@ -4664,7 +4814,10 @@ function collectScopedRouteReceiverBindings(
   }
 
   ts.forEachChild(sourceFile, collectBindings);
+  classifyCommonJsFrameworkFactories();
+  invalidateMutableFrameworkFactories();
   ts.forEachChild(sourceFile, collectRootReceivers);
+  applyExpressRouteMountPrefixes(sourceFile, { byScopeId });
   while (collectPluginReceivers()) {
     // Plugin receivers are discovered in one lexical pass per static nesting level.
   }
@@ -4866,6 +5019,80 @@ function applyFrameworkRoutePluginMountPrefixes(
   }
 }
 
+interface ExpressMountObservation {
+  readonly parent: RouteBinding | null;
+  readonly prefix: string | null;
+}
+
+function applyExpressRouteMountPrefixes(
+  sourceFile: ts.SourceFile,
+  bindings: ScopedRouteReceiverBindings
+): void {
+  const observations = new Map<RouteBinding, ExpressMountObservation[]>();
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === "use" &&
+      ts.isIdentifier(node.expression.expression)
+    ) {
+      const parent = visibleRouteBinding(sourceFile, node.expression.expression, bindings);
+      for (const [index, argument] of node.arguments.entries()) {
+        if (!ts.isIdentifier(argument)) continue;
+        const child = visibleRouteBinding(sourceFile, argument, bindings);
+        if (child?.kind !== "express-receiver") continue;
+        const isDirectLiteralMount =
+          node.questionDotToken === undefined &&
+          node.expression.questionDotToken === undefined &&
+          parent?.kind === "express-receiver" &&
+          node.arguments.length === 2 &&
+          index === 1;
+        const mounts = observations.get(child) ?? [];
+        mounts.push({
+          parent: isDirectLiteralMount ? parent : null,
+          prefix: isDirectLiteralMount
+            ? literalFrameworkRoutePluginMountPrefix(node.arguments[0])
+            : null
+        });
+        observations.set(child, mounts);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(sourceFile, visit);
+
+  const resolved = new Map<RouteBinding, string | null>();
+  const resolvePrefix = (binding: RouteBinding, active: Set<RouteBinding>): string | null => {
+    if (resolved.has(binding)) return resolved.get(binding) ?? null;
+    if (active.has(binding)) return null;
+    const mounts = observations.get(binding);
+    if (mounts === undefined) return "";
+    const mount = mounts.length === 1 ? mounts[0] : undefined;
+    if (
+      mount === undefined ||
+      mount.parent === null ||
+      mount.prefix === null ||
+      mount.parent === binding
+    ) {
+      resolved.set(binding, null);
+      return null;
+    }
+    const parentPrefix = resolvePrefix(mount.parent, new Set(active).add(binding));
+    const prefix = parentPrefix === null ? null : `${parentPrefix}${mount.prefix}`;
+    resolved.set(binding, prefix);
+    return prefix;
+  };
+
+  for (const child of observations.keys()) {
+    const prefix = resolvePrefix(child, new Set());
+    if (prefix === null || prefix.length === 0) {
+      child.suppressFrameworkRoutePluginRoutes = true;
+    } else {
+      child.prefix = prefix;
+    }
+  }
+}
+
 function staticFrameworkRoutePluginImportedMountFact(
   sourceFile: ts.SourceFile,
   filePath: string,
@@ -4984,9 +5211,13 @@ function staticExpressRoute(
     node.questionDotToken !== undefined ||
     !ts.isPropertyAccessExpression(node.expression) ||
     node.expression.questionDotToken !== undefined ||
-    !ts.isIdentifier(node.expression.expression) ||
-    !isExpressRouteReceiver(sourceFile, node.expression.expression, bindings)
+    !ts.isIdentifier(node.expression.expression)
   ) {
+    return null;
+  }
+
+  const receiver = visibleRouteBinding(sourceFile, node.expression.expression, bindings);
+  if (receiver?.kind !== "express-receiver" || receiver.suppressFrameworkRoutePluginRoutes === true) {
     return null;
   }
 
@@ -5010,7 +5241,7 @@ function staticExpressRoute(
     return null;
   }
 
-  return { method, path: pathArgument.text, handler };
+  return { method, path: `${receiver.prefix ?? ""}${pathArgument.text}`, handler };
 }
 
 interface StaticFrameworkRoutePluginRoute {
@@ -7695,6 +7926,15 @@ function fileNodeFor(sourceFile: ts.SourceFile, input: ExtractFileFactsInput): S
   };
 }
 
+function hasJavaScriptParseDiagnostics(sourceFile: ts.SourceFile): boolean {
+  const diagnostics = (
+    sourceFile as ts.SourceFile & {
+      readonly parseDiagnostics?: readonly ts.Diagnostic[];
+    }
+  ).parseDiagnostics;
+  return diagnostics !== undefined && diagnostics.length > 0;
+}
+
 /**
  * Extracts only file-local, syntax-proven facts. Cross-file resolution is deliberately
  * left to the application layer so an unresolved reference cannot become a false edge.
@@ -7870,12 +8110,24 @@ export function extractFileFacts(
     true,
     scriptKindFor(input)
   );
+  if (input.language === "javascript" && hasJavaScriptParseDiagnostics(sourceFile)) {
+    return {
+      symbols: [fileNodeFor(sourceFile, input)],
+      edges: [],
+      pendingReferences: [],
+      localBindings: [],
+      referenceScopes: [],
+      importBindings: [],
+      exportBindings: [],
+      reExportBindings: []
+    };
+  }
   const isAstroEndpointSource =
     input.frameworkEvidence?.astro === true && astroEndpointPath(input.filePath) !== null;
   const explicitExportNames = collectExplicitExportNames(sourceFile);
   const commonJsSyntaxEnabled =
     input.language === "javascript" &&
-    hasUseStrictDirective(sourceFile) &&
+    (/\.cjs$/iu.test(input.filePath) || hasUseStrictDirective(sourceFile)) &&
     !hasEcmaScriptModuleSyntax(sourceFile);
   const commonJsExportClass =
     commonJsSyntaxEnabled &&
@@ -8893,6 +9145,22 @@ export function extractFileFacts(
         space: "value"
       });
     }
+    if (
+      (input.language === "typescript" || input.language === "javascript") &&
+      ts.isBinaryExpression(node) &&
+      isAssignmentOperatorKind(node.operatorToken.kind) &&
+      ts.isIdentifier(node.left)
+    ) {
+      const assignmentScope = enclosingScopeNodes(node)[0];
+      if (assignmentScope !== undefined) {
+        localBindings.push({
+          name: node.left.text,
+          symbolId: null,
+          scopeId: scopeIdFor(sourceFile, assignmentScope),
+          space: "value"
+        });
+      }
+    }
     if (declaredSymbol !== null) {
       stack.push(declaredSymbol);
     }
@@ -8903,7 +9171,7 @@ export function extractFileFacts(
       ts.isNewExpression(node) &&
       ts.isIdentifier(node.expression)
     ) {
-      addPendingReference(currentOwner().id, node.expression.text, "instantiates", node.expression);
+      addPendingReference(currentCallOwner(node).id, node.expression.text, "instantiates", node.expression);
     }
 
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {

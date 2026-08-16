@@ -45,6 +45,33 @@ describe("JavaScript CommonJS extraction", () => {
     ]);
   });
 
+  it("treats the cjs extension as an explicit CommonJS contract without a strict directive", () => {
+    const facts = extractFileFacts({
+      filePath: "lib/application.cjs",
+      language: "javascript",
+      sourceText: [
+        "const request = require('./request')",
+        "module.exports = class Application {",
+        "  create () { return request.create() }",
+        "}",
+        ""
+      ].join("\n")
+    });
+
+    const application = facts.symbols.find(
+      (symbol) => symbol.kind === "class" && symbol.name === "Application"
+    );
+    expect(application).toMatchObject({
+      qualifiedName: "lib/application.cjs#Application",
+      isExported: true
+    });
+    expect(facts.pendingReferences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ relationKind: "imports", referenceName: "./request" })
+      ])
+    );
+  });
+
   it("fails closed for shadowed CommonJS globals and non-literal or nested shapes", () => {
     const cases = [
       [

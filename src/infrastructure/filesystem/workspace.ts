@@ -16,7 +16,7 @@ import {
 } from "./discovery.js";
 import { readProjectConfigurationInput } from "./project-inputs.js";
 
-const SOURCE_FILE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx"] as const;
+const SOURCE_FILE_EXTENSIONS = [".ts", ".tsx", ".js", ".mjs", ".cjs", ".jsx"] as const;
 const PACKAGE_NAME_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
 
 interface WorkspacePattern {

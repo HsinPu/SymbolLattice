@@ -46,6 +46,14 @@ describe("source discovery", () => {
     expect(getSourceLanguage("web/PRINT.CSS")).toBe("css");
   });
 
+  it("routes every supported JavaScript module extension to the JavaScript extractor", () => {
+    expect(getSourceLanguage("src/index.js")).toBe("javascript");
+    expect(getSourceLanguage("src/index.mjs")).toBe("javascript");
+    expect(getSourceLanguage("src/index.jsx")).toBe("javascript");
+    expect(getSourceLanguage("src/index.cjs")).toBe("javascript");
+    expect(getSourceLanguage("src/INDEX.CJS")).toBe("javascript");
+  });
+
   it("bounds full source reads for large repositories", async () => {
     const projectPath = resolve("bounded-source-project");
     const sourcePaths = Array.from(

@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.426.0 是從官方 GitHub 固定版本安裝的開發者預覽版；SymbolLattice 尚未發布到 npm Registry。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
+> v0.427.0 是從官方 GitHub 固定版本安裝的開發者預覽版；SymbolLattice 尚未發布到 npm Registry。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
 
 ## 這是什麼
 
@@ -21,7 +21,7 @@ SymbolLattice 掃描本機 repository、保存程式碼圖，並以 CLI/MCP 提�
 
 無法精確證明的關係會保留為 unresolved 或 pending，而不會成為錯誤的 exact edge。
 
-v0.426.0 新增 `.css` 單檔深度掃描：保留 style rule、selector、At-rule、keyframes、自訂屬性、selector 分類與 declaration group，並只建立來源可證明的直接 containment。固定 Bootstrap v5.3.8 的 31 個官方範例 CSS，由獨立 PostCSS oracle 驗證 1,144 個 resources 與 1,144 個 containment，合計 TP 2,288／FP 0／FN 0；150 個 malformed 案例全部保守為 file-only。`var()` target、animation name、`@import` target、URL、HTML／JavaScript、cascade、CSS Modules、Sass／Less、Tailwind 與跨語言關係不會被猜成 exact。
+v0.427.0 強化 JavaScript／Node.js 深度：新增 `.cjs` 探索與模組候選、保守 CommonJS class／literal `require()`、正確的函式內 `new` 歸屬，以及來源可證明的 Express router prefix、Fastify plugin prefix 與本地 named handler route。固定 ESLint v10.4.0、Express v5.2.1、Fastify v5.10.0，由獨立 Espree oracle 抽樣驗證 identity、containment、call、instantiation、heritage 共 TP 245／FP 0／FN 0；另有 150 個 shadow、rebind、computed 與 member 負向案例。相對 self-require、inline handler、動態 mount、重複／循環 router、動態 `require()` 與 runtime middleware dispatch 不會被猜成 exact。
 
 ## 快速開始
 
@@ -97,7 +97,7 @@ SymbolLattice uninstall codex --apply --yes
 
 ## 從 v0.420.0 或更早版本升級
 
-v0.426.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
+v0.427.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
 
 ```bash
 # 仍可執行舊 CLI 時，先移除舊 Codex MCP 設定
@@ -113,7 +113,7 @@ SymbolLattice init .
 SymbolLattice doctor codex
 ```
 
-| 舊項目 | v0.426.0 |
+| 舊項目 | v0.427.0 |
 | --- | --- |
 | npm package | `@hsinpu/symbollattice` |
 | CLI | `SymbolLattice` |

@@ -130,7 +130,7 @@ function modulePathCandidates(fromFilePath: string, moduleSpecifier: string): re
   const withoutExtension = extensionMatch === null ? rawPath : rawPath.slice(0, -extensionMatch[0].length);
   const candidates = new Set<string>([rawPath]);
 
-  for (const extension of [".ts", ".tsx", ".js", ".mjs", ".jsx", ".ets"]) {
+  for (const extension of [".ts", ".tsx", ".js", ".mjs", ".cjs", ".jsx", ".ets"]) {
     candidates.add(`${withoutExtension}${extension}`);
     candidates.add(`${rawPath}/index${extension}`);
   }
