@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v322";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v324";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v155";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v156";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -1695,6 +1695,10 @@ export interface PythonTopLevelDeclarationFact {
   readonly symbolId: string;
   readonly name: string;
   readonly kind: "function" | "class";
+  /** Present only for a synchronous top-level function eligible as an exact call target. */
+  readonly runtimeCallEligible?: true;
+  /** Present only for an undecorated class without an explicit metaclass keyword. */
+  readonly instantiationEligible?: true;
 }
 
 /** A single-name `from .module import Name [as Alias]` parsed without recovery. */
@@ -1715,6 +1719,14 @@ export interface PythonImportedFunctionCallFact {
   readonly range: SourceRange;
 }
 
+/** A bare direct call that may resolve to one imported top-level Python class. */
+export interface PythonImportedClassInstantiationFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly localName: string;
+  readonly range: SourceRange;
+}
+
 /** One direct class base written through one syntax-proven Python relative named import. */
 export interface PythonImportedClassInheritanceFact {
   readonly sourceId: string;
@@ -1728,7 +1740,12 @@ export interface PythonFacts {
   readonly topLevelDeclarations: readonly PythonTopLevelDeclarationFact[];
   readonly relativeNamedImports: readonly PythonRelativeNamedImportFact[];
   readonly importedFunctionCalls: readonly PythonImportedFunctionCallFact[];
+  readonly importedClassInstantiations?: readonly PythonImportedClassInstantiationFact[];
   readonly importedClassInheritances: readonly PythonImportedClassInheritanceFact[];
+  /** Declaration names whose module binding can be replaced through `global` in this artifact. */
+  readonly artifactGlobalTaintedNames?: readonly string[];
+  /** True when a bare code-token `globals()` or `exec()` prevents exact runtime identity. */
+  readonly dynamicGlobalHazard?: true;
 }
 
 /** The parsed direct JVM heritage shape before its target type is resolved. */

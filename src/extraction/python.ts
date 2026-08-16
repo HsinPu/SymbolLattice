@@ -23,6 +23,7 @@ import {
   type FlaskImportedBlueprintRegistrationFact,
   type GraphEdge,
   type PythonImportedClassInheritanceFact,
+  type PythonImportedClassInstantiationFact,
   type PythonImportedFunctionCallFact,
   type PythonRelativeNamedImportFact,
   type PythonTopLevelDeclarationFact,
@@ -71,8 +72,8 @@ interface StaticPythonRelativeNamedImport {
   readonly moduleName: string;
   readonly importedName: string;
   readonly localName: string;
-  readonly from: number;
-  readonly to: number;
+  readonly moduleFrom: number;
+  readonly moduleTo: number;
 }
 
 function staticPythonRelativeNamedImport(
@@ -97,6 +98,8 @@ function staticPythonRelativeNamedImport(
     return [];
   }
   const confirmedModuleName = moduleName;
+  const moduleFrom = children[1].from;
+  const moduleTo = module.to;
 
   function binding(
     importedNode: PythonSyntaxNode,
@@ -110,8 +113,8 @@ function staticPythonRelativeNamedImport(
           moduleName: confirmedModuleName,
           importedName,
           localName,
-          from: importedNode.from,
-          to: localNode.to
+          moduleFrom,
+          moduleTo
         };
   }
 
@@ -691,14 +694,44 @@ function rangeFor(lineStarts: readonly number[], from: number, to: number): Sour
   };
 }
 
+function lastPythonCodeTokenEnd(node: PythonSyntaxNode): number | null {
+  if (node.name === "Comment" || node.type.isError) {
+    return null;
+  }
+  if (node.name === "String" && !hasSyntaxError(node)) {
+    return node.to;
+  }
+  const children = directChildren(node);
+  for (let index = children.length - 1; index >= 0; index -= 1) {
+    const child = children[index];
+    if (child === undefined) {
+      continue;
+    }
+    const end = lastPythonCodeTokenEnd(child);
+    if (end !== null) {
+      return end;
+    }
+  }
+  return children.length === 0 && node.to > node.from ? node.to : null;
+}
+
 function hasSyntaxError(node: PythonSyntaxNode): boolean {
   return node.type.isError || directChildren(node).some((child) => hasSyntaxError(child));
 }
 
-function hasOnlyStandaloneBareYieldRecovery(
+interface PythonRecoveryCompatibility {
+  readonly mode: "full" | "declarations-only";
+  readonly unsafeBindings: readonly {
+    readonly name: string;
+    readonly from: number;
+    readonly to: number;
+  }[];
+}
+
+function pythonRecoveryCompatibility(
   input: PythonExtractFileFactsInput,
   root: PythonSyntaxNode
-): boolean {
+): PythonRecoveryCompatibility | null {
   const errors: PythonSyntaxNode[] = [];
   function collect(node: PythonSyntaxNode): void {
     if (node.type.isError) {
@@ -709,42 +742,231 @@ function hasOnlyStandaloneBareYieldRecovery(
     }
   }
   collect(root);
-  const error = errors[0];
-  if (errors.length !== 1 || error === undefined || error.from !== error.to) {
-    return false;
+
+  if (errors.length === 0) {
+    return { mode: "full", unsafeBindings: [] };
   }
-  const yieldStatement = error.parent;
-  if (yieldStatement?.name !== "YieldStatement") {
-    return false;
-  }
-  const children = directChildren(yieldStatement);
-  const errorIndex = children.findIndex(
-    (child) => child.type.isError && child.from === error.from && child.to === error.to
-  );
-  const previous = errorIndex > 0 ? children[errorIndex - 1] : undefined;
-  if (
-    previous?.name === "yield" &&
-    previous.to === error.from &&
-    nodeText(input, yieldStatement) === "yield"
-  ) {
-    const allowedAncestors = new Set([
-      "Body",
-      "TryStatement",
-      "IfStatement",
-      "ForStatement",
-      "WhileStatement",
-      "WithStatement"
-    ]);
-    for (let ancestor = yieldStatement.parent; ancestor !== null; ancestor = ancestor.parent) {
-      if (ancestor.name === "FunctionDefinition") {
+
+  function isClosedBareYield(error: PythonSyntaxNode): boolean {
+    if (error.from !== error.to) {
+      return false;
+    }
+    const yieldNode = error.parent;
+    if (yieldNode?.name !== "YieldStatement" && yieldNode?.name !== "YieldExpression") {
+      return false;
+    }
+    const children = directChildren(yieldNode);
+    const errorIndex = children.findIndex((child) => nodeKey(child) === nodeKey(error));
+    const previous = errorIndex > 0 ? children[errorIndex - 1] : undefined;
+    if (
+      errorIndex !== children.length - 1 ||
+      previous?.name !== "yield" ||
+      previous.to !== error.from ||
+      nodeText(input, yieldNode) !== "yield"
+    ) {
+      return false;
+    }
+    const requiredAncestor =
+      yieldNode.name === "YieldStatement" ? "FunctionDefinition" : "LambdaExpression";
+    for (let ancestor = yieldNode.parent; ancestor !== null; ancestor = ancestor.parent) {
+      if (ancestor.name === requiredAncestor) {
         return true;
       }
-      if (ancestor.name === "Script" || !allowedAncestors.has(ancestor.name)) {
+      if (ancestor.name === "Script" || ancestor.name === "ClassDefinition") {
         return false;
       }
     }
+    return false;
   }
-  return false;
+
+  if (errors.every((error) => isClosedBareYield(error))) {
+    return { mode: "full", unsafeBindings: [] };
+  }
+
+  const typeParameterLists = new Set<PythonSyntaxNode>();
+  let defaultMasksAreClosed = errors.length % 2 === 0;
+  for (const error of errors) {
+    let list: PythonSyntaxNode | null = error.parent;
+    while (list !== null && list.name !== "TypeParamList") {
+      list = list.parent;
+    }
+    if (list === null) {
+      defaultMasksAreClosed = false;
+      break;
+    }
+    typeParameterLists.add(list);
+  }
+  if (defaultMasksAreClosed) {
+    const acceptedErrorKeys = new Set<string>();
+    const isAcceptedDefaultPair = (
+      equals: PythonSyntaxNode | undefined,
+      defaultName: PythonSyntaxNode | undefined
+    ): boolean => {
+      if (
+        equals === undefined ||
+        defaultName === undefined ||
+        !equals.type.isError ||
+        !defaultName.type.isError ||
+        nodeText(input, equals) !== "=" ||
+        !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(nodeText(input, defaultName))
+      ) {
+        return false;
+      }
+      acceptedErrorKeys.add(nodeKey(equals));
+      acceptedErrorKeys.add(nodeKey(defaultName));
+      return true;
+    };
+    for (const list of typeParameterLists) {
+      const children = directChildren(list).filter((child) => child.name !== "Comment");
+      if (children[0]?.name !== "[" || children.at(-1)?.name !== "]") {
+        defaultMasksAreClosed = false;
+        break;
+      }
+      let index = 1;
+      let sawDefault = false;
+      let sawParameter = false;
+      while (index < children.length - 1) {
+        const parameter = children[index];
+        if (parameter?.name !== "TypeParam") {
+          defaultMasksAreClosed = false;
+          break;
+        }
+        sawParameter = true;
+        index += 1;
+        const parameterChildren = directChildren(parameter).filter(
+          (child) => child.name !== "Comment"
+        );
+        const nestedErrors = parameterChildren.filter((child) => child.type.isError);
+        let hasDefault = false;
+        if (nestedErrors.length > 0) {
+          const equals = nestedErrors[0];
+          const defaultName = nestedErrors[1];
+          hasDefault =
+            nestedErrors.length === 2 &&
+            parameterChildren.at(-2) !== undefined &&
+            nodeKey(parameterChildren.at(-2)!) === nodeKey(equals!) &&
+            parameterChildren.at(-1) !== undefined &&
+            nodeKey(parameterChildren.at(-1)!) === nodeKey(defaultName!) &&
+            isAcceptedDefaultPair(equals, defaultName);
+        } else if (children[index]?.type.isError || children[index + 1]?.type.isError) {
+          hasDefault = isAcceptedDefaultPair(children[index], children[index + 1]);
+          index += 2;
+        }
+        if ((nestedErrors.length > 0 && !hasDefault) || (sawDefault && !hasDefault)) {
+          defaultMasksAreClosed = false;
+          break;
+        }
+        sawDefault ||= hasDefault;
+        if (index >= children.length - 1) {
+          break;
+        }
+        if (children[index]?.name !== ",") {
+          defaultMasksAreClosed = false;
+          break;
+        }
+        index += 1;
+        if (index >= children.length - 1) {
+          break;
+        }
+      }
+      if (!defaultMasksAreClosed || !sawParameter || index !== children.length - 1) {
+        defaultMasksAreClosed = false;
+        break;
+      }
+    }
+    if (
+      defaultMasksAreClosed &&
+      (acceptedErrorKeys.size !== errors.length ||
+        errors.some((error) => !acceptedErrorKeys.has(nodeKey(error))))
+    ) {
+      defaultMasksAreClosed = false;
+    }
+    if (defaultMasksAreClosed) {
+      return { mode: "full", unsafeBindings: [] };
+    }
+  }
+
+  const withStatements = new Set<PythonSyntaxNode>();
+  for (const error of errors) {
+    for (let ancestor = error.parent; ancestor !== null; ancestor = ancestor.parent) {
+      if (ancestor.name === "WithStatement") {
+        withStatements.add(ancestor);
+        break;
+      }
+    }
+  }
+  const withStatement = [...withStatements][0];
+  if (withStatements.size === 1 && withStatement !== undefined && errors.length === 3) {
+    const withChildren = directChildren(withStatement);
+    const parenthesized = withChildren[1];
+    const tuple = withChildren.find((child) => child.name === "TupleExpression");
+    const parenthesizedErrors =
+      parenthesized === undefined
+        ? []
+        : directChildren(parenthesized).filter((child) => child.type.isError);
+    const tupleErrors =
+      tuple === undefined ? [] : directChildren(tuple).filter((child) => child.type.isError);
+    const directErrors = withChildren.filter((child) => child.type.isError);
+    const aliases = withChildren.flatMap((child, index) => {
+      const alias = child.name === "as" ? withChildren[index + 1] : undefined;
+      const name = alias?.name === "VariableName" ? declarationName(input, alias) : null;
+      return name === null || alias === undefined
+        ? []
+        : [{ name, from: alias.from, to: alias.to }];
+    });
+    const headerEnd = withChildren.find((child) => child.name === "Body")?.from;
+    if (
+      parenthesized?.name === "ParenthesizedExpression" &&
+      directChildren(parenthesized)[0]?.name === "(" &&
+      parenthesizedErrors.length === 1 &&
+      parenthesizedErrors[0]?.from === parenthesizedErrors[0]?.to &&
+      directErrors.length === 1 &&
+      /^(?:\r\n|\r|\n)$/u.test(nodeText(input, directErrors[0]!)) &&
+      tuple !== undefined &&
+      directChildren(tuple).at(-1)?.name === ")" &&
+      tupleErrors.length === 1 &&
+      tupleErrors[0]?.from === tupleErrors[0]?.to &&
+      aliases.length >= 2 &&
+      headerEnd !== undefined &&
+      /^with[\t ]*\([\s\S]*,[\t \r\n]*\):$/u.test(
+        input.sourceText.slice(withStatement.from, headerEnd + 1)
+      )
+    ) {
+      return { mode: "full", unsafeBindings: aliases };
+    }
+  }
+
+  if (errors.length === 2 && errors.every((error) => error.parent?.name === "Script")) {
+    const children = directChildren(root);
+    const firstErrorIndex = children.findIndex(
+      (child) => nodeKey(child) === nodeKey(errors[0]!)
+    );
+    const nameStatement = firstErrorIndex > 0 ? children[firstErrorIndex - 1] : undefined;
+    const equals = children[firstErrorIndex + 1];
+    const arrayStatement = children[firstErrorIndex + 2];
+    const nameNode = nameStatement?.name === "ExpressionStatement"
+      ? directChildren(nameStatement)[0]
+      : undefined;
+    const arrayNode = arrayStatement?.name === "ExpressionStatement"
+      ? directChildren(arrayStatement)[0]
+      : undefined;
+    if (
+      errors[0]?.from === errors[0]?.to &&
+      equals !== undefined &&
+      nodeKey(equals) === nodeKey(errors[1]!) &&
+      nodeText(input, equals) === "=" &&
+      nameNode?.name === "VariableName" &&
+      declarationName(input, nameNode) !== null &&
+      arrayNode?.name === "ArrayExpression" &&
+      nodeText(input, arrayNode) === "[]" &&
+      /^[A-Za-z_][A-Za-z0-9_]*[\t ]*=[\t ]*\[\]$/u.test(
+        input.sourceText.slice(nameStatement!.from, arrayStatement!.to)
+      )
+    ) {
+      return { mode: "declarations-only", unsafeBindings: [] };
+    }
+  }
+  return null;
 }
 
 function declarationName(
@@ -782,6 +1004,85 @@ function isTopLevelFunction(node: PythonSyntaxNode): boolean {
 
 function isTopLevelClass(node: PythonSyntaxNode): boolean {
   return isTopLevelFunction(node);
+}
+
+function isAsyncPythonFunction(node: PythonSyntaxNode): boolean {
+  return node.name === "FunctionDefinition" && directChildren(node)[0]?.name === "async";
+}
+
+function isPythonClassInstantiationEligible(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): boolean {
+  const argumentList = directChildren(node).find((child) => child.name === "ArgList");
+  return (
+    argumentList === undefined ||
+    !/(?:^|[(,])[\t ]*metaclass[\t ]*=/u.test(nodeText(input, argumentList))
+  );
+}
+
+function pythonSingleBareClassBase(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): PythonSyntaxNode | null {
+  if (node.name !== "ClassDefinition") {
+    return null;
+  }
+  const children = directChildren(node);
+  const typeParameterLists = children.filter((child) => child.name === "TypeParamList");
+  if (
+    typeParameterLists.length > 1 ||
+    typeParameterLists.some((child) => hasSyntaxError(child))
+  ) {
+    return null;
+  }
+  const argumentLists = children.filter((child) => child.name === "ArgList");
+  const argumentList = argumentLists[0];
+  if (argumentLists.length !== 1 || argumentList === undefined || hasSyntaxError(argumentList)) {
+    return null;
+  }
+  const arguments_ = directChildren(argumentList);
+  const base = arguments_[1];
+  if (
+    arguments_.length !== 3 ||
+    arguments_[0]?.name !== "(" ||
+    base?.name !== "VariableName" ||
+    arguments_[2]?.name !== ")"
+  ) {
+    return null;
+  }
+  const baseName = declarationName(input, base);
+  const typeParameterNames = typeParameterLists.flatMap((list) =>
+    directChildren(list)
+      .filter((child) => child.name === "TypeParam")
+      .flatMap((parameter) => {
+        const nameNode = directChildren(parameter).find(
+          (child) => child.name === "VariableName"
+        );
+        const name = nameNode === undefined ? null : declarationName(input, nameNode);
+        return name === null ? [] : [name];
+      })
+  );
+  return baseName !== null && !typeParameterNames.includes(baseName)
+    ? base
+    : null;
+}
+
+function isImmediateCompleteSubscriptOf(
+  parent: PythonSyntaxNode,
+  expression: PythonSyntaxNode
+): boolean {
+  if (parent.name !== "MemberExpression" || hasSyntaxError(parent)) {
+    return false;
+  }
+  const children = directChildren(parent);
+  return (
+    children.length >= 4 &&
+    children[0] !== undefined &&
+    nodeKey(children[0]) === nodeKey(expression) &&
+    children[1]?.name === "[" &&
+    children.at(-1)?.name === "]"
+  );
 }
 
 function staticNamedFrameworkImports(
@@ -1629,6 +1930,62 @@ function directVariableNames(
   return names;
 }
 
+function pythonImportLocalBindingNames(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode
+): readonly string[] {
+  if (node.name !== "ImportStatement" || hasSyntaxError(node)) {
+    return [];
+  }
+  const children = directChildren(node);
+  const importIndex = children.findIndex((child) => child.name === "import");
+  if (importIndex < 0) {
+    return [];
+  }
+  const names: string[] = [];
+  if (children[0]?.name === "from") {
+    let index = importIndex + 1;
+    while (index < children.length) {
+      const imported = children[index];
+      if (imported?.name !== "VariableName") {
+        index += 1;
+        continue;
+      }
+      const alias = children[index + 1]?.name === "as" ? children[index + 2] : undefined;
+      const binding = alias?.name === "VariableName" ? alias : imported;
+      const name = declarationName(input, binding);
+      if (name !== null) {
+        names.push(name);
+      }
+      index += alias === undefined ? 1 : 3;
+    }
+    return names;
+  }
+
+  let index = importIndex + 1;
+  while (index < children.length) {
+    while (children[index] !== undefined && children[index]?.name !== "VariableName") {
+      index += 1;
+    }
+    const first = children[index];
+    if (first?.name !== "VariableName") {
+      break;
+    }
+    let cursor = index + 1;
+    while (children[cursor]?.name === "." && children[cursor + 1]?.name === "VariableName") {
+      cursor += 2;
+    }
+    const alias = children[cursor]?.name === "as" ? children[cursor + 1] : undefined;
+    const binding = alias?.name === "VariableName" ? alias : first;
+    const name = declarationName(input, binding);
+    if (name !== null) {
+      names.push(name);
+    }
+    index = alias === undefined ? cursor + 1 : cursor + 2;
+  }
+  return names;
+}
+
 function targetBindsName(
   input: PythonExtractFileFactsInput,
   node: PythonSyntaxNode,
@@ -1688,7 +2045,13 @@ function assignmentBindsName(
 ): boolean {
   const children = directChildren(node);
   return children.some(
-    (child, index) => children[index + 1]?.name === "AssignOp" && targetBindsName(input, child, name)
+    (child, index) =>
+      (children[index + 1]?.name === "AssignOp" && targetBindsName(input, child, name)) ||
+      (child.name === "TypeDef" &&
+        children[index + 1]?.name === "AssignOp" &&
+        index > 0 &&
+        children[index - 1] !== undefined &&
+        targetBindsName(input, children[index - 1]!, name))
   );
 }
 
@@ -1762,6 +2125,139 @@ function topLevelNodeBindsName(
   name: string
 ): boolean {
   return syntaxMayBindName(input, node, name);
+}
+
+function pythonNodeDirectlyBindsName(
+  input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode,
+  name: string
+): boolean {
+  const definition = decoratedDefinition(node) ?? node;
+  if (definition.name === "FunctionDefinition" || definition.name === "ClassDefinition") {
+    return declarationName(input, definition) === name;
+  }
+  if (node.name === "ImportStatement") {
+    return directVariableNames(input, node).includes(name);
+  }
+  if (node.name === "AssignStatement" || node.name === "NamedExpression") {
+    return assignmentBindsName(input, node, name);
+  }
+  if (node.name === "UpdateStatement" || node.name === "DeleteStatement") {
+    return directChildren(node).some((child) => targetBindsName(input, child, name));
+  }
+  if (node.name === "TypeDefinition") {
+    const alias = directChildren(node).find((child) => child.name === "VariableName");
+    return alias !== undefined && declarationName(input, alias) === name;
+  }
+  if (node.name === "ForStatement") {
+    const children = directChildren(node);
+    const inIndex = children.findIndex((child) => child.name === "in");
+    return children
+      .slice(0, inIndex < 0 ? 0 : inIndex)
+      .some((child) => targetBindsName(input, child, name));
+  }
+  if (node.name === "WithStatement" || node.name === "TryStatement") {
+    const children = directChildren(node);
+    return children.some(
+      (child, index) =>
+        child.name === "as" &&
+        children[index + 1] !== undefined &&
+        targetBindsName(input, children[index + 1]!, name)
+    );
+  }
+  if (node.name === "CapturePattern" || node.name === "AsPattern") {
+    return directChildren(node).some((child) => targetBindsName(input, child, name));
+  }
+  return false;
+}
+
+function pythonArtifactCallTaint(
+  input: PythonExtractFileFactsInput,
+  root: PythonSyntaxNode
+): {
+  readonly dynamicGlobalHazard: boolean;
+  readonly globalTaintedNames: ReadonlySet<string>;
+} {
+  let dynamicGlobalHazard = false;
+  const globalTaintedNames = new Set<string>();
+
+  function scanDynamicCalls(node: PythonSyntaxNode): void {
+    if (node.name === "CallExpression") {
+      const callee = directChildren(node)[0];
+      const name = callee?.name === "VariableName" ? declarationName(input, callee) : null;
+      if (name === "globals" || name === "exec") {
+        dynamicGlobalHazard = true;
+      }
+    }
+    for (const child of directChildren(node)) {
+      scanDynamicCalls(child);
+    }
+  }
+
+  function analyzeFunction(definition: PythonSyntaxNode): void {
+    const body = directChildren(definition).find((child) => child.name === "Body");
+    if (body === undefined) {
+      return;
+    }
+    const globalDeclarationEnds = new Map<string, number>();
+    function collectGlobalDeclarations(node: PythonSyntaxNode): void {
+      if (
+        node !== body &&
+        ["FunctionDefinition", "ClassDefinition", "LambdaExpression"].includes(node.name)
+      ) {
+        return;
+      }
+      if (node.name === "ScopeStatement" && directChildren(node)[0]?.name === "global") {
+        for (const name of directVariableNames(input, node)) {
+          const current = globalDeclarationEnds.get(name);
+          globalDeclarationEnds.set(name, current === undefined ? node.to : Math.min(current, node.to));
+        }
+      }
+      for (const child of directChildren(node)) {
+        collectGlobalDeclarations(child);
+      }
+    }
+    collectGlobalDeclarations(body);
+    if (globalDeclarationEnds.size === 0) {
+      return;
+    }
+
+    function collectMutations(node: PythonSyntaxNode): void {
+      if (
+        node !== body &&
+        ["FunctionDefinition", "ClassDefinition", "LambdaExpression"].includes(node.name)
+      ) {
+        for (const [name, declarationEnd] of globalDeclarationEnds) {
+          if (node.from >= declarationEnd && pythonNodeDirectlyBindsName(input, node, name)) {
+            globalTaintedNames.add(name);
+          }
+        }
+        return;
+      }
+      for (const [name, declarationEnd] of globalDeclarationEnds) {
+        if (node.from >= declarationEnd && pythonNodeDirectlyBindsName(input, node, name)) {
+          globalTaintedNames.add(name);
+        }
+      }
+      for (const child of directChildren(node)) {
+        collectMutations(child);
+      }
+    }
+    collectMutations(body);
+  }
+
+  function visitDefinitions(node: PythonSyntaxNode): void {
+    if (node.name === "FunctionDefinition") {
+      analyzeFunction(node);
+    }
+    for (const child of directChildren(node)) {
+      visitDefinitions(child);
+    }
+  }
+
+  scanDynamicCalls(root);
+  visitDefinitions(root);
+  return { dynamicGlobalHazard, globalTaintedNames };
 }
 
 function hasTopLevelRebinding(
@@ -4201,6 +4697,8 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
   }
 
   const root = parser.parse(input.sourceText).topNode;
+  const recoveryCompatibility = pythonRecoveryCompatibility(input, root);
+  const artifactCallTaint = pythonArtifactCallTaint(input, root);
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
@@ -4210,11 +4708,13 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     topLevelDeclarations: PythonTopLevelDeclarationFact[];
     relativeNamedImports: PythonRelativeNamedImportFact[];
     importedFunctionCalls: PythonImportedFunctionCallFact[];
+    importedClassInstantiations: PythonImportedClassInstantiationFact[];
     importedClassInheritances: PythonImportedClassInheritanceFact[];
   } = {
     topLevelDeclarations: [],
     relativeNamedImports: [],
     importedFunctionCalls: [],
+    importedClassInstantiations: [],
     importedClassInheritances: []
   };
   const fastApiRouterFacts: {
@@ -4293,8 +4793,12 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
   };
   symbols.push(fileNode);
 
-  function addContainment(parent: SymbolNode, child: SymbolNode, node: PythonSyntaxNode): void {
-    const range = rangeFor(lineStarts, node.from, node.to);
+  function addContainment(
+    parent: SymbolNode,
+    child: SymbolNode,
+    node: PythonSyntaxNode,
+    range = rangeFor(lineStarts, node.from, node.to)
+  ): void {
     edges.push({
       id: createEdgeId({
         sourceId: parent.id,
@@ -4336,6 +4840,11 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     const identity = `${qualifiedName}\u0000${kind}`;
     const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
     declarationOrdinals.set(identity, declarationOrdinal + 1);
+    const declarationEnd = lastPythonCodeTokenEnd(node);
+    if (declarationEnd === null) {
+      return null;
+    }
+    const declarationRange = rangeFor(lineStarts, node.from, declarationEnd);
     const symbol: SymbolNode = {
       id: createSymbolId({
         filePath: input.filePath,
@@ -4347,13 +4856,13 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       qualifiedName,
       kind,
       filePath: input.filePath,
-      range: rangeFor(lineStarts, node.from, node.to),
+      range: declarationRange,
       isExported: false,
       declarationOrdinal
     };
     symbols.push(symbol);
     symbolsByNodeKey.set(nodeKey(node), symbol);
-    addContainment(owner, symbol, node);
+    addContainment(owner, symbol, node, declarationRange);
     return symbol;
   }
 
@@ -4395,7 +4904,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         return [];
       }
       const definition = statement;
-      if (definition.name !== "FunctionDefinition") {
+      if (definition.name !== "FunctionDefinition" || isAsyncPythonFunction(definition)) {
         return [];
       }
       const name = declarationName(input, definition);
@@ -4403,6 +4912,19 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       return name === null || symbol?.kind !== "function"
         ? []
         : [{ definition, name, symbol }];
+    });
+    const classDeclarations = topLevelNodes.flatMap((statement) => {
+      if (
+        statement.name !== "ClassDefinition" ||
+        !isPythonClassInstantiationEligible(input, statement)
+      ) {
+        return [];
+      }
+      const name = declarationName(input, statement);
+      const symbol = symbolsByNodeKey.get(nodeKey(statement));
+      return name === null || symbol?.kind !== "class"
+        ? []
+        : [{ definition: statement, name, symbol }];
     });
     const directClassMethodCandidates = topLevelNodes.flatMap((statement) => {
       if (statement.name !== "ClassDefinition") {
@@ -4415,7 +4937,9 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       if (className === null || classSymbol?.kind !== "class" || body === undefined) {
         return [];
       }
-      const methods = directChildren(body).filter((child) => child.name === "FunctionDefinition");
+      const methods = directChildren(body).filter(
+        (child) => child.name === "FunctionDefinition" && !isAsyncPythonFunction(child)
+      );
       const methodNameCounts = new Map<string, number>();
       for (const method of methods) {
         const name = declarationName(input, method);
@@ -4436,6 +4960,12 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       const candidates = declarationsByName.get(declaration.name) ?? [];
       candidates.push(declaration);
       declarationsByName.set(declaration.name, candidates);
+    }
+    const classDeclarationsByName = new Map<string, typeof classDeclarations>();
+    for (const declaration of classDeclarations) {
+      const candidates = classDeclarationsByName.get(declaration.name) ?? [];
+      candidates.push(declaration);
+      classDeclarationsByName.set(declaration.name, candidates);
     }
     const importsByLocalName = new Map<string, readonly StaticPythonRelativeNamedImport[]>();
     for (const imported of relativeNamedImports) {
@@ -4468,7 +4998,13 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
 
     function addDirectBindingNames(node: PythonSyntaxNode, names: Set<string>): void {
       const children = directChildren(node);
-      if (node.name === "ImportStatement" || node.name === "ScopeStatement") {
+      if (node.name === "ImportStatement") {
+        for (const name of pythonImportLocalBindingNames(input, node)) {
+          names.add(name);
+        }
+        return;
+      }
+      if (node.name === "ScopeStatement") {
         for (const name of directVariableNames(input, node)) {
           names.add(name);
         }
@@ -4610,7 +5146,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         moduleName: imported.moduleName,
         importedName: imported.importedName,
         localName: imported.localName,
-        range: rangeFor(lineStarts, imported.from, imported.to)
+        range: rangeFor(lineStarts, imported.moduleFrom, imported.moduleTo)
       });
     }
 
@@ -4630,29 +5166,36 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       ) {
         continue;
       }
-      pythonFacts.topLevelDeclarations.push({ symbolId: symbol.id, name, kind: symbol.kind });
+      pythonFacts.topLevelDeclarations.push({
+        symbolId: symbol.id,
+        name,
+        kind: symbol.kind,
+        ...(symbol.kind === "function" && !isAsyncPythonFunction(statement)
+          ? { runtimeCallEligible: true as const }
+          : {}),
+        ...(symbol.kind === "class" && isPythonClassInstantiationEligible(input, statement)
+          ? { instantiationEligible: true as const }
+          : {})
+      });
       if (symbol.kind !== "class") {
         continue;
       }
-      const header = /^class[\t ]+[A-Za-z_][A-Za-z0-9_]*[\t ]*\([\t ]*([A-Za-z_][A-Za-z0-9_]*)[\t ]*\)[\t ]*:/u.exec(
-        nodeText(input, statement)
-      );
-      const localName = header?.[1];
-      const matchingImports = localName === undefined ? [] : importsByLocalName.get(localName) ?? [];
+      const base = pythonSingleBareClassBase(input, statement);
+      const localName = base === null ? null : declarationName(input, base);
+      const matchingImports = localName === null ? [] : importsByLocalName.get(localName) ?? [];
       if (
-        header === null ||
-        localName === undefined ||
+        base === null ||
+        localName === null ||
         matchingImports.length !== 1 ||
         topLevelBindCounts.get(localName) !== 1
       ) {
         continue;
       }
-      const baseOffset = header[0].lastIndexOf(localName);
       pythonFacts.importedClassInheritances.push({
         sourceId: symbol.id,
         filePath: input.filePath,
         localName,
-        range: rangeFor(lineStarts, statement.from + baseOffset, statement.from + baseOffset + localName.length)
+        range: rangeFor(lineStarts, base.from, base.to)
       });
     }
 
@@ -4674,6 +5217,11 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       }
       input.directCallTraversalObserver?.();
       const unsafeBindingNames = new Set<string>();
+      for (const binding of recoveryCompatibility?.unsafeBindings ?? []) {
+        if (binding.from >= definition.from && binding.to <= definition.to) {
+          unsafeBindingNames.add(binding.name);
+        }
+      }
       for (const child of directChildren(parameterLists[0])) {
         if (child.name === "VariableName") {
           const name = declarationName(input, child);
@@ -4728,7 +5276,8 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
           if (
             name !== null &&
             candidate.parent?.name !== "CallExpression" &&
-            candidate.parent?.name !== "MemberExpression"
+            (candidate.parent?.name !== "MemberExpression" ||
+              isImmediateCompleteSubscriptOf(candidate.parent, candidate))
           ) {
             const calls = callsByName.get(name) ?? [];
             calls.push(callee!);
@@ -4748,8 +5297,12 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       for (const [targetName, calls] of analysis.callsByName) {
         const candidates = declarationsByName.get(targetName) ?? [];
         const target = candidates[0];
+        const classCandidates = classDeclarationsByName.get(targetName) ?? [];
+        const classTarget = classCandidates[0];
         const importedCandidates = importsByLocalName.get(targetName) ?? [];
         if (
+          !artifactCallTaint.dynamicGlobalHazard &&
+          !artifactCallTaint.globalTaintedNames.has(targetName) &&
           !analysis.unsafeBindingNames.has(targetName) &&
           importedCandidates.length === 1 &&
           topLevelBindCounts.get(targetName) === 1
@@ -4761,9 +5314,52 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
               localName: targetName,
               range: rangeFor(lineStarts, call.from, call.to)
             });
+            pythonFacts.importedClassInstantiations.push({
+              sourceId: caller.symbol.id,
+              filePath: input.filePath,
+              localName: targetName,
+              range: rangeFor(lineStarts, call.from, call.to)
+            });
           }
         }
         if (
+          !artifactCallTaint.dynamicGlobalHazard &&
+          !artifactCallTaint.globalTaintedNames.has(targetName) &&
+          !analysis.unsafeBindingNames.has(targetName) &&
+          classCandidates.length === 1 &&
+          classTarget !== undefined &&
+          topLevelBindCounts.get(targetName) === 1
+        ) {
+          for (const call of calls) {
+            const range = rangeFor(lineStarts, call.from, call.to);
+            edges.push({
+              id: createEdgeId({
+                sourceId: caller.symbol.id,
+                targetId: classTarget.symbol.id,
+                kind: "instantiates",
+                line: range.start.line,
+                column: range.start.column,
+                referenceName: targetName
+              }),
+              sourceId: caller.symbol.id,
+              targetId: classTarget.symbol.id,
+              kind: "instantiates",
+              filePath: input.filePath,
+              range,
+              resolution: "exact",
+              confidence: 1,
+              referenceName: targetName,
+              evidence: {
+                ruleId: "syntax.python.same-file.unique-top-level-class-instantiation",
+                stage: "syntax",
+                candidateSymbolIds: [classTarget.symbol.id]
+              }
+            });
+          }
+        }
+        if (
+          artifactCallTaint.dynamicGlobalHazard ||
+          artifactCallTaint.globalTaintedNames.has(targetName) ||
           analysis.unsafeBindingNames.has(targetName) ||
           caller.symbol.kind !== "function" ||
           candidates.length !== 1 ||
@@ -4866,7 +5462,11 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     addPythonRoute(decorator.method, decorator.node, handler, path, ruleId);
   }
 
-  if (!hasSyntaxError(root) || hasOnlyStandaloneBareYieldRecovery(input, root)) {
+  if (recoveryCompatibility?.mode === "declarations-only") {
+    for (const node of directChildren(root)) {
+      visit(node, fileNode);
+    }
+  } else if (recoveryCompatibility?.mode === "full") {
     const topLevelNodes = directChildren(root);
     for (const node of topLevelNodes) {
       visit(node, fileNode);
@@ -6433,6 +7033,12 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     flaskBlueprintFacts,
     sanicBlueprintFacts,
     djangoUrlFacts,
-    pythonFacts
+    pythonFacts: {
+      ...pythonFacts,
+      ...(artifactCallTaint.globalTaintedNames.size === 0
+        ? {}
+        : { artifactGlobalTaintedNames: [...artifactCallTaint.globalTaintedNames].sort() }),
+      ...(artifactCallTaint.dynamicGlobalHazard ? { dynamicGlobalHazard: true as const } : {})
+    }
   };
 }

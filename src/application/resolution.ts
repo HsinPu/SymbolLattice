@@ -261,7 +261,10 @@ function projectPythonRegularPackageRelativeNamedImports(input: {
         continue;
       }
       const declarationCandidateIds = [targetDeclaration.symbolId];
-      const fileImportCandidateIds = [targetFile.id, targetDeclaration.symbolId].sort(compareStableText);
+      const targetCallTainted =
+        targetFacts.dynamicGlobalHazard === true ||
+        (targetFacts.artifactGlobalTaintedNames?.includes(targetDeclaration.name) ?? false);
+      const fileImportCandidateIds = [targetFile.id];
       edges.push({
         id: createEdgeId({
           sourceId: sourceFile.id,
@@ -287,7 +290,11 @@ function projectPythonRegularPackageRelativeNamedImports(input: {
           [filePath, targetFilePath]
         )
       });
-      if (targetDeclaration.kind === "function") {
+      if (
+        targetDeclaration.kind === "function" &&
+        targetDeclaration.runtimeCallEligible === true &&
+        !targetCallTainted
+      ) {
         for (const call of pythonFacts.importedFunctionCalls) {
           if (call.filePath !== filePath || call.localName !== imported.localName) {
             continue;
@@ -320,6 +327,41 @@ function projectPythonRegularPackageRelativeNamedImports(input: {
         }
       }
       if (targetDeclaration.kind === "class") {
+        if (targetDeclaration.instantiationEligible === true && !targetCallTainted) {
+          for (const instantiation of pythonFacts.importedClassInstantiations ?? []) {
+            if (
+              instantiation.filePath !== filePath ||
+              instantiation.localName !== imported.localName
+            ) {
+              continue;
+            }
+            edges.push({
+              id: createEdgeId({
+                sourceId: instantiation.sourceId,
+                targetId: targetDeclaration.symbolId,
+                kind: "instantiates",
+                line: instantiation.range.start.line,
+                column: instantiation.range.start.column,
+                referenceName: instantiation.localName
+              }),
+              sourceId: instantiation.sourceId,
+              targetId: targetDeclaration.symbolId,
+              kind: "instantiates",
+              filePath,
+              range: instantiation.range,
+              resolution: "exact",
+              confidence: 1,
+              referenceName: instantiation.localName,
+              evidence: referenceEvidence(
+                "module.python.regular-package.relative-named-import.unique-top-level-class-instantiation",
+                "module",
+                declarationCandidateIds,
+                [],
+                [filePath, targetFilePath]
+              )
+            });
+          }
+        }
         for (const inheritance of pythonFacts.importedClassInheritances) {
           if (inheritance.filePath !== filePath || inheritance.localName !== imported.localName) {
             continue;

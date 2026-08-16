@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.428.0 是從官方 GitHub 固定版本安裝的開發者預覽版；SymbolLattice 尚未發布到 npm Registry。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
+> v0.429.0 是從官方 GitHub 固定版本安裝的開發者預覽版；SymbolLattice 尚未發布到 npm Registry。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
 
 ## 這是什麼
 
@@ -21,7 +21,7 @@ SymbolLattice 掃描本機 repository、保存程式碼圖，並以 CLI/MCP 提�
 
 無法精確證明的關係會保留為 unresolved 或 pending，而不會成為錯誤的 exact edge。
 
-v0.428.0 新增 JSP 深度掃描：支援 `.jsp`、`.jspf`、`.jspx`、`.tag`、`.tagx`，建立 directive、taglib、element、attribute、靜態 EL path 與 template reference 的來源證據；literal include／forward／tag-file 目標只有在可證明的 web root 或相對位置中且專案內唯一時才成為 exact。固定 Apache Tomcat 11.0.25、JSPWiki 2.12.3 與 Liferay 7.4.3.132-ga132 做大型來源驗證；獨立 oracle 在 Tomcat 嚴格子集驗證 553 個 resource identities 與 553 個 containment edges，合計 TP 1,106／FP 0／FN 0，另有 200 個 malformed 負向案例。動態路徑、任意 EL 運算式、重複 taglib prefix、停用 EL、未平衡標記、scriptlet 內 Java 語意，以及 JSP 與 Spring／MyBatis／Java runtime 的跨語言關係不會被猜成 exact。
+v0.429.0 強化 Python 深度掃描：在固定的官方 GitHub 來源 CPython 3.13.11（`627894459a84be3488a1789919679c997056a03c`）、Django 5.2.15（`21e98408f84d22191e2c7ee4052bdd12d264fd3f`）與 Home Assistant Core 2026.8.0（`4a9dce13f61d03960ad5d2710e2af9fd2a78af54`）上，extractor v324／resolver v156 對宣告、containment、relative import、bounded class instantiation、extends、call 與 async identity 建立可追溯的 exact 證據。凍結驗收子集達到 TP 300／FP 0／FN 0／evidenceInvalid 0，150／150 個負向案例通過；fresh、no-op、comment、semantic、rename、delete、restore、reopen 與 invalid-config 共 38 個生命週期操作通過。這是 bounded 靜態分析，不宣稱支援所有 Python runtime、reflection、dynamic dispatch 或任意 metaprogramming；無法唯一證明的關係會保留 unresolved／pending 或省略。
 
 ## 支援的語言
 
@@ -29,7 +29,7 @@ v0.428.0 新增 JSP 深度掃描：支援 `.jsp`、`.jspf`、`.jspx`、`.tag`、
 
 | 類別 | 語言 |
 | --- | --- |
-| 最近完成大型專案深度驗證 | TypeScript、Java、HTML、CSS、JavaScript、JSP |
+| 最近完成大型專案深度驗證 | TypeScript、Java、HTML、CSS、JavaScript、JSP、Python |
 | Web、元件與模板 | ArkTS、Vue、Svelte、Astro、Razor、PHP、Blade、Liquid、Twig、CFML |
 | JVM、.NET 與應用程式 | Groovy、Kotlin、Scala、C#、F#、VB.NET、Dart |
 | 系統與原生語言 | C、C++、Objective-C、Rust、Go、Swift、Zig、Nim、Fortran、Ada、Pascal、COBOL |
@@ -111,7 +111,7 @@ SymbolLattice uninstall codex --apply --yes
 
 ## 從 v0.420.0 或更早版本升級
 
-v0.428.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
+v0.429.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
 
 ```bash
 # 仍可執行舊 CLI 時，先移除舊 Codex MCP 設定
@@ -127,7 +127,7 @@ SymbolLattice init .
 SymbolLattice doctor codex
 ```
 
-| 舊項目 | v0.428.0 |
+| 舊項目 | v0.429.0 |
 | --- | --- |
 | npm package | `@hsinpu/symbollattice` |
 | CLI | `SymbolLattice` |

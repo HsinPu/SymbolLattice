@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.428.0 is a developer preview installed from a fixed revision of the official GitHub repository; SymbolLattice is not published to the npm Registry. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.SymbolLattice` index; add `--no-auto-sync` to disable it.
+> v0.429.0 is a developer preview installed from a fixed revision of the official GitHub repository; SymbolLattice is not published to the npm Registry. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.SymbolLattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -21,7 +21,7 @@ SymbolLattice scans a local repository, persists a code graph, and exposes CLI/M
 
 Relationships that cannot be proven exactly remain unresolved or pending instead of becoming false exact edges.
 
-v0.428.0 adds deep JSP scanning for `.jsp`, `.jspf`, `.jspx`, `.tag`, and `.tagx`, with source-backed directives, taglibs, elements, attributes, static EL paths, and template references. Literal include, forward, and tag-file targets become exact only within a proven web root or relative location and when the project has one unique target. Fixed Apache Tomcat 11.0.25, JSPWiki 2.12.3, and Liferay 7.4.3.132-ga132 sources provide large-project coverage; an independent strict-subset oracle verified 553 resource identities and 553 containment edges in Tomcat for a combined TP 1,106 / FP 0 / FN 0, plus 200 malformed negatives. Dynamic paths, arbitrary EL expressions, duplicate taglib prefixes, disabled EL, unbalanced markup, Java semantics inside scriptlets, and cross-language JSP-to-Spring/MyBatis/Java runtime links are not guessed as exact.
+v0.429.0 deepens Python scanning. Fixed official GitHub source commits are CPython 3.13.11 (`627894459a84be3488a1789919679c997056a03c`), Django 5.2.15 (`21e98408f84d22191e2c7ee4052bdd12d264fd3f`), and Home Assistant Core 2026.8.0 (`4a9dce13f61d03960ad5d2710e2af9fd2a78af54`); extractor v324 and resolver v156 provide large-project evidence for declarations, containment, relative imports, bounded class instantiation, inheritance, calls, and async identities. The frozen acceptance subset reached TP 300 / FP 0 / FN 0 / evidenceInvalid 0, with 150 / 150 negative cases passing; 38 lifecycle operations covering fresh, no-op, comment, semantic, rename, delete, restore, reopen, and invalid configuration also passed. This is bounded static analysis, not a claim to support every Python runtime, reflection path, dynamic dispatch, or arbitrary metaprogramming; relationships that cannot be uniquely proven remain unresolved or pending, or are omitted.
 
 ## Supported languages
 
@@ -29,7 +29,7 @@ SymbolLattice currently discovers and indexes 57 languages. A single `init` or `
 
 | Category | Languages |
 | --- | --- |
-| Recently validated deeply on large projects | TypeScript, Java, HTML, CSS, JavaScript, JSP |
+| Recently validated deeply on large projects | TypeScript, Java, HTML, CSS, JavaScript, JSP, Python |
 | Web, component, and template languages | ArkTS, Vue, Svelte, Astro, Razor, PHP, Blade, Liquid, Twig, CFML |
 | JVM, .NET, and application languages | Groovy, Kotlin, Scala, C#, F#, VB.NET, Dart |
 | Systems and native languages | C, C++, Objective-C, Rust, Go, Swift, Zig, Nim, Fortran, Ada, Pascal, COBOL |
@@ -111,7 +111,7 @@ The installer never creates or deletes a project index automatically. Restart Co
 
 ## Upgrading from v0.420.0 or earlier
 
-v0.428.0 does not provide aliases for the old names and does not read the old index. Use this order:
+v0.429.0 does not provide aliases for the old names and does not read the old index. Use this order:
 
 ```bash
 # Remove the old Codex MCP configuration while the old CLI is still available
@@ -127,7 +127,7 @@ SymbolLattice init .
 SymbolLattice doctor codex
 ```
 
-| Previous surface | v0.428.0 |
+| Previous surface | v0.429.0 |
 | --- | --- |
 | npm package | `@hsinpu/symbollattice` |
 | CLI | `SymbolLattice` |

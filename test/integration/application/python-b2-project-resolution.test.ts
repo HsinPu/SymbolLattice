@@ -5,7 +5,11 @@ import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { SymbolLatticeService } from "../../../src/application/index.js";
-import { ARTIFACT_FACTS_EXTRACTOR_VERSION } from "../../../src/domain/index.js";
+import {
+  ARTIFACT_FACTS_EXTRACTOR_VERSION,
+  PROJECT_RESOLVER_VERSION,
+  SOURCE_ROLE_CLASSIFIER_VERSION
+} from "../../../src/domain/index.js";
 import { extractFileFacts } from "../../../src/extraction/index.js";
 import { FileSystemSourceCatalog } from "../../../src/infrastructure/filesystem/index.js";
 import { SqliteGraphStore } from "../../../src/infrastructure/sqlite/index.js";
@@ -61,7 +65,7 @@ describe("Python B2 regular-package resolution", () => {
               pythonFacts: undefined
             };
       },
-      { version: "multi-language-ast-v258" }
+      { version: "multi-language-ast-v323" }
     );
     const initialStore = new SqliteGraphStore();
     const initialService = new SymbolLatticeService(initialStore, new FileSystemSourceCatalog(), {
@@ -75,7 +79,7 @@ describe("Python B2 regular-package resolution", () => {
     for (const filePath of ["src/requests/utils.py", "src/requests/sessions.py"]) {
       expect(staleFactsByPath.get(filePath)).toMatchObject({
         filePath,
-        extractorVersion: "multi-language-ast-v258"
+        extractorVersion: "multi-language-ast-v323"
       });
       expect(staleFactsByPath.get(filePath)?.pythonFacts).toBeUndefined();
       expect(staleFactsByPath.get(filePath)?.symbols).toHaveLength(1);
@@ -123,6 +127,12 @@ describe("Python B2 regular-package resolution", () => {
         })
       ])
     );
+    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v324");
+    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v156");
+    expect(upgradedStore.getActiveGenerationBundle(projectPath)).toMatchObject({
+      extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION,
+      resolverVersion: `${PROJECT_RESOLVER_VERSION}+${SOURCE_ROLE_CLASSIFIER_VERSION}`
+    });
 
     const snapshot = upgradedStore.getSnapshot(projectPath);
     const symbol = (qualifiedName: string) =>
@@ -149,10 +159,12 @@ describe("Python B2 regular-package resolution", () => {
     expect(exactImport).toMatchObject({
       sourceId: sessions?.id,
       targetId: utils?.id,
+      range: { start: { line: 1, column: 6 }, end: { line: 1, column: 12 } },
       resolution: "exact",
       confidence: 1,
       evidence: expect.objectContaining({
-        candidateSymbolIds: [utils?.id, defaultHeaders?.id].sort()
+        candidateSymbolIds: [utils?.id],
+        resolutionPath: ["src/requests/sessions.py", "src/requests/utils.py"]
       })
     });
     expect(exactCall).toMatchObject({
@@ -281,7 +293,7 @@ describe("Python B2 regular-package resolution", () => {
         stage: "module"
       }
     });
-    expect(exactImport()?.evidence?.candidateSymbolIds).toContain(defaultHeaders?.id);
+    expect(exactImport()?.evidence?.candidateSymbolIds).toEqual([utils?.id]);
     expect(exactCall()).toMatchObject({
       sourceId: initialize?.id,
       targetId: defaultHeaders?.id,
@@ -458,8 +470,8 @@ describe("Python B2 regular-package resolution", () => {
         .map((edge) => edge.evidence?.candidateSymbolIds)
     ).toEqual(
       expect.arrayContaining([
-        [providers?.id, helper?.id].sort(),
-        [base?.id, providers?.id].sort()
+        [providers?.id],
+        [providers?.id]
       ])
     );
 
@@ -485,6 +497,88 @@ describe("Python B2 regular-package resolution", () => {
     const reopened = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
     const reopenedCallers = await reopened.callers(projectPath, helper?.qualifiedName ?? "missing");
     expect(reopenedCallers.relations.map((relation) => relation.symbol.id)).toEqual([entry?.id]);
+  });
+
+  it("resolves one-dot imported top-level class construction with exact module evidence", async () => {
+    const projectPath = await createInlineProject({
+      "pkg/__init__.py": "",
+      "pkg/providers.py": [
+        "class Widget:",
+        "    pass"
+      ].join("\n"),
+      "pkg/consumer.py": [
+        "from .providers import Widget as LocalWidget",
+        "def build():",
+        "    return LocalWidget()",
+        "class Factory:",
+        "    def build(self):",
+        "        return LocalWidget()"
+      ].join("\n")
+    });
+    const store = new SqliteGraphStore();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const snapshot = store.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const widget = symbol("pkg/providers.py#Widget");
+    const build = symbol("pkg/consumer.py#build");
+    const method = symbol("pkg/consumer.py#Factory.build");
+    const instantiates = snapshot.edges.filter(
+      (edge) =>
+        edge.kind === "instantiates" &&
+        edge.evidence?.ruleId ===
+          "module.python.regular-package.relative-named-import.unique-top-level-class-instantiation"
+    );
+
+    expect(instantiates).toEqual([
+      expect.objectContaining({
+        sourceId: build?.id,
+        targetId: widget?.id,
+        range: { start: { line: 3, column: 12 }, end: { line: 3, column: 23 } },
+        resolution: "exact",
+        confidence: 1,
+        referenceName: "LocalWidget",
+        evidence: {
+          ruleId:
+            "module.python.regular-package.relative-named-import.unique-top-level-class-instantiation",
+          stage: "module",
+          candidateSymbolIds: [widget?.id],
+          resolutionPath: ["pkg/consumer.py", "pkg/providers.py"]
+        }
+      }),
+      expect.objectContaining({
+        sourceId: method?.id,
+        targetId: widget?.id,
+        range: { start: { line: 6, column: 16 }, end: { line: 6, column: 27 } },
+        evidence: expect.objectContaining({ candidateSymbolIds: [widget?.id] })
+      })
+    ]);
+    expect(
+      snapshot.edges.filter((edge) => edge.kind === "calls" && edge.referenceName === "LocalWidget")
+    ).toEqual([]);
+  });
+
+  it("keeps an imported async function import exact without a runtime call edge", async () => {
+    const projectPath = await createInlineProject({
+      "pkg/__init__.py": "",
+      "pkg/providers.py": "async def async_helper():\n    return 1",
+      "pkg/consumer.py": [
+        "from .providers import async_helper",
+        "def entry():",
+        "    return async_helper()"
+      ].join("\n")
+    });
+    const store = new SqliteGraphStore();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const pythonEdges = store
+      .getSnapshot(projectPath)
+      .edges.filter((edge) => edge.evidence?.ruleId.startsWith("module.python.regular-package."));
+    expect(pythonEdges.filter((edge) => edge.kind === "imports")).toHaveLength(1);
+    expect(pythonEdges.filter((edge) => edge.kind === "calls")).toEqual([]);
   });
 
   it("fails closed for unsupported package/import/binding/declaration shapes", async () => {
@@ -568,6 +662,67 @@ describe("Python B2 regular-package resolution", () => {
       );
 
     expect(b2Edges).toEqual([]);
+  });
+
+  it("fails closed for imported calls when the target artifact can globally replace the declaration", async () => {
+    const projectPath = await createInlineProject({
+      "pkg/__init__.py": "",
+      "pkg/providers.py": [
+        "def helper():",
+        "    return 1",
+        "class Widget:",
+        "    pass",
+        "def mutate_helper():",
+        "    global helper, Widget",
+        "    helper = lambda: 2",
+        "    Widget = object"
+      ].join("\n"),
+      "pkg/consumer.py": [
+        "from .providers import helper",
+        "from .providers import Widget",
+        "def entry():",
+        "    helper()",
+        "    return Widget()"
+      ].join("\n")
+    });
+    const store = new SqliteGraphStore();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const pythonEdges = store
+      .getSnapshot(projectPath)
+      .edges.filter((edge) => edge.evidence?.ruleId.startsWith("module.python.regular-package."));
+    expect(pythonEdges.filter((edge) => edge.kind === "imports")).toHaveLength(2);
+    expect(pythonEdges.filter((edge) => edge.kind === "calls")).toEqual([]);
+    expect(pythonEdges.filter((edge) => edge.kind === "instantiates")).toEqual([]);
+  });
+
+  it("fails closed for imported calls after an annotated global assignment in the target artifact", async () => {
+    const projectPath = await createInlineProject({
+      "pkg/__init__.py": "",
+      "pkg/providers.py": [
+        "def helper():",
+        "    return 1",
+        "replacement = helper",
+        "def mutate_helper():",
+        "    global helper",
+        "    helper: object = replacement"
+      ].join("\n"),
+      "pkg/consumer.py": [
+        "from .providers import helper",
+        "def entry():",
+        "    return helper()"
+      ].join("\n")
+    });
+    const store = new SqliteGraphStore();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const pythonEdges = store
+      .getSnapshot(projectPath)
+      .edges.filter((edge) => edge.evidence?.ruleId.startsWith("module.python.regular-package."));
+    expect(pythonEdges.filter((edge) => edge.kind === "imports")).toHaveLength(1);
+    expect(pythonEdges.filter((edge) => edge.kind === "calls")).toEqual([]);
   });
 
   it("retains Python B2 edges across importer and target incremental syncs", async () => {
@@ -722,5 +877,86 @@ describe("Python B2 regular-package resolution", () => {
     expect(
       b2Edges.filter((edge) => edge.filePath === "pkg/generic_class.py" && edge.kind === "extends")
     ).toEqual([]);
+  });
+
+  it("uses only actual local import bindings when exposing a multi-base Python class", async () => {
+    const projectPath = await createInlineProject({
+      "pkg/__init__.py": "",
+      "pkg/vendor.py": [
+        "class DatabaseFeatures:",
+        "    pass"
+      ].join("\n"),
+      "pkg/features.py": [
+        "from .vendor import DatabaseFeatures as VendorFeatures",
+        "class BaseSpatialFeatures:",
+        "    pass",
+        "class DatabaseFeatures(BaseSpatialFeatures, VendorFeatures):",
+        "    pass"
+      ].join("\n"),
+      "pkg/base.py": "from .features import DatabaseFeatures"
+    });
+    const store = new SqliteGraphStore();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const snapshot = store.getSnapshot(projectPath);
+    const targetFile = snapshot.symbols.find(
+      (symbol) => symbol.kind === "file" && symbol.filePath === "pkg/features.py"
+    );
+    expect(
+      snapshot.edges.filter(
+        (edge) =>
+          edge.filePath === "pkg/base.py" &&
+          edge.kind === "imports" &&
+          edge.referenceName === ".features"
+      )
+    ).toEqual([
+      expect.objectContaining({
+        targetId: targetFile?.id,
+        range: { start: { line: 1, column: 6 }, end: { line: 1, column: 15 } },
+        resolution: "exact",
+        confidence: 1,
+        evidence: expect.objectContaining({ candidateSymbolIds: [targetFile?.id] })
+      })
+    ]);
+  });
+
+  it("resolves a generic Python class with one structural bare imported base", async () => {
+    const projectPath = await createInlineProject({
+      "pkg/__init__.py": "",
+      "pkg/providers.py": [
+        "class Base:",
+        "    pass"
+      ].join("\n"),
+      "pkg/consumer.py": [
+        "from .providers import Base",
+        "class Child[_DataT](Base):",
+        "    pass"
+      ].join("\n")
+    });
+    const store = new SqliteGraphStore();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+    const snapshot = store.getSnapshot(projectPath);
+    const child = snapshot.symbols.find((symbol) => symbol.qualifiedName === "pkg/consumer.py#Child");
+    const base = snapshot.symbols.find((symbol) => symbol.qualifiedName === "pkg/providers.py#Base");
+    expect(
+      snapshot.edges.filter(
+        (edge) =>
+          edge.filePath === "pkg/consumer.py" &&
+          edge.kind === "extends" &&
+          edge.referenceName === "Base"
+      )
+    ).toEqual([
+      expect.objectContaining({
+        sourceId: child?.id,
+        targetId: base?.id,
+        range: { start: { line: 2, column: 21 }, end: { line: 2, column: 25 } },
+        resolution: "exact",
+        confidence: 1,
+        evidence: expect.objectContaining({ candidateSymbolIds: [base?.id] })
+      })
+    ]);
   });
 });

@@ -2879,6 +2879,53 @@ describe("source extraction", () => {
     expect(decorated.edges.filter((edge) => edge.kind === "calls")).toEqual([]);
   });
 
+  it("ends Python declaration and containment ranges at the last code token", () => {
+    const cases = [
+      {
+        sourceText: "def lf():\n    return 1\n\n# trailing declaration comment\n",
+        expected: {
+          lf: { start: { line: 1, column: 1 }, end: { line: 2, column: 13 } }
+        }
+      },
+      {
+        sourceText: "class Container:\r\n    def method(self):\r\n        return 1\r\n\r\n# trailing class comment\r\n",
+        expected: {
+          Container: { start: { line: 1, column: 1 }, end: { line: 3, column: 17 } },
+          method: { start: { line: 2, column: 5 }, end: { line: 3, column: 17 } }
+        }
+      },
+      {
+        sourceText: [
+          "async def outer():",
+          "    async def nested():",
+          "        return 2  # nested tail",
+          "    return 1  # outer tail",
+          "# artifact tail"
+        ].join("\n"),
+        expected: {
+          outer: { start: { line: 1, column: 1 }, end: { line: 4, column: 13 } },
+          nested: { start: { line: 2, column: 5 }, end: { line: 3, column: 17 } }
+        }
+      }
+    ] as const;
+
+    for (const testCase of cases) {
+      const facts = extractPythonFileFacts({
+        filePath: "range.py",
+        language: "python",
+        sourceText: testCase.sourceText
+      });
+      for (const [name, range] of Object.entries(testCase.expected)) {
+        const symbol = facts.symbols.find((candidate) => candidate.name === name);
+        expect(symbol?.range, name).toEqual(range);
+        expect(
+          facts.edges.find((edge) => edge.kind === "contains" && edge.targetId === symbol?.id)?.range,
+          `${name} containment`
+        ).toEqual(range);
+      }
+    }
+  });
+
   it("fails closed for Python direct calls when a wildcard import exists", () => {
     const wildcard = extractFileFacts({
       filePath: "wildcard.py",
@@ -2925,6 +2972,276 @@ describe("source extraction", () => {
     });
 
     expect(facts.edges.filter((edge) => edge.kind === "calls")).toEqual([]);
+  });
+
+  it("fails closed for all five frozen Python rebinding and cross-function global shapes", () => {
+    const sources = [
+      "def target():\n    pass\ntarget = lambda: None\ndef caller():\n    target()\n",
+      "def target():\n    pass\ndel target\ndef caller():\n    target()\n",
+      "def target():\n    pass\ndef target():\n    pass\ndef caller():\n    target()\n",
+      "def target():\n    pass\ndef caller():\n    global target\n    target()\n",
+      "def target():\n    pass\ndef mutator():\n    global target\n    target = lambda: None\ndef caller():\n    target()\n"
+    ] as const;
+
+    for (const sourceText of sources) {
+      const facts = extractPythonFileFacts({
+        filePath: "entry.py",
+        language: "python",
+        sourceText
+      });
+      expect(facts.edges.filter((edge) => edge.kind === "calls"), sourceText).toEqual([]);
+    }
+  });
+
+  it("taints a Python target after global delete, augmented assignment, or import rebinding", () => {
+    const mutations = [
+      "del target",
+      "target += replacement",
+      "from foreign import replacement as target"
+    ] as const;
+
+    for (const mutation of mutations) {
+      const facts = extractPythonFileFacts({
+        filePath: "entry.py",
+        language: "python",
+        sourceText: [
+          "def target():",
+          "    return 1",
+          "replacement = target",
+          "def mutator():",
+          "    global target",
+          `    ${mutation}`,
+          "def caller():",
+          "    return target()"
+        ].join("\n")
+      });
+      expect(facts.edges.filter((edge) => edge.kind === "calls"), mutation).toEqual([]);
+    }
+  });
+
+  it("taints annotated global assignments without matching comments or strings", () => {
+    const tainted = extractPythonFileFacts({
+      filePath: "annotated-global.py",
+      language: "python",
+      sourceText: [
+        "def helper():",
+        "    return 1",
+        "replacement = helper",
+        "def mutator():",
+        "    global helper",
+        "    helper: object = replacement",
+        "def caller():",
+        "    return helper()"
+      ].join("\n")
+    });
+    expect(tainted.edges.filter((edge) => edge.kind === "calls")).toEqual([]);
+
+    const safe = extractPythonFileFacts({
+      filePath: "annotated-global-control.py",
+      language: "python",
+      sourceText: [
+        "def helper():",
+        "    return 1",
+        "def observer():",
+        "    global helper",
+        "    # helper: object = replacement",
+        "    description = 'helper: object = replacement'",
+        "def caller():",
+        "    return helper()"
+      ].join("\n")
+    });
+    expect(safe.edges.filter((edge) => edge.kind === "calls")).toHaveLength(1);
+  });
+
+  it("suppresses Python exact calls for code-token globals or exec hazards only", () => {
+    for (const hazard of ["globals()", "exec('target = replacement')"] as const) {
+      const facts = extractPythonFileFacts({
+        filePath: "hazard.py",
+        language: "python",
+        sourceText: [
+          "def target():",
+          "    return 1",
+          "def caller():",
+          "    return target()",
+          "def dynamic_scope():",
+          `    ${hazard}`
+        ].join("\n")
+      });
+      expect(facts.edges.filter((edge) => edge.kind === "calls"), hazard).toEqual([]);
+    }
+
+    const safe = extractPythonFileFacts({
+      filePath: "safe.py",
+      language: "python",
+      sourceText: [
+        "# globals() and exec('target = replacement') are inert here",
+        "description = \"globals() exec('target = replacement')\"",
+        "def target():",
+        "    return 1",
+        "def caller():",
+        "    return target()"
+      ].join("\n")
+    });
+    expect(safe.edges.filter((edge) => edge.kind === "calls")).toHaveLength(1);
+  });
+
+  it("suppresses imported Python call facts after an artifact-level global mutation", () => {
+    const facts = extractPythonFileFacts({
+      filePath: "pkg/consumer.py",
+      language: "python",
+      sourceText: [
+        "from .providers import helper",
+        "def mutator():",
+        "    global helper",
+        "    helper = lambda: 2",
+        "def caller():",
+        "    return helper()"
+      ].join("\n")
+    });
+
+    expect(facts.pythonFacts?.relativeNamedImports).toHaveLength(1);
+    expect(facts.pythonFacts?.importedFunctionCalls).toEqual([]);
+  });
+
+  it("emits exact Python instantiates edges for unique local classes without duplicate calls", () => {
+    const facts = extractPythonFileFacts({
+      filePath: "construct.py",
+      language: "python",
+      sourceText: [
+        "class Local:",
+        "    pass",
+        "def helper():",
+        "    return 1",
+        "def build():",
+        "    helper()",
+        "    return Local()",
+        "class Factory:",
+        "    def build(self):",
+        "        return Local()"
+      ].join("\n")
+    });
+    const symbol = (qualifiedName: string) =>
+      facts.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const local = symbol("construct.py#Local");
+    const build = symbol("construct.py#build");
+    const method = symbol("construct.py#Factory.build");
+    const instantiates = facts.edges.filter((edge) => edge.kind === "instantiates");
+
+    expect(instantiates).toEqual([
+      expect.objectContaining({
+        sourceId: build?.id,
+        targetId: local?.id,
+        range: { start: { line: 7, column: 12 }, end: { line: 7, column: 17 } },
+        resolution: "exact",
+        confidence: 1,
+        referenceName: "Local",
+        evidence: {
+          ruleId: "syntax.python.same-file.unique-top-level-class-instantiation",
+          stage: "syntax",
+          candidateSymbolIds: [local?.id]
+        }
+      }),
+      expect.objectContaining({
+        sourceId: method?.id,
+        targetId: local?.id,
+        range: { start: { line: 10, column: 16 }, end: { line: 10, column: 21 } },
+        evidence: expect.objectContaining({ candidateSymbolIds: [local?.id] })
+      })
+    ]);
+    expect(
+      facts.edges.filter((edge) => edge.kind === "calls" && edge.referenceName === "Local")
+    ).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "calls")).toHaveLength(1);
+  });
+
+  it("records imported Python class construction candidates for module resolution", () => {
+    const facts = extractPythonFileFacts({
+      filePath: "pkg/consumer.py",
+      language: "python",
+      sourceText: [
+        "from .providers import Widget as LocalWidget",
+        "def build():",
+        "    return LocalWidget()"
+      ].join("\n")
+    });
+
+    expect(facts.pythonFacts?.importedClassInstantiations).toEqual([
+      expect.objectContaining({
+        sourceId: "symbol:pkg%2Fconsumer.py:pkg%2Fconsumer.py%23build:function:0",
+        localName: "LocalWidget",
+        range: { start: { line: 3, column: 12 }, end: { line: 3, column: 23 } }
+      })
+    ]);
+  });
+
+  it("fails closed for unsupported Python class construction shapes", () => {
+    const sources = [
+      "def deco(value):\n    return value\n@deco\nclass Target:\n    pass\ndef caller():\n    Target()",
+      "class Target:\n    pass\nclass Target:\n    pass\ndef caller():\n    Target()",
+      "class Target:\n    pass\ndef caller(Target):\n    Target()",
+      "class Target:\n    pass\nTarget = factory\ndef caller():\n    Target()",
+      "class Target:\n    pass\ndef caller():\n    def nested():\n        Target()\n    return nested()",
+      "class Target:\n    pass\ndef caller():\n    callback = lambda: Target()\n    return callback()",
+      "class Target:\n    pass\ndef caller(holder):\n    holder.Target()",
+      "class Target:\n    pass\ndef caller():\n    return Target()()",
+      "class Target(Base, metaclass=type):\n    pass\ndef caller():\n    return Target()",
+      "class Target:\n    pass\ndef caller():\n    globals()\n    return Target()"
+    ] as const;
+
+    for (const sourceText of sources) {
+      const facts = extractPythonFileFacts({
+        filePath: "unsupported-construction.py",
+        language: "python",
+        sourceText
+      });
+      expect(facts.edges.filter((edge) => edge.kind === "instantiates"), sourceText).toEqual([]);
+    }
+  });
+
+  it("keeps Python function calls as calls rather than instantiations", () => {
+    const facts = extractPythonFileFacts({
+      filePath: "factory.py",
+      language: "python",
+      sourceText: "def Target():\n    return object()\ndef caller():\n    return Target()"
+    });
+
+    expect(facts.edges.filter((edge) => edge.kind === "calls")).toHaveLength(1);
+    expect(facts.edges.filter((edge) => edge.kind === "instantiates")).toEqual([]);
+  });
+
+  it("keeps async Python declarations and containment without runtime edges", () => {
+    const facts = extractPythonFileFacts({
+      filePath: "async-runtime.py",
+      language: "python",
+      sourceText: [
+        "class Resource:",
+        "    pass",
+        "def sync_target():",
+        "    return 1",
+        "async def async_target():",
+        "    return 2",
+        "async def async_caller():",
+        "    sync_target()",
+        "    return Resource()",
+        "def sync_caller():",
+        "    return async_target()",
+        "class Factory:",
+        "    async def build(self):",
+        "        return Resource()"
+      ].join("\n")
+    });
+
+    for (const name of ["async_target", "async_caller", "build"] as const) {
+      const symbol = facts.symbols.find((candidate) => candidate.name === name);
+      expect(symbol, name).toBeDefined();
+      expect(
+        facts.edges.find((edge) => edge.kind === "contains" && edge.targetId === symbol?.id),
+        `${name} containment`
+      ).toBeDefined();
+    }
+    expect(
+      facts.edges.filter((edge) => ["calls", "instantiates"].includes(edge.kind))
+    ).toEqual([]);
   });
 
   it("fails closed for annotated Python caller assignments", () => {
@@ -3026,13 +3343,13 @@ describe("source extraction", () => {
         moduleName: "utils",
         importedName: "default_headers",
         localName: "default_headers",
-        range: { start: { line: 2, column: 5 }, end: { line: 2, column: 20 } }
+        range: { start: { line: 1, column: 6 }, end: { line: 1, column: 12 } }
       }),
       expect.objectContaining({
         moduleName: "utils",
         importedName: "get_netrc_auth",
         localName: "netrc_auth",
-        range: { start: { line: 3, column: 5 }, end: { line: 3, column: 33 } }
+        range: { start: { line: 1, column: 6 }, end: { line: 1, column: 12 } }
       })
     ]);
     expect(sessionFacts.pythonFacts?.importedFunctionCalls).toEqual([
@@ -3069,6 +3386,313 @@ describe("source extraction", () => {
       ["set_environ", "function"],
       ["default_headers", "function"]
     ]);
+  });
+
+  it("accepts only the closed valid-Python recovery signatures", () => {
+    const yieldCluster = extractPythonFileFacts({
+      filePath: "yield-cluster.py",
+      language: "python",
+      sourceText: [
+        "generator = type((lambda: (yield))())",
+        "async def async_generator(): yield",
+        "class Iterable:",
+        "    @classmethod",
+        "    def iterator(cls):",
+        "        yield",
+        "def after_recovery():",
+        "    return 1"
+      ].join("\n")
+    });
+    expect(
+      yieldCluster.symbols
+        .filter((symbol) => ["class", "function", "method"].includes(symbol.kind))
+        .map((symbol) => symbol.name)
+    ).toEqual(["async_generator", "Iterable", "iterator", "after_recovery"]);
+
+    const defaultedTypeParameter = extractPythonFileFacts({
+      filePath: "defaulted-type-parameter.py",
+      language: "python",
+      sourceText: [
+        "class Base:",
+        "    pass",
+        "class SetupFlow[_T: Base = Base](Base):",
+        "    def run(self):",
+        "        return 1",
+        "def after_recovery():",
+        "    return 2"
+      ].join("\n")
+    });
+    expect(
+      defaultedTypeParameter.symbols
+        .filter((symbol) => ["class", "function", "method"].includes(symbol.kind))
+        .map((symbol) => symbol.name)
+    ).toEqual(["Base", "SetupFlow", "run", "after_recovery"]);
+
+    const parenthesizedWith = extractPythonFileFacts({
+      filePath: "parenthesized-with.py",
+      language: "python",
+      sourceText: [
+        "def helper():",
+        "    return 1",
+        "def open_one():",
+        "    return helper",
+        "def open_two():",
+        "    return helper",
+        "def entry():",
+        "    with (",
+        "        open_one() as helper,",
+        "        open_two() as second,",
+        "    ):",
+        "        helper()"
+      ].join("\n")
+    });
+    expect(parenthesizedWith.symbols.some((symbol) => symbol.name === "entry")).toBe(true);
+    expect(
+      parenthesizedWith.edges.filter(
+        (edge) => edge.kind === "calls" && edge.referenceName === "helper"
+      )
+    ).toEqual([]);
+
+    const longCrLfPrefix = Array.from(
+      { length: 417 },
+      (_, index) => `SETTING_${index} = ${index}`
+    ).join("\r\n");
+    const declarationOnly = extractPythonFileFacts({
+      filePath: "declaration-only.py",
+      language: "python",
+      sourceText: [
+        longCrLfPrefix,
+        "AUTH_PASSWORD_VALIDATORS = []",
+        "def helper():",
+        "    return 1",
+        "def caller():",
+        "    return helper()"
+      ].join("\r\n")
+    });
+    expect(
+      declarationOnly.symbols
+        .filter((symbol) => symbol.kind === "function")
+        .map((symbol) => symbol.name)
+    ).toEqual(["helper", "caller"]);
+    expect(declarationOnly.edges.filter((edge) => edge.kind === "calls")).toEqual([]);
+    expect(declarationOnly.pythonFacts?.topLevelDeclarations).toEqual([]);
+  });
+
+  it("keeps the frozen malformed-recovery matrix file-only", () => {
+    const malformedShapes = [
+      "def target():\n    pass\ndef caller(:\n    target()",
+      "def target():\n    pass\ndef caller():\n    target(",
+      "class Base:\n    pass\nclass Child(Base\n    pass",
+      "from .mod import Target\ndef caller():\n    Target(",
+      "def caller():\n    if True\n        target()"
+    ] as const;
+    const malformed25 = [
+      ...Array.from({ length: 20 }, (_, index) => malformedShapes[index % 5]!),
+      ...Array.from(
+        { length: 5 },
+        (_, index) =>
+          `def caller():\n    ${"(".repeat(280 + index)}target()${")".repeat(279 + index)}`
+      )
+    ];
+
+    expect(malformed25).toHaveLength(25);
+    for (const sourceText of malformed25) {
+      const facts = extractPythonFileFacts({
+        filePath: "malformed.py",
+        language: "python",
+        sourceText
+      });
+      expect(facts.symbols.map((symbol) => symbol.kind), sourceText).toEqual(["file"]);
+      expect(facts.edges, sourceText).toEqual([]);
+      expect(facts.pythonFacts?.topLevelDeclarations, sourceText).toEqual([]);
+    }
+  });
+
+  it("keeps mixed or near-miss Python recovery signatures file-only", () => {
+    const longCrLfPrefix = Array.from(
+      { length: 417 },
+      (_, index) => `SETTING_${index} = ${index}`
+    ).join("\r\n");
+    const sources = [
+      "def generator():\n    yield\ndef broken(:\n    pass",
+      "class Broken[_T: Base =](Base):\n    pass\ndef after():\n    return 1",
+      [
+        "def entry():",
+        "    with (",
+        "        open_one() as first",
+        "        open_two() as second,",
+        "    ):",
+        "        first()"
+      ].join("\n"),
+      [longCrLfPrefix, "AUTH_PASSWORD_VALIDATORS = []", "def broken(:", "    pass"].join(
+        "\r\n"
+      )
+    ] as const;
+
+    for (const sourceText of sources) {
+      const facts = extractPythonFileFacts({
+        filePath: "near-miss.py",
+        language: "python",
+        sourceText
+      });
+      expect(facts.symbols.map((symbol) => symbol.kind), sourceText).toEqual(["file"]);
+      expect(facts.edges, sourceText).toEqual([]);
+      expect(facts.pythonFacts?.topLevelDeclarations, sourceText).toEqual([]);
+    }
+  });
+
+  it("rejects PEP 695 non-default parameters after a recovered default", () => {
+    const invalidSources = [
+      [
+        "def target():",
+        "    return 1",
+        "def caller[T: B = X, U]():",
+        "    return target()"
+      ].join("\n"),
+      [
+        "class Base:",
+        "    pass",
+        "class Child[T: Base = X, U](Base):",
+        "    pass"
+      ].join("\n")
+    ] as const;
+    for (const sourceText of invalidSources) {
+      const facts = extractPythonFileFacts({
+        filePath: "invalid-type-parameter-order.py",
+        language: "python",
+        sourceText
+      });
+      expect(facts.symbols.map((symbol) => symbol.kind), sourceText).toEqual(["file"]);
+      expect(facts.edges, sourceText).toEqual([]);
+      expect(facts.pythonFacts?.topLevelDeclarations, sourceText).toEqual([]);
+    }
+
+    const validFunctionHeaders = [
+      "def caller[T, U]():",
+      "def caller[T, U = X]():",
+      "def caller[T = X, U = Y]():",
+      "def caller[T: B = X, U: C = Y]():",
+      [
+        "def caller[",
+        "    T: B = X,  # first default",
+        "    U: C = Y,",
+        "]():"
+      ].join("\n")
+    ] as const;
+    for (const header of validFunctionHeaders) {
+      const facts = extractPythonFileFacts({
+        filePath: "valid-type-parameter-order.py",
+        language: "python",
+        sourceText: [
+          "def target():",
+          "    return 1",
+          header,
+          "    return target()"
+        ].join("\n")
+      });
+      expect(
+        facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.name),
+        header
+      ).toEqual(["target", "caller"]);
+      expect(
+        facts.edges.filter((edge) => edge.kind === "calls" && edge.referenceName === "target"),
+        header
+      ).toHaveLength(1);
+    }
+
+    const validClassHeaders = [
+      "class Child[T, U](Base):",
+      "class Child[T, U = X](Base):",
+      "class Child[T = X, U = Y](Base):",
+      "class Child[T: Base = X, U: Base = Y](Base):"
+    ] as const;
+    for (const header of validClassHeaders) {
+      const facts = extractPythonFileFacts({
+        filePath: "valid-class-type-parameter-order.py",
+        language: "python",
+        sourceText: ["class Base:", "    pass", header, "    pass"].join("\n")
+      });
+      expect(
+        facts.symbols.filter((symbol) => symbol.kind === "class").map((symbol) => symbol.name),
+        header
+      ).toEqual(["Base", "Child"]);
+    }
+  });
+
+  it("includes complete triple-quoted strings in Python declaration ranges", () => {
+    const facts = extractPythonFileFacts({
+      filePath: "triple-quoted.py",
+      language: "python",
+      sourceText: [
+        "class Greeting:",
+        "    \"\"\"\\u00b6\"\"\"",
+        "",
+        "class Next:",
+        "    pass"
+      ].join("\n")
+    });
+    const greeting = facts.symbols.find((symbol) => symbol.name === "Greeting");
+    expect(greeting?.range).toEqual({
+      start: { line: 1, column: 1 },
+      end: { line: 2, column: 17 }
+    });
+    expect(
+      facts.edges.find((edge) => edge.kind === "contains" && edge.targetId === greeting?.id)?.range
+    ).toEqual(greeting?.range);
+  });
+
+  it("keeps occurrence-distinct direct calls immediately consumed by a complete subscript", () => {
+    const facts = extractPythonFileFacts({
+      filePath: "subscript-call.py",
+      language: "python",
+      sourceText: [
+        "def unpack(value):",
+        "    return value",
+        "def caller(first, second):",
+        "    plain = unpack(first)",
+        "    indexed = unpack(second)[0]",
+        "    chained = unpack(second).value"
+      ].join("\n")
+    });
+    const unpackCalls = facts.edges.filter(
+      (edge) => edge.kind === "calls" && edge.referenceName === "unpack"
+    );
+    expect(unpackCalls.map((edge) => edge.range)).toEqual([
+      { start: { line: 4, column: 13 }, end: { line: 4, column: 19 } },
+      { start: { line: 5, column: 15 }, end: { line: 5, column: 21 } }
+    ]);
+    expect(new Set(unpackCalls.map((edge) => edge.id)).size).toBe(2);
+  });
+
+  it("uses the one-dot module specifier as relative named-import evidence", () => {
+    const sources = [
+      "from .helpers import helper",
+      "from .helpers import helper as local_helper",
+      [
+        "from .helpers import (",
+        "    helper,",
+        "    second as local_second,",
+        ")"
+      ].join("\n")
+    ] as const;
+
+    for (const sourceText of sources) {
+      const facts = extractPythonFileFacts({
+        filePath: "pkg/consumer.py",
+        language: "python",
+        sourceText
+      });
+      expect(facts.pythonFacts?.relativeNamedImports.length, sourceText).toBeGreaterThan(0);
+      expect(
+        facts.pythonFacts?.relativeNamedImports.map((fact) => fact.range),
+        sourceText
+      ).toEqual(
+        facts.pythonFacts?.relativeNamedImports.map(() => ({
+          start: { line: 1, column: 6 },
+          end: { line: 1, column: 14 }
+        }))
+      );
+    }
   });
 
   it("fails closed for unsupported Python relative named-import forms", () => {
