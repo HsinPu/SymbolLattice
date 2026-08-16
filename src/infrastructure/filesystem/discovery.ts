@@ -149,6 +149,10 @@ export const STREAMING_UTF8_HASH_POLICY = "streaming-utf8-v1" as const;
 export const SOURCE_FINGERPRINT_READ_POLICY =
   "streaming-utf8-with-objective-c-header-classification-v1" as const;
 export const MAXIMUM_FRESHNESS_CONCURRENT_READS = 8 as const;
+/** Full source reads retain text, so keep descriptor pressure bounded on large repositories. */
+export const MAXIMUM_SOURCE_CONCURRENT_READS = 8 as const;
+
+export type SourceTextReader = (absolutePath: string) => Promise<string>;
 
 export interface FreshnessProjectPathDiscovery {
   readonly policy: typeof FRESHNESS_PATH_DISCOVERY_POLICY;
@@ -293,31 +297,49 @@ export async function discoverSourceFiles(
       })
     )
   ).flat();
-  const sourceFiles = (
-    await Promise.all(
-      paths.map(async (absolutePath) => {
-        const sourceText = await readFile(absolutePath, "utf8");
-        const language = getSourceLanguage(absolutePath, sourceText);
+  const sourceFiles = await loadSourcePaths(normalizedProjectPath, paths);
 
+  return sourceFiles.sort((left, right) => compareProjectPaths(left.relativePath, right.relativePath));
+}
+
+/**
+ * Loads source text in bounded batches. Exposed for deterministic concurrency tests; callers
+ * normally use `discoverSourceFiles`, which supplies native UTF-8 reads and discovered paths.
+ */
+export async function loadSourcePaths(
+  projectPath: string,
+  paths: readonly string[],
+  readSourceText: SourceTextReader = (absolutePath) => readFile(absolutePath, "utf8")
+): Promise<SourceFile[]> {
+  const normalizedProjectPath = resolve(projectPath);
+  const sourceFiles: SourceFile[] = [];
+  for (let offset = 0; offset < paths.length; offset += MAXIMUM_SOURCE_CONCURRENT_READS) {
+    const batch = await Promise.all(
+      paths.slice(offset, offset + MAXIMUM_SOURCE_CONCURRENT_READS).map(async (absolutePath) => {
+        const sourceText = await readSourceText(absolutePath);
+        const language = getSourceLanguage(absolutePath, sourceText);
         if (language === null) {
           if (isObjectiveCHeaderPath(absolutePath)) {
             return null;
           }
           throw new Error(`Unsupported source file was discovered: ${absolutePath}`);
         }
-
         return {
           absolutePath,
           relativePath: toProjectRelativePath(normalizedProjectPath, absolutePath),
           language,
           sourceText,
           contentHash: hashSource(sourceText)
-        };
+        } satisfies SourceFile;
       })
-    )
-  ).filter((file): file is SourceFile => file !== null);
-
-  return sourceFiles.sort((left, right) => compareProjectPaths(left.relativePath, right.relativePath));
+    );
+    for (const file of batch) {
+      if (file !== null) {
+        sourceFiles.push(file);
+      }
+    }
+  }
+  return sourceFiles;
 }
 
 /**

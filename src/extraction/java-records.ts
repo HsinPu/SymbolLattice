@@ -333,12 +333,12 @@ function collectRecordRanges(node: SgNode, ranges: JavaRecordRange[]): void {
 export function inspectJavaRecords(
   input: JavaRecordExtractFileFactsInput
 ): JavaRecordInspection {
-  if (!input.sourceText.includes("record")) {
-    return { isSyntaxClean: false, recordRanges: [], records: [] };
-  }
   const root = parse("java", input.sourceText).root();
   if (hasSyntaxError(root)) {
     return { isSyntaxClean: false, recordRanges: [], records: [] };
+  }
+  if (!input.sourceText.includes("record")) {
+    return { isSyntaxClean: true, recordRanges: [], records: [] };
   }
   const recordRanges: JavaRecordRange[] = [];
   collectRecordRanges(root, recordRanges);

@@ -13,6 +13,8 @@ import {
   hashSource,
   hashUtf8File,
   isUnsafeProjectPath,
+  loadSourcePaths,
+  MAXIMUM_SOURCE_CONCURRENT_READS,
   toProjectRelativePath
 } from "../../../src/infrastructure/filesystem/discovery.js";
 
@@ -34,6 +36,27 @@ afterEach(async () => {
 });
 
 describe("source discovery", () => {
+  it("bounds full source reads for large repositories", async () => {
+    const projectPath = resolve("bounded-source-project");
+    const sourcePaths = Array.from(
+      { length: MAXIMUM_SOURCE_CONCURRENT_READS * 4 },
+      (_, index) => join(projectPath, `Source${index}.java`)
+    );
+    let activeReads = 0;
+    let observedPeakReads = 0;
+
+    const files = await loadSourcePaths(projectPath, sourcePaths, async () => {
+      activeReads += 1;
+      observedPeakReads = Math.max(observedPeakReads, activeReads);
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 1));
+      activeReads -= 1;
+      return "class Example {}\n";
+    });
+
+    expect(files).toHaveLength(sourcePaths.length);
+    expect(observedPeakReads).toBeLessThanOrEqual(MAXIMUM_SOURCE_CONCURRENT_READS);
+  });
+
   it("streams the same UTF-8 SHA-256 identity as a complete decoded read", async () => {
     const projectPath = await createProject();
     const sourcePath = join(projectPath, "large.ts");

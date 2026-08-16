@@ -55,6 +55,7 @@ import {
   type JavaCallableDeclarationFact,
   type JavaChainedCallReferenceFact,
   type JavaFieldDeclarationFact,
+  type JavaInstantiationReferenceFact,
   type JavaMemberCallReferenceFact,
   type NestSymbolReference,
   type PendingReference,
@@ -8193,19 +8194,27 @@ function samePackageJvmModuleEvidence(input: {
   }
   const sourceMemberships = input.membershipsByFile.get(input.sourceFilePath) ?? [];
   const targetMemberships = input.membershipsByFile.get(input.targetFilePath) ?? [];
-  const sourceMembership = sourceMemberships.length === 1 ? sourceMemberships[0] : undefined;
-  const targetMembership = targetMemberships.length === 1 ? targetMemberships[0] : undefined;
+  const sourceByModule = new Map(sourceMemberships.map((membership) => [membership.moduleId, membership]));
+  const targetByModule = new Map(targetMemberships.map((membership) => [membership.moduleId, membership]));
   if (
-    sourceMembership === undefined ||
-    targetMembership === undefined ||
-    sourceMembership.moduleId !== targetMembership.moduleId ||
-    (sourceMembership.sourceSet === "main" && targetMembership.sourceSet !== "main")
+    sourceMemberships.length === 0 ||
+    targetMemberships.length === 0 ||
+    sourceByModule.size !== sourceMemberships.length ||
+    targetByModule.size !== targetMemberships.length ||
+    sourceByModule.size !== targetByModule.size ||
+    [...sourceByModule].some(([moduleId, sourceMembership]) => {
+      const targetMembership = targetByModule.get(moduleId);
+      return (
+        targetMembership === undefined ||
+        (sourceMembership.sourceSet === "main" && targetMembership.sourceSet !== "main")
+      );
+    })
   ) {
     return null;
   }
   return uniqueConfigurationPaths([
-    sourceMembership.configurationPaths,
-    targetMembership.configurationPaths
+    ...sourceMemberships.map((membership) => membership.configurationPaths),
+    ...targetMemberships.map((membership) => membership.configurationPaths)
   ]);
 }
 
@@ -8512,6 +8521,127 @@ function projectJvmCallableSignatureReferences(input: {
       referenceName: reference.referenceName,
       evidence: referenceEvidence(
         `signature.java.${proof}.${reference.relationKind}`,
+        "module",
+        candidateSymbolIds(candidates.map((candidate) => candidate.symbol)),
+        configurationPaths,
+        [reference.filePath, target.filePath]
+      )
+    });
+  }
+  return edges;
+}
+
+/** Projects direct Java `new Type(...)` syntax to one proven indexed top-level class. */
+function projectJavaInstantiationReferences(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+  readonly jvmProjectModuleEvidence?: JvmProjectModuleEvidence;
+}): readonly GraphEdge[] {
+  const typesBySymbolId = new Map<string, JvmResolvedType[]>();
+  const references: JavaInstantiationReferenceFact[] = [];
+  for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    for (const fact of facts.jvmFacts?.types ?? []) {
+      const symbol = input.symbolsById.get(fact.symbolId);
+      if (symbol?.kind !== "class" && symbol?.kind !== "interface") {
+        continue;
+      }
+      const entries = typesBySymbolId.get(symbol.id) ?? [];
+      entries.push({ fact, symbol });
+      typesBySymbolId.set(symbol.id, entries);
+    }
+    references.push(...(facts.jvmFacts?.javaInstantiationReferences ?? []));
+  }
+  const types = [...typesBySymbolId.values()]
+    .filter((entries) => entries.length === 1 && entries[0] !== undefined)
+    .map((entries) => entries[0] as JvmResolvedType)
+    .sort((left, right) => compareStableText(left.symbol.id, right.symbol.id));
+  const membershipsByFile = jvmModuleMembershipsByFile(input.jvmProjectModuleEvidence);
+  const edges: GraphEdge[] = [];
+
+  for (const reference of [...references].sort((left, right) =>
+    compareStableText(
+      `${left.sourceId}\u0000${left.range.start.line}\u0000${left.range.start.column}`,
+      `${right.sourceId}\u0000${right.range.start.line}\u0000${right.range.start.column}`
+    )
+  )) {
+    const source = input.symbolsById.get(reference.sourceId);
+    const declaringTypeEntries = typesBySymbolId.get(reference.declaringTypeId) ?? [];
+    if (
+      source?.kind !== "method" ||
+      declaringTypeEntries.length !== 1 ||
+      declaringTypeEntries[0] === undefined
+    ) {
+      continue;
+    }
+    const declaringType = declaringTypeEntries[0];
+    const targetTypePath = reference.qualifiedTypePath ?? reference.importedTypePath;
+    const resolutionProof =
+      reference.qualifiedTypePath !== undefined
+        ? "qualified-type"
+        : reference.importedTypePath !== undefined
+          ? "explicit-import"
+          : "same-package";
+    const candidates = types.filter((candidate) =>
+      candidate.symbol.kind === "class" &&
+      (targetTypePath === undefined
+        ? candidate.fact.packageName === declaringType.fact.packageName &&
+          candidate.symbol.name === reference.referenceName
+        : jvmTypePath(candidate) === targetTypePath)
+    );
+    if (candidates.length !== 1 || candidates[0] === undefined) {
+      continue;
+    }
+    const target = candidates[0].symbol;
+    const samePackageConfigurationPaths =
+      resolutionProof !== "same-package" || source.filePath === target.filePath
+        ? []
+        : samePackageJvmModuleEvidence({
+            projectEvidence: input.jvmProjectModuleEvidence,
+            membershipsByFile,
+            sourceFilePath: source.filePath,
+            targetFilePath: target.filePath
+          });
+    if (samePackageConfigurationPaths === null) {
+      continue;
+    }
+    const declaredProjectDependency =
+      resolutionProof === "same-package"
+        ? null
+        : declaredJvmProjectDependencyEvidence({
+            projectEvidence: input.jvmProjectModuleEvidence,
+            membershipsByFile,
+            sourceFilePath: source.filePath,
+            targetFilePath: target.filePath
+          });
+    const configurationPaths =
+      resolutionProof === "same-package"
+        ? samePackageConfigurationPaths
+        : declaredProjectDependency?.configurationPaths ?? [];
+    const proof =
+      declaredProjectDependency === null
+        ? resolutionProof
+        : `${resolutionProof}.declared-${declaredProjectDependency.kind}`;
+    edges.push({
+      id: createEdgeId({
+        sourceId: source.id,
+        targetId: target.id,
+        kind: "instantiates",
+        line: reference.range.start.line,
+        column: reference.range.start.column,
+        referenceName: reference.referenceName
+      }),
+      sourceId: source.id,
+      targetId: target.id,
+      kind: "instantiates",
+      filePath: reference.filePath,
+      range: reference.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: reference.referenceName,
+      evidence: referenceEvidence(
+        `syntax.java.object-creation.${proof}`,
         "module",
         candidateSymbolIds(candidates.map((candidate) => candidate.symbol)),
         configurationPaths,
@@ -11344,7 +11474,7 @@ function projectJavaCallReferences(input: {
             methodSetEntry.inherited ? "inherited-dispatch" : "direct-dispatch"
           }`,
           "module",
-          methodPlan.arityEvidence.candidates.map((candidate) => candidate.symbolId),
+          [methodPlan.selected.symbolId],
           configurationPaths,
           sourcePaths
         ),
@@ -11577,7 +11707,7 @@ function projectJavaCallReferences(input: {
         ...referenceEvidence(
           `call.java.chained-factory.${proof}.${factoryPlan.selection}.factory`,
           "module",
-          factoryPlan.arityEvidence.candidates.map((candidate) => candidate.symbolId),
+          [factoryPlan.selected.symbolId],
           configurationPaths,
           sourcePaths
         ),
@@ -11610,7 +11740,7 @@ function projectJavaCallReferences(input: {
             methodSetEntry.inherited ? "inherited-return-dispatch" : "return-dispatch"
           }`,
           "module",
-          methodPlan.arityEvidence.candidates.map((candidate) => candidate.symbolId),
+          [methodPlan.selected.symbolId],
           configurationPaths,
           sourcePaths
         ),
@@ -12144,6 +12274,15 @@ export function resolveProjectFacts(input: {
       : { jvmProjectModuleEvidence: input.jvmProjectModuleEvidence })
   });
   resolvedEdges.push(...jvmCallableSignatureEdges);
+  resolvedEdges.push(
+    ...projectJavaInstantiationReferences({
+      factsByFile,
+      symbolsById,
+      ...(input.jvmProjectModuleEvidence === undefined
+        ? {}
+        : { jvmProjectModuleEvidence: input.jvmProjectModuleEvidence })
+    })
+  );
   resolvedEdges.push(
     ...projectJavaCallReferences({
       factsByFile,

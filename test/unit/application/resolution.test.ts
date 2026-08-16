@@ -1556,6 +1556,121 @@ describe("explicit Java and Kotlin override resolution", () => {
   });
 });
 
+describe("exact Java object-creation resolution", () => {
+  it("projects imported, qualified, and same-package constructions without simple-name guessing", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/api/Widget.java",
+        relativePath: "src/api/Widget.java",
+        language: "java",
+        sourceText: "package api; public class Widget {}",
+        contentHash: "api-widget"
+      },
+      {
+        absolutePath: "C:/project/src/other/Widget.java",
+        relativePath: "src/other/Widget.java",
+        language: "java",
+        sourceText: "package other; public class Widget {}",
+        contentHash: "other-widget"
+      },
+      {
+        absolutePath: "C:/project/src/app/LocalWidget.java",
+        relativePath: "src/app/LocalWidget.java",
+        language: "java",
+        sourceText: "package app; class LocalWidget {}",
+        contentHash: "local-widget"
+      },
+      {
+        absolutePath: "C:/project/src/app/Consumer.java",
+        relativePath: "src/app/Consumer.java",
+        language: "java",
+        sourceText: [
+          "package app;",
+          "import api.Widget;",
+          "class Consumer {",
+          "  void imported() { new Widget(); }",
+          "  void qualified() { new api.Widget(); }",
+          "  void local() { new LocalWidget(); }",
+          "}"
+        ].join("\n"),
+        contentHash: "consumer"
+      },
+      {
+        absolutePath: "C:/project/src/app/Wildcard.java",
+        relativePath: "src/app/Wildcard.java",
+        language: "java",
+        sourceText: "package app; import api.*; class Wildcard { void create() { new Widget(); } }",
+        contentHash: "wildcard"
+      }
+    ];
+    const snapshot = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles: sourceDocuments.map((document) =>
+        extractFileFacts({
+          filePath: document.relativePath,
+          sourceText: document.sourceText,
+          language: "java"
+        })
+      ),
+      indexedAt: "2026-08-16T00:00:00.000Z",
+      jvmProjectModuleEvidence: {
+        memberships: ["src/app/Consumer.java", "src/app/LocalWidget.java"].flatMap((filePath) => [
+          {
+            filePath,
+            moduleId: "gradle:build.gradle",
+            sourceSet: "main" as const,
+            configurationPaths: ["build.gradle", "settings.gradle"]
+          },
+          {
+            filePath,
+            moduleId: "maven:pom.xml",
+            sourceSet: "main" as const,
+            configurationPaths: ["pom.xml"]
+          }
+        ])
+      }
+    });
+    const target = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "src/api/Widget.java#Widget"
+    );
+    const edges = snapshot.edges.filter((edge) => edge.kind === "instantiates");
+
+    expect(edges).toHaveLength(3);
+    expect(edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        targetId: target?.id,
+        referenceName: "Widget",
+        resolution: "exact",
+        confidence: 1,
+        evidence: expect.objectContaining({
+          ruleId: "syntax.java.object-creation.explicit-import",
+          candidateSymbolIds: [target?.id]
+        })
+      }),
+      expect.objectContaining({
+        targetId: target?.id,
+        referenceName: "Widget",
+        resolution: "exact",
+        confidence: 1,
+        evidence: expect.objectContaining({
+          ruleId: "syntax.java.object-creation.qualified-type",
+          candidateSymbolIds: [target?.id]
+        })
+      }),
+      expect.objectContaining({
+        referenceName: "LocalWidget",
+        resolution: "exact",
+        confidence: 1,
+        evidence: expect.objectContaining({
+          ruleId: "syntax.java.object-creation.same-package",
+          configurationPaths: ["build.gradle", "settings.gradle", "pom.xml"]
+        })
+      })
+    ]));
+    expect(edges.some((edge) => edge.filePath === "src/app/Wildcard.java")).toBe(false);
+  });
+});
+
 describe("exact JVM cross-file heritage resolution", () => {
   it("projects direct imported and same-package Java/Kotlin parents, but rejects wildcard and aliased imports", () => {
     const sourceDocuments: readonly SourceDocument[] = [

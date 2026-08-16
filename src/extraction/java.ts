@@ -17,6 +17,7 @@ import {
   type JavaCallableDeclarationFact,
   type JavaChainedCallReferenceFact,
   type JavaFieldDeclarationFact,
+  type JavaInstantiationReferenceFact,
   type JavaMemberCallReferenceFact,
   type PendingReference,
   type ReactNativeFacts,
@@ -1972,10 +1973,46 @@ function hasSyntaxError(
   return (
     (node.type.isError &&
       !isModernRecoveredError &&
+      !isLegacyGrammarClassLiteralMarker(input, node) &&
       !isLegacyGrammarDefaultModifierMarker(node) &&
       !isLegacyGrammarSwitchRuleMarker(input, node) &&
       !isLegacyGrammarInstanceofPatternMarker(input, node)) ||
     directChildren(node).some((child) => hasSyntaxError(input, child, modernRecoveryOffsets))
+  );
+}
+
+/**
+ * @lezer/java 1.1.3 recovers the `class` token in an otherwise valid Java
+ * class literal (for example `String.class` or `int[].class`) as an error. It
+ * also appends a zero-width error to some otherwise complete qualified member
+ * accesses. Accept only those exact, closed legacy-parser shapes; every
+ * surrounding or additional syntax error remains fail-closed.
+ */
+function isLegacyGrammarClassLiteralMarker(
+  input: JavaExtractFileFactsInput,
+  node: JavaSyntaxNode
+): boolean {
+  if (!node.type.isError || node.parent === null) {
+    return false;
+  }
+  const parentText = nodeText(input, node.parent).trim();
+  const hasOnlyTrailingWhitespace = input.sourceText.slice(node.to, node.parent.to).trim().length === 0;
+  const isClosedQualifiedMember =
+    node.from === node.to &&
+    hasOnlyTrailingWhitespace &&
+    node.parent.name === "MethodReference" &&
+    /^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)+$/u.test(parentText);
+  const isClassLiteral =
+    /^(?:(?:byte|short|int|long|float|double|boolean|char|void)|[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)(?:\[\])*\.class$/u.test(
+      parentText
+    );
+  return (
+    isClosedQualifiedMember ||
+    (isClassLiteral &&
+      hasOnlyTrailingWhitespace &&
+      ((nodeText(input, node) === "class" &&
+        (node.parent.name === "ObjectCreationExpression" || node.parent.name === "ScopedTypeName")) ||
+        (node.from === node.to && node.parent.name === "MethodReference")))
   );
 }
 
@@ -2918,6 +2955,55 @@ const NESTED_JAVA_CALLABLE_SCOPES = new Set([
   "ConstructorDeclaration",
   "LambdaExpression"
 ]);
+
+function staticJavaInstantiationReferences(input: {
+  readonly extraction: JavaExtractFileFactsInput;
+  readonly callable: StaticJavaMethod | StaticJavaConstructor;
+  readonly callableSymbol: SymbolNode;
+  readonly declaringType: SymbolNode;
+  readonly imports: ReadonlyMap<string, string>;
+}): readonly JavaInstantiationReferenceFact[] {
+  const body = input.callable.body;
+  if (body === null) {
+    return [];
+  }
+  const references: JavaInstantiationReferenceFact[] = [];
+
+  function visit(node: JavaSyntaxNode): void {
+    if (node !== body && NESTED_JAVA_CALLABLE_SCOPES.has(node.name)) {
+      return;
+    }
+    if (node.name === "ObjectCreationExpression") {
+      const typeNodes = directChildren(node).filter(isJavaDirectTypeName);
+      const type =
+        typeNodes.length === 1 && typeNodes[0] !== undefined
+          ? staticJavaCallTypeReference(
+              input.extraction,
+              typeNodes[0],
+              input.imports,
+              "object-creation"
+            )
+          : null;
+      if (type?.kind === "reference") {
+        references.push({
+          sourceId: input.callableSymbol.id,
+          declaringTypeId: input.declaringType.id,
+          filePath: input.extraction.filePath,
+          referenceName: type.referenceName,
+          range: type.range,
+          ...(type.importedTypePath === undefined ? {} : { importedTypePath: type.importedTypePath }),
+          ...(type.qualifiedTypePath === undefined ? {} : { qualifiedTypePath: type.qualifiedTypePath })
+        });
+      }
+    }
+    for (const child of directChildren(node)) {
+      visit(child);
+    }
+  }
+
+  visit(body);
+  return references;
+}
 
 function staticJavaValueDeclarationNames(
   input: JavaExtractFileFactsInput,
@@ -6218,6 +6304,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   const javaChainedCallReferences: JavaChainedCallReferenceFact[] = [];
   const javaMemberCallReferences: JavaMemberCallReferenceFact[] = [];
   const javaFieldDeclarations: JavaFieldDeclarationFact[] = [];
+  const javaInstantiationReferences: JavaInstantiationReferenceFact[] = [];
   const springBootPropertiesValueReferences: SpringBootPropertiesValueReferenceFact[] = [];
   const springBootConfigurationPropertiesPrefixes: SpringBootConfigurationPropertiesPrefixReferenceFact[] = [];
   const reactNativeNativeMethods: ReactNativeFacts["nativeMethods"][number][] = [];
@@ -6623,9 +6710,13 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     });
   }
 
+  // The legacy Lezer grammar recovers several valid modern Java constructs as
+  // errors. The independent modern tree-sitter parse is already required for
+  // record extraction, so a clean whole-file result may safely authorize only
+  // the legacy nodes that each bounded extractor still proves structurally.
   const canUseLegacyJavaRoot =
     !hasSyntaxError(input, root, instanceofAndPatternInspection.legacyRecoveryOffsets) ||
-    (recordInspection.isSyntaxClean && recordInspection.recordRanges.length > 0);
+    recordInspection.isSyntaxClean;
   const packageName = canUseLegacyJavaRoot ? staticJavaPackage(input, root) : null;
   const overlapsRecord = (node: JavaSyntaxNode): boolean =>
     recordInspection.recordRanges.some(
@@ -6709,6 +6800,15 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
               declaringType: typeSymbol,
               imports,
               instanceofAndPatternSyntaxes: instanceofAndPatternInspection.syntaxes
+            })
+          );
+          javaInstantiationReferences.push(
+            ...staticJavaInstantiationReferences({
+              extraction: input,
+              callable: methodDeclaration,
+              callableSymbol: methodSymbol,
+              declaringType: typeSymbol,
+              imports
             })
           );
         }
@@ -6851,6 +6951,15 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
             instanceofAndPatternSyntaxes: instanceofAndPatternInspection.syntaxes
           })
         );
+        javaInstantiationReferences.push(
+          ...staticJavaInstantiationReferences({
+            extraction: input,
+            callable: constructorDeclaration,
+            callableSymbol: constructorSymbol,
+            declaringType: classSymbol,
+            imports
+          })
+        );
       }
       const symbolsByMethod = new Map<StaticJavaMethod, SymbolNode>();
       for (const methodDeclaration of methods) {
@@ -6884,6 +6993,15 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
             declaringType: classSymbol,
             imports,
             instanceofAndPatternSyntaxes: instanceofAndPatternInspection.syntaxes
+          })
+        );
+        javaInstantiationReferences.push(
+          ...staticJavaInstantiationReferences({
+            extraction: input,
+            callable: methodDeclaration,
+            callableSymbol: methodSymbol,
+            declaringType: classSymbol,
+            imports
           })
         );
         if (hasJavaOverrideAnnotation(methodDeclaration)) {
@@ -7094,7 +7212,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       javaCallableDeclarations,
       javaChainedCallReferences,
       javaMemberCallReferences,
-      javaFieldDeclarations
+      javaFieldDeclarations,
+      javaInstantiationReferences
     },
     springBootPropertiesFacts: {
       valueReferences: springBootPropertiesValueReferences,

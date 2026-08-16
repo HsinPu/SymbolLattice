@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v307";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v309";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v150";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v153";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -1853,6 +1853,17 @@ export interface JavaCallTypeReferenceFact {
   readonly qualifiedTypePath?: string;
 }
 
+/** One direct Java object creation whose constructed top-level type is source-proven. */
+export interface JavaInstantiationReferenceFact {
+  readonly sourceId: string;
+  readonly declaringTypeId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly range: SourceRange;
+  readonly importedTypePath?: string;
+  readonly qualifiedTypePath?: string;
+}
+
 /** One source-declared Java class field or interface constant retained for receiver resolution. */
 export interface JavaFieldDeclarationFact {
   readonly declaringTypeId: string;
@@ -2242,6 +2253,8 @@ export interface JvmFacts {
   readonly javaMemberCallReferences?: readonly JavaMemberCallReferenceFact[];
   /** Omitted only by artifact facts persisted before v0.311. */
   readonly javaFieldDeclarations?: readonly JavaFieldDeclarationFact[];
+  /** Omitted only by artifact facts persisted before v0.309. */
+  readonly javaInstantiationReferences?: readonly JavaInstantiationReferenceFact[];
 }
 
 /**

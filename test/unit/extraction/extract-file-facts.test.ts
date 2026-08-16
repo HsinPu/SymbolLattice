@@ -593,6 +593,35 @@ describe("source extraction", () => {
     expect(signatureReferences.filter((reference) => ["T", "M"].includes(reference.referenceName))).toEqual([]);
   });
 
+  it("retains Java declarations around valid class literals without accepting adjacent malformed syntax", () => {
+    const facts = extractFileFacts({
+      filePath: "src/ClassLiteralService.java",
+      language: "java",
+      sourceText: [
+        "class ClassLiteralService {",
+        "  private static final Class<?> STRING_TYPE = String.class;",
+        "  Class<?> primitiveType() { return int[].class; }",
+        "  void consume() { accept(String.class, Object.class); }",
+        "  int constant() { return External.Constants.VALUE; }",
+        "}"
+      ].join("\n")
+    });
+
+    expect(
+      facts.symbols.map((symbol) => [symbol.name, symbol.kind])
+    ).toEqual(expect.arrayContaining([
+      ["ClassLiteralService", "class"],
+      ["primitiveType", "method"]
+    ]));
+
+    const malformed = extractFileFacts({
+      filePath: "src/MalformedClassLiteral.java",
+      language: "java",
+      sourceText: "class MalformedClassLiteral { Class<?> type() { return String.class extra; } }"
+    });
+    expect(malformed.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
+  });
+
   it("extracts exact same-file Java and Kotlin interface hierarchy evidence", () => {
     const java = extractFileFacts({
       filePath: "src/java-interfaces.java",

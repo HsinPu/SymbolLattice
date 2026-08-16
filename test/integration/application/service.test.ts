@@ -2717,7 +2717,9 @@ describe("SymbolLatticeService", () => {
     expect(
       factoryOverloadCalls.find((edge) => edge.referenceName === "create")?.evidence
         ?.candidateSymbolIds
-    ).toHaveLength(2);
+    ).toEqual([
+      factoryOverloadCalls.find((edge) => edge.referenceName === "create")?.targetId
+    ]);
     expect(factoryOverloadCalls.find((edge) => edge.referenceName === "create")?.evidence).toMatchObject({
       ruleId: "call.java.chained-factory.same-package.arity.factory",
       callArity: {
@@ -2736,7 +2738,9 @@ describe("SymbolLatticeService", () => {
     expect(
       outerOverloadCalls.find((edge) => edge.referenceName === "execute")?.evidence
         ?.candidateSymbolIds
-    ).toHaveLength(2);
+    ).toEqual([
+      outerOverloadCalls.find((edge) => edge.referenceName === "execute")?.targetId
+    ]);
     expect(outerOverloadCalls.find((edge) => edge.referenceName === "execute")?.evidence).toMatchObject({
       ruleId: "call.java.chained-factory.same-package.arity.return-dispatch",
       callArity: {
@@ -7852,10 +7856,9 @@ describe("SymbolLatticeService", () => {
       resolution: "exact",
       evidence: {
         ruleId: "call.java.chained-factory.explicit-import.arity-type.factory",
-        candidateSymbolIds: expect.arrayContaining([
-          symbol("src/factory/TypedFactory.java#TypedFactory.create", 6)?.id,
-          symbol("src/factory/TypedFactory.java#TypedFactory.create", 7)?.id
-        ]),
+        candidateSymbolIds: [
+          symbol("src/factory/TypedFactory.java#TypedFactory.create", 6)?.id
+        ],
         callType: {
           arguments: [
             expect.objectContaining({

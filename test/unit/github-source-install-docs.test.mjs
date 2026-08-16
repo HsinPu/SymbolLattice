@@ -11,8 +11,9 @@ describe("GitHub source installation documentation", () => {
   for (const doc of docs) {
     it(`${doc.language} documents the fixed-ref preview-first source installer`, async () => {
       const content = await readFile(doc.path, "utf8");
+      const packageVersion = JSON.parse(await readFile("package.json", "utf8")).version;
 
-      expect(content).toContain("v0.422.0");
+      expect(content).toContain(`v${packageVersion}`);
       expect(content).toContain("https://github.com/HsinPu/SymbolLattice.git");
       expect(content).toContain("install.ps1");
       expect(content).toContain("-Ref");

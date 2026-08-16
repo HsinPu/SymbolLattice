@@ -13,13 +13,15 @@
 </div>
 
 > [!IMPORTANT]
-> v0.422.0 is a developer preview installed from a fixed revision of the official GitHub repository; SymbolLattice is not published to the npm Registry. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.SymbolLattice` index; add `--no-auto-sync` to disable it.
+> v0.423.0 is a developer preview installed from a fixed revision of the official GitHub repository; SymbolLattice is not published to the npm Registry. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.SymbolLattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
 SymbolLattice scans a local repository, persists a code graph, and exposes CLI/MCP queries for files, symbols, calls, imports, inheritance, routes, entry points, bounded impact paths, and source-backed context. Every relationship carries source range, resolution stage, confidence, and rule evidence.
 
 Relationships that cannot be proven exactly remain unresolved or pending instead of becoming false exact edges.
+
+v0.423.0 uses fixed Spring PetClinic and Spring Framework Java sources plus an independent JDK compiler oracle to validate 300 exact-agreement cases and 150 negative assertions: TP 300 / FP 0 / FN 0 with no invalid evidence. A separate deterministic recall diagnostic still records unsupported modern Java, overload, import, override, and annotation depth; those cases remain unresolved or nonclaims rather than implying complete Java-language coverage.
 
 ## Quick start
 
@@ -95,7 +97,7 @@ The installer never creates or deletes a project index automatically. Restart Co
 
 ## Upgrading from v0.420.0 or earlier
 
-v0.422.0 does not provide aliases for the old names and does not read the old index. Use this order:
+v0.423.0 does not provide aliases for the old names and does not read the old index. Use this order:
 
 ```bash
 # Remove the old Codex MCP configuration while the old CLI is still available
@@ -111,7 +113,7 @@ SymbolLattice init .
 SymbolLattice doctor codex
 ```
 
-| Previous surface | v0.422.0 |
+| Previous surface | v0.423.0 |
 | --- | --- |
 | npm package | `@hsinpu/symbollattice` |
 | CLI | `SymbolLattice` |

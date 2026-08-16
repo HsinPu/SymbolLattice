@@ -13,13 +13,15 @@
 </div>
 
 > [!IMPORTANT]
-> v0.422.0 是從官方 GitHub 固定版本安裝的開發者預覽版；SymbolLattice 尚未發布到 npm Registry。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
+> v0.423.0 是從官方 GitHub 固定版本安裝的開發者預覽版；SymbolLattice 尚未發布到 npm Registry。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
 
 ## 這是什麼
 
 SymbolLattice 掃描本機 repository、保存程式碼圖，並以 CLI/MCP 提供檔案、symbol、呼叫、import、繼承、route、entry point、限界 impact path 與來源可追溯脈絡的查詢。每一條關係都有 source range、解析階段、信心程度與規則證據。
 
 無法精確證明的關係會保留為 unresolved 或 pending，而不會成為錯誤的 exact edge。
+
+v0.423.0 以固定的 Spring PetClinic 與 Spring Framework 大型 Java 來源，使用 JDK compiler 獨立驗證 300 個 exact agreement cases 與 150 個負向案例；結果為 TP 300／FP 0／FN 0，且無無效 evidence。另行保留的 deterministic recall 診斷仍顯示部分現代 Java、overload、import、override 與 annotation 深度尚未涵蓋；這些情況維持 unresolved／nonclaim，不宣稱所有 Java 語法皆已完成。
 
 ## 快速開始
 
@@ -95,7 +97,7 @@ SymbolLattice uninstall codex --apply --yes
 
 ## 從 v0.420.0 或更早版本升級
 
-v0.422.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
+v0.423.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
 
 ```bash
 # 仍可執行舊 CLI 時，先移除舊 Codex MCP 設定
@@ -111,7 +113,7 @@ SymbolLattice init .
 SymbolLattice doctor codex
 ```
 
-| 舊項目 | v0.422.0 |
+| 舊項目 | v0.423.0 |
 | --- | --- |
 | npm package | `@hsinpu/symbollattice` |
 | CLI | `SymbolLattice` |
