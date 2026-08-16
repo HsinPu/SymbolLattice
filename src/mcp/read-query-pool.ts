@@ -55,7 +55,10 @@ export interface McpReadQueryPoolStatusService {
 
 const MAX_MCP_READ_QUERY_WORKER_CRASHES = 4;
 const MAX_MCP_READ_QUERY_RETRIES = 1;
-const MAX_MCP_READ_QUERY_CONCURRENT_SPAWNS = 2;
+// Native parser modules are loaded by every worker. Starting more than one
+// worker at the same time can race inside the Windows/Node native module
+// loader, so scale the pool one fully initialized worker at a time.
+const MAX_MCP_READ_QUERY_CONCURRENT_SPAWNS = 1;
 
 type McpReadQueryFallbackReason = Exclude<keyof McpReadQueryFallbacks, "total">;
 

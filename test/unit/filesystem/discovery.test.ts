@@ -41,6 +41,11 @@ describe("source discovery", () => {
     expect(getSourceLanguage("web/legacy.HTM")).toBe("html");
   });
 
+  it("routes CSS files to the CSS extractor", () => {
+    expect(getSourceLanguage("web/site.css")).toBe("css");
+    expect(getSourceLanguage("web/PRINT.CSS")).toBe("css");
+  });
+
   it("bounds full source reads for large repositories", async () => {
     const projectPath = resolve("bounded-source-project");
     const sourcePaths = Array.from(

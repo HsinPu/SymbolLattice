@@ -122,6 +122,9 @@ describe("McpReadQueryPool", () => {
       pool.execute("search", { query: "queued-" + index }, async () => response("fallback"))
     );
 
+    expect(workers).toHaveLength(2);
+    expect(pool.queryPoolStatus().workers.pending).toBe(1);
+
     for (let index = 1; index < MAX_MCP_READ_QUERY_WORKERS; index += 1) {
       const worker = workers[index];
       if (worker === undefined) {
