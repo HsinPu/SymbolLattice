@@ -23,6 +23,20 @@ Relationships that cannot be proven exactly remain unresolved or pending instead
 
 v0.428.0 adds deep JSP scanning for `.jsp`, `.jspf`, `.jspx`, `.tag`, and `.tagx`, with source-backed directives, taglibs, elements, attributes, static EL paths, and template references. Literal include, forward, and tag-file targets become exact only within a proven web root or relative location and when the project has one unique target. Fixed Apache Tomcat 11.0.25, JSPWiki 2.12.3, and Liferay 7.4.3.132-ga132 sources provide large-project coverage; an independent strict-subset oracle verified 553 resource identities and 553 containment edges in Tomcat for a combined TP 1,106 / FP 0 / FN 0, plus 200 malformed negatives. Dynamic paths, arbitrary EL expressions, duplicate taglib prefixes, disabled EL, unbalanced markup, Java semantics inside scriptlets, and cross-language JSP-to-Spring/MyBatis/Java runtime links are not guessed as exact.
 
+## Supported languages
+
+SymbolLattice currently discovers and indexes 57 languages. A single `init` or `sync` scans every matching language in the same repository; languages do not need to be selected individually. This list means the files can be scanned and represented in the graph, not that every language has identical parsing depth. Dynamic relationships that cannot be proven from static source remain unresolved or pending, or are omitted.
+
+| Category | Languages |
+| --- | --- |
+| Recently validated deeply on large projects | TypeScript, Java, HTML, CSS, JavaScript, JSP |
+| Web, component, and template languages | ArkTS, Vue, Svelte, Astro, Razor, PHP, Blade, Liquid, Twig, CFML |
+| JVM, .NET, and application languages | Groovy, Kotlin, Scala, C#, F#, VB.NET, Dart |
+| Systems and native languages | C, C++, Objective-C, Rust, Go, Swift, Zig, Nim, Fortran, Ada, Pascal, COBOL |
+| Scripting and data processing | Python, Ruby, Perl, Lua, Luau, R, Julia, Shell, SQL |
+| Functional and BEAM languages | Elixir, Erlang, Clojure, Haskell, OCaml |
+| Infrastructure, data, and schemas | Terraform/OpenTofu, Nix, YAML, XML, Java Properties, GraphQL, Protocol Buffers, Solidity |
+
 ## Quick start
 
 Requires Node.js `>=22.13 <25` and npm.

@@ -23,6 +23,20 @@ SymbolLattice 掃描本機 repository、保存程式碼圖，並以 CLI/MCP 提�
 
 v0.428.0 新增 JSP 深度掃描：支援 `.jsp`、`.jspf`、`.jspx`、`.tag`、`.tagx`，建立 directive、taglib、element、attribute、靜態 EL path 與 template reference 的來源證據；literal include／forward／tag-file 目標只有在可證明的 web root 或相對位置中且專案內唯一時才成為 exact。固定 Apache Tomcat 11.0.25、JSPWiki 2.12.3 與 Liferay 7.4.3.132-ga132 做大型來源驗證；獨立 oracle 在 Tomcat 嚴格子集驗證 553 個 resource identities 與 553 個 containment edges，合計 TP 1,106／FP 0／FN 0，另有 200 個 malformed 負向案例。動態路徑、任意 EL 運算式、重複 taglib prefix、停用 EL、未平衡標記、scriptlet 內 Java 語意，以及 JSP 與 Spring／MyBatis／Java runtime 的跨語言關係不會被猜成 exact。
 
+## 支援的語言
+
+目前可發現並建立索引的語言共 57 種。執行一次 `init` 或 `sync` 會掃描同一個 repository 內所有符合的語言，不需要逐一指定。下列清單代表可掃描與建立圖譜，不代表每種語言都有相同的解析深度；無法由靜態來源證明的動態關係會保留為 unresolved／pending 或直接省略。
+
+| 類別 | 語言 |
+| --- | --- |
+| 最近完成大型專案深度驗證 | TypeScript、Java、HTML、CSS、JavaScript、JSP |
+| Web、元件與模板 | ArkTS、Vue、Svelte、Astro、Razor、PHP、Blade、Liquid、Twig、CFML |
+| JVM、.NET 與應用程式 | Groovy、Kotlin、Scala、C#、F#、VB.NET、Dart |
+| 系統與原生語言 | C、C++、Objective-C、Rust、Go、Swift、Zig、Nim、Fortran、Ada、Pascal、COBOL |
+| 腳本與資料處理 | Python、Ruby、Perl、Lua、Luau、R、Julia、Shell、SQL |
+| 函數式與 BEAM | Elixir、Erlang、Clojure、Haskell、OCaml |
+| 基礎設施、資料與結構描述 | Terraform／OpenTofu、Nix、YAML、XML、Java Properties、GraphQL、Protocol Buffers、Solidity |
+
 ## 快速開始
 
 需要 Node.js `>=22.13 <25` 與 npm。
