@@ -14232,7 +14232,7 @@ describe("source extraction", () => {
     expect(broken.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
   });
 
-  it("extracts direct Ruby Rails routes.draw controller-action routes with exact local evidence", () => {
+  it("extracts direct Ruby Rails literal route identities without handler dispatch", () => {
     const facts = extractFileFacts({
       filePath: "config/routes.rb",
       language: "ruby",
@@ -14263,7 +14263,6 @@ describe("source extraction", () => {
       ].join("\n")
     });
 
-    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
     expect(facts.symbols.filter((symbol) => symbol.kind === "class").map((symbol) => symbol.qualifiedName)).toEqual([
       "config/routes.rb#HealthController",
       "config/routes.rb#OrdersController",
@@ -14272,42 +14271,24 @@ describe("source extraction", () => {
     expect(facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)).toEqual([
       "config/routes.rb#helper"
     ]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route").map((symbol) => symbol.name)).toEqual([
+      "GET /health",
+      "POST /orders"
+    ]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    expect(facts.pendingReferences).toEqual([]);
     expect(
       facts.edges
-        .filter((edge) => edge.kind === "routes")
-        .map((edge) => [
-          symbolsById.get(edge.sourceId)?.name,
-          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
-          edge.evidence?.ruleId,
-          edge.resolution,
-          edge.confidence
-        ])
-    ).toEqual([
-      [
-        "GET /health",
-        "config/routes.rb#HealthController.show",
-        "framework.rails.direct-routes-draw.literal-controller-action.local-method",
-        "exact",
-        1
-      ],
-      [
-        "POST /orders",
-        "config/routes.rb#OrdersController.create",
-        "framework.rails.direct-routes-draw.literal-controller-action.local-method",
-        "exact",
-        1
-      ],
-      [
-        "HEAD /status",
-        "config/routes.rb#StatusController.check",
-        "framework.rails.direct-routes-draw.literal-controller-action.local-method",
-        "exact",
-        1
-      ]
-    ]);
+        .filter(
+          (edge) =>
+            edge.kind === "contains" &&
+            facts.symbols.find((symbol) => symbol.id === edge.targetId)?.kind === "route"
+        )
+        .every((edge) => edge.evidence?.ruleId === "language.ruby.v1_6_1.rails.direct-routes-draw.literal-registration.containment")
+    ).toBe(true);
   });
 
-  it("extracts direct Ruby Rails RESTful resources and resource routes with literal action filters", () => {
+  it("does not claim Rails resources/resource macros as direct route registrations", () => {
     const facts = extractFileFacts({
       filePath: "config/routes.rb",
       language: "ruby",
@@ -14347,89 +14328,9 @@ describe("source extraction", () => {
       ].join("\n")
     });
 
-    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
-    expect(
-      facts.edges
-        .filter((edge) => edge.kind === "routes")
-        .map((edge) => [
-          symbolsById.get(edge.sourceId)?.name,
-          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
-          edge.evidence?.ruleId,
-          edge.resolution,
-          edge.confidence
-        ])
-    ).toEqual([
-      [
-        "GET /articles",
-        "config/routes.rb#ArticlesController.index",
-        "framework.rails.resources.direct-routes-draw.literal-resource.local-method",
-        "exact",
-        1
-      ],
-      [
-        "GET /articles/:id",
-        "config/routes.rb#ArticlesController.show",
-        "framework.rails.resources.direct-routes-draw.literal-resource.local-method",
-        "exact",
-        1
-      ],
-      [
-        "PATCH /articles/:id",
-        "config/routes.rb#ArticlesController.update",
-        "framework.rails.resources.direct-routes-draw.literal-resource.local-method",
-        "exact",
-        1
-      ],
-      [
-        "PUT /articles/:id",
-        "config/routes.rb#ArticlesController.update",
-        "framework.rails.resources.direct-routes-draw.literal-resource.local-method",
-        "exact",
-        1
-      ],
-      [
-        "POST /profile",
-        "config/routes.rb#ProfilesController.create",
-        "framework.rails.resource.direct-routes-draw.literal-resource.local-method",
-        "exact",
-        1
-      ],
-      [
-        "GET /profile",
-        "config/routes.rb#ProfilesController.show",
-        "framework.rails.resource.direct-routes-draw.literal-resource.local-method",
-        "exact",
-        1
-      ],
-      [
-        "GET /profile/edit",
-        "config/routes.rb#ProfilesController.edit",
-        "framework.rails.resource.direct-routes-draw.literal-resource.local-method",
-        "exact",
-        1
-      ],
-      [
-        "PATCH /profile",
-        "config/routes.rb#ProfilesController.update",
-        "framework.rails.resource.direct-routes-draw.literal-resource.local-method",
-        "exact",
-        1
-      ],
-      [
-        "PUT /profile",
-        "config/routes.rb#ProfilesController.update",
-        "framework.rails.resource.direct-routes-draw.literal-resource.local-method",
-        "exact",
-        1
-      ],
-      [
-        "DELETE /profile",
-        "config/routes.rb#ProfilesController.destroy",
-        "framework.rails.resource.direct-routes-draw.literal-resource.local-method",
-        "exact",
-        1
-      ]
-    ]);
+    expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
+    expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    expect(facts.pendingReferences).toEqual([]);
   });
 
   it("rejects dynamic or unsupported direct Ruby Rails resource declarations", () => {
@@ -14486,23 +14387,8 @@ describe("source extraction", () => {
     expect(unresolved.symbols.filter((symbol) => symbol.kind === "route").map((symbol) => symbol.name)).toEqual([
       "DELETE /admin/health"
     ]);
-    expect(
-      unresolved.edges.filter((edge) => edge.kind === "routes").map((edge) => [
-        edge.targetId,
-        edge.referenceName,
-        edge.resolution,
-        edge.confidence,
-        edge.evidence?.ruleId
-      ])
-    ).toEqual([
-      [
-        null,
-        "admin/health#destroy",
-        "unresolved",
-        0,
-        "framework.rails.direct-routes-draw.literal-controller-action.unresolved-controller-method"
-      ]
-    ]);
+    expect(unresolved.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+    expect(unresolved.pendingReferences).toEqual([]);
     expect(broken.symbols.filter((symbol) => symbol.kind === "class")).toEqual([]);
     expect(broken.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
     expect(broken.edges.filter((edge) => edge.kind === "routes")).toEqual([]);

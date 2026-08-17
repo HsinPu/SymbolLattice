@@ -27,13 +27,13 @@ type RubySyntaxNode = SgNode;
 interface StaticRubyClass {
   readonly name: string;
   readonly node: RubySyntaxNode;
-  readonly body: RubySyntaxNode;
+  readonly body: RubySyntaxNode | null;
 }
 
 interface StaticRubyModule {
   readonly name: string;
   readonly node: RubySyntaxNode;
-  readonly body: RubySyntaxNode;
+  readonly body: RubySyntaxNode | null;
 }
 
 interface StaticRubyMethod {
@@ -74,9 +74,11 @@ const RAILS_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
   put: "PUT",
   patch: "PATCH",
   delete: "DELETE",
-  head: "HEAD",
   options: "OPTIONS"
 };
+
+const RUBY_AST_MAX_DEPTH = 2048;
+const RUBY_AST_MAX_NODES = 100_000;
 
 const RAILS_PLURAL_RESOURCE_ACTIONS = [
   "index",
@@ -182,11 +184,34 @@ function hasSyntaxError(node: RubySyntaxNode): boolean {
   // tree-sitter-ruby represents a missing terminal (for example a missing
   // `end`) as an empty token node instead of an ERROR node. Treat either form
   // as invalid so a partially recovered route block never becomes a result.
-  return (
-    node.kind() === "ERROR" ||
-    (node.kind() !== "program" && nodeText(node).length === 0) ||
-    directChildren(node).some((child) => hasSyntaxError(child))
-  );
+  const pending: Array<{ readonly node: RubySyntaxNode; readonly depth: number }> = [
+    { node, depth: 0 }
+  ];
+  let visited = 0;
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (current === undefined) {
+      continue;
+    }
+    visited += 1;
+    if (current.depth > RUBY_AST_MAX_DEPTH || visited > RUBY_AST_MAX_NODES) {
+      return true;
+    }
+    if (
+      current.node.kind() === "ERROR" ||
+      (current.node.kind() !== "program" && nodeText(current.node).length === 0)
+    ) {
+      return true;
+    }
+    const children = directChildren(current.node);
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      const child = children[index];
+      if (child !== undefined) {
+        pending.push({ node: child, depth: current.depth + 1 });
+      }
+    }
+  }
+  return false;
 }
 
 function identifierText(node: RubySyntaxNode): string | null {
@@ -232,7 +257,7 @@ function staticRubyClass(node: RubySyntaxNode): StaticRubyClass | null {
   const nameNode = children.find((child) => child.kind() === "constant");
   const body = children.find((child) => child.kind() === "body_statement");
   const name = nameNode === undefined ? null : constantText(nameNode);
-  return name === null || body === undefined ? null : { name, node, body };
+  return name === null ? null : { name, node, body: body ?? null };
 }
 
 function staticRubyModule(node: RubySyntaxNode): StaticRubyModule | null {
@@ -245,9 +270,9 @@ function staticRubyModule(node: RubySyntaxNode): StaticRubyModule | null {
   const nameNode = names[0];
   const body = bodies[0];
   const name = nameNode === undefined ? null : constantText(nameNode);
-  return name === null || names.length !== 1 || bodies.length !== 1 || body === undefined
+  return name === null || names.length !== 1 || bodies.length > 1
     ? null
-    : { name, node, body };
+    : { name, node, body: body ?? null };
 }
 
 function staticRubyMethod(node: RubySyntaxNode): StaticRubyMethod | null {
@@ -286,6 +311,9 @@ function staticRubySingletonMethod(node: RubySyntaxNode): StaticRubySingletonMet
 function staticRubyModuleSingletonMethods(
   module: StaticRubyModule
 ): readonly StaticRubySingletonMethod[] | null {
+  if (module.body === null) {
+    return [];
+  }
   const declarations = directChildren(module.body);
   const methods = declarations
     .map((node) => staticRubySingletonMethod(node))
@@ -332,7 +360,20 @@ function isRubySingletonClassMutation(node: RubySyntaxNode): boolean {
 }
 
 function hasRubyModuleSingletonAmbiguity(module: StaticRubyModule): boolean {
-  function visit(node: RubySyntaxNode): boolean {
+  if (module.body === null) {
+    return false;
+  }
+  const pending: RubySyntaxNode[] = [module.body];
+  let visited = 0;
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (node === undefined) {
+      continue;
+    }
+    visited += 1;
+    if (visited > RUBY_AST_MAX_NODES) {
+      return true;
+    }
     if (node.kind() === "alias" || node.kind() === "undef" || node.kind() === "singleton_class") {
       return true;
     }
@@ -343,9 +384,11 @@ function hasRubyModuleSingletonAmbiguity(module: StaticRubyModule): boolean {
     ) {
       return true;
     }
-    return directChildren(node).some((child) => visit(child));
+    for (const child of directChildren(node)) {
+      pending.push(child);
+    }
   }
-  return visit(module.body);
+  return false;
 }
 
 function staticMemberCall(node: RubySyntaxNode): StaticRubyMemberCall | null {
@@ -390,8 +433,40 @@ function staticRailsRoutesDraw(node: RubySyntaxNode): RubySyntaxNode | null {
   if (call === null || call.name !== "draw" || call.block === null || !isRailsRoutes(call.receiver)) {
     return null;
   }
-  const bodies = directChildren(call.block).filter((child) => child.kind() === "body_statement");
+  const blockChildren = directChildren(call.block);
+  if (blockChildren.some((child) => child.kind() === "block_parameters")) {
+    return null;
+  }
+  const bodies = blockChildren.filter((child) => child.kind() === "body_statement");
   return bodies.length === 1 && bodies[0] !== undefined ? bodies[0] : null;
+}
+
+function staticRailsDrawBodies(root: RubySyntaxNode): readonly RubySyntaxNode[] {
+  const bodies: RubySyntaxNode[] = [];
+  const pending: RubySyntaxNode[] = [root];
+  let visited = 0;
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (node === undefined) {
+      continue;
+    }
+    visited += 1;
+    if (visited > RUBY_AST_MAX_NODES) {
+      return [];
+    }
+    const body = staticRailsRoutesDraw(node);
+    if (body !== null) {
+      bodies.push(body);
+    }
+    const children = directChildren(node);
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      const child = children[index];
+      if (child !== undefined) {
+        pending.push(child);
+      }
+    }
+  }
+  return bodies;
 }
 
 function staticRailsToAction(node: RubySyntaxNode): StaticRailsControllerAction | null {
@@ -399,12 +474,16 @@ function staticRailsToAction(node: RubySyntaxNode): StaticRailsControllerAction 
     return null;
   }
   const children = directChildren(node);
-  const key = children.find((child) => child.kind() === "hash_key_symbol");
-  const value = children.find((child) => child.kind() === "string");
+  const key = children[0];
+  const separator = children[1];
+  const value = children[2];
   if (
     key === undefined ||
+    separator === undefined ||
     value === undefined ||
     children.length !== 3 ||
+    key.kind() !== "hash_key_symbol" ||
+    separator.kind() !== ":" ||
     nodeText(key) !== "to"
   ) {
     return null;
@@ -420,6 +499,70 @@ function staticRailsToAction(node: RubySyntaxNode): StaticRailsControllerAction 
     return null;
   }
   return staticRailsControllerAction(match[1], match[2]);
+}
+
+function staticRailsHashRocketAction(node: RubySyntaxNode): {
+  readonly path: string;
+  readonly action: StaticRailsControllerAction;
+} | null {
+  if (node.kind() !== "pair") {
+    return null;
+  }
+  const children = directChildren(node);
+  const pathNode = children[0];
+  const operator = children[1];
+  const value = children[2];
+  if (
+    children.length !== 3 ||
+    pathNode?.kind() !== "string" ||
+    operator?.kind() !== "=>" ||
+    value?.kind() !== "string"
+  ) {
+    return null;
+  }
+  const path = staticRailsPath(pathNode);
+  const handler = staticPlainRubyString(value);
+  const match =
+    handler === null
+      ? null
+      : /^([a-z_][a-z0-9_]*(?:\/[a-z_][a-z0-9_]*)*)#([a-z_][a-zA-Z0-9_]*)$/u.exec(handler);
+  if (
+    path === null ||
+    match === null ||
+    match[1] === undefined ||
+    match[2] === undefined
+  ) {
+    return null;
+  }
+  const action = staticRailsControllerAction(match[1], match[2]);
+  return action === null ? null : { path, action };
+}
+
+function staticRailsAsOption(node: RubySyntaxNode): boolean {
+  if (node.kind() !== "pair") {
+    return false;
+  }
+  const children = directChildren(node);
+  const key = children[0];
+  const separator = children[1];
+  const value = children[2];
+  if (
+    children.length !== 3 ||
+    key === undefined ||
+    separator === undefined ||
+    value === undefined ||
+    key.kind() !== "hash_key_symbol" ||
+    separator.kind() !== ":" ||
+    nodeText(key) !== "as" ||
+    (value.kind() !== "simple_symbol" && value.kind() !== "string")
+  ) {
+    return false;
+  }
+  const asValue =
+    value.kind() === "simple_symbol"
+      ? /^:([a-z_][a-zA-Z0-9_]*)$/u.exec(nodeText(value))?.[1] ?? null
+      : staticPlainRubyString(value);
+  return asValue !== null && /^[a-z_][a-zA-Z0-9_]*$/u.test(asValue);
 }
 
 function staticRailsControllerAction(
@@ -458,14 +601,28 @@ function staticRailsRoute(node: RubySyntaxNode): StaticRailsRoute | null {
     return null;
   }
   const arguments_ = directChildren(argumentList).filter(
-    (child) => child.kind() === "string" || child.kind() === "pair"
+    (child) => child.kind() !== "," && child.kind() !== "comment"
   );
-  if (arguments_.length !== 2 || arguments_[0] === undefined || arguments_[1] === undefined) {
+  if (arguments_.length === 2 && arguments_[0]?.kind() === "string" && arguments_[1]?.kind() === "pair") {
+    const path = staticRailsPath(arguments_[0]);
+    const action = staticRailsToAction(arguments_[1]);
+    return path === null || action === null ? null : { method, path, action, node };
+  }
+  if (
+    (arguments_.length !== 1 && arguments_.length !== 2) ||
+    arguments_[0]?.kind() !== "pair"
+  ) {
     return null;
   }
-  const path = staticRailsPath(arguments_[0]);
-  const action = staticRailsToAction(arguments_[1]);
-  return path === null || action === null ? null : { method, path, action, node };
+  const hashRoute = staticRailsHashRocketAction(arguments_[0]);
+  if (
+    hashRoute === null ||
+    (arguments_.length === 2 &&
+      (arguments_[1] === undefined || !staticRailsAsOption(arguments_[1])))
+  ) {
+    return null;
+  }
+  return { method, path: hashRoute.path, action: hashRoute.action, node };
 }
 
 function staticRailsSimpleSymbol(node: RubySyntaxNode): string | null {
@@ -650,7 +807,12 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
     return ordinal;
   }
 
-  function addContainment(parent: SymbolNode, child: SymbolNode, node: RubySyntaxNode): void {
+  function addContainment(
+    parent: SymbolNode,
+    child: SymbolNode,
+    node: RubySyntaxNode,
+    ruleId = "syntax.containment"
+  ): void {
     const range = rangeForNode(node);
     edges.push({
       id: createEdgeId({
@@ -670,7 +832,7 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
       confidence: 1,
       referenceName: child.name,
       evidence: {
-        ruleId: "syntax.containment",
+        ruleId,
         stage: "syntax",
         candidateSymbolIds: [child.id]
       }
@@ -696,7 +858,7 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
       declarationOrdinal
     };
     symbols.push(symbol);
-    addContainment(fileNode, symbol, declaration.node);
+    addContainment(fileNode, symbol, declaration.node, "language.ruby.v1_6.direct-declaration.containment");
     return symbol;
   }
 
@@ -719,7 +881,7 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
       declarationOrdinal
     };
     symbols.push(symbol);
-    addContainment(fileNode, symbol, declaration.node);
+    addContainment(fileNode, symbol, declaration.node, "language.ruby.v1_6.direct-declaration.containment");
     return symbol;
   }
 
@@ -795,7 +957,7 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
     return symbol;
   }
 
-  function addRailsRoute(routeFact: StaticRailsRoute, handler: SymbolNode | null): void {
+  function addRailsRoute(routeFact: StaticRailsRoute): void {
     const routeName = routeFact.method + " " + routeFact.path;
     const qualifiedName = input.filePath + "#route:" + routeName;
     const declarationOrdinal = nextOrdinal(qualifiedName, "route");
@@ -816,85 +978,26 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
       declarationOrdinal
     };
     symbols.push(route);
-    addContainment(fileNode, route, routeFact.node);
-    const referenceName = routeFact.action.controller + "#" + routeFact.action.action;
-    const edgeId = createEdgeId({
-        sourceId: route.id,
-        targetId: handler?.id ?? null,
-        kind: "routes",
-        line: range.start.line,
-        column: range.start.column,
-        referenceName
-      });
-    edges.push({
-      id: edgeId,
-      sourceId: route.id,
-      targetId: handler?.id ?? null,
-      kind: "routes",
-      filePath: input.filePath,
-      range,
-      resolution: handler === null ? "unresolved" : "exact",
-      confidence: handler === null ? 0 : 1,
-      referenceName,
-      evidence: {
-        ruleId:
-          routeFact.routeRegistration === "rails-resources"
-            ? handler === null
-              ? "framework.rails.resources.direct-routes-draw.literal-resource.unresolved-controller-method"
-              : "framework.rails.resources.direct-routes-draw.literal-resource.local-method"
-            : routeFact.routeRegistration === "rails-resource"
-              ? handler === null
-                ? "framework.rails.resource.direct-routes-draw.literal-resource.unresolved-controller-method"
-                : "framework.rails.resource.direct-routes-draw.literal-resource.local-method"
-              : handler === null
-                ? "framework.rails.direct-routes-draw.literal-controller-action.unresolved-controller-method"
-                : "framework.rails.direct-routes-draw.literal-controller-action.local-method",
-        stage: "syntax",
-        candidateSymbolIds: handler === null ? [] : [handler.id]
-      }
-    });
-    if (handler === null && routeFact.action.localControllerName !== null) {
-      if (routeFact.routeRegistration === undefined) {
-        pendingReferences.push({
-          id: edgeId,
-          sourceId: route.id,
-          filePath: input.filePath,
-          referenceName,
-          relationKind: "routes",
-          routeFramework: "rails",
-          range
-        });
-      } else {
-        pendingReferences.push({
-          id: edgeId,
-          sourceId: route.id,
-          filePath: input.filePath,
-          referenceName,
-          relationKind: "routes",
-          routeFramework: "rails",
-          routeRegistration: routeFact.routeRegistration,
-          range
-        });
-      }
-    }
+    addContainment(
+      fileNode,
+      route,
+      routeFact.node,
+      "language.ruby.v1_6_1.rails.direct-routes-draw.literal-registration.containment"
+    );
   }
 
   if (!hasSyntaxError(root)) {
     const topLevel = directChildren(root);
-    const localMethodsByClassName = new Map<string, SymbolNode[]>();
     for (const classDeclaration of topLevel
       .map((node) => staticRubyClass(node))
       .filter((candidate): candidate is StaticRubyClass => candidate !== null)) {
       const classSymbol = addClass(classDeclaration);
-      for (const methodDeclaration of directChildren(classDeclaration.body)
-        .map((node) => staticRubyMethod(node))
-        .filter((candidate): candidate is StaticRubyMethod => candidate !== null)) {
-        const methodSymbol = addMethod(classSymbol, methodDeclaration);
-        const identity = classDeclaration.name + "\u0000" + methodDeclaration.name;
-        localMethodsByClassName.set(identity, [
-          ...(localMethodsByClassName.get(identity) ?? []),
-          methodSymbol
-        ]);
+      if (classDeclaration.body !== null) {
+        for (const methodDeclaration of directChildren(classDeclaration.body)
+          .map((node) => staticRubyMethod(node))
+          .filter((candidate): candidate is StaticRubyMethod => candidate !== null)) {
+          addMethod(classSymbol, methodDeclaration);
+        }
       }
     }
 
@@ -904,56 +1007,33 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
       addFunction(functionDeclaration);
     }
 
-    const modulesByName = new Map<string, StaticRubyModule[]>();
-    for (const moduleDeclaration of topLevel
+    const moduleDeclarations = topLevel
       .map((node) => staticRubyModule(node))
-      .filter((candidate): candidate is StaticRubyModule => candidate !== null)) {
-      modulesByName.set(moduleDeclaration.name, [
-        ...(modulesByName.get(moduleDeclaration.name) ?? []),
-        moduleDeclaration
-      ]);
-    }
-    for (const moduleDeclarations of modulesByName.values()) {
-      const moduleDeclaration = moduleDeclarations[0];
-      const singletonMethods =
-        moduleDeclaration === undefined ? null : staticRubyModuleSingletonMethods(moduleDeclaration);
-      if (
-        moduleDeclarations.length !== 1 ||
-        moduleDeclaration === undefined ||
-        topLevel.length !== 1 ||
-        topLevel[0] !== moduleDeclaration.node ||
-        singletonMethods === null ||
-        hasRubyModuleSingletonAmbiguity(moduleDeclaration)
-      ) {
+      .filter((candidate): candidate is StaticRubyModule => candidate !== null);
+    for (const moduleDeclaration of moduleDeclarations) {
+      const moduleSymbol = addModule(moduleDeclaration);
+      if (moduleDeclarations.length !== 1 || topLevel.length !== 1) {
         continue;
       }
-      const moduleSymbol = addModule(moduleDeclaration);
+      const singletonMethods = staticRubyModuleSingletonMethods(moduleDeclaration);
+      if (singletonMethods === null || hasRubyModuleSingletonAmbiguity(moduleDeclaration)) {
+        continue;
+      }
       for (const declaration of singletonMethods) {
         addSingletonMethod(moduleSymbol, declaration);
       }
     }
 
-    for (const topLevelCall of topLevel) {
-      const body = staticRailsRoutesDraw(topLevelCall);
-      if (body === null) {
-        continue;
-      }
-      for (const routeDeclaration of directChildren(body).flatMap((node) => {
-        const directRoute = staticRailsRoute(node);
-        return directRoute === null ? staticRailsResourceRoutes(node) : [directRoute];
-      })) {
-        const localHandlerCandidates =
-          routeDeclaration.action.localControllerName === null
-            ? []
-            : localMethodsByClassName.get(
-                routeDeclaration.action.localControllerName +
-                  "\u0000" +
-                  routeDeclaration.action.action
-              ) ?? [];
-        const handler =
-          localHandlerCandidates.length === 1 ? localHandlerCandidates[0] ?? null : null;
-        addRailsRoute(routeDeclaration, handler);
-      }
+    const routeDeclarations = staticRailsDrawBodies(root)
+      .flatMap((body) => directChildren(body).map((node) => staticRailsRoute(node)))
+      .filter((candidate): candidate is StaticRailsRoute => candidate !== null)
+      .map((route, order) => ({ route, order }))
+      .sort((left, right) => {
+        const offset = left.route.node.range().start.index - right.route.node.range().start.index;
+        return offset === 0 ? left.order - right.order : offset;
+      });
+    for (const { route } of routeDeclarations) {
+      addRailsRoute(route);
     }
   }
 

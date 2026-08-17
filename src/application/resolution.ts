@@ -7903,11 +7903,18 @@ function projectedRouteEdge(
     edge.kind === "contains" && target !== undefined ? target.route.name : edge.referenceName;
   const evidence =
     edge.kind === "contains" && target !== undefined
-      ? {
-          ruleId: "syntax.containment",
-          stage: "syntax" as const,
-          candidateSymbolIds: [target.route.id]
-        }
+      ? edge.evidence?.ruleId ===
+        "language.ruby.v1_6_1.rails.direct-routes-draw.literal-registration.containment"
+        ? {
+            ruleId: edge.evidence.ruleId,
+            stage: edge.evidence.stage,
+            candidateSymbolIds: [target.route.id]
+          }
+        : {
+            ruleId: "syntax.containment",
+            stage: "syntax" as const,
+            candidateSymbolIds: [target.route.id]
+          }
       : edge.kind === "routes" && source?.prefixApplied === true
       ? {
           ruleId:

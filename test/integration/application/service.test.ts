@@ -32,6 +32,7 @@ import {
 } from "../../../src/application/index.js";
 import {
   ARTIFACT_FACTS_EXTRACTOR_VERSION,
+  createEdgeId,
   PROJECT_RESOLVER_VERSION,
   SOURCE_ROLE_CLASSIFIER_VERSION,
   SOURCE_SEARCH_INDEX_VERSION,
@@ -22945,7 +22946,7 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/Program.cs", language: "csharp" }]);
   });
 
-  it("resolves Ruby Rails direct routes through conventional controllers and retains missing action evidence", async () => {
+  it("indexes Ruby Rails direct literal route registrations without handler claims", async () => {
     const projectPath = await createInlineProject({
       "config/routes.rb": [
         "Rails.application.routes.draw do",
@@ -22966,44 +22967,65 @@ describe("SymbolLatticeService", () => {
     const routes = await service.routes(projectPath);
     const getRoutes = await service.routes(projectPath, { method: "GET" });
     const search = await service.search(projectPath, "health", { language: "ruby" });
+    const routeSymbols = await service.find(projectPath, "config/routes.rb", { kind: "route" });
+    const fileSymbols = await service.find(projectPath, "config/routes.rb", { kind: "file" });
+    const healthRoute = routeSymbols.symbols.find((symbol) => symbol.name === "GET /health");
+    const ordersRoute = routeSymbols.symbols.find((symbol) => symbol.name === "POST /orders");
+    const routesFile = fileSymbols.symbols.find((symbol) => symbol.qualifiedName === "config/routes.rb");
 
-    expect(routes.routes).toEqual(
+    expect(routes.routes).toEqual([]);
+    expect(getRoutes.routes).toEqual([]);
+    expect(routeSymbols.symbols).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          method: "GET",
-          path: "/health",
-          handler: expect.objectContaining({
-            qualifiedName: "app/controllers/health_controller.rb#HealthController.show"
-          }),
-          edge: expect.objectContaining({
-            referenceName: "health#show",
-            resolution: "exact",
-            evidence: expect.objectContaining({
-              ruleId:
-                "framework.rails.direct-routes-draw.literal-controller-action.conventional-file-class-method",
-              stage: "module"
-            })
-          })
+          name: "GET /health",
+          qualifiedName: "config/routes.rb#route:GET /health",
+          filePath: "config/routes.rb",
+          kind: "route",
+          declarationOrdinal: 0,
+          isExported: false,
+          range: { start: { line: 2, column: 3 }, end: { line: 2, column: 35 } }
         }),
         expect.objectContaining({
-          method: "POST",
-          path: "/orders",
-          handler: null,
-          edge: expect.objectContaining({ referenceName: "orders#create", resolution: "unresolved" })
+          name: "POST /orders",
+          qualifiedName: "config/routes.rb#route:POST /orders",
+          declarationOrdinal: 0,
+          range: { start: { line: 3, column: 3 }, end: { line: 3, column: 38 } }
         })
       ])
     );
-    expect(getRoutes.routes).toMatchObject([
-      {
-        method: "GET",
-        path: "/health",
-        handler: { qualifiedName: "app/controllers/health_controller.rb#HealthController.show" },
-        edge: {
-          resolution: "exact",
-          referenceName: "health#show"
-        }
+    expect(healthRoute).toBeDefined();
+    expect(ordersRoute).toBeDefined();
+    expect(routesFile).toBeDefined();
+    for (const route of [healthRoute, ordersRoute]) {
+      if (route === undefined || routesFile === undefined) {
+        throw new Error("Expected direct Ruby route and routes file symbols.");
       }
-    ]);
+      const edgeId = createEdgeId({
+        sourceId: routesFile.id,
+        targetId: route.id,
+        kind: "contains",
+        line: route.range.start.line,
+        column: route.range.start.column,
+        referenceName: route.name
+      });
+      await expect(service.explainEdge(projectPath, edgeId)).resolves.toMatchObject({
+        source: { id: routesFile.id },
+        target: { id: route.id },
+        edge: {
+          kind: "contains",
+          resolution: "exact",
+          confidence: 1,
+          range: route.range,
+          evidence: {
+            ruleId: "language.ruby.v1_6_1.rails.direct-routes-draw.literal-registration.containment",
+            stage: "syntax",
+            candidateSymbolIds: [route.id]
+          }
+        }
+      });
+    }
+
     expect(search.results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ filePath: "config/routes.rb", language: "ruby" }),
@@ -23012,7 +23034,7 @@ describe("SymbolLatticeService", () => {
     );
   });
 
-  it("resolves Rails direct and RESTful resource routes to unique conventional cross-file controllers", async () => {
+  it("keeps Rails resource macros nonclaim while retaining direct route identity", async () => {
     const projectPath = await createInlineProject({
       "config/routes.rb": [
         "Rails.application.routes.draw do",
@@ -23050,79 +23072,55 @@ describe("SymbolLatticeService", () => {
 
     await service.init({ projectPath });
     const routes = await service.routes(projectPath);
-
-    expect(routes.routes).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          method: "GET",
-          path: "/health",
-          handler: expect.objectContaining({
-            qualifiedName: "app/controllers/health_controller.rb#HealthController.show"
-          }),
-          edge: expect.objectContaining({
-            resolution: "exact",
-            evidence: expect.objectContaining({
-              ruleId:
-                "framework.rails.direct-routes-draw.literal-controller-action.conventional-file-class-method",
-              stage: "module"
-            })
-          })
-        }),
-        expect.objectContaining({
-          method: "GET",
-          path: "/articles",
-          handler: expect.objectContaining({
-            qualifiedName: "app/controllers/articles_controller.rb#ArticlesController.index"
-          }),
-          edge: expect.objectContaining({
-            evidence: expect.objectContaining({
-              ruleId:
-                "framework.rails.resources.direct-routes-draw.literal-resource.conventional-file-class-method",
-              stage: "module"
-            })
-          })
-        }),
-        expect.objectContaining({
-          method: "GET",
-          path: "/articles/:id",
-          handler: expect.objectContaining({
-            qualifiedName: "app/controllers/articles_controller.rb#ArticlesController.show"
-          })
-        }),
-        expect.objectContaining({
-          method: "PATCH",
-          path: "/articles/:id",
-          handler: expect.objectContaining({
-            qualifiedName: "app/controllers/articles_controller.rb#ArticlesController.update"
-          })
-        }),
-        expect.objectContaining({
-          method: "PUT",
-          path: "/articles/:id",
-          handler: expect.objectContaining({
-            qualifiedName: "app/controllers/articles_controller.rb#ArticlesController.update"
-          })
-        }),
-        expect.objectContaining({
-          method: "GET",
-          path: "/profile",
-          handler: expect.objectContaining({
-            qualifiedName: "app/controllers/profiles_controller.rb#ProfilesController.show"
-          }),
-          edge: expect.objectContaining({
-            evidence: expect.objectContaining({
-              ruleId:
-                "framework.rails.resource.direct-routes-draw.literal-resource.conventional-file-class-method",
-              stage: "module"
-            })
-          })
-        })
-      ])
+    const directRoutes = await service.find(projectPath, "config/routes.rb", { kind: "route" });
+    const routesFile = (await service.find(projectPath, "config/routes.rb", { kind: "file" })).symbols.find(
+      (symbol) => symbol.qualifiedName === "config/routes.rb"
     );
-    expect(routes.routes).toHaveLength(6);
+    const healthRoute = directRoutes.symbols.find((symbol) => symbol.name === "GET /health");
+
+    expect(routes.routes).toEqual([]);
+    expect(directRoutes.symbols).toHaveLength(1);
+    expect(healthRoute).toMatchObject({
+      name: "GET /health",
+      qualifiedName: "config/routes.rb#route:GET /health",
+      kind: "route",
+      declarationOrdinal: 0
+    });
+    expect(
+      (await service.find(projectPath, "GET /articles", { kind: "route" })).symbols
+    ).toEqual([]);
+    expect(routesFile).toBeDefined();
+    if (healthRoute === undefined || routesFile === undefined) {
+      throw new Error("Expected direct Ruby route and routes file symbols.");
+    }
+    await expect(
+      service.explainEdge(
+        projectPath,
+        createEdgeId({
+          sourceId: routesFile.id,
+          targetId: healthRoute.id,
+          kind: "contains",
+          line: healthRoute.range.start.line,
+          column: healthRoute.range.start.column,
+          referenceName: healthRoute.name
+        })
+      )
+    ).resolves.toMatchObject({
+      source: { id: routesFile.id },
+      target: { id: healthRoute.id },
+      edge: {
+        kind: "contains",
+        evidence: {
+          ruleId: "language.ruby.v1_6_1.rails.direct-routes-draw.literal-registration.containment",
+          stage: "syntax",
+          candidateSymbolIds: [healthRoute.id]
+        }
+      }
+    });
+
   });
 
-  it("keeps Rails conventional controller routes unresolved when the controller class is ambiguous", async () => {
+  it("does not claim Rails resource macros when the controller class is ambiguous", async () => {
     const projectPath = await createInlineProject({
       "config/routes.rb": [
         "Rails.application.routes.draw do",
@@ -23145,24 +23143,11 @@ describe("SymbolLatticeService", () => {
 
     await service.init({ projectPath });
     const routes = await service.routes(projectPath);
+    const resourceRoutes = await service.find(projectPath, "config/routes.rb", { kind: "route" });
 
-    expect(routes.routes).toMatchObject([
-      {
-        method: "GET",
-        path: "/articles/:id",
-        handler: null,
-        edge: {
-          resolution: "unresolved",
-          referenceName: "articles#show",
-          evidence: {
-            ruleId:
-              "framework.rails.resources.direct-routes-draw.literal-resource.unresolved-controller-method",
-            stage: "unresolved",
-            candidateSymbolIds: expect.any(Array)
-          }
-        }
-      }
-    ]);
+    expect(routes.routes).toEqual([]);
+    expect(resourceRoutes.symbols).toEqual([]);
+    expect((await service.find(projectPath, "GET /articles/:id", { kind: "route" })).symbols).toEqual([]);
   });
 
   it("indexes Kotlin Ktor callable-reference routes as persisted exact function evidence", async () => {
