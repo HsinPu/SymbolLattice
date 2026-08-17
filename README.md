@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.430.0 是從官方 GitHub 固定版本安裝的開發者預覽版。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
+> v0.431.0 是從官方 GitHub 固定版本安裝的開發者預覽版。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
 
 ## 這是什麼
 
@@ -23,7 +23,7 @@ SymbolLattice 掃描本機 repository、保存程式碼圖，並以 CLI/MCP 提�
 
 前一版本 v0.429.0 強化 Python 深度掃描：在固定的官方 GitHub 來源 CPython 3.13.11（`627894459a84be3488a1789919679c997056a03c`）、Django 5.2.15（`21e98408f84d22191e2c7ee4052bdd12d264fd3f`）與 Home Assistant Core 2026.8.0（`4a9dce13f61d03960ad5d2710e2af9fd2a78af54`）上，extractor v324／resolver v156 對宣告、containment、relative import、bounded class instantiation、extends、call 與 async identity 建立可追溯的 exact 證據。凍結驗收子集達到 TP 300／FP 0／FN 0／evidenceInvalid 0，150／150 個負向案例通過；fresh、no-op、comment、semantic、rename、delete、restore、reopen 與 invalid-config 共 38 個生命週期操作通過。這是 bounded 靜態分析，不宣稱支援所有 Python runtime、reflection、dynamic dispatch 或任意 metaprogramming；無法唯一證明的關係會保留 unresolved／pending 或省略。
 
-v0.430.0 強化 Ruby structural depth。固定來源為 Ruby v3.4.5（`20cda200d3ce092571d0b5d342dadca69636cb0f`）、Rails v8.0.2（`3235827585d87661942c91bc81f64f56d710f0b2`）與 Discourse v3.5.0（`05a304006600f36c3e45d19c9c5919f43f5541c9`）；extractor v326／resolver v157 對 Ruby declaration identity、`contains`、檔案 containment，以及可由 source syntax 唯一證明的 Rails direct route registration identity／containment 建立可追溯證據。R11 獨立驗收子集達到 TP 300／FP 0／FN 0／evidenceInvalid 0，150／150 個負向案例通過。這仍是 bounded 靜態 structural analysis：runtime call、plain `require`、`require_relative`、`new`、inheritance、mixin 與 handler dispatch 均為 NONCLAIM，不代表完整 Ruby runtime 支援；native Ruby runtime validation evidence 也不在此靜態證據邊界內。
+v0.431.0 強化 SQL／PostgreSQL structural depth。固定來源為 PostgreSQL `REL_17_5`（`5e2f3df49d4298c6097789364a5a53be172f6e85`）、Supabase PostgreSQL observed `develop`（`667e8c6a0d65c6f2a855b05a33f96cdc24453999`）與 Hasura v2.12.0 peeled commit（`2660015787a4de2aa52fe67e56fb90efc90148b8`）。在 extractor v327／resolver v157、未新增 parser dependency 的 structural-only v2 契約下，只宣稱完整、可界定的 `CREATE SCHEMA`／`CREATE TABLE` identity 與檔案 `contains`；postfix v4 達到 TP 300／FP 0／FN 0／evidenceInvalid 0、負向 150／150、targeted 16／16，lifecycle v8 的 14 個正式操作通過。這仍是 bounded 靜態 structural analysis；view、function、dependency、`search_path`、PL/pgSQL、dynamic SQL、runtime 與其他 SQL 方言均為 NONCLAIM，不代表完整 PostgreSQL 支援。
 
 ## 支援的語言
 
@@ -113,7 +113,7 @@ SymbolLattice uninstall codex --apply --yes
 
 ## 從 v0.420.0 或更早版本升級
 
-v0.430.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
+v0.431.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
 
 ```bash
 # 仍可執行舊 CLI 時，先移除舊 Codex MCP 設定
@@ -129,7 +129,7 @@ SymbolLattice init .
 SymbolLattice doctor codex
 ```
 
-| 舊項目 | v0.430.0 |
+| 舊項目 | v0.431.0 |
 | --- | --- |
 | npm package | `@hsinpu/symbollattice` |
 | CLI | `SymbolLattice` |

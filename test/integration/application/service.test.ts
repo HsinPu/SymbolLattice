@@ -29891,7 +29891,7 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
-  it("indexes direct SQL table and view declarations with persisted source search", async () => {
+  it("indexes only structural SQL table occurrences without inferring a view dependency", async () => {
     const projectPath = await createInlineProject({
       "db/schema.sql": [
         "CREATE TABLE public.users (",
@@ -29907,7 +29907,8 @@ describe("SymbolLatticeService", () => {
 
     const indexed = await service.init({ projectPath });
     const routes = await service.routes(projectPath);
-    const search = await service.search(projectPath, "active_users", { language: "sql" });
+    const search = await service.search(projectPath, "users", { language: "sql" });
+    const users = await service.find(projectPath, "db/schema.sql#sql-structural-v2:table:qualified:public.users");
     const activeUsers = await service.find(projectPath, "db/schema.sql#sql-view:public.active_users");
     const persistedFacts = graphStore
       .getArtifactFacts(projectPath)
@@ -29915,19 +29916,31 @@ describe("SymbolLatticeService", () => {
 
     expect(indexed).toMatchObject({
       stale: false,
-      counts: { files: 1, symbols: 3, edges: 2 }
+      counts: { files: 1, symbols: 2, edges: 1 }
     });
     expect(persistedFacts).toMatchObject({
       language: "sql",
       extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION
     });
-    expect(activeUsers.symbols).toMatchObject([
+    expect(users.symbols).toMatchObject([
       {
         kind: "resource",
-        qualifiedName: "db/schema.sql#sql-view:public.active_users",
+        qualifiedName: "db/schema.sql#sql-structural-v2:table:qualified:public.users",
         isExported: true
       }
     ]);
+    expect(activeUsers.symbols).toEqual([]);
+    expect(persistedFacts?.symbols).toHaveLength(2);
+    expect(persistedFacts?.edges).toMatchObject([
+      expect.objectContaining({
+        kind: "contains",
+        referenceName: "public.users",
+        resolution: "exact",
+        confidence: 1
+      })
+    ]);
+    expect(persistedFacts?.edges).toHaveLength(1);
+    expect(persistedFacts?.pendingReferences).toEqual([]);
     expect(routes.routes).toEqual([]);
     expect(search.results).toMatchObject([{ filePath: "db/schema.sql", language: "sql" }]);
   });

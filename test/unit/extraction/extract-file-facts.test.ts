@@ -20198,24 +20198,18 @@ describe("source extraction", () => {
     ]);
   });
 
-  it("extracts complete direct SQL table and view declarations with source ranges", () => {
+  it("extracts only complete structural SQL schema and table declarations with source ranges", () => {
     const facts = extractFileFacts({
       filePath: "db/schema.sql",
       language: "sql",
       sourceText: [
         "-- CREATE TABLE ignored (id integer);",
+        "CREATE SCHEMA IF NOT EXISTS audit AUTHORIZATION owner;",
         "CREATE TABLE IF NOT EXISTS public.users (",
         "  id integer PRIMARY KEY,",
-        "  note text DEFAULT 'CREATE TABLE fake (id integer);'",
+        "  note text",
         ");",
-        "",
-        "CREATE UNLOGGED TABLE audit.events (",
-        "  id integer,",
-        "  metadata jsonb",
-        ");",
-        "",
-        "CREATE OR REPLACE VIEW public.active_users AS",
-        "SELECT id, note FROM public.users;"
+        "CREATE VIEW public.active_users AS SELECT id FROM public.users;"
       ].join("\n")
     });
 
@@ -20231,25 +20225,19 @@ describe("source extraction", () => {
         "file",
         "db/schema.sql",
         0,
-        { start: { line: 1, column: 1 }, end: { line: 13, column: 35 } }
+        { start: { line: 1, column: 1 }, end: { line: 7, column: 64 } }
       ],
       [
         "resource",
-        "db/schema.sql#sql-table:public.users",
+        "db/schema.sql#sql-structural-v2:schema:unqualified:audit",
         0,
-        { start: { line: 2, column: 1 }, end: { line: 5, column: 3 } }
+        { start: { line: 2, column: 1 }, end: { line: 2, column: 54 } }
       ],
       [
         "resource",
-        "db/schema.sql#sql-table:audit.events",
+        "db/schema.sql#sql-structural-v2:table:qualified:public.users",
         0,
-        { start: { line: 7, column: 1 }, end: { line: 10, column: 3 } }
-      ],
-      [
-        "resource",
-        "db/schema.sql#sql-view:public.active_users",
-        0,
-        { start: { line: 12, column: 1 }, end: { line: 13, column: 35 } }
+        { start: { line: 3, column: 1 }, end: { line: 6, column: 2 } }
       ]
     ]);
     expect(
@@ -20263,33 +20251,26 @@ describe("source extraction", () => {
     ).toEqual([
       [
         "contains",
+        "audit",
+        "language.sql.structural-v2.create-schema",
+        "exact",
+        { start: { line: 2, column: 1 }, end: { line: 2, column: 54 } }
+      ],
+      [
+        "contains",
         "public.users",
-        "language.sql.create-table.direct-ddl",
+        "language.sql.structural-v2.create-table",
         "exact",
-        { start: { line: 2, column: 1 }, end: { line: 5, column: 3 } }
-      ],
-      [
-        "contains",
-        "audit.events",
-        "language.sql.create-table.direct-ddl",
-        "exact",
-        { start: { line: 7, column: 1 }, end: { line: 10, column: 3 } }
-      ],
-      [
-        "contains",
-        "public.active_users",
-        "language.sql.create-view.direct-ddl",
-        "exact",
-        { start: { line: 12, column: 1 }, end: { line: 13, column: 35 } }
+        { start: { line: 3, column: 1 }, end: { line: 6, column: 2 } }
       ]
     ]);
   });
 
-  it("rejects unsupported, incomplete, quoted, and dollar-quoted SQL declaration shapes", () => {
+  it("rejects unsupported, incomplete, malformed, and dynamic SQL declaration shapes", () => {
     const quotedName = extractFileFacts({
-      filePath: "db/quoted.sql",
+      filePath: "db/malformed.sql",
       language: "sql",
-      sourceText: 'CREATE TABLE "users" (id integer);\n'
+      sourceText: "CREATE TABLE select (id integer);\n"
     });
     const dynamicName = extractFileFacts({
       filePath: "db/dynamic.sql",

@@ -67,50 +67,13 @@ export -f deploy_helper
     }
   });
 
-  it("emits one exact SQL view-to-table reference for the bounded direct SELECT shape", () => {
+  it("does not infer an SQL dependency from a view and a later same-file table", () => {
     const facts = extractSqlFileFacts({
       filePath: "src/schema.sql",
       language: "sql",
-      sourceText: `CREATE TABLE users (
-  id INTEGER
-);
-
-CREATE VIEW active_users AS SELECT * FROM users;
-`
+      sourceText: "CREATE VIEW public.v AS SELECT * FROM public.t; CREATE TABLE public.t (id integer);"
     });
-    const view = symbol(facts, "active_users", "resource");
-    const table = symbol(facts, "users", "resource");
-
-    expect(references(facts)).toEqual([
-      expect.objectContaining({
-        sourceId: view.id,
-        targetId: table.id,
-        resolution: "exact",
-        confidence: 1,
-        referenceName: "users",
-        evidence: {
-          ruleId: "syntax.sql.same-file.unique-direct-view-table-reference",
-          stage: "syntax",
-          candidateSymbolIds: [table.id]
-        }
-      })
-    ]);
-  });
-
-  it("fails closed for SQL references that are external, ambiguous, qualified differently, or complex", () => {
-    const sources = [
-      `CREATE VIEW active_users AS SELECT * FROM users;`,
-      `CREATE TABLE users (id INTEGER);\nCREATE TABLE users (id INTEGER);\nCREATE VIEW active_users AS SELECT * FROM users;`,
-      `CREATE TABLE app.users (id INTEGER);\nCREATE VIEW active_users AS SELECT * FROM users;`,
-      `CREATE TABLE users (id INTEGER);\nSET search_path TO other;\nCREATE VIEW active_users AS SELECT * FROM users;`,
-      `CREATE TABLE users (id INTEGER);\nCREATE VIEW active_users AS WITH selected AS (SELECT * FROM users) SELECT * FROM selected;`,
-      `CREATE TABLE users (id INTEGER);\nCREATE VIEW active_users AS SELECT * FROM users JOIN roles ON roles.id = users.id;`,
-      `CREATE TABLE users (id INTEGER);\nCREATE VIEW active_users AS SELECT * FROM users WHERE id > 0;`
-    ] as const;
-
-    for (const sourceText of sources) {
-      const facts = extractSqlFileFacts({ filePath: "src/schema.sql", language: "sql", sourceText });
-      expect(references(facts), sourceText).toEqual([]);
-    }
+    expect(symbol(facts, "public.t", "resource").declarationOrdinal).toBe(0);
+    expect(references(facts)).toEqual([]);
   });
 });
