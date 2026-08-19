@@ -7,6 +7,8 @@ export interface SourceDocument {
   readonly relativePath: string;
   readonly language: IndexedFile["language"];
   readonly sourceText: string;
+  /** Optional original bytes for extractors whose exact contract is byte-sensitive. */
+  readonly sourceBytes?: Uint8Array;
   readonly contentHash: string;
 }
 
@@ -33,7 +35,9 @@ export interface ProjectFreshnessVerification {
   readonly retainedSourceText: false;
   readonly configurationPolicy: "configuration-candidates-v1";
   readonly configurationCandidatesChecked: number;
-  readonly sourceReadPolicy: "streaming-utf8-with-objective-c-header-classification-v1";
+  readonly sourceReadPolicy:
+    | "streaming-utf8-with-objective-c-header-classification-v1"
+    | "streaming-utf8-with-shell-raw-bytes-and-objective-c-header-classification-v2";
   readonly configurationReadPolicy: "streaming-utf8-v1";
   readonly discoveryPolicy: "single-project-walk-v1";
   readonly maximumConcurrentReads: 8;

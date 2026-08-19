@@ -20149,20 +20149,24 @@ describe("source extraction", () => {
     ]);
   });
 
-  it("rejects nested, incomplete, quoted, and here-document Shell function shapes", () => {
+  it("excludes nested and quoted Shell shapes while parsing valid here-documents strictly", () => {
     const nested = extractFileFacts({
       filePath: "scripts/nested.bash",
       language: "shell",
       sourceText: [
         "if enabled; then",
         "hidden() {",
+        "  :",
         "}",
         "fi",
         "outer() {",
         "inner() {",
+        "  :",
         "}",
+        "  :",
         "}",
         "visible() {",
+        "  :",
         "}"
       ].join("\n")
     });
@@ -20194,7 +20198,8 @@ describe("source extraction", () => {
       ["file", "quoted.sh"]
     ]);
     expect(hereDocument.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
-      ["file", "here-doc.sh"]
+      ["file", "here-doc.sh"],
+      ["function", "deploy"]
     ]);
   });
 

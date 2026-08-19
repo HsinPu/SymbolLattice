@@ -50,7 +50,7 @@ describe("filesystem source catalog freshness", () => {
       retainedSourceText: false,
       configurationPolicy: "configuration-candidates-v1",
       configurationCandidatesChecked: expect.any(Number),
-      sourceReadPolicy: "streaming-utf8-with-objective-c-header-classification-v1",
+      sourceReadPolicy: "streaming-utf8-with-shell-raw-bytes-and-objective-c-header-classification-v2",
       configurationReadPolicy: "streaming-utf8-v1",
       discoveryPolicy: "single-project-walk-v1",
       maximumConcurrentReads: 8,

@@ -4689,6 +4689,7 @@ export class SymbolLatticeService {
       ...this.artifactFactsExtractor({
         filePath: document.relativePath,
         sourceText: document.sourceText,
+        ...(document.sourceBytes === undefined ? {} : { sourceBytes: document.sourceBytes }),
         language: document.language,
         ...(frameworkEvidence === undefined ? {} : { frameworkEvidence })
       }),

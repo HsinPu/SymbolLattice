@@ -164,6 +164,8 @@ export type ExtractionLanguage = ArtifactLanguage;
 export interface ExtractFileFactsInput {
   readonly filePath: string;
   readonly sourceText: string;
+  /** Optional original bytes retained by byte-sensitive source catalogs. */
+  readonly sourceBytes?: Uint8Array;
   readonly language: ExtractionLanguage;
   /** Project-wide framework proof supplied by the source catalog when available. */
   readonly frameworkEvidence?: ProjectFrameworkEvidence;

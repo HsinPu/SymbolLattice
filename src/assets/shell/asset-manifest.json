@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "symbol-lattice-shell-asset-manifest-v1",
+  "algorithm": "sha256 of UTF-8 concatenated sorted lines: <sha256> <bytes> <path> LF",
+  "entryCount": 9,
+  "aggregateSha256": "a01786d9b98fef7667ef0f763e6ad23534051bef13831842d9f49b32bb8c713d",
+  "selfExcluded": true,
+  "entries": [
+    {
+      "path": "Binaryen-Apache-2.0.txt",
+      "bytes": 11535,
+      "sha256": "64c0d02491e16eced74826440ecd2bcf7722d37fa586faf457b2494293afbffe"
+    },
+    {
+      "path": "Go-BSD-3-Clause.txt",
+      "bytes": 1453,
+      "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+    },
+    {
+      "path": "LLVM-compiler-rt-Apache-2.0-WITH-LLVM-exception.txt",
+      "bytes": 16708,
+      "sha256": "1a8f1058753f1ba890de984e48f0242a3a5c29a6a8f2ed9fd813f36985387e8d"
+    },
+    {
+      "path": "mvdan-sh-BSD-3-Clause.txt",
+      "bytes": 1488,
+      "sha256": "ce63850f77649f00d1394045e2794ffb09a5596beabac51c9548edd958845d7c"
+    },
+    {
+      "path": "mvdan-sh-v3.13.1-tinygo-v0.41.1.wasm",
+      "bytes": 319617,
+      "sha256": "e2133afeda7a69abd8af28d64138f5f7fff7dc42e836b382e80b0ffb9cadcf45"
+    },
+    {
+      "path": "provenance.json",
+      "bytes": 6943,
+      "sha256": "2644255a8ddd959a0599d31418f9f13ecdb6b0f9b3f5f94b3d6f3741e23f24d7"
+    },
+    {
+      "path": "sbom.cdx.json",
+      "bytes": 4738,
+      "sha256": "dd182845a008bffbddd2729497ca8e0416b84fd48460d6cde969d5f3f645e388"
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "bytes": 1544,
+      "sha256": "1dc8d3210fb66db2409b3f769c343d5402b3e91c12af43b38c5c09611e4439f2"
+    },
+    {
+      "path": "TinyGo-BSD-3-Clause.txt",
+      "bytes": 1835,
+      "sha256": "4cb7d99a97ebd57584ea8398898c4b0bbbcb39662330712b43153efdad308766"
+    }
+  ]
+}

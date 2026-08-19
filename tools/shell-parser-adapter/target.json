@@ -1,0 +1,10 @@
+{
+  "inherits": [
+    "wasm-unknown"
+  ],
+  "ldflags": [
+    "--initial-memory=8388608",
+    "--max-memory=67108864",
+    "-zstack-size=1048576"
+  ]
+}

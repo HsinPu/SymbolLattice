@@ -9,6 +9,8 @@ import { dirname, isAbsolute, join, parse, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
+import { verifyShellParserAssets } from "./copy-shell-parser-assets.mjs";
+
 const PACKAGE_NAME = "@hsinpu/symbollattice";
 const REPOSITORY = "HsinPu/SymbolLattice";
 const REPOSITORY_URL = "https://github.com/HsinPu/SymbolLattice.git";
@@ -26,6 +28,16 @@ const REQUIRED_PACKAGE_FILES = Object.freeze([
   "LICENSE",
   "README.en.md",
   "README.md",
+  "dist/assets/shell/Binaryen-Apache-2.0.txt",
+  "dist/assets/shell/Go-BSD-3-Clause.txt",
+  "dist/assets/shell/LLVM-compiler-rt-Apache-2.0-WITH-LLVM-exception.txt",
+  "dist/assets/shell/THIRD_PARTY_NOTICES.md",
+  "dist/assets/shell/TinyGo-BSD-3-Clause.txt",
+  "dist/assets/shell/asset-manifest.json",
+  "dist/assets/shell/mvdan-sh-BSD-3-Clause.txt",
+  "dist/assets/shell/mvdan-sh-v3.13.1-tinygo-v0.41.1.wasm",
+  "dist/assets/shell/provenance.json",
+  "dist/assets/shell/sbom.cdx.json",
   "dist/cli/main.js",
   "dist/index.js",
   "package.json"
@@ -243,6 +255,11 @@ export async function executeSourceInstallStage2(plan, dependencies = {}) {
     await run("install-dependencies", "npm", ["ci", "--no-audit", "--no-fund"], { env: npmEnvironment });
     await run("type-check", "npm", ["run", "check"], { env: npmEnvironment });
     await run("build", "npm", ["run", "build"], { env: npmEnvironment });
+    step = "verify-build-assets";
+    const builtShellAssets = await verifyShellParserAssets(
+      join(workspacePath, "dist", "assets", "shell")
+    );
+    executedSteps.push("verify-build-assets");
 
     step = "pack-directory";
     const packDirectory = join(workspacePath, "source-install-pack");
@@ -257,11 +274,19 @@ export async function executeSourceInstallStage2(plan, dependencies = {}) {
     await run("isolated-install", "npm", [
       "install", "--prefix", isolatedPrefix, "--no-audit", "--no-fund", packageEvidence.tarballPath
     ], { env: npmEnvironment });
-    const isolatedEntry = join(
+    const isolatedPackageDirectory = join(
       isolatedPrefix,
       "node_modules",
       "@hsinpu",
-      "symbollattice",
+      "symbollattice"
+    );
+    step = "verify-isolated-assets";
+    const isolatedShellAssets = await verifyShellParserAssets(
+      join(isolatedPackageDirectory, "dist", "assets", "shell")
+    );
+    executedSteps.push("verify-isolated-assets");
+    const isolatedEntry = join(
+      isolatedPackageDirectory,
       "dist",
       "cli",
       "main.js"
@@ -300,13 +325,15 @@ export async function executeSourceInstallStage2(plan, dependencies = {}) {
         sha256: packageEvidence.sha256,
         files: Object.freeze(packageEvidence.files),
         requiredFilesPresent: true,
-        forbiddenFiles: Object.freeze([])
+        forbiddenFiles: Object.freeze([]),
+        shellAssets: freezeShellAssetEvidence(builtShellAssets)
       }),
       isolatedInstallation: Object.freeze({
         prefix: isolatedPrefix,
         entryPath: isolatedEntry,
         version: reportedVersion,
         cliHelpPassed: true,
+        shellAssets: freezeShellAssetEvidence(isolatedShellAssets),
         mcp: Object.freeze(mcp)
       }),
       globalInstallation: Object.freeze({ performed: false }),
@@ -818,6 +845,14 @@ function isForbiddenPackagePath(path) {
 
 function compareText(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function freezeShellAssetEvidence(evidence) {
+  return Object.freeze({
+    manifestSha256: evidence.manifestSha256,
+    aggregateSha256: evidence.aggregateSha256,
+    files: Object.freeze([...evidence.files])
+  });
 }
 
 function validateMcpSmoke(mcp) {

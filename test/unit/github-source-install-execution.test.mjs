@@ -1,6 +1,7 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -12,10 +13,23 @@ import {
 const COMMIT = "0123456789abcdef0123456789abcdef01234567";
 const VERSION = "0.421.0";
 const OFFICIAL_REPOSITORY = "https://github.com/HsinPu/SymbolLattice.git";
+const SHELL_ASSET_MANIFEST_SHA256 = "25b76ced19fc8154bc4d80ae32162b1da7dbe75655d50251421c31c9bc55cc0a";
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const shellAssetSource = join(repositoryRoot, "src", "assets", "shell");
 const REQUIRED_PACKAGE_FILES = [
   "LICENSE",
   "README.en.md",
   "README.md",
+  "dist/assets/shell/Binaryen-Apache-2.0.txt",
+  "dist/assets/shell/Go-BSD-3-Clause.txt",
+  "dist/assets/shell/LLVM-compiler-rt-Apache-2.0-WITH-LLVM-exception.txt",
+  "dist/assets/shell/THIRD_PARTY_NOTICES.md",
+  "dist/assets/shell/TinyGo-BSD-3-Clause.txt",
+  "dist/assets/shell/asset-manifest.json",
+  "dist/assets/shell/mvdan-sh-BSD-3-Clause.txt",
+  "dist/assets/shell/mvdan-sh-v3.13.1-tinygo-v0.41.1.wasm",
+  "dist/assets/shell/provenance.json",
+  "dist/assets/shell/sbom.cdx.json",
   "dist/cli/main.js",
   "dist/index.js",
   "package.json"
@@ -45,6 +59,7 @@ async function executionFixture(options = {}) {
         ...(options.packageOverrides ?? {})
       }, null, 2)}\n`);
       await writeFile(join(workspace, "package-lock.json"), "{}\n");
+      await cp(shellAssetSource, join(workspace, "src", "assets", "shell"), { recursive: true });
       return workspace;
     },
     runProcess: async (command, args, context) => {
@@ -55,6 +70,14 @@ async function executionFixture(options = {}) {
       if (command === "git" && args.includes("get-url")) return { stdout: `${OFFICIAL_REPOSITORY}\n`, stderr: "" };
       if (command === "git" && args.includes("rev-parse")) return { stdout: `${COMMIT}\n`, stderr: "" };
       if (command === "git" && args.includes("status")) return { stdout: "", stderr: "" };
+      if (command === "npm" && args[0] === "run" && args[1] === "build") {
+        const builtAssets = join(workspace, "dist", "assets", "shell");
+        await cp(join(workspace, "src", "assets", "shell"), builtAssets, { recursive: true });
+        if (options.corruptBuildAsset === true) {
+          await writeFile(join(builtAssets, "provenance.json"), " ", { flag: "a" });
+        }
+        return { stdout: "built\n", stderr: "" };
+      }
       if (command === "npm" && args[0] === "pack") {
         const packDirectory = args[args.indexOf("--pack-destination") + 1];
         await mkdir(packDirectory, { recursive: true });
@@ -76,6 +99,13 @@ async function executionFixture(options = {}) {
         const entry = join(prefix, "node_modules", "@hsinpu", "symbollattice", "dist", "cli", "main.js");
         await mkdir(resolve(entry, ".."), { recursive: true });
         await writeFile(entry, "// isolated fixture\n");
+        if (options.omitIsolatedAssets !== true) {
+          await cp(
+            join(workspace, "dist", "assets", "shell"),
+            join(prefix, "node_modules", "@hsinpu", "symbollattice", "dist", "assets", "shell"),
+            { recursive: true }
+          );
+        }
         return { stdout: "installed\n", stderr: "" };
       }
       if (command === process.execPath && args.at(-1) === "--version") return { stdout: `${VERSION}\n`, stderr: "" };
@@ -122,12 +152,14 @@ describe("GitHub source installation Stage 2 execution", () => {
         version: VERSION,
         sizeBytes: 22,
         requiredFilesPresent: true,
-        forbiddenFiles: []
+        forbiddenFiles: [],
+        shellAssets: { manifestSha256: SHELL_ASSET_MANIFEST_SHA256 }
       },
       isolatedInstallation: {
         version: VERSION,
         cliHelpPassed: true,
-        mcp: { toolCount: 21 }
+        mcp: { toolCount: 21 },
+        shellAssets: { manifestSha256: SHELL_ASSET_MANIFEST_SHA256 }
       },
       globalInstallation: { performed: false },
       mutation: { performed: true, globalInstallationPerformed: false },
@@ -172,6 +204,26 @@ describe("GitHub source installation Stage 2 execution", () => {
     expect(fixture.calls.some((call) => call.step === "pack")).toBe(false);
     expect(fixture.calls.some((call) => call.step === "isolated-install")).toBe(false);
     expect(fixture.calls.some((call) => call.args.includes("--global"))).toBe(false);
+  });
+
+  it("stops before packing when a built Shell parser asset is stale", async () => {
+    const fixture = await executionFixture({ corruptBuildAsset: true });
+
+    await expect(executeSourceInstallStage2(fixture.plan, fixture.dependencies)).rejects.toMatchObject({
+      name: "SourceInstallStage2Error",
+      step: "verify-build-assets"
+    });
+    expect(fixture.calls.some((call) => call.step === "pack")).toBe(false);
+  });
+
+  it("rejects an isolated install that omits the Shell parser asset closure", async () => {
+    const fixture = await executionFixture({ omitIsolatedAssets: true });
+
+    await expect(executeSourceInstallStage2(fixture.plan, fixture.dependencies)).rejects.toMatchObject({
+      name: "SourceInstallStage2Error",
+      step: "verify-isolated-assets"
+    });
+    expect(fixture.calls.some((call) => call.step === "isolated-version")).toBe(false);
   });
 
   it("rejects a cloned package identity mismatch before installing dependencies", async () => {

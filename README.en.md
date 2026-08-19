@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.431.0 is a developer preview installed from a fixed revision of the official GitHub repository. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.SymbolLattice` index; add `--no-auto-sync` to disable it.
+> v0.432.0 is a developer preview installed from a fixed revision of the official GitHub repository. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.SymbolLattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -25,13 +25,15 @@ The previous v0.429.0 release deepened Python scanning. Fixed official GitHub so
 
 v0.431.0 deepens SQL/PostgreSQL structural depth. Fixed sources are PostgreSQL `REL_17_5` (`5e2f3df49d4298c6097789364a5a53be172f6e85`), observed Supabase PostgreSQL `develop` (`667e8c6a0d65c6f2a855b05a33f96cdc24453999`), and the Hasura v2.12.0 peeled commit (`2660015787a4de2aa52fe67e56fb90efc90148b8`). Under the structural-only v2 contract with extractor v327, resolver v157, and no new parser dependency, only complete, bounded `CREATE SCHEMA` / `CREATE TABLE` identities and file `contains` are claimed. Postfix v4 reached TP 300 / FP 0 / FN 0 / evidenceInvalid 0, 150 / 150 negatives, and targeted 16 / 16; lifecycle v8 passed 14 formal operations. This remains bounded static structural analysis: views, functions, dependencies, `search_path`, PL/pgSQL, dynamic SQL, runtime behavior, and other SQL dialects are NONCLAIM; it is not full PostgreSQL support.
 
+v0.432.0 deepens Shell (POSIX/Bash) structural depth. Fixed sources are Git v2.50.1 (`d82adb61ba2fd11d8f2587fca1b6bd7925ce4044`), nvm v0.40.6 (`b6cf55f6adf3b953d0e5e00a4049444e300e3af8`), and Kubernetes v1.36.3 (`0f29094e5b73085e3802ecc1298ecae13866bfe6`). Under extractor v328, resolver v157, and the versioned `SL-SHELL-STRUCTURAL-v1.2.3` contract, the approved subset reached TP 300 / FP 0 / FN 0 / evidenceInvalid 0, with 150 / 150 negatives and 4 / 4 controls. Lifecycle coverage includes fresh, no-op, comment, semantic, rename, delete, restore, reopen, invalid source/config, and bounded resource-recovery cases. Claims are limited to syntax-valid, bounded direct top-level function identities and file `contains`; dynamic dispatch, `export -f`, runtime behavior, cross-language relationships, and Shell semantics that cannot be uniquely proven are NONCLAIM.
+
 ## Supported languages
 
 SymbolLattice currently discovers and indexes 57 languages. A single `init` or `sync` scans every matching language in the same repository; languages do not need to be selected individually. This list means the files can be scanned and represented in the graph, not that every language has identical parsing depth. Dynamic relationships that cannot be proven from static source remain unresolved or pending, or are omitted.
 
 | Category | Languages |
 | --- | --- |
-| Recently validated deeply on large projects | TypeScript, Java, HTML, CSS, JavaScript, JSP, Python, Ruby |
+| Recently validated deeply on large projects | TypeScript, Java, HTML, CSS, JavaScript, JSP, Python, Ruby, Shell |
 | Web, component, and template languages | ArkTS, Vue, Svelte, Astro, Razor, PHP, Blade, Liquid, Twig, CFML |
 | JVM, .NET, and application languages | Groovy, Kotlin, Scala, C#, F#, VB.NET, Dart |
 | Systems and native languages | C, C++, Objective-C, Rust, Go, Swift, Zig, Nim, Fortran, Ada, Pascal, COBOL |
@@ -113,7 +115,7 @@ The installer never creates or deletes a project index automatically. Restart Co
 
 ## Upgrading from v0.420.0 or earlier
 
-v0.431.0 does not provide aliases for the old names and does not read the old index. Use this order:
+v0.432.0 does not provide aliases for the old names and does not read the old index. Use this order:
 
 ```bash
 # Remove the old Codex MCP configuration while the old CLI is still available
@@ -129,7 +131,7 @@ SymbolLattice init .
 SymbolLattice doctor codex
 ```
 
-| Previous surface | v0.431.0 |
+| Previous surface | v0.432.0 |
 | --- | --- |
 | npm package | `@hsinpu/symbollattice` |
 | CLI | `SymbolLattice` |

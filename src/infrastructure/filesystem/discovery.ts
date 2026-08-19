@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { open, readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, parse, relative, resolve, sep } from "node:path";
 
@@ -115,6 +115,21 @@ const OBJECTIVE_C_HEADER_CONTAINER =
   /^[ \t]*@(interface|protocol)[ \t]+[A-Za-z_][A-Za-z0-9_]*/mu;
 const OBJECTIVE_C_HEADER_END = /^[ \t]*@end[ \t]*$/mu;
 
+export const SHELL_SHEBANG_ALLOWLIST = Object.freeze([
+  "#!/bin/sh",
+  "#!/usr/bin/sh",
+  "#!/bin/dash",
+  "#!/usr/bin/dash",
+  "#!/bin/bash",
+  "#!/usr/bin/bash",
+  "#!/usr/bin/env sh",
+  "#!/usr/bin/env dash",
+  "#!/usr/bin/env bash"
+] as const);
+
+/** Longest allowlisted line plus one byte, so a suffix or LF is observable. */
+export const MAXIMUM_SHELL_SHEBANG_READ_BYTES = 20 as const;
+
 /**
  * These directories contain neither user source nor SymbolLattice input. They
  * are deliberately outside `.gitignore` semantics, so a negated rule can
@@ -138,6 +153,8 @@ export interface SourceFile {
   readonly relativePath: string;
   readonly language: SupportedLanguage;
   readonly sourceText: string;
+  /** Retained only for Shell, whose exact parser contract validates raw UTF-8. */
+  readonly sourceBytes?: Uint8Array;
   readonly contentHash: string;
 }
 
@@ -151,17 +168,23 @@ export interface SourceFileFingerprint {
 export interface SourceDiscoveryOptions {
   /** Source directories relative to the project root. Defaults to the project root. */
   readonly scopeRoots?: readonly string[];
+  /** Injectable only to make the bounded, ignore-before-read policy testable. */
+  readonly shellShebangReader?: ShellShebangReader;
 }
 
 export const FRESHNESS_PATH_DISCOVERY_POLICY = "single-project-walk-v1" as const;
 export const STREAMING_UTF8_HASH_POLICY = "streaming-utf8-v1" as const;
 export const SOURCE_FINGERPRINT_READ_POLICY =
-  "streaming-utf8-with-objective-c-header-classification-v1" as const;
+  "streaming-utf8-with-shell-raw-bytes-and-objective-c-header-classification-v2" as const;
 export const MAXIMUM_FRESHNESS_CONCURRENT_READS = 8 as const;
 /** Full source reads retain text, so keep descriptor pressure bounded on large repositories. */
 export const MAXIMUM_SOURCE_CONCURRENT_READS = 8 as const;
 
 export type SourceTextReader = (absolutePath: string) => Promise<string>;
+export type ShellShebangReader = (
+  absolutePath: string,
+  maximumBytes: number
+) => Promise<Uint8Array>;
 
 export interface FreshnessProjectPathDiscovery {
   readonly policy: typeof FRESHNESS_PATH_DISCOVERY_POLICY;
@@ -259,14 +282,33 @@ export function getSourceLanguage(
     return "blade";
   }
   const extension = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
-  if (extension === OBJECTIVE_C_HEADER_EXTENSION) {
-    return sourceText !== undefined && isProvenObjectiveCHeader(sourceText) ? "objc" : null;
+  const extensionLanguage = SUPPORTED_EXTENSIONS.get(extension);
+  if (extensionLanguage !== undefined) {
+    return extensionLanguage;
   }
-  return SUPPORTED_EXTENSIONS.get(extension) ?? null;
+  if (extension === OBJECTIVE_C_HEADER_EXTENSION) {
+    if (sourceText !== undefined && isProvenObjectiveCHeader(sourceText)) {
+      return "objc";
+    }
+  }
+  return sourceText !== undefined && hasExactShellShebang(sourceText) ? "shell" : null;
 }
 
 export function hashSource(sourceText: string): string {
   return createHash("sha256").update(sourceText).digest("hex");
+}
+
+function hashSourceBytes(sourceBytes: Uint8Array): string {
+  return createHash("sha256").update(sourceBytes).digest("hex");
+}
+
+async function hashRawFile(filePath: string): Promise<string> {
+  const hash = createHash("sha256");
+  const stream = createReadStream(filePath);
+  for await (const chunk of stream) {
+    hash.update(chunk);
+  }
+  return hash.digest("hex");
 }
 
 /** Hash decoded UTF-8 incrementally without retaining the complete file string. */
@@ -301,7 +343,8 @@ export async function discoverSourceFiles(
         return collectSourcePaths(
           resolve(normalizedProjectPath, scopeRoot),
           scopeRoot,
-          ignoreMatcher
+          ignoreMatcher,
+          options?.shellShebangReader ?? readShellShebangPrefix
         );
       })
     )
@@ -318,14 +361,20 @@ export async function discoverSourceFiles(
 export async function loadSourcePaths(
   projectPath: string,
   paths: readonly string[],
-  readSourceText: SourceTextReader = (absolutePath) => readFile(absolutePath, "utf8")
+  readSourceText?: SourceTextReader
 ): Promise<SourceFile[]> {
   const normalizedProjectPath = resolve(projectPath);
   const sourceFiles: SourceFile[] = [];
   for (let offset = 0; offset < paths.length; offset += MAXIMUM_SOURCE_CONCURRENT_READS) {
     const batch = await Promise.all(
       paths.slice(offset, offset + MAXIMUM_SOURCE_CONCURRENT_READS).map(async (absolutePath) => {
-        const sourceText = await readSourceText(absolutePath);
+        const sourceInput = readSourceText === undefined
+          ? await readFile(absolutePath)
+          : await readSourceText(absolutePath);
+        const sourceBytes = typeof sourceInput === "string" ? undefined : sourceInput;
+        const sourceText = typeof sourceInput === "string"
+          ? sourceInput
+          : new TextDecoder("utf-8").decode(sourceInput);
         const language = getSourceLanguage(absolutePath, sourceText);
         if (language === null) {
           if (isObjectiveCHeaderPath(absolutePath)) {
@@ -338,7 +387,10 @@ export async function loadSourcePaths(
           relativePath: toProjectRelativePath(normalizedProjectPath, absolutePath),
           language,
           sourceText,
-          contentHash: hashSource(sourceText)
+          ...(language === "shell" && sourceBytes !== undefined ? { sourceBytes } : {}),
+          contentHash: language === "shell" && sourceBytes !== undefined
+            ? hashSourceBytes(sourceBytes)
+            : hashSource(sourceText)
         } satisfies SourceFile;
       })
     );
@@ -376,11 +428,16 @@ export async function fingerprintSourcePaths(
   for (let offset = 0; offset < paths.length; offset += MAXIMUM_FRESHNESS_CONCURRENT_READS) {
     const batch = await Promise.all(
       paths.slice(offset, offset + MAXIMUM_FRESHNESS_CONCURRENT_READS).map(async (absolutePath) => {
-        const objectiveCHeader = isObjectiveCHeaderPath(absolutePath);
-        const sourceText = objectiveCHeader ? await readFile(absolutePath, "utf8") : undefined;
+        const needsContentClassification = getSourceLanguage(absolutePath) === null;
+        const sourceBytes = needsContentClassification
+          ? await readFile(absolutePath)
+          : undefined;
+        const sourceText = sourceBytes === undefined
+          ? undefined
+          : new TextDecoder("utf-8").decode(sourceBytes);
         const language = getSourceLanguage(absolutePath, sourceText);
         if (language === null) {
-          if (objectiveCHeader) {
+          if (needsContentClassification) {
             return null;
           }
           throw new Error(`Unsupported source file was discovered: ${absolutePath}`);
@@ -388,7 +445,13 @@ export async function fingerprintSourcePaths(
         return {
           relativePath: toProjectRelativePath(normalizedProjectPath, absolutePath),
           language,
-          contentHash: sourceText === undefined ? await hashUtf8File(absolutePath) : hashSource(sourceText)
+          contentHash: language === "shell"
+            ? sourceBytes === undefined
+              ? await hashRawFile(absolutePath)
+              : hashSourceBytes(sourceBytes)
+            : sourceText === undefined
+              ? await hashUtf8File(absolutePath)
+              : hashSource(sourceText)
         };
       })
     );
@@ -439,8 +502,12 @@ export async function discoverFreshnessProjectPaths(
       }
       if (
         insideSourceScope(entryRelativePath) &&
-        isSourceCandidatePath(entryRelativePath) &&
-        !ignoreMatcher.ignores(entryRelativePath)
+        !ignoreMatcher.ignores(entryRelativePath) &&
+        await isSourceCandidateFile(
+          entryRelativePath,
+          entryPath,
+          options.shellShebangReader ?? readShellShebangPrefix
+        )
       ) {
         sourcePaths.push(entryPath);
       }
@@ -470,7 +537,8 @@ async function discoverSourcePaths(
         return collectSourcePaths(
           resolve(normalizedProjectPath, scopeRoot),
           scopeRoot,
-          ignoreMatcher
+          ignoreMatcher,
+          options?.shellShebangReader ?? readShellShebangPrefix
         );
       })
     )
@@ -480,7 +548,8 @@ async function discoverSourcePaths(
 async function collectSourcePaths(
   directoryPath: string,
   directoryRelativePath: string,
-  ignoreMatcher: Ignore
+  ignoreMatcher: Ignore,
+  shellShebangReader: ShellShebangReader
 ): Promise<string[]> {
   const entries = await readdir(directoryPath, { withFileTypes: true });
   const sourcePaths: string[] = [];
@@ -495,7 +564,12 @@ async function collectSourcePaths(
         // rules can re-include descendants, so every non-hard-excluded branch
         // must still be inspected.
         sourcePaths.push(
-          ...(await collectSourcePaths(entryPath, entryRelativePath, ignoreMatcher))
+          ...(await collectSourcePaths(
+            entryPath,
+            entryRelativePath,
+            ignoreMatcher,
+            shellShebangReader
+          ))
         );
       }
       continue;
@@ -503,8 +577,12 @@ async function collectSourcePaths(
 
     if (
       entry.isFile() &&
-      isSourceCandidatePath(entryRelativePath) &&
-      !ignoreMatcher.ignores(entryRelativePath)
+      !ignoreMatcher.ignores(entryRelativePath) &&
+      await isSourceCandidateFile(
+        entryRelativePath,
+        entryPath,
+        shellShebangReader
+      )
     ) {
       sourcePaths.push(entryPath);
     }
@@ -518,12 +596,51 @@ function isPlayRoutesFile(filePath: string): boolean {
   return /(?:^|\/)conf\/(?:routes|[^/]+\.routes)$/u.test(normalized);
 }
 
-function isSourceCandidatePath(filePath: string): boolean {
-  return getSourceLanguage(filePath) !== null || isObjectiveCHeaderPath(filePath);
+async function isSourceCandidateFile(
+  relativePath: string,
+  absolutePath: string,
+  shellShebangReader: ShellShebangReader
+): Promise<boolean> {
+  if (getSourceLanguage(relativePath) !== null || isObjectiveCHeaderPath(relativePath)) {
+    return true;
+  }
+
+  const prefix = await shellShebangReader(absolutePath, MAXIMUM_SHELL_SHEBANG_READ_BYTES);
+  return hasExactShellShebangBytes(prefix);
 }
 
 function isObjectiveCHeaderPath(filePath: string): boolean {
   return filePath.toLowerCase().endsWith(OBJECTIVE_C_HEADER_EXTENSION);
+}
+
+async function readShellShebangPrefix(
+  absolutePath: string,
+  maximumBytes: number
+): Promise<Uint8Array> {
+  const handle = await open(absolutePath, "r");
+  try {
+    const buffer = Buffer.alloc(maximumBytes);
+    const { bytesRead } = await handle.read(buffer, 0, maximumBytes, 0);
+    return buffer.subarray(0, bytesRead);
+  } finally {
+    await handle.close();
+  }
+}
+
+function hasExactShellShebang(sourceText: string): boolean {
+  const newlineIndex = sourceText.indexOf("\n");
+  const firstLine = newlineIndex === -1 ? sourceText : sourceText.slice(0, newlineIndex);
+  return (SHELL_SHEBANG_ALLOWLIST as readonly string[]).includes(firstLine);
+}
+
+function hasExactShellShebangBytes(prefix: Uint8Array): boolean {
+  const newlineIndex = prefix.indexOf(0x0a);
+  const firstLine = newlineIndex === -1 ? prefix : prefix.subarray(0, newlineIndex);
+  return SHELL_SHEBANG_ALLOWLIST.some((shebang) => {
+    const expected = Buffer.from(shebang, "ascii");
+    return firstLine.byteLength === expected.byteLength &&
+      firstLine.every((value, index) => value === expected[index]);
+  });
 }
 
 /**

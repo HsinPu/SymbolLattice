@@ -19,7 +19,7 @@ function references(facts: ArtifactFacts): readonly GraphEdge[] {
 }
 
 describe("Shell and SQL B1 semantic relationships", () => {
-  it("emits an exact reference from a Shell file to one directly exported function", () => {
+  it("keeps export -f outside the structural Shell relationship contract", () => {
     const facts = extractShellFileFacts({
       filePath: "src/deploy.sh",
       language: "shell",
@@ -33,7 +33,7 @@ export -f deploy_helper
     const file = symbol(facts, "deploy.sh", "file");
     const helper = symbol(facts, "deploy_helper", "function");
 
-    expect(references(facts)).toEqual([
+    expect(facts.edges.filter((edge) => edge.kind === "contains")).toEqual([
       expect.objectContaining({
         sourceId: file.id,
         targetId: helper.id,
@@ -41,12 +41,15 @@ export -f deploy_helper
         confidence: 1,
         referenceName: "deploy_helper",
         evidence: {
-          ruleId: "syntax.shell.direct-top-level-export-function-reference",
+          ruleId: "language.shell.function.direct-top-level",
           stage: "syntax",
           candidateSymbolIds: [helper.id]
         }
       })
     ]);
+    expect(references(facts)).toEqual([]);
+    expect(facts.pendingReferences).toEqual([]);
+    expect(facts.exportBindings).toEqual([]);
   });
 
   it("fails closed for unsafe Shell export shapes and competing declarations", () => {
