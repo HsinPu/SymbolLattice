@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.436.0 是從官方 GitHub 固定版本安裝的開發者預覽版。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
+> v0.437.0 是從官方 GitHub 固定版本安裝的開發者預覽版。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
 
 ## 這是什麼
 
@@ -35,13 +35,15 @@ v0.435.0 強化 Julia structural depth。固定來源為 Julia `v1.12.7`（`6d17
 
 v0.436.0 強化 Perl structural depth。固定來源為 Perl `v5.45.2`（`6f488b9e12b015c5b1b2827a5621991e8bd30e04`）、Mojolicious `v9.49`（`c2d9f035556218c628dedae2e1075e115504a2a6`）與 Perl::Critic `v1.154`（`382d701fd1129822c98fdcdb08403a733a24dc08`）。extractor v332 支援 bounded package／class／role／named sub identity、forward declaration、prototype／attribute 宣告範圍與 file／package containment；核准 reviewed exact-singleton subset 達 TP 400／FP 0／FN 0／evidenceInvalid 0，150／150 個負向案例與 lifecycle gates 通過。全固定來源候選掃描另記錄 TP 5,013／FP 2,587／FN 6,923，unsupported breadth recall 0.420；候選 oracle 以獨立 masked-line truth 定義，未納入 reviewed subset 的語法仍保留為 unsupported，不宣稱完整 Perl coverage。eval／do／require、anonymous／nested sub、qualified method dispatch、runtime reflection、metaprogramming 與跨檔 exact resolution 均為 NONCLAIM。
 
+v0.437.0 強化 R structural depth。固定來源為 R `v4.5.1`（`1d95a4c60b0be6766490b1a621610b98a4bf5765`）、Shiny `v1.14.0`（`dffc756a2867533fafc0858baf4c3fdbed165692`）與 Plumber `v1.3.3`（`0f777a3f279736fe26da4d715407b573c80b5ffd`）。extractor v333 支援 bounded top-level function assignment、literal S4 `setClass`／`setRefClass` identity 與 file containment，並保留 bounded Plumber annotation routes；核准 reviewed exact-singleton subset 達 TP 400／FP 0／FN 0／evidenceInvalid 0，150／150 個負向案例與 lifecycle gates 通過。全固定來源候選掃描另記錄 TP 4,184／FP 1,283／FN 2,434，unsupported breadth recall 0.632；候選 oracle 以獨立 masked-line truth 定義，未納入 reviewed subset 的語法仍保留為 unsupported，不宣稱完整 R coverage。S3／S4 method dispatch、dynamic class names、eval／parse／source／do.call／get、nested／anonymous functions、Shiny reactive runtime 與跨檔 exact resolution 均為 NONCLAIM。
+
 ## 支援的語言
 
 目前可發現並建立索引的語言共 57 種。執行一次 `init` 或 `sync` 會掃描同一個 repository 內所有符合的語言，不需要逐一指定。下列清單代表可掃描與建立圖譜，不代表每種語言都有相同的解析深度；無法由靜態來源證明的動態關係會保留為 unresolved／pending 或直接省略。
 
 | 類別 | 語言 |
 | --- | --- |
-| 最近完成大型專案深度驗證 | TypeScript、Java、HTML、CSS、JavaScript、JSP、Python、Ruby、Shell、Lua、Luau、Julia、Perl |
+| 最近完成大型專案深度驗證 | TypeScript、Java、HTML、CSS、JavaScript、JSP、Python、Ruby、Shell、Lua、Luau、Julia、Perl、R |
 | Web、元件與模板 | ArkTS、Vue、Svelte、Astro、Razor、PHP、Blade、Liquid、Twig、CFML |
 | JVM、.NET 與應用程式 | Groovy、Kotlin、Scala、C#、F#、VB.NET、Dart |
 | 系統與原生語言 | C、C++、Objective-C、Rust、Go、Swift、Zig、Nim、Fortran、Ada、Pascal、COBOL |
@@ -123,7 +125,7 @@ SymbolLattice uninstall codex --apply --yes
 
 ## 從 v0.420.0 或更早版本升級
 
-v0.436.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
+v0.437.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
 
 ```bash
 # 仍可執行舊 CLI 時，先移除舊 Codex MCP 設定
@@ -139,7 +141,7 @@ SymbolLattice init .
 SymbolLattice doctor codex
 ```
 
-| 舊項目 | v0.436.0 |
+| 舊項目 | v0.437.0 |
 | --- | --- |
 | npm package | `@hsinpu/symbollattice` |
 | CLI | `SymbolLattice` |

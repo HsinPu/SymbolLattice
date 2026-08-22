@@ -45,6 +45,12 @@ interface StaticRFunction {
   readonly end: number;
 }
 
+interface StaticRClass {
+  readonly name: string;
+  readonly start: number;
+  readonly end: number;
+}
+
 interface StaticPlumberRoute {
   readonly method: PlumberRouteMethod;
   readonly path: string;
@@ -438,6 +444,44 @@ function collectTopLevelRFunctions(
   return functions;
 }
 
+function collectTopLevelRClasses(
+  sourceText: string,
+  structure: RStructure
+): readonly StaticRClass[] {
+  const classes: StaticRClass[] = [];
+  for (let index = 0; index < structure.tokens.length; index += 1) {
+    const declarationToken = structure.tokens[index];
+    if (
+      declarationToken?.kind !== "identifier" ||
+      !["setClass", "setRefClass"].includes(declarationToken.text) ||
+      structure.depthBefore[index] !== 0 ||
+      !startsDirectStatement(sourceText, structure.tokens, index) ||
+      structure.tokens[index + 1]?.text !== "("
+    ) {
+      continue;
+    }
+    const closing = structure.pairedDelimiters.get(index + 1);
+    const firstArgument = structure.tokens[index + 2];
+    const afterFirstArgument = structure.tokens[index + 3];
+    const closingToken = closing === undefined ? undefined : structure.tokens[closing];
+    if (
+      closing === undefined ||
+      firstArgument?.kind !== "string" ||
+      closingToken === undefined ||
+      (afterFirstArgument !== undefined && afterFirstArgument.text !== "," && afterFirstArgument.text !== ")") ||
+      !endsDirectStatement(sourceText, structure.tokens, closing)
+    ) {
+      continue;
+    }
+    const rawName = firstArgument.text.slice(1, -1);
+    if (!/^[A-Za-z][A-Za-z0-9_.]*$/u.test(rawName)) {
+      continue;
+    }
+    classes.push({ name: rawName, start: declarationToken.start, end: closingToken.end });
+  }
+  return classes;
+}
+
 function collectPlumberRoutes(sourceText: string, structure: RStructure): readonly StaticPlumberRoute[] {
   const routes: StaticPlumberRoute[] = [];
   for (let index = 0; index < structure.tokens.length; index += 1) {
@@ -545,6 +589,29 @@ export function extractRFileFacts(input: RExtractFileFactsInput): ArtifactFacts 
     return symbol;
   }
 
+  function addClass(name: string, start: number, end: number): SymbolNode {
+    const qualifiedName = `${fileNode.qualifiedName}#class:${name}`;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "class");
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "class",
+        declarationOrdinal
+      }),
+      name,
+      qualifiedName,
+      kind: "class",
+      filePath: input.filePath,
+      range: rangeFor(lineStarts, start, end),
+      isExported: true,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(fileNode, symbol, start, end);
+    return symbol;
+  }
+
   function addPlumberRoute(routeFact: StaticPlumberRoute, handler: SymbolNode): void {
     const routeName = `${routeFact.method} ${routeFact.path}`;
     const qualifiedName = `${fileNode.qualifiedName}#route:${routeName}`;
@@ -599,6 +666,11 @@ export function extractRFileFacts(input: RExtractFileFactsInput): ArtifactFacts 
         start: declaration.start,
         declaration
       })),
+      ...collectTopLevelRClasses(input.sourceText, structure).map((declaration) => ({
+        kind: "class" as const,
+        start: declaration.start,
+        declaration
+      })),
       ...collectPlumberRoutes(input.sourceText, structure).map((route) => ({
         kind: "route" as const,
         start: route.handlerStart,
@@ -616,6 +688,11 @@ export function extractRFileFacts(input: RExtractFileFactsInput): ArtifactFacts 
           functionFact.end,
           true
         );
+        continue;
+      }
+      if (declaration.kind === "class") {
+        const classFact = declaration.declaration;
+        addClass(classFact.name, classFact.start, classFact.end);
         continue;
       }
       const routeFact = declaration.route;
