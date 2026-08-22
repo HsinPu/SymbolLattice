@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.433.0 is a developer preview installed from a fixed revision of the official GitHub repository. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.SymbolLattice` index; add `--no-auto-sync` to disable it.
+> v0.434.0 is a developer preview installed from a fixed revision of the official GitHub repository. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.SymbolLattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
@@ -29,13 +29,15 @@ v0.432.0 deepens Shell (POSIX/Bash) structural depth. Fixed sources are Git v2.5
 
 v0.433.0 deepens Lua structural depth. Fixed sources are LuaRocks v3.13.0, Kong 3.9.3, and Lua 5.5.1; the product uses the sole `web-tree-sitter@0.26.12` runtime with retained `tree-sitter-lua` v0.5.0 WASM (SHA-256 `609f25f03773c8eaa3e94c504f360e770c49009ba9383b65be581b2d51774b71`). The approved subset is grammar-defined direct-root named Lua functions plus file `contains`; the fixed large-source acceptance reached TP 300 / FP 0 / FN 0 / evidenceInvalid 0, with all actual/generated negatives, controls, and lifecycle gates passing. Luau typed syntax, direct-call semantics, runtime dispatch, metatables, reflection, dynamic loading, and relationships that cannot be uniquely proven remain NONCLAIM; the official Lua 5.5 `luac` oracle is not claimed as fully compatible in this release.
 
+v0.434.0 deepens Luau structural depth. Fixed sources are official Luau 0.735 (`367f9d83cc29804a6d5938ec85b6116d34d8743b`), Lute `v1.0.1-nightly.20260822` (`ccd1edc563010fbab83c16d4476e6ed5be1ff1a3`), and Fusion `v0.3-beta` (`77e603534ff4013f4049611826ff0309d6000b15`). Extractor v330 supports bounded generic/optional/union/table/function type annotations, Luau if-expressions and interpolated strings, direct-root member methods, and exported/local type aliases; the reviewed exact-singleton subset reached TP 300 / FP 0 / FN 0 / evidenceInvalid 0, with 150 / 150 negative cases and lifecycle gates passing. The full fixed-source candidate scan separately records TP 3,752 / FP 0 / FN 1,412 and unsupported breadth recall 0.727; candidates outside the approved subset remain unsupported rather than being presented as full Luau coverage. Runtime dispatch, Roblox engine semantics, metatables, reflection, dynamic require, cross-file/cross-language relationships, and type inference/subtype compatibility are NONCLAIM.
+
 ## Supported languages
 
 SymbolLattice currently discovers and indexes 57 languages. A single `init` or `sync` scans every matching language in the same repository; languages do not need to be selected individually. This list means the files can be scanned and represented in the graph, not that every language has identical parsing depth. Dynamic relationships that cannot be proven from static source remain unresolved or pending, or are omitted.
 
 | Category | Languages |
 | --- | --- |
-| Recently validated deeply on large projects | TypeScript, Java, HTML, CSS, JavaScript, JSP, Python, Ruby, Shell |
+| Recently validated deeply on large projects | TypeScript, Java, HTML, CSS, JavaScript, JSP, Python, Ruby, Shell, Luau |
 | Web, component, and template languages | ArkTS, Vue, Svelte, Astro, Razor, PHP, Blade, Liquid, Twig, CFML |
 | JVM, .NET, and application languages | Groovy, Kotlin, Scala, C#, F#, VB.NET, Dart |
 | Systems and native languages | C, C++, Objective-C, Rust, Go, Swift, Zig, Nim, Fortran, Ada, Pascal, COBOL |
@@ -117,7 +119,7 @@ The installer never creates or deletes a project index automatically. Restart Co
 
 ## Upgrading from v0.420.0 or earlier
 
-v0.433.0 does not provide aliases for the old names and does not read the old index. Use this order:
+v0.434.0 does not provide aliases for the old names and does not read the old index. Use this order:
 
 ```bash
 # Remove the old Codex MCP configuration while the old CLI is still available
@@ -133,7 +135,7 @@ SymbolLattice init .
 SymbolLattice doctor codex
 ```
 
-| Previous surface | v0.433.0 |
+| Previous surface | v0.434.0 |
 | --- | --- |
 | npm package | `@hsinpu/symbollattice` |
 | CLI | `SymbolLattice` |
