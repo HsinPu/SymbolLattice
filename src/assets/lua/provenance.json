@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "symbol-lattice-lua-parser-provenance-v1",
+  "contract": {
+    "id": "SL-LUA-STRUCTURAL-v1.2",
+    "sha256": "09fe77359e177e99d8b06c769834857b79bfbefa19717a36f6fde92db965c6e6"
+  },
+  "runtime": {
+    "package": "web-tree-sitter",
+    "version": "0.26.12",
+    "packageArchiveSha256": "3bd96883c95ca6c5cb652f265a1563a2987651cdd4687f24967453c6fcbfdfce",
+    "lockIntegrity": "sha512-fvqTNZQBGUgUgfP0mHw+iHf9Yf6bRQrp0A3pSf2v/hSKxkT1beCoIWoLVmlPL7O6dmySfSb/t1aJoJvrgTRStw==",
+    "runtimeWasm": {
+      "bytes": 201104,
+      "sha256": "ba5c7a539603f251f380e4d6ce26ee954ffca7bda8b2e13744dc4c87d6ce6041"
+    },
+    "license": {
+      "path": "web-tree-sitter-MIT.txt",
+      "bytes": 1080,
+      "sha256": "c5cfb43042b6b72045f4ba997834d0a7786d2793d91680868b5815b39f14fc78"
+    }
+  },
+  "grammar": {
+    "name": "tree-sitter-lua",
+    "version": "0.5.0",
+    "repository": "https://github.com/tree-sitter-grammars/tree-sitter-lua.git",
+    "commit": "10fe0054734eec83049514ea2e718b2a56acd0c9",
+    "gitTreeSha1": "2795b5bd6e83dffbb6ab64c2e6f5d5989ddf9ae5",
+    "sourceArchive": {
+      "bytes": 675840,
+      "sha256": "731a2baa105607793d6e843a18040804c2dde4d3aacda0dc3ceca9f7fa19b3b7",
+      "pristineFiles": 59,
+      "pristineAggregateSha256": "229d5c80df58d585d22206b0a948d71cb38329148bb466692e73f66c092c6b5e"
+    },
+    "postGenerate": {
+      "files": 59,
+      "aggregateSha256": "bc695f07824ff0ac645d12b795d821dfe5d20a55b493cb4ff66d7750e5caff09",
+      "changedFiles": [
+        "src/node-types.json",
+        "src/parser.c",
+        "src/tree_sitter/array.h",
+        "src/tree_sitter/parser.h"
+      ]
+    },
+    "build": {
+      "treeSitterCli": "0.25.3",
+      "abi": 15,
+      "retainedDualBuildsByteIdentical": true,
+      "currentFreshBuild": "UNAVAILABLE_TERMINAL"
+    },
+    "wasm": {
+      "path": "tree-sitter-lua-v0.5.0.wasm",
+      "bytes": 53176,
+      "sha256": "609f25f03773c8eaa3e94c504f360e770c49009ba9383b65be581b2d51774b71"
+    },
+    "license": {
+      "path": "tree-sitter-lua-MIT.txt",
+      "bytes": 1079,
+      "sha256": "9a32b02e4c917b1ce6b5e79d8ea81e25cefd7f27d89c7235f2afb262c06cf32e"
+    }
+  },
+  "runtimePolicy": {
+    "architecture": "worker-per-request-byte-injected",
+    "filesystemReadsInsideWorker": 0,
+    "networkCallsInsideWorker": 0,
+    "sourceFailurePolicy": "file-only-fresh-worker-recovery",
+    "packagingFailurePolicy": "abort-generation-no-fallback"
+  }
+}

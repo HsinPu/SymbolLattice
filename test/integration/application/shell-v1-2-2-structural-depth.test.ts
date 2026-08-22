@@ -101,7 +101,7 @@ describe("Shell structural v1.2.2 persistence", () => {
       .toEqual(["custom"]);
   });
 
-  it("invalidates stale v327 facts and persists v328 direct-root structure", async () => {
+  it("invalidates stale v327 facts and persists v329 direct-root structure", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-shell-v328-"));
     temporaryDirectories.push(projectPath);
     const scriptPath = join(projectPath, "scripts", "deploy.sh");
@@ -155,7 +155,7 @@ describe("Shell structural v1.2.2 persistence", () => {
     });
 
     const synced = await upgradedService.sync({ projectPath });
-    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v328");
+    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v329");
     expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v157");
     expect(synced.lastIndexWork).toMatchObject({
       mode: "incremental",
@@ -166,7 +166,7 @@ describe("Shell structural v1.2.2 persistence", () => {
     const facts = upgradedStore.getArtifactFacts(projectPath)[0];
     expect(facts).toMatchObject({
       filePath: "scripts/deploy.sh",
-      extractorVersion: "multi-language-ast-v328"
+      extractorVersion: "multi-language-ast-v329"
     });
     expect(facts?.symbols.filter(({ kind }) => kind === "function").map(({ name }) => name))
       .toEqual(["left", "right"]);

@@ -14,12 +14,21 @@ const COMMIT = "0123456789abcdef0123456789abcdef01234567";
 const VERSION = "0.421.0";
 const OFFICIAL_REPOSITORY = "https://github.com/HsinPu/SymbolLattice.git";
 const SHELL_ASSET_MANIFEST_SHA256 = "25b76ced19fc8154bc4d80ae32162b1da7dbe75655d50251421c31c9bc55cc0a";
+const LUA_ASSET_MANIFEST_SHA256 = "29cf0d0c82cdc532da04d3ea0ce1d5a385cc71820d75d194b4d4576842ffd9d0";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const shellAssetSource = join(repositoryRoot, "src", "assets", "shell");
+const luaAssetSource = join(repositoryRoot, "src", "assets", "lua");
 const REQUIRED_PACKAGE_FILES = [
   "LICENSE",
   "README.en.md",
   "README.md",
+  "dist/assets/lua/THIRD_PARTY_NOTICES.md",
+  "dist/assets/lua/asset-manifest.json",
+  "dist/assets/lua/provenance.json",
+  "dist/assets/lua/sbom.cdx.json",
+  "dist/assets/lua/tree-sitter-lua-MIT.txt",
+  "dist/assets/lua/tree-sitter-lua-v0.5.0.wasm",
+  "dist/assets/lua/web-tree-sitter-MIT.txt",
   "dist/assets/shell/Binaryen-Apache-2.0.txt",
   "dist/assets/shell/Go-BSD-3-Clause.txt",
   "dist/assets/shell/LLVM-compiler-rt-Apache-2.0-WITH-LLVM-exception.txt",
@@ -60,6 +69,7 @@ async function executionFixture(options = {}) {
       }, null, 2)}\n`);
       await writeFile(join(workspace, "package-lock.json"), "{}\n");
       await cp(shellAssetSource, join(workspace, "src", "assets", "shell"), { recursive: true });
+      await cp(luaAssetSource, join(workspace, "src", "assets", "lua"), { recursive: true });
       return workspace;
     },
     runProcess: async (command, args, context) => {
@@ -73,6 +83,11 @@ async function executionFixture(options = {}) {
       if (command === "npm" && args[0] === "run" && args[1] === "build") {
         const builtAssets = join(workspace, "dist", "assets", "shell");
         await cp(join(workspace, "src", "assets", "shell"), builtAssets, { recursive: true });
+        await cp(
+          join(workspace, "src", "assets", "lua"),
+          join(workspace, "dist", "assets", "lua"),
+          { recursive: true }
+        );
         if (options.corruptBuildAsset === true) {
           await writeFile(join(builtAssets, "provenance.json"), " ", { flag: "a" });
         }
@@ -103,6 +118,11 @@ async function executionFixture(options = {}) {
           await cp(
             join(workspace, "dist", "assets", "shell"),
             join(prefix, "node_modules", "@hsinpu", "symbollattice", "dist", "assets", "shell"),
+            { recursive: true }
+          );
+          await cp(
+            join(workspace, "dist", "assets", "lua"),
+            join(prefix, "node_modules", "@hsinpu", "symbollattice", "dist", "assets", "lua"),
             { recursive: true }
           );
         }
@@ -153,13 +173,15 @@ describe("GitHub source installation Stage 2 execution", () => {
         sizeBytes: 22,
         requiredFilesPresent: true,
         forbiddenFiles: [],
-        shellAssets: { manifestSha256: SHELL_ASSET_MANIFEST_SHA256 }
+        shellAssets: { manifestSha256: SHELL_ASSET_MANIFEST_SHA256 },
+        luaAssets: { manifestSha256: LUA_ASSET_MANIFEST_SHA256 }
       },
       isolatedInstallation: {
         version: VERSION,
         cliHelpPassed: true,
         mcp: { toolCount: 21 },
-        shellAssets: { manifestSha256: SHELL_ASSET_MANIFEST_SHA256 }
+        shellAssets: { manifestSha256: SHELL_ASSET_MANIFEST_SHA256 },
+        luaAssets: { manifestSha256: LUA_ASSET_MANIFEST_SHA256 }
       },
       globalInstallation: { performed: false },
       mutation: { performed: true, globalInstallationPerformed: false },

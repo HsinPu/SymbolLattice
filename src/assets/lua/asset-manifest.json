@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "symbol-lattice-lua-asset-manifest-v1",
+  "algorithm": "sha256 of UTF-8 concatenated sorted lines: <sha256> <bytes> <path> LF",
+  "entryCount": 6,
+  "aggregateSha256": "1b66cc5ea785a48916af57fb3b5afc9aa90be1acc02bb79cc2f8c6c03d31aa51",
+  "selfExcluded": true,
+  "entries": [
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "bytes": 754,
+      "sha256": "ca44d053260ee861a2853700aa28122e31b2df06d025b1d43f2cb31d6dc17363"
+    },
+    {
+      "path": "provenance.json",
+      "bytes": 2426,
+      "sha256": "b01bdefa7c519fd7da00c90d1dfa6a33dd2513e8d3293f155d26303b48889993"
+    },
+    {
+      "path": "sbom.cdx.json",
+      "bytes": 2085,
+      "sha256": "410d5e42efbb9192f54a732263d6bfc36492645ccc31d738d07f8fffe6731cad"
+    },
+    {
+      "path": "tree-sitter-lua-MIT.txt",
+      "bytes": 1079,
+      "sha256": "9a32b02e4c917b1ce6b5e79d8ea81e25cefd7f27d89c7235f2afb262c06cf32e"
+    },
+    {
+      "path": "tree-sitter-lua-v0.5.0.wasm",
+      "bytes": 53176,
+      "sha256": "609f25f03773c8eaa3e94c504f360e770c49009ba9383b65be581b2d51774b71"
+    },
+    {
+      "path": "web-tree-sitter-MIT.txt",
+      "bytes": 1080,
+      "sha256": "c5cfb43042b6b72045f4ba997834d0a7786d2793d91680868b5815b39f14fc78"
+    }
+  ]
+}

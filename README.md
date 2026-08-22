@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.432.0 是從官方 GitHub 固定版本安裝的開發者預覽版。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
+> v0.433.0 是從官方 GitHub 固定版本安裝的開發者預覽版。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
 
 ## 這是什麼
 
@@ -26,6 +26,8 @@ SymbolLattice 掃描本機 repository、保存程式碼圖，並以 CLI/MCP 提�
 v0.431.0 強化 SQL／PostgreSQL structural depth。固定來源為 PostgreSQL `REL_17_5`（`5e2f3df49d4298c6097789364a5a53be172f6e85`）、Supabase PostgreSQL observed `develop`（`667e8c6a0d65c6f2a855b05a33f96cdc24453999`）與 Hasura v2.12.0 peeled commit（`2660015787a4de2aa52fe67e56fb90efc90148b8`）。在 extractor v327／resolver v157、未新增 parser dependency 的 structural-only v2 契約下，只宣稱完整、可界定的 `CREATE SCHEMA`／`CREATE TABLE` identity 與檔案 `contains`；postfix v4 達到 TP 300／FP 0／FN 0／evidenceInvalid 0、負向 150／150、targeted 16／16，lifecycle v8 的 14 個正式操作通過。這仍是 bounded 靜態 structural analysis；view、function、dependency、`search_path`、PL/pgSQL、dynamic SQL、runtime 與其他 SQL 方言均為 NONCLAIM，不代表完整 PostgreSQL 支援。
 
 v0.432.0 強化 Shell（POSIX／Bash）structural depth。固定來源為 Git v2.50.1（`d82adb61ba2fd11d8f2587fca1b6bd7925ce4044`）、nvm v0.40.6（`b6cf55f6adf3b953d0e5e00a4049444e300e3af8`）與 Kubernetes v1.36.3（`0f29094e5b73085e3802ecc1298ecae13866bfe6`）。在 extractor v328／resolver v157 與版本化 `SL-SHELL-STRUCTURAL-v1.2.3` 契約下，核准 subset 達 TP 300／FP 0／FN 0／evidenceInvalid 0、負向 150／150、controls 4／4；生命週期涵蓋 fresh、no-op、comment、semantic、rename、delete、restore、reopen、invalid source／config 與資源壓力恢復。支援限於語法有效且有界的 direct top-level function identity 與檔案 `contains`；動態 dispatch、`export -f`、runtime 行為、跨語言關係與無法唯一證明的 Shell 語意均為 NONCLAIM。
+
+v0.433.0 強化 Lua structural depth。固定 LuaRocks v3.13.0、Kong 3.9.3 與 Lua 5.5.1 來源；產品使用唯一 `web-tree-sitter@0.26.12` runtime 與保留的 `tree-sitter-lua` v0.5.0 WASM（SHA-256 `609f25f03773c8eaa3e94c504f360e770c49009ba9383b65be581b2d51774b71`）。核准 subset 為 grammar-defined direct-root named Lua functions 與檔案 `contains`，大型固定來源達 TP 300／FP 0／FN 0／evidenceInvalid 0，actual/generated negatives、controls 與 lifecycle gates 全部通過。`.luau` typed syntax、direct-call 語意、runtime dispatch、metatables、reflection、dynamic loading 與無法唯一證明的關係均為 NONCLAIM；官方 Lua 5.5 `luac` oracle 在本版仍未宣稱完整相容。
 
 ## 支援的語言
 
@@ -115,7 +117,7 @@ SymbolLattice uninstall codex --apply --yes
 
 ## 從 v0.420.0 或更早版本升級
 
-v0.432.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
+v0.433.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
 
 ```bash
 # 仍可執行舊 CLI 時，先移除舊 Codex MCP 設定
@@ -131,7 +133,7 @@ SymbolLattice init .
 SymbolLattice doctor codex
 ```
 
-| 舊項目 | v0.432.0 |
+| 舊項目 | v0.433.0 |
 | --- | --- |
 | npm package | `@hsinpu/symbollattice` |
 | CLI | `SymbolLattice` |

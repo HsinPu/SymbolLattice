@@ -44,6 +44,8 @@ import {
   createFrameworkFactPluginRegistry,
   extractFileFacts
 } from "../../../src/extraction/index.js";
+import { LUA_GRAMMAR_SHA256 } from "../../../src/extraction/lua-worker-protocol.js";
+import type { LuaWorkerFactory } from "../../../src/extraction/lua-worker-runtime.js";
 import { FileSystemSourceCatalog } from "../../../src/infrastructure/filesystem/index.js";
 import { SqliteGraphStore } from "../../../src/infrastructure/sqlite/index.js";
 import type {
@@ -21624,7 +21626,7 @@ describe("SymbolLatticeService", () => {
     expect(search.results).toMatchObject([{ filePath: "src/server.c", language: "c" }]);
   });
 
-  it("indexes Lua Lapis routes and retains Lua source-search filtering", async () => {
+  it("indexes structural Lua functions without Lapis route claims", async () => {
     const projectPath = await createInlineProject({
       "src/app.lua": [
         'local lapis = require("lapis")',
@@ -21641,41 +21643,76 @@ describe("SymbolLatticeService", () => {
         'app:post("create-user", "/users", create_user)'
       ].join("\n")
     });
-    const service = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+    const encoder = new TextEncoder();
+    const workerFactory: LuaWorkerFactory = {
+      async create() {
+        return {
+          async parse(input) {
+            const sourceText = new TextDecoder().decode(input.sourceBytes);
+            const declarations = ["health", "create_user"].map((name) => {
+              const declarationStart = sourceText.indexOf(`local function ${name}`);
+              const nameStart = sourceText.indexOf(name, declarationStart);
+              const declarationEnd = sourceText.indexOf("\nend", nameStart) + "\nend".length;
+              return {
+                name,
+                form: "local-function" as const,
+                declarationStartByte: encoder.encode(sourceText.slice(0, declarationStart)).byteLength,
+                declarationEndByte: encoder.encode(sourceText.slice(0, declarationEnd)).byteLength,
+                nameStartByte: encoder.encode(sourceText.slice(0, nameStart)).byteLength,
+                nameEndByte: encoder.encode(sourceText.slice(0, nameStart + name.length)).byteLength
+              };
+            });
+            return {
+              schema: "symbol-lattice-lua-worker-response-v1",
+              requestId: input.requestId,
+              fileSha256: input.fileSha256,
+              grammarSha256: LUA_GRAMMAR_SHA256,
+              decision: { kind: "emit" },
+              metrics: {
+                sourceBytes: input.sourceBytes.byteLength,
+                physicalLines: sourceText.split("\n").length,
+                functionCandidates: declarations.length,
+                namedFunctions: declarations.length,
+                maxDepth: 2
+              },
+              declarations
+            };
+          },
+          async terminate() {}
+        };
+      }
+    };
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(
+      graphStore,
+      new FileSystemSourceCatalog(),
+      { luaWorkerFactory: workerFactory }
+    );
 
     await service.init({ projectPath });
     const routes = await service.routes(projectPath);
     const getRoutes = await service.routes(projectPath, { method: "GET" });
     const search = await service.search(projectPath, "health", { language: "lua" });
+    const health = await service.find(projectPath, "src/app.lua#health");
+    const snapshot = graphStore.getSnapshot(projectPath);
 
-    expect(routes.routes).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          method: "GET",
-          path: "/health",
-          handler: expect.objectContaining({ qualifiedName: "src/app.lua#health" }),
-          edge: expect.objectContaining({
-            resolution: "exact",
-            evidence: expect.objectContaining({
-              ruleId: "framework.lapis.direct-application.literal-route.local-function",
-              stage: "syntax"
-            })
-          })
-        }),
-        expect.objectContaining({
-          method: "POST",
-          path: "/users",
-          handler: expect.objectContaining({ qualifiedName: "src/app.lua#create_user" })
-        })
-      ])
-    );
-    expect(getRoutes.routes).toMatchObject([
+    expect(health.symbols).toMatchObject([
       {
-        method: "GET",
-        path: "/health",
-        handler: { qualifiedName: "src/app.lua#health" }
+        kind: "function",
+        qualifiedName: "src/app.lua#health"
       }
     ]);
+    expect(snapshot.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "contains",
+        evidence: expect.objectContaining({
+          ruleId: "language.lua.function.direct-root.tree-sitter-lua-v0.5",
+          stage: "syntax"
+        })
+      })
+    ]));
+    expect(routes.routes).toEqual([]);
+    expect(getRoutes.routes).toEqual([]);
     expect(search.results).toMatchObject([{ filePath: "src/app.lua", language: "lua" }]);
   });
 

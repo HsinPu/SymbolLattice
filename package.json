@@ -1,6 +1,6 @@
 {
   "name": "@hsinpu/symbollattice",
-  "version": "0.432.0",
+  "version": "0.433.0",
   "description": "Evidence-first local code intelligence for TypeScript, JavaScript, ArkTS/ArkUI, Vue, Svelte, Astro, HTML, CSS, JSP/JSPX/tag files, Razor/Blazor, Terraform/OpenTofu, Shopify Liquid, Twig, Laravel Blade, Solidity, CFML/CFScript, Nix, VB.NET, Python/FastAPI/Django Ninja/Flask/Flask-RESTful/Django/Starlette/aiohttp/Sanic, Go, Rust, Java/Spring/Micronaut/Jakarta REST, Groovy, Fortran, Ada, PHP, C, COBOL/CICS, Zig, YAML, XML/MyBatis, Java properties, Shell/Bash, SQL DDL, GraphQL schema with bounded NestJS resolver links, Protocol Buffers declarations with bounded gRPC service contracts, Lua/Luau, Pascal, Objective-C/Objective-C++, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.",
   "license": "MIT",
   "repository": {
@@ -26,7 +26,7 @@
     "node": ">=22.13 <25"
   },
   "scripts": {
-    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json && node scripts/copy-shell-parser-assets.mjs",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json && node scripts/copy-shell-parser-assets.mjs && node scripts/copy-lua-parser-assets.mjs",
     "check": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -56,6 +56,7 @@
     "jsonc-parser": "3.3.1",
     "saxes": "^6.0.0",
     "typescript": "^5.9.3",
+    "web-tree-sitter": "0.26.12",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },

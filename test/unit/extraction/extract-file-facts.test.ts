@@ -11289,7 +11289,7 @@ describe("source extraction", () => {
     expect(broken.symbols.filter((symbol) => symbol.kind === "function")).toEqual([]);
   });
 
-  it("extracts direct Lua Lapis literal routes with exact evidence", () => {
+  it("keeps synchronous Lua extraction file-only without Lapis route claims", () => {
     const facts = extractFileFacts({
       filePath: "src/app.lua",
       language: "lua",
@@ -11313,46 +11313,11 @@ describe("source extraction", () => {
       ].join("\n")
     });
 
-    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
-    expect(
-      facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)
-    ).toEqual(["src/app.lua#health", "src/app.lua#create_user", "src/app.lua#remove_user"]);
-    expect(
-      facts.edges
-        .filter((edge) => edge.kind === "routes")
-        .map((edge) => [
-          symbolsById.get(edge.sourceId)?.name,
-          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
-          edge.evidence?.ruleId,
-          edge.resolution,
-          edge.confidence
-        ])
-    ).toEqual([
-      [
-        "GET /health",
-        "src/app.lua#health",
-        "framework.lapis.direct-application.literal-route.local-function",
-        "exact",
-        1
-      ],
-      [
-        "POST /users",
-        "src/app.lua#create_user",
-        "framework.lapis.direct-application.literal-route.local-function",
-        "exact",
-        1
-      ],
-      [
-        "ALL /users/:id",
-        "src/app.lua#remove_user",
-        "framework.lapis.direct-application.literal-route.local-function",
-        "exact",
-        1
-      ]
-    ]);
+    expect(facts.symbols).toMatchObject([{ kind: "file", qualifiedName: "src/app.lua" }]);
+    expect(facts.edges).toEqual([]);
   });
 
-  it("accepts a direct Lua require(\"lapis\").Application binding", () => {
+  it("does not treat a direct Lua require(\"lapis\").Application binding as a route", () => {
     const facts = extractFileFacts({
       filePath: "src/direct.lua",
       language: "lua",
@@ -11365,25 +11330,11 @@ describe("source extraction", () => {
       ].join("\n")
     });
 
-    const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
-    expect(
-      facts.edges
-        .filter((edge) => edge.kind === "routes")
-        .map((edge) => [
-          symbolsById.get(edge.sourceId)?.name,
-          symbolsById.get(edge.targetId ?? "")?.qualifiedName,
-          edge.evidence?.ruleId
-        ])
-    ).toEqual([
-      [
-        "DELETE /users/:id",
-        "src/direct.lua#remove_user",
-        "framework.lapis.direct-application.literal-route.local-function"
-      ]
-    ]);
+    expect(facts.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
+    expect(facts.edges).toEqual([]);
   });
 
-  it("requires direct Lua Lapis bindings, literal paths, local handlers before registration, no rebinding, and balanced syntax", () => {
+  it("keeps all legacy Lua Lapis shapes file-only in synchronous extraction", () => {
     const missingFramework = extractFileFacts({
       filePath: "src/missing-framework.lua",
       language: "lua",
@@ -11468,24 +11419,15 @@ describe("source extraction", () => {
     for (const facts of [
       missingFramework,
       dynamicPath,
+      inlineHandler,
       reboundHandler,
       lateHandler,
       tableWrappedRoute,
       broken
     ]) {
-      expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
-      expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
+      expect(facts.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
+      expect(facts.edges).toEqual([]);
     }
-    expect(inlineHandler.symbols.filter((symbol) => symbol.kind === "route")).toHaveLength(1);
-    expect(inlineHandler.edges.filter((edge) => edge.kind === "routes")).toEqual([
-      expect.objectContaining({
-        referenceName: "<anonymous route handler>",
-        evidence: expect.objectContaining({
-          ruleId: "framework.lapis.direct-application.literal-route.inline-function"
-        })
-      })
-    ]);
-    expect(broken.symbols.filter((symbol) => symbol.kind === "function")).toEqual([]);
   });
 
   it("extracts Luau-compatible top-level functions while keeping Lua-only Lapis routes disabled", () => {

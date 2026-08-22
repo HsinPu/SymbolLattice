@@ -68,6 +68,12 @@ import {
   type ExtractedFileFacts,
   type FrameworkFactPluginRegistry
 } from "../extraction/index.js";
+import { projectLuaStructuralFacts } from "../extraction/lua-structural.js";
+import {
+  createLuaWorkerRuntime,
+  type LuaWorkerFactory,
+  type LuaWorkerRuntime
+} from "../extraction/lua-worker-runtime.js";
 import {
   GitChangeSetError,
   type GitChangeRecord,
@@ -307,6 +313,8 @@ export interface SymbolLatticeServiceExtensions {
   readonly frameworkFactPlugins?: FrameworkFactPluginRegistry;
   readonly frameworkProjectPlugins?: FrameworkProjectPluginRegistry;
   readonly referenceResolverPlugins?: ReferenceResolverPluginRegistry;
+  /** Test composition seam; production callers use the fixed worker factory. */
+  readonly luaWorkerFactory?: LuaWorkerFactory;
 }
 
 function artifactFactsExtractorVersion(extractor: ArtifactFactsExtractor): string {
@@ -1344,6 +1352,7 @@ export class SymbolLatticeService {
   private readonly frameworkProjectPlugins: FrameworkProjectPluginRegistry | undefined;
   private readonly activeArtifactFactsExtractorVersion: string;
   private readonly activeProjectResolverVersion: string;
+  private readonly luaWorkerRuntime: LuaWorkerRuntime;
 
   public constructor(
     graphStore: GraphStore,
@@ -1374,6 +1383,11 @@ export class SymbolLatticeService {
     this.gitRevisionHunkProvider = gitRevisionHunkProvider;
     this.referenceResolverPlugins = extensions?.referenceResolverPlugins;
     this.frameworkProjectPlugins = extensions?.frameworkProjectPlugins;
+    this.luaWorkerRuntime = createLuaWorkerRuntime(
+      extensions?.luaWorkerFactory === undefined
+        ? {}
+        : { workerFactory: extensions.luaWorkerFactory }
+    );
     this.activeArtifactFactsExtractorVersion = artifactFactsExtractorVersion(
       this.artifactFactsExtractor
     );
@@ -1411,9 +1425,10 @@ export class SymbolLatticeService {
     const scan = await this.scanForIndex(projectPath, options, bundle?.indexInputs ?? null);
     performance.end("scan", scanStartedAt);
     const extractionStartedAt = performance.start();
-    const artifactFacts = scan.sourceDocuments.map((document) =>
-      this.extractPersistedFacts(document, scan.frameworkEvidence)
-    );
+    const artifactFacts: PersistedArtifactFacts[] = [];
+    for (const document of scan.sourceDocuments) {
+      artifactFacts.push(await this.extractPersistedFacts(document, scan.frameworkEvidence));
+    }
     performance.end("extraction", extractionStartedAt);
     this.replaceGeneration(
       projectPath,
@@ -1590,7 +1605,7 @@ export class SymbolLatticeService {
           reuseInvalidationReasons.add("framework-evidence-changed");
         }
       }
-      artifactFacts.push(this.extractPersistedFacts(document, scan.frameworkEvidence));
+      artifactFacts.push(await this.extractPersistedFacts(document, scan.frameworkEvidence));
       reExtractedFiles.push(document.relativePath);
     }
 
@@ -4681,18 +4696,29 @@ export class SymbolLatticeService {
     };
   }
 
-  private extractPersistedFacts(
+  private async extractPersistedFacts(
     document: SourceDocument,
     frameworkEvidence?: ExtractFileFactsInput["frameworkEvidence"]
-  ): PersistedArtifactFacts {
+  ): Promise<PersistedArtifactFacts> {
+    const extracted = document.language === "lua"
+      ? projectLuaStructuralFacts({
+          filePath: document.relativePath,
+          sourceBytes: document.sourceBytes ?? new Uint8Array(),
+          sourceText: document.sourceText,
+          response: await this.luaWorkerRuntime.parse({
+            filePath: document.relativePath,
+            ...(document.sourceBytes === undefined ? {} : { sourceBytes: document.sourceBytes })
+          })
+        })
+      : this.artifactFactsExtractor({
+          filePath: document.relativePath,
+          sourceText: document.sourceText,
+          ...(document.sourceBytes === undefined ? {} : { sourceBytes: document.sourceBytes }),
+          language: document.language,
+          ...(frameworkEvidence === undefined ? {} : { frameworkEvidence })
+        });
     return {
-      ...this.artifactFactsExtractor({
-        filePath: document.relativePath,
-        sourceText: document.sourceText,
-        ...(document.sourceBytes === undefined ? {} : { sourceBytes: document.sourceBytes }),
-        language: document.language,
-        ...(frameworkEvidence === undefined ? {} : { frameworkEvidence })
-      }),
+      ...extracted,
       filePath: document.relativePath,
       language: document.language,
       contentHash: document.contentHash,

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ArtifactFacts, SymbolNode } from "../../../src/domain/index.js";
 import { extractLuaFileFacts } from "../../../src/extraction/lua.js";
+import { extractFileFacts } from "../../../src/extraction/index.js";
 import { extractPascalFileFacts } from "../../../src/extraction/pascal.js";
 
 function functionByName(facts: ArtifactFacts, name: string): SymbolNode {
@@ -23,6 +24,20 @@ function routes(facts: ArtifactFacts) {
 }
 
 describe("Lua, Luau, and Pascal bounded same-file direct calls", () => {
+  it("removes legacy Lua and Lapis claims from the product dispatch", () => {
+    const facts = extractFileFacts({
+      filePath: "src/routes.lua",
+      language: "lua",
+      sourceText: `local app = require("lapis").Application()
+local function handler() end
+app:get("/legacy", handler)`
+    });
+
+    expect(facts.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
+    expect(facts.edges).toEqual([]);
+    expect(facts.pendingReferences).toEqual([]);
+  });
+
   it("keeps Lua local function symbols without claiming a direct call", () => {
     const facts = extractLuaFileFacts({
       filePath: "src/smoke.lua",

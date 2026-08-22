@@ -22,6 +22,7 @@ import { extractFortranFileFacts } from "./fortran.js";
 import { extractAdaFileFacts } from "./ada.js";
 import { extractKotlinFileFacts } from "./kotlin.js";
 import { extractLuaFileFacts } from "./lua.js";
+import { projectLuaFileOnlyFacts } from "./lua-structural.js";
 import { extractObjectiveCFileFacts } from "./objc.js";
 import { extractPascalFileFacts } from "./pascal.js";
 import { extractRFileFacts } from "./r.js";
@@ -8012,8 +8013,11 @@ export function extractFileFacts(
   if (input.language === "proto") {
     return extractProtoFileFacts({ ...input, language: "proto" });
   }
-  if (input.language === "lua" || input.language === "luau") {
-    return extractLuaFileFacts({ ...input, language: input.language });
+  if (input.language === "lua") {
+    return projectLuaFileOnlyFacts({ filePath: input.filePath, sourceText: input.sourceText });
+  }
+  if (input.language === "luau") {
+    return extractLuaFileFacts({ ...input, language: "luau" });
   }
   if (input.language === "pascal") {
     return extractPascalFileFacts({ ...input, language: "pascal" });

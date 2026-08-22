@@ -153,7 +153,7 @@ export interface SourceFile {
   readonly relativePath: string;
   readonly language: SupportedLanguage;
   readonly sourceText: string;
-  /** Retained only for Shell, whose exact parser contract validates raw UTF-8. */
+  /** Retained for byte-sensitive Shell and Lua parser contracts. */
   readonly sourceBytes?: Uint8Array;
   readonly contentHash: string;
 }
@@ -175,7 +175,7 @@ export interface SourceDiscoveryOptions {
 export const FRESHNESS_PATH_DISCOVERY_POLICY = "single-project-walk-v1" as const;
 export const STREAMING_UTF8_HASH_POLICY = "streaming-utf8-v1" as const;
 export const SOURCE_FINGERPRINT_READ_POLICY =
-  "streaming-utf8-with-shell-raw-bytes-and-objective-c-header-classification-v2" as const;
+  "streaming-raw-bytes-for-shell-and-lua-with-objective-c-header-classification-v3" as const;
 export const MAXIMUM_FRESHNESS_CONCURRENT_READS = 8 as const;
 /** Full source reads retain text, so keep descriptor pressure bounded on large repositories. */
 export const MAXIMUM_SOURCE_CONCURRENT_READS = 8 as const;
@@ -387,8 +387,8 @@ export async function loadSourcePaths(
           relativePath: toProjectRelativePath(normalizedProjectPath, absolutePath),
           language,
           sourceText,
-          ...(language === "shell" && sourceBytes !== undefined ? { sourceBytes } : {}),
-          contentHash: language === "shell" && sourceBytes !== undefined
+          ...(requiresRawSourceBytes(language) && sourceBytes !== undefined ? { sourceBytes } : {}),
+          contentHash: requiresRawSourceBytes(language) && sourceBytes !== undefined
             ? hashSourceBytes(sourceBytes)
             : hashSource(sourceText)
         } satisfies SourceFile;
@@ -445,7 +445,7 @@ export async function fingerprintSourcePaths(
         return {
           relativePath: toProjectRelativePath(normalizedProjectPath, absolutePath),
           language,
-          contentHash: language === "shell"
+          contentHash: requiresRawSourceBytes(language)
             ? sourceBytes === undefined
               ? await hashRawFile(absolutePath)
               : hashSourceBytes(sourceBytes)
@@ -463,6 +463,10 @@ export async function fingerprintSourcePaths(
   }
 
   return fingerprints.sort((left, right) => compareProjectPaths(left.relativePath, right.relativePath));
+}
+
+function requiresRawSourceBytes(language: SupportedLanguage): boolean {
+  return language === "shell" || language === "lua";
 }
 
 /**

@@ -191,7 +191,7 @@ describe("Shell parser asset closure", () => {
   it("disables Git text conversion for every hash-bound asset and adapter file", async () => {
     const attributes = await readFile(join(repositoryRoot, ".gitattributes"), "utf8");
     expect(attributes).toBe(
-      "/src/assets/shell/* -text\n/tools/shell-parser-adapter/* -text\n"
+      "/src/assets/shell/* -text\n/src/assets/lua/* -text\n/tools/shell-parser-adapter/* -text\n"
     );
     const paths = [
       ...(await readdir(sourceDirectory)).map((path) => `src/assets/shell/${path}`),

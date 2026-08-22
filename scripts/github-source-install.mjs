@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { verifyShellParserAssets } from "./copy-shell-parser-assets.mjs";
+import { verifyLuaParserAssets } from "./copy-lua-parser-assets.mjs";
 
 const PACKAGE_NAME = "@hsinpu/symbollattice";
 const REPOSITORY = "HsinPu/SymbolLattice";
@@ -38,6 +39,13 @@ const REQUIRED_PACKAGE_FILES = Object.freeze([
   "dist/assets/shell/mvdan-sh-v3.13.1-tinygo-v0.41.1.wasm",
   "dist/assets/shell/provenance.json",
   "dist/assets/shell/sbom.cdx.json",
+  "dist/assets/lua/THIRD_PARTY_NOTICES.md",
+  "dist/assets/lua/asset-manifest.json",
+  "dist/assets/lua/provenance.json",
+  "dist/assets/lua/sbom.cdx.json",
+  "dist/assets/lua/tree-sitter-lua-MIT.txt",
+  "dist/assets/lua/tree-sitter-lua-v0.5.0.wasm",
+  "dist/assets/lua/web-tree-sitter-MIT.txt",
   "dist/cli/main.js",
   "dist/index.js",
   "package.json"
@@ -259,6 +267,9 @@ export async function executeSourceInstallStage2(plan, dependencies = {}) {
     const builtShellAssets = await verifyShellParserAssets(
       join(workspacePath, "dist", "assets", "shell")
     );
+    const builtLuaAssets = await verifyLuaParserAssets(
+      join(workspacePath, "dist", "assets", "lua")
+    );
     executedSteps.push("verify-build-assets");
 
     step = "pack-directory";
@@ -283,6 +294,9 @@ export async function executeSourceInstallStage2(plan, dependencies = {}) {
     step = "verify-isolated-assets";
     const isolatedShellAssets = await verifyShellParserAssets(
       join(isolatedPackageDirectory, "dist", "assets", "shell")
+    );
+    const isolatedLuaAssets = await verifyLuaParserAssets(
+      join(isolatedPackageDirectory, "dist", "assets", "lua")
     );
     executedSteps.push("verify-isolated-assets");
     const isolatedEntry = join(
@@ -326,14 +340,16 @@ export async function executeSourceInstallStage2(plan, dependencies = {}) {
         files: Object.freeze(packageEvidence.files),
         requiredFilesPresent: true,
         forbiddenFiles: Object.freeze([]),
-        shellAssets: freezeShellAssetEvidence(builtShellAssets)
+        shellAssets: freezeAssetEvidence(builtShellAssets),
+        luaAssets: freezeAssetEvidence(builtLuaAssets)
       }),
       isolatedInstallation: Object.freeze({
         prefix: isolatedPrefix,
         entryPath: isolatedEntry,
         version: reportedVersion,
         cliHelpPassed: true,
-        shellAssets: freezeShellAssetEvidence(isolatedShellAssets),
+        shellAssets: freezeAssetEvidence(isolatedShellAssets),
+        luaAssets: freezeAssetEvidence(isolatedLuaAssets),
         mcp: Object.freeze(mcp)
       }),
       globalInstallation: Object.freeze({ performed: false }),
@@ -847,7 +863,7 @@ function compareText(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function freezeShellAssetEvidence(evidence) {
+function freezeAssetEvidence(evidence) {
   return Object.freeze({
     manifestSha256: evidence.manifestSha256,
     aggregateSha256: evidence.aggregateSha256,

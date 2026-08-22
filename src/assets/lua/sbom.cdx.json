@@ -1,0 +1,62 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-08-20T00:00:00+08:00",
+    "component": {
+      "type": "application",
+      "bom-ref": "pkg:npm/%40hsinpu/symbollattice@0.433.0",
+      "name": "@hsinpu/symbollattice",
+      "version": "0.433.0"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/web-tree-sitter@0.26.12",
+      "name": "web-tree-sitter",
+      "version": "0.26.12",
+      "purl": "pkg:npm/web-tree-sitter@0.26.12",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "3bd96883c95ca6c5cb652f265a1563a2987651cdd4687f24967453c6fcbfdfce"
+        }
+      ],
+      "licenses": [{ "expression": "MIT" }],
+      "properties": [
+        {
+          "name": "npm:integrity",
+          "value": "sha512-fvqTNZQBGUgUgfP0mHw+iHf9Yf6bRQrp0A3pSf2v/hSKxkT1beCoIWoLVmlPL7O6dmySfSb/t1aJoJvrgTRStw=="
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "tree-sitter-lua-v0.5.0-wasm",
+      "name": "tree-sitter-lua-v0.5.0.wasm",
+      "version": "0.5.0",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "609f25f03773c8eaa3e94c504f360e770c49009ba9383b65be581b2d51774b71"
+        }
+      ],
+      "licenses": [{ "expression": "MIT" }],
+      "properties": [
+        { "name": "vcs:commit", "value": "10fe0054734eec83049514ea2e718b2a56acd0c9" },
+        { "name": "vcs:tree", "value": "2795b5bd6e83dffbb6ab64c2e6f5d5989ddf9ae5" },
+        { "name": "source:archive-sha256", "value": "731a2baa105607793d6e843a18040804c2dde4d3aacda0dc3ceca9f7fa19b3b7" },
+        { "name": "source:pristine-aggregate-sha256", "value": "229d5c80df58d585d22206b0a948d71cb38329148bb466692e73f66c092c6b5e" },
+        { "name": "source:post-generate-aggregate-sha256", "value": "bc695f07824ff0ac645d12b795d821dfe5d20a55b493cb4ff66d7750e5caff09" }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "pkg:npm/%40hsinpu/symbollattice@0.433.0",
+      "dependsOn": ["pkg:npm/web-tree-sitter@0.26.12", "tree-sitter-lua-v0.5.0-wasm"]
+    }
+  ]
+}

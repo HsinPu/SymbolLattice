@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,6 +18,26 @@ afterEach(async () => {
 });
 
 describe("filesystem source catalog freshness", () => {
+  it("retains exact Lua bytes and binds the content hash to those bytes", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-source-catalog-lua-"));
+    temporaryDirectories.push(projectPath);
+    const sourceBytes = new Uint8Array([
+      ...new TextEncoder().encode("function byteExact()\nend\n"),
+      0xff
+    ]);
+    await writeFile(join(projectPath, "entry.lua"), sourceBytes);
+
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(scan.sourceDocuments).toHaveLength(1);
+    expect(scan.sourceDocuments[0]).toMatchObject({
+      relativePath: "entry.lua",
+      language: "lua",
+      contentHash: createHash("sha256").update(sourceBytes).digest("hex")
+    });
+    expect(Array.from(scan.sourceDocuments[0]?.sourceBytes ?? [])).toEqual(Array.from(sourceBytes));
+  });
+
   it("proves an unchanged project from source and bounded configuration identities", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-source-catalog-"));
     temporaryDirectories.push(projectPath);
@@ -50,7 +71,7 @@ describe("filesystem source catalog freshness", () => {
       retainedSourceText: false,
       configurationPolicy: "configuration-candidates-v1",
       configurationCandidatesChecked: expect.any(Number),
-      sourceReadPolicy: "streaming-utf8-with-shell-raw-bytes-and-objective-c-header-classification-v2",
+      sourceReadPolicy: "streaming-raw-bytes-for-shell-and-lua-with-objective-c-header-classification-v3",
       configurationReadPolicy: "streaming-utf8-v1",
       discoveryPolicy: "single-project-walk-v1",
       maximumConcurrentReads: 8,
