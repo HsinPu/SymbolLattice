@@ -49,9 +49,20 @@ interface StaticDancer2Route {
 
 interface StaticPerlFacts {
   readonly valid: boolean;
+  readonly declarations: readonly StaticPerlDeclaration[];
   readonly package: StaticPerlPackage | null;
   readonly functions: readonly StaticPerlFunction[];
   readonly routes: readonly StaticDancer2Route[];
+}
+
+type StaticPerlDeclarationKind = "package" | "function" | "class";
+
+interface StaticPerlDeclaration {
+  readonly kind: StaticPerlDeclarationKind;
+  readonly name: string;
+  readonly packageName: string | null;
+  readonly start: number;
+  readonly end: number;
 }
 
 interface LexicalPerlTokens {
@@ -97,6 +108,35 @@ function isSimplePerlIdentifier(value: string): boolean {
   return /^[A-Za-z_][A-Za-z0-9_]*$/u.test(value);
 }
 
+function perlQuoteLikeAt(sourceText: string, start: number): { readonly end: number } | null | false {
+  const prefix = ["qq", "qw", "qx", "qr", "q"].find((candidate) => sourceText.startsWith(candidate, start));
+  if (prefix === undefined) {
+    return null;
+  }
+  const delimiter = sourceText[start + prefix.length];
+  if (delimiter === undefined || /[\sA-Za-z0-9_]/u.test(delimiter)) {
+    return null;
+  }
+  const pairedClose: Readonly<Record<string, string>> = { "(": ")", "[": "]", "{": "}", "<": ">" };
+  const close = pairedClose[delimiter] ?? delimiter;
+  let depth = 0;
+  let index = start + prefix.length + 1;
+  while (index < sourceText.length) {
+    const value = sourceText[index];
+    if (value === "\\") {
+      index += 2;
+      continue;
+    }
+    if (delimiter !== close && value === delimiter) depth += 1;
+    if (value === close) {
+      if (delimiter === close || depth === 0) return { end: index + 1 };
+      depth -= 1;
+    }
+    index += 1;
+  }
+  return false;
+}
+
 function isPerlPackageName(value: string): boolean {
   return /^(?:[A-Za-z_][A-Za-z0-9_]*)(?:::[A-Za-z_][A-Za-z0-9_]*)*$/u.test(value);
 }
@@ -119,6 +159,24 @@ function lexPerl(sourceText: string): LexicalPerlTokens {
     if (current === "#") {
       const nextLine = sourceText.indexOf("\n", index);
       index = nextLine === -1 ? sourceText.length : nextLine + 1;
+      continue;
+    }
+
+    const quoteLike = perlQuoteLikeAt(sourceText, index);
+    if (quoteLike !== null) {
+      if (quoteLike === false) {
+        return { valid: false, tokens: [] };
+      }
+      const start = index;
+      index = quoteLike.end;
+      tokens.push({
+        kind: "string",
+        text: sourceText.slice(start, index),
+        value: sourceText.slice(start, index),
+        escaped: false,
+        start,
+        end: index
+      });
       continue;
     }
 
@@ -405,15 +463,84 @@ function directDancer2Route(tokens: readonly PerlToken[], index: number): Static
   };
 }
 
+function structuralPerlDeclarations(
+  sourceText: string,
+  tokens: readonly PerlToken[],
+  pairs: ReadonlyMap<number, number>
+): readonly StaticPerlDeclaration[] {
+  const depths: number[] = [];
+  let depth = 0;
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    depths[index] = depth;
+    if (token?.kind !== "symbol") continue;
+    if (OPEN_TO_CLOSE.has(token.text)) depth += 1;
+    else if (CLOSE_TO_OPEN.has(token.text)) depth -= 1;
+  }
+  const declarations: StaticPerlDeclaration[] = [];
+  let currentPackage: string | null = null;
+  const directStatement = (index: number): boolean => {
+    const previous = tokens[index - 1];
+    const current = tokens[index];
+    if (current === undefined || previous === undefined || previous.text === ";") return true;
+    return /\r|\n/u.test(sourceText.slice(previous.end, current.start));
+  };
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token?.kind !== "word" || depths[index] !== 0 || !directStatement(index)) continue;
+    const packageFact = directPerlPackage(tokens, index);
+    if (packageFact !== null) {
+      currentPackage = packageFact.name;
+      declarations.push({ kind: "package", name: packageFact.name, packageName: null, start: packageFact.start, end: packageFact.end });
+      continue;
+    }
+    if (token.text === "sub") {
+      const nameToken = tokens[index + 1];
+      if (nameToken?.kind !== "word" || !isPerlPackageName(nameToken.text) || nameToken.text.includes("::")) continue;
+      let cursor = index + 2;
+      let endToken: PerlToken | undefined;
+      while (cursor < tokens.length) {
+        const candidate = tokens[cursor];
+        if (candidate === undefined) break;
+        if (depths[cursor] === 0 && candidate.text === ";") {
+          endToken = candidate;
+          break;
+        }
+        if (depths[cursor] === 0 && candidate.text === "{") {
+          const closeIndex = pairs.get(cursor);
+          endToken = closeIndex === undefined ? undefined : tokens[closeIndex];
+          break;
+        }
+        cursor += 1;
+      }
+      if (endToken === undefined) continue;
+      declarations.push({ kind: "function", name: nameToken.text, packageName: currentPackage, start: token.start, end: endToken.end });
+      continue;
+    }
+    if (token.text === "class" || token.text === "role") {
+      const nameToken = tokens[index + 1];
+      if (nameToken?.kind !== "word" || !isPerlPackageName(nameToken.text)) continue;
+      let cursor = index + 2;
+      while (cursor < tokens.length && depths[cursor] === 0 && tokens[cursor]?.text !== "{") cursor += 1;
+      const closeIndex = tokens[cursor]?.text === "{" ? pairs.get(cursor) : undefined;
+      const endToken = closeIndex === undefined ? undefined : tokens[closeIndex];
+      if (endToken === undefined) continue;
+      declarations.push({ kind: "class", name: nameToken.text, packageName: currentPackage, start: token.start, end: endToken.end });
+    }
+  }
+  return declarations.sort((left, right) => left.start - right.start || left.end - right.end);
+}
+
 function staticPerlFacts(sourceText: string): StaticPerlFacts {
   const lexical = lexPerl(sourceText);
   if (!lexical.valid) {
-    return { valid: false, package: null, functions: [], routes: [] };
+    return { valid: false, declarations: [], package: null, functions: [], routes: [] };
   }
   const delimiters = delimiterPairs(lexical.tokens);
   if (!delimiters.valid) {
-    return { valid: false, package: null, functions: [], routes: [] };
+    return { valid: false, declarations: [], package: null, functions: [], routes: [] };
   }
+  const declarations = structuralPerlDeclarations(sourceText, lexical.tokens, delimiters.pairs);
 
   const packages: StaticPerlPackage[] = [];
   const functions: StaticPerlFunction[] = [];
@@ -456,6 +583,7 @@ function staticPerlFacts(sourceText: string): StaticPerlFacts {
   const packageFact = packages.length === 1 ? packages[0] ?? null : null;
   return {
     valid: true,
+    declarations,
     package: packageFact,
     functions,
     routes:
@@ -617,6 +745,26 @@ export function extractPerlFileFacts(input: PerlExtractFileFactsInput): Artifact
     return symbol;
   }
 
+  function addClassDeclaration(declaration: StaticPerlDeclaration, parent: SymbolNode): SymbolNode {
+    const qualifiedName = parent.kind === "file"
+      ? input.filePath + "#class:" + declaration.name
+      : parent.qualifiedName + "." + declaration.name;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "class");
+    const symbol: SymbolNode = {
+      id: createSymbolId({ filePath: input.filePath, qualifiedName, kind: "class", declarationOrdinal }),
+      name: declaration.name,
+      qualifiedName,
+      kind: "class",
+      filePath: input.filePath,
+      range: rangeFor(lineStarts, declaration.start, declaration.end),
+      isExported: true,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(parent, symbol, declaration.start, declaration.end);
+    return symbol;
+  }
+
   function addDancer2Route(
     parent: SymbolNode,
     packageFact: StaticPerlPackage | null,
@@ -674,17 +822,38 @@ export function extractPerlFileFacts(input: PerlExtractFileFactsInput): Artifact
     });
   }
 
-  if (staticFacts.valid) {
-    const parent = staticFacts.package === null ? fileNode : addPackage(staticFacts.package);
-    const functionsByName = new Map<string, SymbolNode[]>();
-    for (const functionFact of [...staticFacts.functions].sort((left, right) => left.start - right.start)) {
-      const symbol = addFunction(parent, functionFact);
-      functionsByName.set(functionFact.name, [...(functionsByName.get(functionFact.name) ?? []), symbol]);
+  const packageSymbols = new Map<string, SymbolNode>();
+  const functionsByName = new Map<string, SymbolNode[]>();
+  const structuralDeclarations = staticFacts.declarations.length > 0
+    ? staticFacts.declarations
+    : staticFacts.valid
+      ? [
+          ...(staticFacts.package === null ? [] : [{ kind: "package" as const, name: staticFacts.package.name, packageName: null, start: staticFacts.package.start, end: staticFacts.package.end }]),
+          ...staticFacts.functions.map((functionFact) => ({ kind: "function" as const, name: functionFact.name, packageName: staticFacts.package?.name ?? null, start: functionFact.start, end: functionFact.end }))
+        ]
+      : [];
+  for (const declaration of [...structuralDeclarations].sort((left, right) => left.start - right.start || left.end - right.end)) {
+    if (declaration.kind === "package") {
+      const symbol = addPackage({ name: declaration.name, start: declaration.start, end: declaration.end });
+      packageSymbols.set(declaration.name, symbol);
+      continue;
     }
+    const parent = declaration.packageName === null ? fileNode : packageSymbols.get(declaration.packageName) ?? fileNode;
+    const symbol = declaration.kind === "class"
+      ? addClassDeclaration(declaration, parent)
+      : addFunction(parent, { name: declaration.name, start: declaration.start, end: declaration.end });
+    if (declaration.kind === "function") {
+      functionsByName.set(declaration.name, [...(functionsByName.get(declaration.name) ?? []), symbol]);
+    }
+  }
+  if (staticFacts.valid) {
+    const routeParent = staticFacts.package === null
+      ? fileNode
+      : packageSymbols.get(staticFacts.package.name) ?? fileNode;
     for (const routeFact of [...staticFacts.routes].sort((left, right) => left.start - right.start)) {
       const candidates = functionsByName.get(routeFact.handlerName) ?? [];
       addDancer2Route(
-        parent,
+        routeParent,
         staticFacts.package,
         routeFact,
         candidates.length === 1 ? candidates[0] ?? null : null

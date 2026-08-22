@@ -13,12 +13,14 @@
 </div>
 
 > [!IMPORTANT]
-> Current release: v0.435.0 (Julia structural depth).
+> Current release: v0.436.0 (Perl structural depth).
 > v0.434.0 is a developer preview installed from a fixed revision of the official GitHub repository. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.SymbolLattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
 
-v0.435.0 deepens Julia structural depth. Fixed sources are Julia `v1.12.7` (`6d172b025e4befc4d274d9fbc9339917a8a86b65`), Pluto.jl `v1.0.3` (`4c726d24aa602eb6cba0636540ce3e8f7eb42dbb`), and Flux.jl `v0.16.11` (`443ed1bc8c157168e4fe99a045f42014ae26def8`). Extractor v331 supports bounded module/baremodule, struct/mutable struct, abstract/primitive type, full-form and one-line function/qualified-method identities, and file/module containment; the reviewed exact-singleton subset reached TP 400 / FP 0 / FN 0 / evidenceInvalid 0, with 150 / 150 negative cases and lifecycle gates passing. The full fixed-source candidate scan separately records TP 17,576 / FP 1,317 / FN 5,131 and unsupported breadth recall 0.774; the candidate oracle is an independent masked-line truth, and syntax outside the reviewed subset remains unsupported rather than being presented as full Julia coverage. Macros/generated functions, runtime multiple dispatch, reflection, metaprogramming, package loading, type inference/subtype compatibility, and cross-file exact resolution are NONCLAIM.
+v0.435.0 deepens Julia structural depth. Fixed sources are Julia `v1.12.7` (`6d172b025e4befc4d274d9fbc9339917a8a86b65`), Pluto.jl `v1.0.3` (`4c726d24aa602eb6cba0636540ce3e8f7eb42dbb`), and Flux.jl `v0.16.11` (`443ed1bc8c157168e4fe99a045f42014ae26def8`). Extractor v331 supports bounded module/baremodule, struct/mutable struct, abstract/primitive type, full-form and one-line function/qualified-method identities, and file/module containment; the reviewed exact-singleton subset reached TP 400 / FP 0 / FN 0 / evidenceInvalid 0, with 150 / 150 negative cases and lifecycle gates passing. The final fixed-source candidate scan records TP 18,292 / FP 601 / FN 5,204 and unsupported breadth recall 0.779; the candidate oracle is an independent masked-line truth, and syntax outside the reviewed subset remains unsupported rather than being presented as full Julia coverage. Macros/generated functions, runtime multiple dispatch, reflection, metaprogramming, package loading, type inference/subtype compatibility, and cross-file exact resolution are NONCLAIM.
+
+v0.436.0 deepens Perl structural depth. Fixed sources are Perl `v5.45.2` (`6f488b9e12b015c5b1b2827a5621991e8bd30e04`), Mojolicious `v9.49` (`c2d9f035556218c628dedae2e1075e115504a2a6`), and Perl::Critic `v1.154` (`382d701fd1129822c98fdcdb08403a733a24dc08`). Extractor v332 supports bounded package/class/role/named-sub identities, forward declarations, prototype/attribute declaration ranges, and file/package containment; the reviewed exact-singleton subset reached TP 400 / FP 0 / FN 0 / evidenceInvalid 0, with 150 / 150 negative cases and lifecycle gates passing. The full fixed-source candidate scan separately records TP 5,013 / FP 2,587 / FN 6,923 and unsupported breadth recall 0.420; the candidate oracle is an independent masked-line truth, and syntax outside the reviewed subset remains unsupported rather than being presented as full Perl coverage. eval/do/require, anonymous/nested subs, qualified method dispatch, runtime reflection, metaprogramming, and cross-file exact resolution are NONCLAIM.
 
 SymbolLattice scans a local repository, persists a code graph, and exposes CLI/MCP queries for files, symbols, calls, imports, inheritance, routes, entry points, bounded impact paths, and source-backed context. Every relationship carries source range, resolution stage, confidence, and rule evidence.
 
@@ -36,13 +38,13 @@ v0.434.0 deepens Luau structural depth. Fixed sources are official Luau 0.735 (`
 
 ## Supported languages
 
-Final v0.435.0 candidate figures are TP 18,292 / FP 601 / FN 5,204 with unsupported breadth recall 0.779; the reviewed subset remains TP 400 / FP 0 / FN 0 / evidenceInvalid 0.
+Final v0.436.0 candidate figures are TP 5,013 / FP 2,587 / FN 6,923 with unsupported breadth recall 0.420; the reviewed subset remains TP 400 / FP 0 / FN 0 / evidenceInvalid 0.
 
 SymbolLattice currently discovers and indexes 57 languages. A single `init` or `sync` scans every matching language in the same repository; languages do not need to be selected individually. This list means the files can be scanned and represented in the graph, not that every language has identical parsing depth. Dynamic relationships that cannot be proven from static source remain unresolved or pending, or are omitted.
 
 | Category | Languages |
 | --- | --- |
-| Recently validated deeply on large projects | TypeScript, Java, HTML, CSS, JavaScript, JSP, Python, Ruby, Shell, Luau |
+| Recently validated deeply on large projects | TypeScript, Java, HTML, CSS, JavaScript, JSP, Python, Ruby, Shell, Luau, Julia, Perl |
 | Web, component, and template languages | ArkTS, Vue, Svelte, Astro, Razor, PHP, Blade, Liquid, Twig, CFML |
 | JVM, .NET, and application languages | Groovy, Kotlin, Scala, C#, F#, VB.NET, Dart |
 | Systems and native languages | C, C++, Objective-C, Rust, Go, Swift, Zig, Nim, Fortran, Ada, Pascal, COBOL |
@@ -124,7 +126,7 @@ The installer never creates or deletes a project index automatically. Restart Co
 
 ## Upgrading from v0.420.0 or earlier
 
-v0.434.0 does not provide aliases for the old names and does not read the old index. Use this order:
+v0.436.0 does not provide aliases for the old names and does not read the old index. Use this order:
 
 ```bash
 # Remove the old Codex MCP configuration while the old CLI is still available
@@ -140,7 +142,7 @@ SymbolLattice init .
 SymbolLattice doctor codex
 ```
 
-| Previous surface | v0.434.0 |
+| Previous surface | v0.436.0 |
 | --- | --- |
 | npm package | `@hsinpu/symbollattice` |
 | CLI | `SymbolLattice` |
