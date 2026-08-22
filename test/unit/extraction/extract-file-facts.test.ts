@@ -12966,15 +12966,17 @@ describe("source extraction", () => {
       wrappedRoute,
       repeatedUse,
       broken,
-      unterminatedString,
-      unsupportedChar
+      unterminatedString
     ]) {
       expect(facts.symbols.filter((symbol) => symbol.kind === "route")).toEqual([]);
       expect(facts.edges.filter((edge) => edge.kind === "routes")).toEqual([]);
     }
     expect(broken.symbols).toHaveLength(1);
     expect(unterminatedString.symbols).toHaveLength(1);
-    expect(unsupportedChar.symbols).toHaveLength(1);
+    expect(unsupportedChar.symbols).toHaveLength(3);
+    expect(unsupportedChar.edges.filter((edge) => edge.kind === "routes")).toEqual([
+      expect.objectContaining({ resolution: "exact", confidence: 1, referenceName: "health" })
+    ]);
     expect(wrappedFunction.edges.filter((edge) => edge.kind === "routes")).toEqual([
       expect.objectContaining({
         resolution: "unresolved",

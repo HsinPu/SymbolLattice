@@ -13,7 +13,7 @@
 </div>
 
 > [!IMPORTANT]
-> v0.434.0 是從官方 GitHub 固定版本安裝的開發者預覽版。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
+> v0.435.0 是從官方 GitHub 固定版本安裝的開發者預覽版。MCP 查詢工具為唯讀，但 `serve --mcp` 預設會啟動另一個本機自動同步 watcher；它可能更新專案的 `.SymbolLattice` 索引。加入 `--no-auto-sync` 可停用。
 
 ## 這是什麼
 
@@ -31,13 +31,15 @@ v0.433.0 強化 Lua structural depth。固定 LuaRocks v3.13.0、Kong 3.9.3 與 
 
 v0.434.0 強化 Luau structural depth。固定來源為官方 Luau 0.735（`367f9d83cc29804a6d5938ec85b6116d34d8743b`）、Lute `v1.0.1-nightly.20260822`（`ccd1edc563010fbab83c16d4476e6ed5be1ff1a3`）與 Fusion `v0.3-beta`（`77e603534ff4013f4049611826ff0309d6000b15`）。extractor v330 支援 bounded generic／optional／union／table／function type annotations、Luau if-expressions／interpolated strings、direct-root member methods 與 exported/local type aliases；核准 exact-singleton subset 達 TP 300／FP 0／FN 0／evidenceInvalid 0，150／150 個負向案例與 lifecycle gates 通過。全固定來源候選掃描另記錄 TP 3,752／FP 0／FN 1,412，unsupported breadth recall 0.727；這些未納入核准 subset 的語法保留為 unsupported，不宣稱完整 Luau coverage。runtime dispatch、Roblox engine semantics、metatables、reflection、dynamic require、cross-file／cross-language relationships 與 type inference／subtype compatibility 均為 NONCLAIM。
 
+v0.435.0 強化 Julia structural depth。固定來源為 Julia `v1.12.7`（`6d172b025e4befc4d274d9fbc9339917a8a86b65`）、Pluto.jl `v1.0.3`（`4c726d24aa602eb6cba0636540ce3e8f7eb42dbb`）與 Flux.jl `v0.16.11`（`443ed1bc8c157168e4fe99a045f42014ae26def8`）。extractor v331 支援 bounded module／baremodule、struct／mutable struct、abstract／primitive type、完整與一行函式／qualified method identity，以及 file／module containment；核准 reviewed exact-singleton subset 達 TP 400／FP 0／FN 0／evidenceInvalid 0，150／150 個負向案例與 lifecycle gates 通過。全固定來源候選掃描另記錄 TP 18,292／FP 601／FN 5,204，unsupported breadth recall 0.779；候選 oracle 以獨立 masked-line truth 定義，未納入 reviewed subset 的語法仍保留為 unsupported，不宣稱完整 Julia coverage。macro／generated function、runtime multiple dispatch、reflection、metaprogramming、package loading、type inference／subtype compatibility 與跨檔 exact resolution 均為 NONCLAIM。
+
 ## 支援的語言
 
 目前可發現並建立索引的語言共 57 種。執行一次 `init` 或 `sync` 會掃描同一個 repository 內所有符合的語言，不需要逐一指定。下列清單代表可掃描與建立圖譜，不代表每種語言都有相同的解析深度；無法由靜態來源證明的動態關係會保留為 unresolved／pending 或直接省略。
 
 | 類別 | 語言 |
 | --- | --- |
-| 最近完成大型專案深度驗證 | TypeScript、Java、HTML、CSS、JavaScript、JSP、Python、Ruby、Shell、Luau |
+| 最近完成大型專案深度驗證 | TypeScript、Java、HTML、CSS、JavaScript、JSP、Python、Ruby、Shell、Lua、Luau、Julia |
 | Web、元件與模板 | ArkTS、Vue、Svelte、Astro、Razor、PHP、Blade、Liquid、Twig、CFML |
 | JVM、.NET 與應用程式 | Groovy、Kotlin、Scala、C#、F#、VB.NET、Dart |
 | 系統與原生語言 | C、C++、Objective-C、Rust、Go、Swift、Zig、Nim、Fortran、Ada、Pascal、COBOL |
@@ -119,7 +121,7 @@ SymbolLattice uninstall codex --apply --yes
 
 ## 從 v0.420.0 或更早版本升級
 
-v0.434.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
+v0.435.0 不提供舊名稱的 alias，也不會讀取舊索引。建議依序處理：
 
 ```bash
 # 仍可執行舊 CLI 時，先移除舊 Codex MCP 設定
@@ -135,7 +137,7 @@ SymbolLattice init .
 SymbolLattice doctor codex
 ```
 
-| 舊項目 | v0.434.0 |
+| 舊項目 | v0.435.0 |
 | --- | --- |
 | npm package | `@hsinpu/symbollattice` |
 | CLI | `SymbolLattice` |

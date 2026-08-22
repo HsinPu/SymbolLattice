@@ -13,9 +13,12 @@
 </div>
 
 > [!IMPORTANT]
+> Current release: v0.435.0 (Julia structural depth).
 > v0.434.0 is a developer preview installed from a fixed revision of the official GitHub repository. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.SymbolLattice` index; add `--no-auto-sync` to disable it.
 
 ## What it is
+
+v0.435.0 deepens Julia structural depth. Fixed sources are Julia `v1.12.7` (`6d172b025e4befc4d274d9fbc9339917a8a86b65`), Pluto.jl `v1.0.3` (`4c726d24aa602eb6cba0636540ce3e8f7eb42dbb`), and Flux.jl `v0.16.11` (`443ed1bc8c157168e4fe99a045f42014ae26def8`). Extractor v331 supports bounded module/baremodule, struct/mutable struct, abstract/primitive type, full-form and one-line function/qualified-method identities, and file/module containment; the reviewed exact-singleton subset reached TP 400 / FP 0 / FN 0 / evidenceInvalid 0, with 150 / 150 negative cases and lifecycle gates passing. The full fixed-source candidate scan separately records TP 17,576 / FP 1,317 / FN 5,131 and unsupported breadth recall 0.774; the candidate oracle is an independent masked-line truth, and syntax outside the reviewed subset remains unsupported rather than being presented as full Julia coverage. Macros/generated functions, runtime multiple dispatch, reflection, metaprogramming, package loading, type inference/subtype compatibility, and cross-file exact resolution are NONCLAIM.
 
 SymbolLattice scans a local repository, persists a code graph, and exposes CLI/MCP queries for files, symbols, calls, imports, inheritance, routes, entry points, bounded impact paths, and source-backed context. Every relationship carries source range, resolution stage, confidence, and rule evidence.
 
@@ -32,6 +35,8 @@ v0.433.0 deepens Lua structural depth. Fixed sources are LuaRocks v3.13.0, Kong 
 v0.434.0 deepens Luau structural depth. Fixed sources are official Luau 0.735 (`367f9d83cc29804a6d5938ec85b6116d34d8743b`), Lute `v1.0.1-nightly.20260822` (`ccd1edc563010fbab83c16d4476e6ed5be1ff1a3`), and Fusion `v0.3-beta` (`77e603534ff4013f4049611826ff0309d6000b15`). Extractor v330 supports bounded generic/optional/union/table/function type annotations, Luau if-expressions and interpolated strings, direct-root member methods, and exported/local type aliases; the reviewed exact-singleton subset reached TP 300 / FP 0 / FN 0 / evidenceInvalid 0, with 150 / 150 negative cases and lifecycle gates passing. The full fixed-source candidate scan separately records TP 3,752 / FP 0 / FN 1,412 and unsupported breadth recall 0.727; candidates outside the approved subset remain unsupported rather than being presented as full Luau coverage. Runtime dispatch, Roblox engine semantics, metatables, reflection, dynamic require, cross-file/cross-language relationships, and type inference/subtype compatibility are NONCLAIM.
 
 ## Supported languages
+
+Final v0.435.0 candidate figures are TP 18,292 / FP 601 / FN 5,204 with unsupported breadth recall 0.779; the reviewed subset remains TP 400 / FP 0 / FN 0 / evidenceInvalid 0.
 
 SymbolLattice currently discovers and indexes 57 languages. A single `init` or `sync` scans every matching language in the same repository; languages do not need to be selected individually. This list means the files can be scanned and represented in the graph, not that every language has identical parsing depth. Dynamic relationships that cannot be proven from static source remain unresolved or pending, or are omitted.
 

@@ -52,10 +52,25 @@ interface StaticGenieRoute {
 
 interface StaticJuliaFacts {
   readonly valid: boolean;
+  readonly declarations: readonly StaticJuliaDeclaration[];
   readonly functions: readonly StaticJuliaFunction[];
   readonly methodDeclarationNames: readonly string[];
   readonly calls: readonly StaticJuliaDirectCall[];
   readonly routes: readonly StaticGenieRoute[];
+}
+
+type StaticJuliaDeclarationKind = "module" | "type" | "function";
+
+interface StaticJuliaDeclaration {
+  readonly kind: StaticJuliaDeclarationKind;
+  readonly name: string;
+  /** Name relative to the file, including the containing module path. */
+  readonly qualifiedName: string;
+  readonly parentQualifiedName: string | null;
+  readonly start: number;
+  readonly end: number;
+  readonly nameStart: number;
+  readonly nameEnd: number;
 }
 
 interface LexicalJuliaTokens {
@@ -105,16 +120,55 @@ const JULIA_BLOCK_OPENERS = new Set([
   "while"
 ]);
 
+const JULIA_NON_FUNCTION_HEADS = new Set([
+  "abstract",
+  "baremodule",
+  "begin",
+  "catch",
+  "const",
+  "do",
+  "else",
+  "elseif",
+  "end",
+  "export",
+  "finally",
+  "for",
+  "function",
+  "global",
+  "if",
+  "import",
+  "let",
+  "local",
+  "macro",
+  "module",
+  "primitive",
+  "quote",
+  "return",
+  "struct",
+  "try",
+  "using",
+  "while"
+]);
+
 function isJuliaWordStart(value: string | undefined): boolean {
-  return value !== undefined && /[A-Za-z_]/u.test(value);
+  return value !== undefined && /[\p{L}\p{Nl}_]/u.test(value);
 }
 
 function isJuliaWordPart(value: string | undefined): boolean {
-  return value !== undefined && /[A-Za-z0-9_!]/u.test(value);
+  return value !== undefined && /[\p{L}\p{Nl}\p{Mn}\p{Mc}0-9_!]/u.test(value);
 }
 
 function isSimpleJuliaIdentifier(value: string): boolean {
-  return /^[A-Za-z_][A-Za-z0-9_]*!?$/u.test(value);
+  return /^[\p{L}\p{Nl}_][\p{L}\p{Nl}\p{Mn}\p{Mc}0-9_]*!?$/u.test(value);
+}
+
+function codePointAt(sourceText: string, index: number): { readonly value: string; readonly width: number } | null {
+  const codePoint = sourceText.codePointAt(index);
+  if (codePoint === undefined) {
+    return null;
+  }
+  const value = String.fromCodePoint(codePoint);
+  return { value, width: value.length };
 }
 
 function lexJulia(sourceText: string): LexicalJuliaTokens {
@@ -134,11 +188,22 @@ function lexJulia(sourceText: string): LexicalJuliaTokens {
 
     if (current === "#") {
       if (sourceText.slice(index, index + 2) === "#=") {
-        const closingIndex = sourceText.indexOf("=#", index + 2);
-        if (closingIndex === -1) {
+        let depth = 1;
+        index += 2;
+        while (index < sourceText.length && depth > 0) {
+          if (sourceText.slice(index, index + 2) === "#=") {
+            depth += 1;
+            index += 2;
+          } else if (sourceText.slice(index, index + 2) === "=#") {
+            depth -= 1;
+            index += 2;
+          } else {
+            index += codePointAt(sourceText, index)?.width ?? 1;
+          }
+        }
+        if (depth !== 0) {
           return { valid: false, tokens: [] };
         }
-        index = closingIndex + 2;
         continue;
       }
       const nextLine = sourceText.indexOf("\n", index);
@@ -147,11 +212,83 @@ function lexJulia(sourceText: string): LexicalJuliaTokens {
     }
 
     if (sourceText.slice(index, index + 3) === "\"\"\"") {
-      return { valid: false, tokens: [] };
+      const start = index;
+      let escaped = false;
+      index += 3;
+      let closed = false;
+      while (index < sourceText.length) {
+        if (sourceText[index] === "\\") {
+          escaped = true;
+          index += 1;
+          if (index >= sourceText.length) {
+            return { valid: false, tokens: [] };
+          }
+          index += codePointAt(sourceText, index)?.width ?? 1;
+          continue;
+        }
+        if (sourceText.slice(index, index + 3) === "\"\"\"") {
+          index += 3;
+          closed = true;
+          break;
+        }
+        index += codePointAt(sourceText, index)?.width ?? 1;
+      }
+      if (!closed) {
+        return { valid: false, tokens: [] };
+      }
+      tokens.push({
+        kind: "string",
+        text: sourceText.slice(start, index),
+        value: sourceText.slice(start + 3, index - 3),
+        escaped,
+        start,
+        end: index
+      });
+      continue;
     }
 
     if (current === "'") {
-      return { valid: false, tokens: [] };
+      const start = index;
+      let cursor = index + 1;
+      let escaped = false;
+      let closed = false;
+      while (cursor < sourceText.length && sourceText[cursor] !== "\n" && sourceText[cursor] !== "\r") {
+        if (sourceText[cursor] === "\\") {
+          escaped = true;
+          cursor += 2;
+          continue;
+        }
+        if (sourceText[cursor] === "'") {
+          cursor += 1;
+          closed = true;
+          break;
+        }
+        cursor += codePointAt(sourceText, cursor)?.width ?? 1;
+      }
+      if (!closed) {
+        // In Julia an apostrophe after an expression is the adjoint operator,
+        // not an unterminated character literal. Keep it opaque as a symbol.
+        tokens.push({
+          kind: "symbol",
+          text: "'",
+          value: undefined,
+          escaped: undefined,
+          start,
+          end: start + 1
+        });
+        index = start + 1;
+        continue;
+      }
+      tokens.push({
+        kind: "string",
+        text: sourceText.slice(start, cursor),
+        value: sourceText.slice(start + 1, cursor - 1),
+        escaped,
+        start,
+        end: cursor
+      });
+      index = cursor;
+      continue;
     }
 
     if (current === "\"") {
@@ -167,7 +304,7 @@ function lexJulia(sourceText: string): LexicalJuliaTokens {
           if (index >= sourceText.length) {
             return { valid: false, tokens: [] };
           }
-          index += 1;
+          index += codePointAt(sourceText, index)?.width ?? 1;
           continue;
         }
         if (value === "\"") {
@@ -175,7 +312,7 @@ function lexJulia(sourceText: string): LexicalJuliaTokens {
           closed = true;
           break;
         }
-        index += 1;
+        index += codePointAt(sourceText, index)?.width ?? 1;
       }
       if (!closed) {
         return { valid: false, tokens: [] };
@@ -191,11 +328,52 @@ function lexJulia(sourceText: string): LexicalJuliaTokens {
       continue;
     }
 
-    if (isJuliaWordStart(current)) {
+    if (current === "`") {
       const start = index;
+      let escaped = false;
       index += 1;
-      while (isJuliaWordPart(sourceText[index])) {
-        index += 1;
+      let closed = false;
+      while (index < sourceText.length) {
+        if (sourceText[index] === "\\") {
+          escaped = true;
+          index += 1;
+          if (index >= sourceText.length) {
+            return { valid: false, tokens: [] };
+          }
+          index += codePointAt(sourceText, index)?.width ?? 1;
+          continue;
+        }
+        if (sourceText[index] === "`") {
+          index += 1;
+          closed = true;
+          break;
+        }
+        index += codePointAt(sourceText, index)?.width ?? 1;
+      }
+      if (!closed) {
+        return { valid: false, tokens: [] };
+      }
+      tokens.push({
+        kind: "string",
+        text: sourceText.slice(start, index),
+        value: sourceText.slice(start + 1, index - 1),
+        escaped,
+        start,
+        end: index
+      });
+      continue;
+    }
+
+    const currentPoint = codePointAt(sourceText, index);
+    if (isJuliaWordStart(currentPoint?.value)) {
+      const start = index;
+      index += currentPoint?.width ?? 1;
+      while (index < sourceText.length) {
+        const nextPoint = codePointAt(sourceText, index);
+        if (!isJuliaWordPart(nextPoint?.value)) {
+          break;
+        }
+        index += nextPoint?.width ?? 1;
       }
       tokens.push({
         kind: "word",
@@ -484,15 +662,292 @@ function directGenieRoute(
   };
 }
 
+interface MutableJuliaDeclaration {
+  readonly kind: StaticJuliaDeclarationKind;
+  readonly name: string;
+  readonly qualifiedName: string;
+  readonly parentQualifiedName: string | null;
+  readonly start: number;
+  readonly nameStart: number;
+  readonly nameEnd: number;
+  end: number;
+}
+
+interface JuliaBlockFrame {
+  readonly kind: "module" | "type" | "function" | "begin" | "other";
+  readonly declaration: MutableJuliaDeclaration | null;
+  readonly modulePath: string | null;
+}
+
+interface JuliaFunctionHead {
+  readonly name: string;
+  readonly nameStart: number;
+  readonly nameEnd: number;
+  readonly openIndex: number;
+  readonly closeIndex: number;
+  readonly equalsIndex: number | null;
+}
+
+function structuralJuliaStatementStart(
+  sourceText: string,
+  tokens: readonly JuliaToken[],
+  index: number
+): boolean {
+  return startsDirectStatement(sourceText, tokens, index);
+}
+
+function hasJuliaMacroPrefix(tokens: readonly JuliaToken[], index: number): boolean {
+  const previous = tokens[index - 1];
+  const beforePrevious = tokens[index - 2];
+  return previous?.text === "eval" && beforePrevious?.text === "@";
+}
+
+function currentJuliaModulePath(stack: readonly JuliaBlockFrame[]): string | null {
+  for (let index = stack.length - 1; index >= 0; index -= 1) {
+    const modulePath = stack[index]?.modulePath;
+    if (modulePath !== null && modulePath !== undefined) {
+      return modulePath;
+    }
+  }
+  return null;
+}
+
+function canDeclareJuliaStructuralSymbol(stack: readonly JuliaBlockFrame[]): boolean {
+  return stack.every((frame) => frame.kind === "module" || frame.kind === "begin");
+}
+
+function parseJuliaFunctionHead(
+  tokens: readonly JuliaToken[],
+  index: number,
+  pairs: ReadonlyMap<number, number>,
+  requireEquals: boolean
+): JuliaFunctionHead | null {
+  let cursor = index;
+  const first = tokens[cursor];
+  if (
+    first?.kind !== "word" ||
+    JULIA_NON_FUNCTION_HEADS.has(first.text) ||
+    !isSimpleJuliaIdentifier(first.text)
+  ) {
+    return null;
+  }
+  const parts = [first.text];
+  let nameEnd = first.end;
+  while (tokens[cursor + 1]?.text === ".") {
+    const member = tokens[cursor + 2];
+    if (member?.kind !== "word" || !isSimpleJuliaIdentifier(member.text)) {
+      return null;
+    }
+    parts.push(member.text);
+    cursor += 2;
+    nameEnd = member.end;
+  }
+  const openIndex = cursor + 1;
+  if (tokens[openIndex]?.text !== "(") {
+    return null;
+  }
+  const closeIndex = pairs.get(openIndex);
+  if (closeIndex === undefined) {
+    return null;
+  }
+  let afterClose = closeIndex + 1;
+  while (tokens[afterClose]?.text === "::") {
+    afterClose += 1;
+    while (
+      afterClose < tokens.length &&
+      tokens[afterClose]?.text !== "=" &&
+      tokens[afterClose]?.text !== "where"
+    ) {
+      afterClose += 1;
+    }
+  }
+  if (tokens[afterClose]?.text === "where") {
+    const whereOpen = afterClose + 1;
+    const whereClose = tokens[whereOpen]?.text === "{" ? pairs.get(whereOpen) : undefined;
+    if (whereClose === undefined) {
+      return null;
+    }
+    afterClose = whereClose + 1;
+  }
+  const equalsIndex = tokens[afterClose]?.text === "=" ? afterClose : null;
+  if (requireEquals && equalsIndex === null) {
+    return null;
+  }
+  return {
+    name: parts.join("."),
+    nameStart: first.start,
+    nameEnd,
+    openIndex,
+    closeIndex,
+    equalsIndex
+  };
+}
+
+function structuralJuliaDeclarations(
+  sourceText: string,
+  tokens: readonly JuliaToken[],
+  pairs: ReadonlyMap<number, number>
+): readonly StaticJuliaDeclaration[] {
+  const delimiterDepths: number[] = [];
+  let delimiterDepth = 0;
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    delimiterDepths[index] = delimiterDepth;
+    if (token?.kind !== "symbol") {
+      continue;
+    }
+    if (OPEN_TO_CLOSE.has(token.text)) {
+      delimiterDepth += 1;
+    } else if (CLOSE_TO_OPEN.has(token.text)) {
+      delimiterDepth -= 1;
+    }
+  }
+
+  const declarations: StaticJuliaDeclaration[] = [];
+  const stack: JuliaBlockFrame[] = [];
+  const structuralStart = (index: number): boolean =>
+    delimiterDepths[index] === 0 && structuralJuliaStatementStart(sourceText, tokens, index);
+  const makeDeclaration = (
+    kind: StaticJuliaDeclarationKind,
+    name: string,
+    start: number,
+    nameStart: number,
+    nameEnd: number
+  ): MutableJuliaDeclaration => {
+    const parentQualifiedName = currentJuliaModulePath(stack);
+    const qualifiedName = parentQualifiedName === null ? name : `${parentQualifiedName}.${name}`;
+    return {
+      kind,
+      name,
+      qualifiedName,
+      parentQualifiedName,
+      start,
+      nameStart,
+      nameEnd,
+      end: -1
+    };
+  };
+  const pushBlock = (
+    kind: JuliaBlockFrame["kind"],
+    declaration: MutableJuliaDeclaration | null,
+    modulePath: string | null = currentJuliaModulePath(stack)
+  ): void => {
+    stack.push({ kind, declaration, modulePath });
+  };
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token === undefined || delimiterDepths[index] !== 0 || token.kind !== "word") {
+      continue;
+    }
+
+    if (token.text === "end") {
+      const frame = stack.pop();
+      if (frame === undefined) {
+        return [];
+      }
+      if (frame.declaration !== null) {
+        frame.declaration.end = token.end;
+        if (frame.declaration.end <= frame.declaration.start) {
+          return [];
+        }
+        declarations.push({ ...frame.declaration });
+      }
+      continue;
+    }
+
+    const allowed = canDeclareJuliaStructuralSymbol(stack) && !hasJuliaMacroPrefix(tokens, index);
+
+    if (token.text === "module" || token.text === "baremodule") {
+      const name = tokens[index + 1];
+      const startIndex = index;
+      const moduleName = name?.kind === "word" && isSimpleJuliaIdentifier(name.text) ? name : undefined;
+      const declaration = allowed && structuralStart(startIndex) && moduleName !== undefined
+        ? makeDeclaration("module", moduleName.text, token.start, moduleName.start, moduleName.end)
+        : null;
+      const modulePath = declaration?.qualifiedName ?? currentJuliaModulePath(stack);
+      pushBlock(declaration === null ? "other" : "module", declaration, modulePath);
+      continue;
+    }
+
+    if (token.text === "struct") {
+      const mutable = tokens[index - 1]?.kind === "word" && tokens[index - 1]?.text === "mutable";
+      const startIndex = mutable ? index - 1 : index;
+      const name = tokens[index + 1];
+      const typeName = name?.kind === "word" && isSimpleJuliaIdentifier(name.text) ? name : undefined;
+      const declaration = allowed && structuralStart(startIndex) && typeName !== undefined
+        ? makeDeclaration("type", typeName.text, tokens[startIndex]?.start ?? token.start, typeName.start, typeName.end)
+        : null;
+      pushBlock("type", declaration, currentJuliaModulePath(stack));
+      continue;
+    }
+
+    if (
+      (token.text === "abstract" || token.text === "primitive") &&
+      tokens[index + 1]?.kind === "word" &&
+      tokens[index + 1]?.text === "type"
+    ) {
+      const name = tokens[index + 2];
+      const typeName = name?.kind === "word" && isSimpleJuliaIdentifier(name.text) ? name : undefined;
+      const declaration = allowed && structuralStart(index) && typeName !== undefined
+        ? makeDeclaration("type", typeName.text, token.start, typeName.start, typeName.end)
+        : null;
+      pushBlock("type", declaration, currentJuliaModulePath(stack));
+      continue;
+    }
+
+    if (token.text === "function") {
+      const head = parseJuliaFunctionHead(tokens, index + 1, pairs, false);
+      const declaration = allowed && structuralStart(index) && head !== null && head.openIndex > index + 1
+        ? makeDeclaration("function", head.name, token.start, head.nameStart, head.nameEnd)
+        : null;
+      pushBlock("function", declaration, currentJuliaModulePath(stack));
+      continue;
+    }
+
+    if (allowed && structuralStart(index)) {
+      const oneLine = parseJuliaFunctionHead(tokens, index, pairs, true);
+      if (oneLine !== null && oneLine.equalsIndex !== null) {
+        const declaration = makeDeclaration(
+          "function",
+          oneLine.name,
+          oneLine.nameStart,
+          oneLine.nameStart,
+          oneLine.nameEnd
+        );
+        declaration.end = tokens[oneLine.equalsIndex]?.end ?? oneLine.nameEnd;
+        declarations.push({ ...declaration });
+        continue;
+      }
+    }
+
+    if (JULIA_BLOCK_OPENERS.has(token.text)) {
+      pushBlock(
+        token.text === "begin" && !hasJuliaMacroPrefix(tokens, index) ? "begin" : "other",
+        null,
+        currentJuliaModulePath(stack)
+      );
+    }
+  }
+
+  if (stack.length !== 0) {
+    if (stack.some((frame) => frame.declaration !== null)) {
+      return [];
+    }
+  }
+  return declarations.sort((left, right) => left.start - right.start || left.end - right.end);
+}
+
 function staticJuliaFacts(sourceText: string): StaticJuliaFacts {
   const lexical = lexJulia(sourceText);
   if (!lexical.valid) {
-    return { valid: false, functions: [], methodDeclarationNames: [], calls: [], routes: [] };
+    return { valid: false, declarations: [], functions: [], methodDeclarationNames: [], calls: [], routes: [] };
   }
   const delimiters = delimiterPairs(lexical.tokens);
   if (!delimiters.valid) {
-    return { valid: false, functions: [], methodDeclarationNames: [], calls: [], routes: [] };
+    return { valid: false, declarations: [], functions: [], methodDeclarationNames: [], calls: [], routes: [] };
   }
+  const declarations = structuralJuliaDeclarations(sourceText, lexical.tokens, delimiters.pairs);
 
   const functions: StaticJuliaFunction[] = [];
   const methodDeclarationNames: string[] = [];
@@ -560,10 +1015,17 @@ function staticJuliaFacts(sourceText: string): StaticJuliaFacts {
     if (token.kind === "word" && delimiterDepth === 0) {
       if (token.text === "end") {
         if (blockDepth === 0) {
-          return { valid: false, functions: [], methodDeclarationNames: [], calls: [], routes: [] };
+          return { valid: false, declarations, functions: [], methodDeclarationNames: [], calls: [], routes: [] };
         }
         blockDepth -= 1;
         blockOpeners.pop();
+      } else if (
+        (token.text === "abstract" || token.text === "primitive") &&
+        lexical.tokens[index + 1]?.kind === "word" &&
+        lexical.tokens[index + 1]?.text === "type"
+      ) {
+        blockDepth += 1;
+        blockOpeners.push(`${token.text} type`);
       } else if (JULIA_BLOCK_OPENERS.has(token.text)) {
         blockDepth += 1;
         blockOpeners.push(token.text);
@@ -581,10 +1043,11 @@ function staticJuliaFacts(sourceText: string): StaticJuliaFacts {
   }
 
   if (blockDepth !== 0) {
-    return { valid: false, functions: [], methodDeclarationNames: [], calls: [], routes: [] };
+    return { valid: false, declarations, functions: [], methodDeclarationNames: [], calls: [], routes: [] };
   }
   return {
     valid: true,
+    declarations,
     functions,
     methodDeclarationNames,
     calls: hasOnlyJuliaB1TopLevelForms(sourceText, lexical.tokens, delimiters.pairs) ? calls : [],
@@ -625,8 +1088,10 @@ function rangeFor(lineStarts: readonly number[], start: number, end: number): So
 }
 
 /**
- * Extracts direct Julia one-line functions and a narrow Genie route subset.
- * Exact routes require a direct using Genie proof and a unique same-file function.
+ * Extracts bounded Julia structural declarations and the existing narrow Genie
+ * route subset. Exact structural edges require syntax-balanced source ranges;
+ * exact routes additionally require a direct using Genie proof and a unique
+ * same-file function.
  */
 export function extractJuliaFileFacts(input: JuliaExtractFileFactsInput): ArtifactFacts {
   const genieCapability = frameworkCapability("genie");
@@ -664,18 +1129,18 @@ export function extractJuliaFileFacts(input: JuliaExtractFileFactsInput): Artifa
     return ordinal;
   }
 
-  function addContainment(child: SymbolNode, from: number, to: number): void {
+  function addContainment(source: SymbolNode, child: SymbolNode, from: number, to: number): void {
     const range = rangeFor(lineStarts, from, to);
     edges.push({
       id: createEdgeId({
-        sourceId: fileNode.id,
+        sourceId: source.id,
         targetId: child.id,
         kind: "contains",
         line: range.start.line,
         column: range.start.column,
         referenceName: child.name
       }),
-      sourceId: fileNode.id,
+      sourceId: source.id,
       targetId: child.id,
       kind: "contains",
       filePath: input.filePath,
@@ -684,34 +1149,64 @@ export function extractJuliaFileFacts(input: JuliaExtractFileFactsInput): Artifa
       confidence: 1,
       referenceName: child.name,
       evidence: {
-        ruleId: "syntax.containment",
+        ruleId: source.kind === "file" ? "syntax.containment" : "syntax.julia.structural-v1.nested-containment",
         stage: "syntax",
         candidateSymbolIds: [child.id]
       }
     });
   }
 
-  function addFunction(functionFact: StaticJuliaFunction): SymbolNode {
-    const qualifiedName = fileNode.qualifiedName + "." + functionFact.name;
-    const declarationOrdinal = nextOrdinal(qualifiedName, "function");
+  function addStructuralDeclaration(declaration: StaticJuliaDeclaration): SymbolNode {
+    const qualifiedName = fileNode.qualifiedName + "." + declaration.qualifiedName;
+    const declarationOrdinal = nextOrdinal(qualifiedName, declaration.kind);
     const symbol: SymbolNode = {
       id: createSymbolId({
         filePath: input.filePath,
         qualifiedName,
-        kind: "function",
+        kind: declaration.kind,
         declarationOrdinal
       }),
-      name: functionFact.name,
+      name: declaration.name,
       qualifiedName,
-      kind: "function",
+      kind: declaration.kind,
       filePath: input.filePath,
-      range: rangeFor(lineStarts, functionFact.start, functionFact.end),
+      range: rangeFor(lineStarts, declaration.start, declaration.end),
       isExported: true,
       declarationOrdinal
     };
     symbols.push(symbol);
-    addContainment(symbol, functionFact.start, functionFact.end);
     return symbol;
+  }
+
+  function addJuliaDeclarationContainment(
+    declaration: StaticJuliaDeclaration,
+    symbol: SymbolNode,
+    parentSymbols: ReadonlyMap<string, SymbolNode>
+  ): void {
+    const parent = declaration.parentQualifiedName === null
+      ? fileNode
+      : parentSymbols.get(declaration.parentQualifiedName);
+    if (parent === undefined) {
+      return;
+    }
+    addContainment(parent, symbol, declaration.start, declaration.end);
+  }
+
+  function addFunctionFallback(functionFact: StaticJuliaFunction): StaticJuliaDeclaration {
+    return {
+      kind: "function",
+      name: functionFact.name,
+      qualifiedName: functionFact.name,
+      parentQualifiedName: null,
+      start: functionFact.start,
+      end: functionFact.end,
+      nameStart: functionFact.start,
+      nameEnd: functionFact.start + functionFact.name.length
+    };
+  }
+
+  function addRouteContainment(route: SymbolNode, from: number, to: number): void {
+    addContainment(fileNode, route, from, to);
   }
 
   function addGenieRoute(routeFact: StaticGenieRoute, handler: SymbolNode | null): void {
@@ -735,7 +1230,7 @@ export function extractJuliaFileFacts(input: JuliaExtractFileFactsInput): Artifa
       declarationOrdinal
     };
     symbols.push(route);
-    addContainment(route, routeFact.start, routeFact.end);
+    addRouteContainment(route, routeFact.start, routeFact.end);
     edges.push({
       id: createEdgeId({
         sourceId: route.id,
@@ -764,6 +1259,22 @@ export function extractJuliaFileFacts(input: JuliaExtractFileFactsInput): Artifa
     });
   }
 
+  const structuralDeclarations = staticFacts.declarations.length > 0
+    ? staticFacts.declarations
+    : staticFacts.valid
+      ? staticFacts.functions.map((functionFact) => addFunctionFallback(functionFact))
+      : [];
+  const structuralSymbols = new Map<string, SymbolNode>();
+  const moduleSymbols = new Map<string, SymbolNode>();
+  for (const declaration of [...structuralDeclarations].sort((left, right) => left.start - right.start || left.end - right.end)) {
+    const symbol = addStructuralDeclaration(declaration);
+    structuralSymbols.set(`${declaration.kind}\u0000${declaration.start}`, symbol);
+    addJuliaDeclarationContainment(declaration, symbol, moduleSymbols);
+    if (declaration.kind === "module") {
+      moduleSymbols.set(declaration.qualifiedName, symbol);
+    }
+  }
+
   if (staticFacts.valid) {
     const functionsByName = new Map<string, SymbolNode[]>();
     const functionsByStart = new Map<number, SymbolNode>();
@@ -773,7 +1284,10 @@ export function extractJuliaFileFacts(input: JuliaExtractFileFactsInput): Artifa
       methodDeclarationCounts.set(name, (methodDeclarationCounts.get(name) ?? 0) + 1);
     }
     for (const functionFact of [...staticFacts.functions].sort((left, right) => left.start - right.start)) {
-      const symbol = addFunction(functionFact);
+      const symbol = structuralSymbols.get(`function\u0000${functionFact.start}`);
+      if (symbol === undefined) {
+        continue;
+      }
       functionsByName.set(functionFact.name, [...(functionsByName.get(functionFact.name) ?? []), symbol]);
       functionsByStart.set(functionFact.start, symbol);
       if (functionFact.isZeroArgument) {
