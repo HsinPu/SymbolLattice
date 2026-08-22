@@ -60,6 +60,25 @@ sub real { return $quoted }
     ]);
   });
 
+  it("extracts bounded class and role declarations without descending into their bodies", () => {
+    const facts = extractPerlFileFacts({
+      filePath: "lib/Shapes.pm",
+      language: "perl",
+      sourceText: `class Shape {
+    method area { 1 }
+}
+role Measurable {
+    requires area;
+}
+`
+    });
+    expect(declarations(facts)).toEqual([
+      expect.objectContaining({ kind: "class", name: "Shape" }),
+      expect.objectContaining({ kind: "class", name: "Measurable" })
+    ]);
+    expect(contains(facts)).toHaveLength(2);
+  });
+
   it("fails closed for malformed package/sub structure", () => {
     const facts = extractPerlFileFacts({
       filePath: "lib/Broken.pm",
