@@ -108,13 +108,23 @@ function isSimplePerlIdentifier(value: string): boolean {
   return /^[A-Za-z_][A-Za-z0-9_]*$/u.test(value);
 }
 
+function isSupportedPerlQuoteDelimiter(value: string | undefined): value is string {
+  return value !== undefined && !/[\sA-Za-z0-9_]/u.test(value);
+}
+
 function perlQuoteLikeAt(sourceText: string, start: number): { readonly end: number } | null | false {
+  if (isPerlWordPart(sourceText[start - 1]) || "$@%&*".includes(sourceText[start - 1] ?? "")) {
+    return null;
+  }
   const prefix = ["qq", "qw", "qx", "qr", "q"].find((candidate) => sourceText.startsWith(candidate, start));
   if (prefix === undefined) {
     return null;
   }
   const delimiter = sourceText[start + prefix.length];
-  if (delimiter === undefined || /[\sA-Za-z0-9_]/u.test(delimiter)) {
+  if (
+    !isSupportedPerlQuoteDelimiter(delimiter) ||
+    sourceText.slice(start + prefix.length, start + prefix.length + 2) === "::"
+  ) {
     return null;
   }
   const pairedClose: Readonly<Record<string, string>> = { "(": ")", "[": "]", "{": "}", "<": ">" };
@@ -141,7 +151,204 @@ function isPerlPackageName(value: string): boolean {
   return /^(?:[A-Za-z_][A-Za-z0-9_]*)(?:::[A-Za-z_][A-Za-z0-9_]*)*$/u.test(value);
 }
 
+function perlPodEnd(sourceText: string, start: number): number | null | false {
+  if (
+    (start > 0 && sourceText[start - 1] !== "\n") ||
+    !/^=(?!cut\b)[A-Za-z][A-Za-z0-9_]*/u.test(sourceText.slice(start))
+  ) {
+    return null;
+  }
+  const close = /\r?\n=cut(?:[^\r\n]*)?(?:\r?\n|$)/u.exec(sourceText.slice(start));
+  return close === null ? false : start + close.index + close[0].length;
+}
+
+function isPerlDataMarker(sourceText: string, start: number): boolean {
+  return (
+    (start === 0 || sourceText[start - 1] === "\n") &&
+    /^__(?:END|DATA)__[\t ]*(?:\r?\n|$)/u.test(sourceText.slice(start))
+  );
+}
+
+function isPerlPunctuationVariable(sourceText: string, start: number): boolean {
+  if (sourceText[start] !== "$") return false;
+  const punctuation = sourceText[start + 1] ?? "";
+  if (punctuation === ")") {
+    const linePrefix = sourceText.slice(sourceText.lastIndexOf("\n", start - 1) + 1, start);
+    return !/\bsub\s+[A-Za-z_][A-Za-z0-9_]*\s*\([^)]*$/u.test(linePrefix);
+  }
+  return ";!?@/\\|,.:\"`#%=-~^".includes(punctuation);
+}
+
+function maskPerlHeredocBodies(sourceText: string): string | null {
+  const characters = sourceText.split("");
+  const pending: { readonly marker: string; readonly indented: boolean }[] = [];
+  let index = 0;
+  while (index < sourceText.length) {
+    if (pending.length > 0 && (index === 0 || sourceText[index - 1] === "\n")) {
+      const lineEnd = sourceText.indexOf("\n", index);
+      const end = lineEnd === -1 ? sourceText.length : lineEnd + 1;
+      const current = pending[0];
+      const content = sourceText.slice(index, end).replace(/\r?\n$/u, "");
+      const candidate = current?.indented ? content.trimStart() : content;
+      for (let cursor = index; cursor < end; cursor += 1) {
+        if (characters[cursor] !== "\n" && characters[cursor] !== "\r") characters[cursor] = " ";
+      }
+      if (candidate === current?.marker) pending.shift();
+      index = end;
+      continue;
+    }
+
+    if (isPerlDataMarker(sourceText, index)) break;
+    if (isPerlPunctuationVariable(sourceText, index)) {
+      index += 2;
+      continue;
+    }
+    const podEnd = perlPodEnd(sourceText, index);
+    if (podEnd !== null) {
+      index = podEnd === false ? sourceText.length : podEnd;
+      continue;
+    }
+    if (sourceText[index] === "#") {
+      const lineEnd = sourceText.indexOf("\n", index);
+      index = lineEnd === -1 ? sourceText.length : lineEnd + 1;
+      continue;
+    }
+
+    const opener = /^<<(~)?[\t ]*(?:'([^'\r\n]+)'|"([^"\r\n]+)"|([A-Za-z_][A-Za-z0-9_]*))/u.exec(
+      sourceText.slice(index)
+    );
+    if (opener !== null && !isPerlWordPart(sourceText[index - 1])) {
+      const match = opener;
+      const marker = match[2] ?? match[3] ?? match[4];
+      if (marker !== undefined) pending.push({ marker, indented: match[1] === "~" });
+      index += match[0].length;
+      continue;
+    }
+
+    const quoteLike = perlQuoteLikeAt(sourceText, index);
+    if (quoteLike !== null) {
+      if (quoteLike === false) {
+        index += 1;
+        continue;
+      }
+      index = quoteLike.end;
+      continue;
+    }
+    const regexLike = perlRegexLikeAt(sourceText, index);
+    if (regexLike !== null) {
+      if (regexLike === false) {
+        index += 1;
+        continue;
+      }
+      index = regexLike.end;
+      continue;
+    }
+    const quote = sourceText[index];
+    if (quote === "'" || quote === "\"" || quote === "`") {
+      index += 1;
+      let closed = false;
+      while (index < sourceText.length) {
+        if (sourceText[index] === "\\") {
+          index += 2;
+          continue;
+        }
+        if (sourceText[index] === quote) {
+          index += 1;
+          closed = true;
+          break;
+        }
+        index += 1;
+      }
+      if (!closed) return null;
+      continue;
+    }
+    index += 1;
+  }
+  return pending.length === 0 ? characters.join("") : null;
+}
+
+function perlDelimitedEnd(sourceText: string, openIndex: number): number | false {
+  const open = sourceText[openIndex];
+  if (!isSupportedPerlQuoteDelimiter(open)) return false;
+  const pairedClose: Readonly<Record<string, string>> = { "(": ")", "[": "]", "{": "}", "<": ">" };
+  const close = pairedClose[open] ?? open;
+  let depth = 0;
+  let inCharacterClass = false;
+  for (let index = openIndex + 1; index < sourceText.length; index += 1) {
+    const value = sourceText[index];
+    if (value === "\\") {
+      index += 1;
+      continue;
+    }
+    if (open === "/" && value === "[") inCharacterClass = true;
+    else if (open === "/" && value === "]") inCharacterClass = false;
+    if (inCharacterClass) continue;
+    if (open !== close && value === open) depth += 1;
+    else if (value === close) {
+      if (open === close || depth === 0) return index + 1;
+      depth -= 1;
+    }
+  }
+  return false;
+}
+
+function perlRegexLikeAt(sourceText: string, start: number): { readonly end: number } | null | false {
+  let operator = "";
+  let sections = 1;
+  for (const candidate of ["tr", "s", "m", "y"]) {
+    if (
+      sourceText.startsWith(candidate, start) &&
+      !isPerlWordPart(sourceText[start - 1]) &&
+      !"$@%&*".includes(sourceText[start - 1] ?? "") &&
+      sourceText[start - 1] !== "-" &&
+      sourceText[start - 1] !== "/" &&
+      sourceText[start - 1] !== "\\" &&
+      !isPerlWordPart(sourceText[start + candidate.length])
+    ) {
+      operator = candidate;
+      sections = candidate === "m" ? 1 : 2;
+      break;
+    }
+  }
+  let openIndex: number;
+  if (operator !== "") {
+    openIndex = start + operator.length;
+    const adjacent = openIndex;
+    while (sourceText[openIndex] === " " || sourceText[openIndex] === "\t") openIndex += 1;
+    if (!isSupportedPerlQuoteDelimiter(sourceText[openIndex])) return null;
+    if (openIndex !== adjacent && !"/([{<".includes(sourceText[openIndex] ?? "")) return null;
+  } else {
+    if (
+      sourceText[start] !== "/" ||
+      !/(?:=~|!~|\bsplit\s*\(?|\b(?:if|elsif|unless|while)\s*\()\s*$/u.test(
+        sourceText.slice(Math.max(0, start - 48), start)
+      )
+    ) {
+      return null;
+    }
+    openIndex = start;
+  }
+  const firstEnd = perlDelimitedEnd(sourceText, openIndex);
+  if (firstEnd === false) return false;
+  let end = firstEnd;
+  if (sections === 2) {
+    const open = sourceText[openIndex] ?? "";
+    const paired = "([{<".includes(open);
+    let secondOpen = paired ? end : end - 1;
+    while (paired && (sourceText[secondOpen] === " " || sourceText[secondOpen] === "\t")) secondOpen += 1;
+    if (paired && sourceText[secondOpen] !== open) return false;
+    const secondEnd = perlDelimitedEnd(sourceText, secondOpen);
+    if (secondEnd === false) return false;
+    end = secondEnd;
+  }
+  while (/[A-Za-z]/u.test(sourceText[end] ?? "")) end += 1;
+  return { end };
+}
+
 function lexPerl(sourceText: string): LexicalPerlTokens {
+  const maskedSource = maskPerlHeredocBodies(sourceText);
+  if (maskedSource === null) return { valid: false, tokens: [] };
+  sourceText = maskedSource;
   const tokens: PerlToken[] = [];
   let index = 0;
 
@@ -156,7 +363,36 @@ function lexPerl(sourceText: string): LexicalPerlTokens {
       continue;
     }
 
-    if (current === "#") {
+    if (isPerlPunctuationVariable(sourceText, index)) {
+      const start = index;
+      index += 2;
+      tokens.push({
+        kind: "string",
+        text: sourceText.slice(start, index),
+        value: sourceText.slice(start, index),
+        escaped: false,
+        start,
+        end: index
+      });
+      continue;
+    }
+
+    if (isPerlDataMarker(sourceText, index)) {
+      index = sourceText.length;
+      continue;
+    }
+
+    const podEnd = perlPodEnd(sourceText, index);
+    if (podEnd !== null) {
+      if (podEnd === false) {
+        index = sourceText.length;
+        continue;
+      }
+      index = podEnd;
+      continue;
+    }
+
+    if (current === "#" && sourceText[index - 1] !== "$") {
       const nextLine = sourceText.indexOf("\n", index);
       index = nextLine === -1 ? sourceText.length : nextLine + 1;
       continue;
@@ -169,6 +405,24 @@ function lexPerl(sourceText: string): LexicalPerlTokens {
       }
       const start = index;
       index = quoteLike.end;
+      tokens.push({
+        kind: "string",
+        text: sourceText.slice(start, index),
+        value: sourceText.slice(start, index),
+        escaped: false,
+        start,
+        end: index
+      });
+      continue;
+    }
+
+    const regexLike = perlRegexLikeAt(sourceText, index);
+    if (regexLike !== null) {
+      if (regexLike === false) {
+        return { valid: false, tokens: [] };
+      }
+      const start = index;
+      index = regexLike.end;
       tokens.push({
         kind: "string",
         text: sourceText.slice(start, index),

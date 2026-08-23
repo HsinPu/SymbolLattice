@@ -23,8 +23,206 @@ function retainSmallest(selection, fact, quota) {
   if (selection.length > quota) selection.length = quota;
 }
 
+function perlPodEnd(sourceText, start) {
+  if (
+    (start > 0 && sourceText[start - 1] !== "\n") ||
+    !/^=(?!cut\b)[A-Za-z][A-Za-z0-9_]*/u.test(sourceText.slice(start))
+  ) return null;
+  const close = /\r?\n=cut(?:[^\r\n]*)?(?:\r?\n|$)/u.exec(sourceText.slice(start));
+  return close === null ? false : start + close.index + close[0].length;
+}
+
+function isPerlDataMarker(sourceText, start) {
+  return (
+    (start === 0 || sourceText[start - 1] === "\n") &&
+    /^__(?:END|DATA)__[\t ]*(?:\r?\n|$)/u.test(sourceText.slice(start))
+  );
+}
+
+function isPerlPunctuationVariable(sourceText, start) {
+  if (sourceText[start] !== "$") return false;
+  const punctuation = sourceText[start + 1] ?? "";
+  if (punctuation === ")") {
+    const linePrefix = sourceText.slice(sourceText.lastIndexOf("\n", start - 1) + 1, start);
+    return !/\bsub\s+[A-Za-z_][A-Za-z0-9_]*\s*\([^)]*$/u.test(linePrefix);
+  }
+  return ";!?@/\\|,.:\"`#%=-~^".includes(punctuation);
+}
+
+function maskPerlHeredocBodies(sourceText) {
+  const characters = sourceText.split("");
+  const pending = [];
+  const isWord = (value) => /[A-Za-z0-9_]/u.test(value ?? "");
+  let index = 0;
+  while (index < sourceText.length) {
+    if (pending.length > 0 && (index === 0 || sourceText[index - 1] === "\n")) {
+      const lineEnd = sourceText.indexOf("\n", index);
+      const end = lineEnd === -1 ? sourceText.length : lineEnd + 1;
+      const current = pending[0];
+      const content = sourceText.slice(index, end).replace(/\r?\n$/u, "");
+      const candidate = current.indented ? content.trimStart() : content;
+      for (let cursor = index; cursor < end; cursor += 1) {
+        if (characters[cursor] !== "\n" && characters[cursor] !== "\r") characters[cursor] = " ";
+      }
+      if (candidate === current.marker) pending.shift();
+      index = end;
+      continue;
+    }
+
+    if (isPerlDataMarker(sourceText, index)) break;
+    if (isPerlPunctuationVariable(sourceText, index)) {
+      index += 2;
+      continue;
+    }
+    const podEnd = perlPodEnd(sourceText, index);
+    if (podEnd !== null) {
+      index = podEnd === false ? sourceText.length : podEnd;
+      continue;
+    }
+    if (sourceText[index] === "#") {
+      const lineEnd = sourceText.indexOf("\n", index);
+      index = lineEnd === -1 ? sourceText.length : lineEnd + 1;
+      continue;
+    }
+
+    const opener = /^<<(~)?[\t ]*(?:'([^'\r\n]+)'|"([^"\r\n]+)"|([A-Za-z_][A-Za-z0-9_]*))/u.exec(
+      sourceText.slice(index)
+    );
+    if (opener !== null && !isWord(sourceText[index - 1])) {
+      const match = opener;
+      const marker = match[2] ?? match[3] ?? match[4];
+      if (marker !== undefined) pending.push({ marker, indented: match[1] === "~" });
+      index += match[0].length;
+      continue;
+    }
+
+    const regexLike = perlRegexLikeAt(sourceText, index);
+    if (regexLike !== null) {
+      if (regexLike === false) {
+        index += 1;
+        continue;
+      }
+      index = regexLike.end;
+      continue;
+    }
+    if (/[A-Za-z]/u.test(sourceText[index] ?? "")) {
+      let end = index + 1;
+      while (end < sourceText.length && /[A-Za-z0-9_]/u.test(sourceText[end] ?? "")) end += 1;
+      const word = sourceText.slice(index, end);
+      const prefix = ["qq", "qw", "qx", "qr", "q"].find((candidate) => word === candidate);
+      const delimiter = sourceText[end] ?? "";
+      if (
+        prefix !== undefined &&
+        !"$@%&*".includes(sourceText[index - 1] ?? "") &&
+        delimiter !== "" &&
+        !/[\sA-Za-z0-9_]/u.test(delimiter) &&
+        sourceText.slice(end, end + 2) !== "::"
+      ) {
+        const quoteEnd = perlDelimitedEnd(sourceText, end);
+        if (quoteEnd === false) {
+          index += 1;
+          continue;
+        }
+        index = quoteEnd;
+        continue;
+      }
+    }
+    const quote = sourceText[index];
+    if (quote === "'" || quote === "\"" || quote === "`") {
+      index += 1;
+      let closed = false;
+      while (index < sourceText.length) {
+        if (sourceText[index] === "\\") {
+          index += 2;
+          continue;
+        }
+        if (sourceText[index] === quote) {
+          index += 1;
+          closed = true;
+          break;
+        }
+        index += 1;
+      }
+      if (!closed) return sourceText;
+      continue;
+    }
+    index += 1;
+  }
+  return characters.join("");
+}
+
+function perlDelimitedEnd(sourceText, openIndex) {
+  const open = sourceText[openIndex];
+  if (open === undefined || /[\sA-Za-z0-9_]/u.test(open)) return false;
+  const paired = { "(": ")", "[": "]", "{": "}", "<": ">" };
+  const close = paired[open] ?? open;
+  let depth = 0;
+  let inCharacterClass = false;
+  for (let index = openIndex + 1; index < sourceText.length; index += 1) {
+    const value = sourceText[index];
+    if (value === "\\") { index += 1; continue; }
+    if (open === "/" && value === "[") inCharacterClass = true;
+    else if (open === "/" && value === "]") inCharacterClass = false;
+    if (inCharacterClass) continue;
+    if (open !== close && value === open) depth += 1;
+    else if (value === close) {
+      if (open === close || depth === 0) return index + 1;
+      depth -= 1;
+    }
+  }
+  return false;
+}
+
+function perlRegexLikeAt(sourceText, start) {
+  let operator = "";
+  let sections = 1;
+  const isWord = (value) => /[A-Za-z0-9_]/u.test(value ?? "");
+  for (const candidate of ["tr", "s", "m", "y"]) {
+    if (
+      sourceText.startsWith(candidate, start) &&
+      !isWord(sourceText[start - 1]) &&
+      !"$@%&*".includes(sourceText[start - 1] ?? "") &&
+      sourceText[start - 1] !== "-" &&
+      sourceText[start - 1] !== "/" &&
+      sourceText[start - 1] !== "\\" &&
+      !isWord(sourceText[start + candidate.length])
+    ) {
+      operator = candidate;
+      sections = candidate === "m" ? 1 : 2;
+      break;
+    }
+  }
+  let openIndex;
+  if (operator !== "") {
+    openIndex = start + operator.length;
+    const adjacent = openIndex;
+    while (sourceText[openIndex] === " " || sourceText[openIndex] === "\t") openIndex += 1;
+    if (/[\sA-Za-z0-9_]/u.test(sourceText[openIndex] ?? "")) return null;
+    if (openIndex !== adjacent && !"/([{<".includes(sourceText[openIndex] ?? "")) return null;
+  } else {
+    if (sourceText[start] !== "/" || !/(?:=~|!~|\bsplit\s*\(?|\b(?:if|elsif|unless|while)\s*\()\s*$/u.test(sourceText.slice(Math.max(0, start - 48), start))) return null;
+    openIndex = start;
+  }
+  const firstEnd = perlDelimitedEnd(sourceText, openIndex);
+  if (firstEnd === false) return false;
+  let end = firstEnd;
+  if (sections === 2) {
+    const open = sourceText[openIndex] ?? "";
+    const usesPairs = "([{<".includes(open);
+    let secondOpen = usesPairs ? end : end - 1;
+    while (usesPairs && (sourceText[secondOpen] === " " || sourceText[secondOpen] === "\t")) secondOpen += 1;
+    if (usesPairs && sourceText[secondOpen] !== open) return false;
+    const secondEnd = perlDelimitedEnd(sourceText, secondOpen);
+    if (secondEnd === false) return false;
+    end = secondEnd;
+  }
+  while (/[A-Za-z]/u.test(sourceText[end] ?? "")) end += 1;
+  return { end };
+}
+
 function maskPerlNonCode(sourceText) {
-  const characters = [...sourceText];
+  sourceText = maskPerlHeredocBodies(sourceText);
+  const characters = sourceText.split("");
   let state = "code";
   let quote = "";
   let delimiter = "";
@@ -34,11 +232,43 @@ function maskPerlNonCode(sourceText) {
   const isWord = (value) => /[A-Za-z0-9_]/u.test(value ?? "");
   for (let index = 0; index < characters.length; index += 1) {
     const character = characters[index] ?? "";
-    const next = characters[index + 1] ?? "";
-    if (state === "code" && character === "#") {
+    if (state === "code" && isPerlDataMarker(sourceText, index)) {
+      for (let cursor = index; cursor < characters.length; cursor += 1) {
+        if (characters[cursor] !== "\n" && characters[cursor] !== "\r") characters[cursor] = " ";
+      }
+      break;
+    }
+    if (state === "code" && isPerlPunctuationVariable(sourceText, index)) {
+      characters[index] = " ";
+      characters[index + 1] = " ";
+      index += 1;
+      continue;
+    }
+    if (state === "code") {
+      const podEnd = perlPodEnd(sourceText, index);
+      if (podEnd !== null) {
+        const end = podEnd === false ? characters.length : podEnd;
+        for (let cursor = index; cursor < end; cursor += 1) {
+          if (characters[cursor] !== "\n" && characters[cursor] !== "\r") characters[cursor] = " ";
+        }
+        index = end - 1;
+        continue;
+      }
+    }
+    if (state === "code" && character === "#" && sourceText[index - 1] !== "$") {
       state = "line";
       characters[index] = " ";
       continue;
+    }
+    if (state === "code") {
+      const regexLike = perlRegexLikeAt(sourceText, index);
+      if (regexLike && regexLike !== false) {
+        for (let cursor = index; cursor < regexLike.end; cursor += 1) {
+          if (characters[cursor] !== "\n" && characters[cursor] !== "\r") characters[cursor] = " ";
+        }
+        index = regexLike.end - 1;
+        continue;
+      }
     }
     if (state === "line") {
       if (character === "\n" || character === "\r") state = "code";
@@ -72,7 +302,13 @@ function maskPerlNonCode(sourceText) {
       const word = sourceText.slice(index, end);
       const prefix = ["qq", "qw", "qx", "qr", "q"].find((candidate) => word === candidate);
       const candidateDelimiter = characters[end] ?? "";
-      if (prefix !== undefined && candidateDelimiter !== "" && !/[\sA-Za-z0-9_]/u.test(candidateDelimiter)) {
+      if (
+        prefix !== undefined &&
+        !"$@%&*".includes(sourceText[index - 1] ?? "") &&
+        candidateDelimiter !== "" &&
+        !/[\sA-Za-z0-9_]/u.test(candidateDelimiter) &&
+        sourceText.slice(end, end + 2) !== "::"
+      ) {
         delimiter = candidateDelimiter;
         close = paired[delimiter] ?? delimiter;
         nested = 0;
@@ -114,7 +350,7 @@ function declarationFromLine(project, filePath, line, lineIndex, packageName) {
   const patterns = [
     ["package", /^\s*package\s+([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)\s*;/u],
     ["class", /^\s*(?:class|role)\s+([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)\b[^\n]*\{/u],
-    ["function", /^\s*sub\s+([A-Za-z_][A-Za-z0-9_]*)\b[^\n]*(?:\{|;)\s*$/u]
+    ["function", /^\s*sub\s+([A-Za-z_][A-Za-z0-9_]*)\b[^\n]*(?:\{|;)/u]
   ];
   for (const [kind, pattern] of patterns) {
     const match = pattern.exec(line);

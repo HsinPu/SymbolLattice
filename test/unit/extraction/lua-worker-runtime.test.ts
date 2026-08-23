@@ -46,12 +46,13 @@ describe("Lua worker runtime fault boundary", () => {
   it("rejects lexical function and nesting limits before starting a worker", async () => {
     const factory: LuaWorkerFactory = { create: vi.fn() };
     const runtime = createLuaWorkerRuntime({ workerFactory: factory });
-    const functions = Array.from({ length: 513 }, (_, index) =>
+    const functions = Array.from({ length: 1_025 }, (_, index) =>
       `function f${index}() end`
     ).join("\n");
-    const nestedDo = `${"do ".repeat(129)}${"end ".repeat(129)}`;
-    const nestedParentheses = `return ${"(".repeat(129)}1${")".repeat(129)}`;
-    const tooManyLines = "\n".repeat(4_096);
+    const nestedDo = `${"do ".repeat(257)}${"end ".repeat(257)}`;
+    const nestedParentheses = `return ${"(".repeat(257)}1${")".repeat(257)}`;
+    const tooManyLines = "\n".repeat(16_384);
+    const tooManyBytes = new Uint8Array(1_048_577).fill(0x20);
 
     await expect(runtime.parse({ filePath: "functions.lua", sourceBytes: encoder.encode(functions) }))
       .resolves.toMatchObject({ decision: { kind: "file-only", code: "FUNCTION_LIMIT" } });
@@ -61,6 +62,8 @@ describe("Lua worker runtime fault boundary", () => {
       .resolves.toMatchObject({ decision: { kind: "file-only", code: "NESTING_LIMIT" } });
     await expect(runtime.parse({ filePath: "lines.lua", sourceBytes: encoder.encode(tooManyLines) }))
       .resolves.toMatchObject({ decision: { kind: "file-only", code: "LINE_LIMIT" } });
+    await expect(runtime.parse({ filePath: "bytes.lua", sourceBytes: tooManyBytes }))
+      .resolves.toMatchObject({ decision: { kind: "file-only", code: "SOURCE_LIMIT" } });
     expect(factory.create).not.toHaveBeenCalled();
   });
 
@@ -72,24 +75,25 @@ describe("Lua worker runtime fault boundary", () => {
       async terminate() {}
     }));
     const runtime = createLuaWorkerRuntime({ workerFactory: { create } });
-    const atFunctionLimit = Array.from({ length: 512 }, (_, index) =>
+    const atFunctionLimit = Array.from({ length: 1_024 }, (_, index) =>
       `function f${index}() end`
     ).join("\n");
-    const atBlockLimit = `${"do ".repeat(128)}${"end ".repeat(128)}`;
-    const atDelimiterLimit = `return ${"(".repeat(128)}1${")".repeat(128)}`;
-    const inertKeywords = `-- ${"function ".repeat(513)}\nlocal value = [=[${"do ".repeat(129)}]=]`;
+    const atBlockLimit = `${"do ".repeat(256)}${"end ".repeat(256)}`;
+    const atDelimiterLimit = `return ${"(".repeat(256)}1${")".repeat(256)}`;
+    const inertKeywords = `-- ${"function ".repeat(1_025)}\nlocal value = [=[${"do ".repeat(257)}]=]`;
 
     for (const [filePath, sourceText] of [
       ["functions.lua", atFunctionLimit],
       ["blocks.lua", atBlockLimit],
       ["delimiters.lua", atDelimiterLimit],
-      ["lines.lua", "\n".repeat(4_095)],
+      ["lines.lua", "\n".repeat(16_383)],
+      ["bytes.lua", " ".repeat(1_048_576)],
       ["inert.lua", inertKeywords]
     ] as const) {
       await expect(runtime.parse({ filePath, sourceBytes: encoder.encode(sourceText) }))
         .resolves.toMatchObject({ decision: { kind: "emit" } });
     }
-    expect(create).toHaveBeenCalledTimes(5);
+    expect(create).toHaveBeenCalledTimes(6);
   });
 
   it.each([

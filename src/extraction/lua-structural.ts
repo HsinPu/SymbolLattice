@@ -36,8 +36,11 @@ export function projectLuaStructuralFacts(input: ProjectLuaStructuralFactsInput)
   for (const declaration of input.response.declarations) {
     const declarationStart = requiredUtf16Offset(offsets.byByte, declaration.declarationStartByte);
     const declarationEnd = requiredUtf16Offset(offsets.byByte, declaration.declarationEndByte);
+    const member = declaration.form === "dotted-function" || declaration.form === "colon-function";
+    const kind = member ? "method" : "function";
+    const name = member ? declaration.name.split(/[.:]/u).at(-1) ?? declaration.name : declaration.name;
     const qualifiedName = `${input.filePath}#${declaration.name}`;
-    const identity = `${qualifiedName}\0function`;
+    const identity = `${qualifiedName}\0${kind}`;
     const declarationOrdinal = ordinals.get(identity) ?? 0;
     ordinals.set(identity, declarationOrdinal + 1);
     const range = rangeFor(lineStarts, declarationStart, declarationEnd);
@@ -45,12 +48,12 @@ export function projectLuaStructuralFacts(input: ProjectLuaStructuralFactsInput)
       id: createSymbolId({
         filePath: input.filePath,
         qualifiedName,
-        kind: "function",
+        kind,
         declarationOrdinal
       }),
-      name: declaration.name,
+      name,
       qualifiedName,
-      kind: "function",
+      kind,
       filePath: input.filePath,
       range,
       isExported: declaration.form !== "local-function",

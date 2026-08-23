@@ -90,4 +90,108 @@ sub missing {
     });
     expect(declarations(facts)).toEqual([]);
   });
+
+  it("treats POD bodies as opaque while preserving following declarations", () => {
+    const facts = extractPerlFileFacts({
+      filePath: "lib/Pod.pm",
+      language: "perl",
+      sourceText: `package Pod;
+=head1 DESCRIPTION
+sub fake { ([
+=cut
+sub real { return 1 }
+`
+    });
+    expect(declarations(facts).map((symbol) => symbol.name)).toEqual(["Pod", "real"]);
+  });
+
+  it("accepts POD documentation that continues to the end of the file", () => {
+    const facts = extractPerlFileFacts({
+      filePath: "lib/TrailingPod.pm",
+      language: "perl",
+      sourceText: `package TrailingPod;
+sub real { return 1 }
+=head1 METHODS
+sub fake { ([
+`
+    });
+    expect(declarations(facts).map((symbol) => symbol.name)).toEqual(["TrailingPod", "real"]);
+  });
+
+  it("keeps regex operators and heredoc bodies out of structural delimiter depth", () => {
+    const facts = extractPerlFileFacts({
+      filePath: "lib/OpaqueSyntax.pm",
+      language: "perl",
+      sourceText: `package OpaqueSyntax;
+sub regexes {
+  return 1 if $value =~ /^#([0-9]+)$/;
+  return $values[$#values];
+  my $group_id = $);
+  $value =~ s{([{}])}{[$1]}g;
+  $value =~ tr/[]/()/;
+}
+sub heredoc {
+  my $unicode = "🐛";
+  my $text = <<'END_TEXT';
+sub fake { ([
+END_TEXT
+  return $text;
+}
+sub after { return 1 }
+`
+    });
+    expect(declarations(facts).map((symbol) => symbol.name)).toEqual([
+      "OpaqueSyntax",
+      "regexes",
+      "heredoc",
+      "after"
+    ]);
+  });
+
+  it("stops executable scanning at Perl END and DATA markers", () => {
+    for (const marker of ["__END__", "__DATA__"]) {
+      const facts = extractPerlFileFacts({
+        filePath: "lib/EndMarker.pm",
+        language: "perl",
+        sourceText: `package EndMarker;
+sub before { return 1 }
+${marker}
+=head1 DATA
+sub fake { ([
+`
+      });
+      expect(declarations(facts).map((symbol) => symbol.name), marker).toEqual([
+        "EndMarker",
+        "before"
+      ]);
+    }
+  });
+
+  it("does not treat heredoc lookalikes in comments, strings, or POD as openers", () => {
+    const facts = extractPerlFileFacts({
+      filePath: "lib/HeredocDocs.pm",
+      language: "perl",
+      sourceText: `package HeredocDocs;
+# documentation example: <<COMMENT_EOF
+my $text = "documentation <<STRING_EOF";
+=head1 EXAMPLE
+    <<POD_EOF
+=cut
+sub real { return 1 }
+`
+    });
+    expect(declarations(facts).map((symbol) => symbol.name)).toEqual(["HeredocDocs", "real"]);
+  });
+
+  it("accepts arbitrary legal quote-like delimiters", () => {
+    const facts = extractPerlFileFacts({
+      filePath: "lib/QuoteDelimiter.pm",
+      language: "perl",
+      sourceText: `package QuoteDelimiter;
+my $text = q^} unmatched structural text^;
+sub real { return 1 }
+`
+    });
+    expect(declarations(facts).map((symbol) => symbol.name)).toEqual(["QuoteDelimiter", "real"]);
+  });
 });

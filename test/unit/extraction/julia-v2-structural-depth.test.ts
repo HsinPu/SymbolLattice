@@ -114,4 +114,76 @@ end
       expect.objectContaining({ kind: "function", name: "real" })
     ]);
   });
+
+  it("treats paired Julia adjoints as operators without swallowing delimiters", () => {
+    const facts = extractJuliaFileFacts({
+      filePath: "src/Adjoints.jl",
+      language: "julia",
+      sourceText: `module Adjoints
+function before()
+    values = compare(rewrite(x' * ones(2, 2)), x' * ones(2, 2))
+end
+function after()
+    true
+end
+end`
+    });
+
+    expect(symbols(facts)).toEqual([
+      expect.objectContaining({ kind: "module", name: "Adjoints" }),
+      expect.objectContaining({ kind: "function", name: "before" }),
+      expect.objectContaining({ kind: "function", name: "after" })
+    ]);
+  });
+
+  it("extracts bounded nested Julia method declarations", () => {
+    const facts = extractJuliaFileFacts({
+      filePath: "src/NestedMethods.jl",
+      language: "julia",
+      sourceText: `module NestedMethods
+struct Box
+    value::Int
+    function Box(value::Int)
+        new(value)
+    end
+end
+function outer!_impl()
+    local_short(x) = x
+    function local_long(y)
+        y
+    end
+end
+end`
+    });
+
+    expect(symbols(facts).map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["module", "NestedMethods"],
+      ["type", "Box"],
+      ["function", "Box"],
+      ["function", "local_short"],
+      ["function", "local_long"]
+    ]);
+
+    const dynamic = extractJuliaFileFacts({
+      filePath: "src/DynamicNested.jl",
+      language: "julia",
+      sourceText: `@eval begin
+function generated()
+end
+end`
+    });
+    expect(symbols(dynamic)).toEqual([]);
+
+    const typedCall = extractJuliaFileFacts({
+      filePath: "src/TypedCall.jl",
+      language: "julia",
+      sourceText: `module TypedCall
+function outer(model)
+    MOI.get(model, MOI.ListOfVariableIndices())::Vector{MOI.VariableIndex}
+    next_value = 1
+end
+end`
+    });
+    expect(symbols(typedCall).map((symbol) => symbol.name)).toEqual(["TypedCall", "outer"]);
+  });
 });

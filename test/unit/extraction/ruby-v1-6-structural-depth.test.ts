@@ -106,6 +106,31 @@ describe("Ruby v1.6 structural depth", () => {
     ]);
   });
 
+  it("extracts methods from a statically named singleton-class receiver", () => {
+    const facts = rubyFacts([
+      "module ELFTools",
+      "  module Sections",
+      "    class << Section",
+      "      def create(header)",
+      "      end",
+      "    end",
+      "    class << receiver_for(Section)",
+      "      def dynamic_create(header)",
+      "      end",
+      "    end",
+      "  end",
+      "end"
+    ].join("\n"));
+
+    expect(
+      facts.symbols
+        .filter((symbol) => symbol.kind === "method")
+        .map((symbol) => [symbol.name, symbol.qualifiedName])
+    ).toEqual([
+      ["create", "config/routes.rb#ELFTools.Sections.Section.create"]
+    ]);
+  });
+
   it("keeps direct class/module identities and full declaration containment in source order", () => {
     const facts = rubyFacts([
       "module Alpha",

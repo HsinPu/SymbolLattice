@@ -84,11 +84,11 @@ describe("Lua structural v1.2 projector", () => {
       response: response(sourceBytes, declarations)
     });
 
-    expect(facts.symbols.filter(({ kind }) => kind === "function")).toEqual([
+    expect(facts.symbols.filter(({ kind }) => kind !== "file")).toEqual([
       expect.objectContaining({ name: "plain", qualifiedName: "src/forms.lua#plain", declarationOrdinal: 0, isExported: true }),
       expect.objectContaining({ name: "local_name", qualifiedName: "src/forms.lua#local_name", declarationOrdinal: 0, isExported: false }),
-      expect.objectContaining({ name: "owner.child", qualifiedName: "src/forms.lua#owner.child", declarationOrdinal: 0, isExported: true }),
-      expect.objectContaining({ name: "owner:method", qualifiedName: "src/forms.lua#owner:method", declarationOrdinal: 0, isExported: true })
+      expect.objectContaining({ name: "child", qualifiedName: "src/forms.lua#owner.child", kind: "method", declarationOrdinal: 0, isExported: true }),
+      expect.objectContaining({ name: "method", qualifiedName: "src/forms.lua#owner:method", kind: "method", declarationOrdinal: 0, isExported: true })
     ]);
     expect(facts.edges).toHaveLength(4);
     for (const edge of facts.edges) {

@@ -55,6 +55,19 @@ end`
     expect(calls(facts)).toEqual([]);
   });
 
+  it("projects qualified Lua declarations as leaf-name methods", () => {
+    const facts = extractLuaFileFacts({
+      filePath: "src/members.lua",
+      language: "lua",
+      sourceText: "function owner.child() end\nfunction owner:method() end\n"
+    });
+
+    expect(facts.symbols.filter(({ kind }) => kind === "method")).toEqual([
+      expect.objectContaining({ name: "child", qualifiedName: "src/members.lua#owner.child" }),
+      expect.objectContaining({ name: "method", qualifiedName: "src/members.lua#owner:method" })
+    ]);
+  });
+
   it("keeps Lua debug aliases fail-closed and retains an exact Lapis route handler", () => {
     const aliasedReflection = extractLuaFileFacts({
       filePath: "src/alias.lua",

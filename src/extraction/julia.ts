@@ -249,6 +249,19 @@ function lexJulia(sourceText: string): LexicalJuliaTokens {
 
     if (current === "'") {
       const start = index;
+      const previous = sourceText[index - 1] ?? "";
+      if (/[\p{L}\p{Nl}\p{Mn}\p{Mc}0-9_\)\]\}]/u.test(previous)) {
+        tokens.push({
+          kind: "symbol",
+          text: "'",
+          value: undefined,
+          escaped: undefined,
+          start,
+          end: start + 1
+        });
+        index = start + 1;
+        continue;
+      }
       let cursor = index + 1;
       let escaped = false;
       let closed = false;
@@ -677,6 +690,7 @@ interface JuliaBlockFrame {
   readonly kind: "module" | "type" | "function" | "begin" | "other";
   readonly declaration: MutableJuliaDeclaration | null;
   readonly modulePath: string | null;
+  readonly allowsDeclarations: boolean;
 }
 
 interface JuliaFunctionHead {
@@ -713,10 +727,11 @@ function currentJuliaModulePath(stack: readonly JuliaBlockFrame[]): string | nul
 }
 
 function canDeclareJuliaStructuralSymbol(stack: readonly JuliaBlockFrame[]): boolean {
-  return stack.every((frame) => frame.kind === "module" || frame.kind === "begin");
+  return stack.every((frame) => frame.allowsDeclarations);
 }
 
 function parseJuliaFunctionHead(
+  sourceText: string,
   tokens: readonly JuliaToken[],
   index: number,
   pairs: ReadonlyMap<number, number>,
@@ -758,6 +773,16 @@ function parseJuliaFunctionHead(
       tokens[afterClose]?.text !== "=" &&
       tokens[afterClose]?.text !== "where"
     ) {
+      if (
+        afterClose > closeIndex + 1 &&
+        startsDirectStatement(sourceText, tokens, afterClose) &&
+        tokens[afterClose - 1]?.text !== "::"
+      ) {
+        if (requireEquals) {
+          return null;
+        }
+        break;
+      }
       afterClose += 1;
     }
   }
@@ -830,9 +855,10 @@ function structuralJuliaDeclarations(
   const pushBlock = (
     kind: JuliaBlockFrame["kind"],
     declaration: MutableJuliaDeclaration | null,
-    modulePath: string | null = currentJuliaModulePath(stack)
+    modulePath: string | null = currentJuliaModulePath(stack),
+    allowsDeclarations = canDeclareJuliaStructuralSymbol(stack)
   ): void => {
-    stack.push({ kind, declaration, modulePath });
+    stack.push({ kind, declaration, modulePath, allowsDeclarations });
   };
 
   for (let index = 0; index < tokens.length; index += 1) {
@@ -866,7 +892,12 @@ function structuralJuliaDeclarations(
         ? makeDeclaration("module", moduleName.text, token.start, moduleName.start, moduleName.end)
         : null;
       const modulePath = declaration?.qualifiedName ?? currentJuliaModulePath(stack);
-      pushBlock(declaration === null ? "other" : "module", declaration, modulePath);
+      pushBlock(
+        declaration === null ? "other" : "module",
+        declaration,
+        modulePath,
+        declaration !== null
+      );
       continue;
     }
 
@@ -878,7 +909,7 @@ function structuralJuliaDeclarations(
       const declaration = allowed && structuralStart(startIndex) && typeName !== undefined
         ? makeDeclaration("type", typeName.text, tokens[startIndex]?.start ?? token.start, typeName.start, typeName.end)
         : null;
-      pushBlock("type", declaration, currentJuliaModulePath(stack));
+      pushBlock("type", declaration, currentJuliaModulePath(stack), declaration !== null);
       continue;
     }
 
@@ -892,21 +923,26 @@ function structuralJuliaDeclarations(
       const declaration = allowed && structuralStart(index) && typeName !== undefined
         ? makeDeclaration("type", typeName.text, token.start, typeName.start, typeName.end)
         : null;
-      pushBlock("type", declaration, currentJuliaModulePath(stack));
+      pushBlock("type", declaration, currentJuliaModulePath(stack), declaration !== null);
       continue;
     }
 
     if (token.text === "function") {
-      const head = parseJuliaFunctionHead(tokens, index + 1, pairs, false);
+      const head = parseJuliaFunctionHead(sourceText, tokens, index + 1, pairs, false);
       const declaration = allowed && structuralStart(index) && head !== null && head.openIndex > index + 1
         ? makeDeclaration("function", head.name, token.start, head.nameStart, head.nameEnd)
         : null;
-      pushBlock("function", declaration, currentJuliaModulePath(stack));
+      pushBlock(
+        "function",
+        declaration,
+        currentJuliaModulePath(stack),
+        allowed && structuralStart(index)
+      );
       continue;
     }
 
     if (allowed && structuralStart(index)) {
-      const oneLine = parseJuliaFunctionHead(tokens, index, pairs, true);
+      const oneLine = parseJuliaFunctionHead(sourceText, tokens, index, pairs, true);
       if (oneLine !== null && oneLine.equalsIndex !== null) {
         const declaration = makeDeclaration(
           "function",
@@ -922,10 +958,15 @@ function structuralJuliaDeclarations(
     }
 
     if (JULIA_BLOCK_OPENERS.has(token.text)) {
+      const nestedDeclarationsAllowed =
+        canDeclareJuliaStructuralSymbol(stack) &&
+        !hasJuliaMacroPrefix(tokens, index) &&
+        token.text === "begin";
       pushBlock(
         token.text === "begin" && !hasJuliaMacroPrefix(tokens, index) ? "begin" : "other",
         null,
-        currentJuliaModulePath(stack)
+        currentJuliaModulePath(stack),
+        nestedDeclarationsAllowed
       );
     }
   }

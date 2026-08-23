@@ -719,6 +719,20 @@ function hasSyntaxError(node: PythonSyntaxNode): boolean {
   return node.type.isError || directChildren(node).some((child) => hasSyntaxError(child));
 }
 
+function pythonSyntaxErrors(root: PythonSyntaxNode): readonly PythonSyntaxNode[] {
+  const errors: PythonSyntaxNode[] = [];
+  function collect(node: PythonSyntaxNode): void {
+    if (node.type.isError) {
+      errors.push(node);
+    }
+    for (const child of directChildren(node)) {
+      collect(child);
+    }
+  }
+  collect(root);
+  return errors;
+}
+
 interface PythonRecoveryCompatibility {
   readonly mode: "full" | "declarations-only";
   readonly unsafeBindings: readonly {
@@ -732,16 +746,7 @@ function pythonRecoveryCompatibility(
   input: PythonExtractFileFactsInput,
   root: PythonSyntaxNode
 ): PythonRecoveryCompatibility | null {
-  const errors: PythonSyntaxNode[] = [];
-  function collect(node: PythonSyntaxNode): void {
-    if (node.type.isError) {
-      errors.push(node);
-    }
-    for (const child of directChildren(node)) {
-      collect(child);
-    }
-  }
-  collect(root);
+  const errors = pythonSyntaxErrors(root);
 
   if (errors.length === 0) {
     return { mode: "full", unsafeBindings: [] };
@@ -887,16 +892,25 @@ function pythonRecoveryCompatibility(
   }
 
   const withStatements = new Set<PythonSyntaxNode>();
+  const withStatementByError = new Map<string, PythonSyntaxNode>();
   for (const error of errors) {
     for (let ancestor = error.parent; ancestor !== null; ancestor = ancestor.parent) {
       if (ancestor.name === "WithStatement") {
         withStatements.add(ancestor);
+        withStatementByError.set(nodeKey(error), ancestor);
         break;
       }
     }
   }
-  const withStatement = [...withStatements][0];
-  if (withStatements.size === 1 && withStatement !== undefined && errors.length === 3) {
+  const acceptedWithErrorKeys = new Set<string>();
+  const recoveredWithBindings: { name: string; from: number; to: number }[] = [];
+  for (const withStatement of withStatements) {
+    const statementErrors = errors.filter(
+      (error) => nodeKey(withStatementByError.get(nodeKey(error)) ?? error) === nodeKey(withStatement)
+    );
+    if (statementErrors.length !== 3) {
+      continue;
+    }
     const withChildren = directChildren(withStatement);
     const parenthesized = withChildren[1];
     const tuple = withChildren.find((child) => child.name === "TupleExpression");
@@ -932,8 +946,54 @@ function pythonRecoveryCompatibility(
         input.sourceText.slice(withStatement.from, headerEnd + 1)
       )
     ) {
-      return { mode: "full", unsafeBindings: aliases };
+      for (const error of statementErrors) {
+        acceptedWithErrorKeys.add(nodeKey(error));
+      }
+      recoveredWithBindings.push(...aliases);
     }
+  }
+  if (
+    acceptedWithErrorKeys.size === errors.length &&
+    errors.every((error) => acceptedWithErrorKeys.has(nodeKey(error)))
+  ) {
+    return { mode: "full", unsafeBindings: recoveredWithBindings };
+  }
+
+  if (errors.length === 1) {
+    const error = errors[0]!;
+    const withStatement = withStatementByError.get(nodeKey(error));
+    const headerEnd = withStatement === undefined
+      ? undefined
+      : directChildren(withStatement).find((child) => child.name === "Body")?.from;
+    if (
+      withStatement !== undefined &&
+      headerEnd !== undefined &&
+      error.parent?.name === "WithStatement" &&
+      /^\.[A-Za-z_][A-Za-z0-9_]*$/u.test(nodeText(input, error)) &&
+      /^with[\s\S]*\bas[\t ]+[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+[\t ]*:$/u.test(
+        input.sourceText.slice(withStatement.from, headerEnd + 1)
+      )
+    ) {
+      return { mode: "declarations-only", unsafeBindings: [] };
+    }
+  }
+
+  const firstError = errors[0];
+  const tupleTargetWith = firstError === undefined
+    ? undefined
+    : withStatementByError.get(nodeKey(firstError));
+  const tupleTargetHeader = tupleTargetWith === undefined
+    ? undefined
+    : input.sourceText.slice(tupleTargetWith.from).match(
+        /^with[\s\S]+?\bas[\t ]*\([\t \r\n]*[A-Za-z_][A-Za-z0-9_]*(?:[\t \r\n]*,[\t \r\n]*[A-Za-z_][A-Za-z0-9_]*)+[\t \r\n]*,?[\t \r\n]*\)[\t ]*:(?=\r?\n|$)/u
+      )?.[0];
+  if (
+    tupleTargetWith !== undefined &&
+    tupleTargetHeader !== undefined &&
+    errors.every((error) => error.from === error.to) &&
+    tupleTargetHeader.length > 0
+  ) {
+    return { mode: "declarations-only", unsafeBindings: [] };
   }
 
   if (errors.length === 2 && errors.every((error) => error.parent?.name === "Script")) {
@@ -4709,6 +4769,17 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
   }
 
   const root = parser.parse(input.sourceText).topNode;
+  const normalizedLineEndings = input.sourceText.replace(/\r\n/gu, "\n");
+  if (normalizedLineEndings !== input.sourceText && hasSyntaxError(root)) {
+    const errors = pythonSyntaxErrors(root);
+    const isClosedCrLfRecovery = errors.every((error) => error.parent?.name !== "Script");
+    const normalizedRoot = isClosedCrLfRecovery
+      ? parser.parse(normalizedLineEndings).topNode
+      : null;
+    if (normalizedRoot !== null && !hasSyntaxError(normalizedRoot)) {
+      return extractPythonFileFacts({ ...input, sourceText: normalizedLineEndings });
+    }
+  }
   const recoveryCompatibility = pythonRecoveryCompatibility(input, root);
   const artifactCallTaint = pythonArtifactCallTaint(input, root);
   const lineStarts = lineStartsFor(input.sourceText);
@@ -4805,6 +4876,66 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
   };
   symbols.push(fileNode);
 
+  const recoveredClassScopes: {
+    readonly node: PythonSyntaxNode;
+    readonly classIndent: number;
+    readonly bodyIndent: number;
+    readonly from: number;
+    readonly to: number;
+  }[] = [];
+  if (recoveryCompatibility?.mode === "declarations-only") {
+    function collectRecoveredClassScopes(node: PythonSyntaxNode): void {
+      if (node.name === "ClassDefinition") {
+        const line = rangeFor(lineStarts, node.from, node.from).start.line - 1;
+        const lineStart = lineStarts[line];
+        const lineEnd = lineStarts[line + 1] ?? input.sourceText.length;
+        const header =
+          lineStart === undefined ? "" : input.sourceText.slice(lineStart, lineEnd).replace(/[\r\n]+$/u, "");
+        const match = /^( *)class[\t ]+[A-Za-z_][A-Za-z0-9_]*(?:[\t ]*\([^\r\n]*\))?[\t ]*:[\t ]*(?:#.*)?$/u.exec(
+          header
+        );
+        if (match !== null) {
+          const classIndent = match[1]!.length;
+          let bodyIndent: number | null = null;
+          let scopeEnd = input.sourceText.length;
+          for (let index = line + 1; index < lineStarts.length; index += 1) {
+            const start = lineStarts[index];
+            if (start === undefined) {
+              continue;
+            }
+            const end = lineStarts[index + 1] ?? input.sourceText.length;
+            const text = input.sourceText.slice(start, end).replace(/[\r\n]+$/u, "");
+            if (/^[\t ]*(?:#.*)?$/u.test(text)) {
+              continue;
+            }
+            const indentation = /^( *)/u.exec(text)?.[1]?.length;
+            if (indentation === undefined || text.startsWith("\t")) {
+              break;
+            }
+            if (indentation <= classIndent) {
+              scopeEnd = start;
+              break;
+            }
+            bodyIndent ??= indentation;
+          }
+          if (bodyIndent !== null) {
+            recoveredClassScopes.push({
+              node,
+              classIndent,
+              bodyIndent,
+              from: node.from,
+              to: scopeEnd
+            });
+          }
+        }
+      }
+      for (const child of directChildren(node)) {
+        collectRecoveredClassScopes(child);
+      }
+    }
+    collectRecoveredClassScopes(root);
+  }
+
   function addContainment(
     parent: SymbolNode,
     child: SymbolNode,
@@ -4836,6 +4967,28 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     });
   }
 
+  function recoveredClassOwner(node: PythonSyntaxNode): SymbolNode | null {
+    const line = rangeFor(lineStarts, node.from, node.from).start.line - 1;
+    const lineStart = lineStarts[line];
+    const lineEnd = lineStarts[line + 1] ?? input.sourceText.length;
+    const declarationLine =
+      lineStart === undefined ? "" : input.sourceText.slice(lineStart, lineEnd).replace(/[\r\n]+$/u, "");
+    const indentation = /^( *)/u.exec(declarationLine)?.[1]?.length;
+    if (indentation === undefined || declarationLine.startsWith("\t")) {
+      return null;
+    }
+    const candidates = recoveredClassScopes
+      .filter(
+        (scope) =>
+          node.from > scope.from &&
+          node.from < scope.to &&
+          indentation === scope.bodyIndent
+      )
+      .sort((left, right) => right.classIndent - left.classIndent);
+    const scope = candidates[0];
+    return scope === undefined ? null : symbolsByNodeKey.get(nodeKey(scope.node)) ?? null;
+  }
+
   function addDeclaration(node: PythonSyntaxNode, owner: SymbolNode): SymbolNode | null {
     const name = declarationName(input, node);
     if (name === null) {
@@ -4844,7 +4997,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     const kind: SymbolKind =
       node.name === "ClassDefinition"
         ? "class"
-        : isClassScopedFunction(node)
+        : owner.kind === "class" || isClassScopedFunction(node)
           ? "method"
           : "function";
     const qualifiedName =
@@ -4879,12 +5032,18 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
   }
 
   function visit(node: PythonSyntaxNode, owner: SymbolNode): void {
+    const effectiveOwner =
+      node.name === "FunctionDefinition" &&
+      owner.kind === "file" &&
+      recoveryCompatibility?.mode === "declarations-only"
+        ? recoveredClassOwner(node) ?? owner
+        : owner;
     const declaration =
       node.name === "FunctionDefinition" || node.name === "ClassDefinition"
-        ? addDeclaration(node, owner)
+        ? addDeclaration(node, effectiveOwner)
         : null;
     for (const child of directChildren(node)) {
-      visit(child, declaration ?? owner);
+      visit(child, declaration ?? effectiveOwner);
     }
   }
 

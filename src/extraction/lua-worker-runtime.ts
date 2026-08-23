@@ -6,6 +6,10 @@ import { pathToFileURL } from "node:url";
 
 import {
   LUA_GRAMMAR_SHA256,
+  LUA_MAXIMUM_FUNCTIONS,
+  LUA_MAXIMUM_NESTING,
+  LUA_MAXIMUM_PHYSICAL_LINES,
+  LUA_MAXIMUM_SOURCE_BYTES,
   LUA_WORKER_RESPONSE_SCHEMA,
   LuaWorkerResponseError,
   validateLuaWorkerResponse,
@@ -350,7 +354,7 @@ function requiredAsset(
 function preflightSource(sourceBytes: Uint8Array | undefined): LuaFileFailureCode | null {
   if (sourceBytes === undefined) return "RAW_BYTES_MISSING";
   if (!(sourceBytes instanceof Uint8Array)) return "RESPONSE_INVALID";
-  if (sourceBytes.byteLength > 65_536) return "SOURCE_LIMIT";
+  if (sourceBytes.byteLength > LUA_MAXIMUM_SOURCE_BYTES) return "SOURCE_LIMIT";
   let sourceText: string;
   try {
     sourceText = new TextDecoder("utf-8", { fatal: true }).decode(sourceBytes);
@@ -359,10 +363,10 @@ function preflightSource(sourceBytes: Uint8Array | undefined): LuaFileFailureCod
   }
   if (!byteEqual(new TextEncoder().encode(sourceText), sourceBytes)) return "INVALID_UTF8";
   if (sourceBytes.includes(0)) return "NUL";
-  if (physicalLines(sourceBytes) > 4_096) return "LINE_LIMIT";
+  if (physicalLines(sourceBytes) > LUA_MAXIMUM_PHYSICAL_LINES) return "LINE_LIMIT";
   const lexicalBounds = luaLexicalBounds(sourceText);
-  if (lexicalBounds.functionCandidates > 512) return "FUNCTION_LIMIT";
-  if (lexicalBounds.maxDepth > 128) return "NESTING_LIMIT";
+  if (lexicalBounds.functionCandidates > LUA_MAXIMUM_FUNCTIONS) return "FUNCTION_LIMIT";
+  if (lexicalBounds.maxDepth > LUA_MAXIMUM_NESTING) return "NESTING_LIMIT";
   return null;
 }
 
@@ -502,7 +506,7 @@ function fileOnlyResponse(
 function emptyMetrics(sourceBytes: Uint8Array): LuaWorkerMetrics {
   return {
     sourceBytes: sourceBytes.byteLength,
-    physicalLines: Math.min(4_096, physicalLines(sourceBytes)),
+    physicalLines: Math.min(LUA_MAXIMUM_PHYSICAL_LINES, physicalLines(sourceBytes)),
     functionCandidates: 0,
     namedFunctions: 0,
     maxDepth: 0

@@ -95,7 +95,7 @@ describe("Lua structural v1.2 application composition", () => {
     expect(snapshot.symbols.filter((symbol) => symbol.filePath === "b-missing.lua"))
       .toHaveLength(1);
     expect(snapshot.symbols).toEqual(expect.arrayContaining([
-      expect.objectContaining({ filePath: "c-next.lua", name: "pkg.next", kind: "function" }),
+      expect.objectContaining({ filePath: "c-next.lua", name: "next", qualifiedName: "c-next.lua#pkg.next", kind: "method" }),
       expect.objectContaining({ filePath: "frozen.luau", name: "frozen", kind: "function" })
     ]));
     expect(snapshot.edges).toEqual(expect.arrayContaining([

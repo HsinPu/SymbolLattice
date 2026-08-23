@@ -3510,6 +3510,99 @@ describe("source extraction", () => {
     expect(declarationOnly.pythonFacts?.topLevelDeclarations).toEqual([]);
   });
 
+  it("retains declarations for closed valid-Python recovery clusters seen in pandas", () => {
+    const sources = [
+      [
+        "def before():",
+        "    return 1",
+        "def render(value):",
+        "    raise ValueError(f\"invalid {value} \\",
+        "continued\")",
+        "def after():",
+        "    return 2"
+      ].join("\r\n"),
+      [
+        "def compare():",
+        "    with (",
+        "        open_one() as first,",
+        "        open_two() as second,",
+        "    ):",
+        "        pass",
+        "    with (",
+        "        open_three() as third,",
+        "        open_four() as fourth,",
+        "    ):",
+        "        pass",
+        "def after():",
+        "    return 2"
+      ].join("\n"),
+      [
+        "class Writer:",
+        "    def write(self):",
+        "        with get_handle() as self.handles:",
+        "            pass",
+        "def after():",
+        "    return 2"
+      ].join("\n"),
+      [
+        "def box():",
+        "    with manager() as (",
+        "        first,",
+        "        second,",
+        "    ):",
+        "        with first:",
+        "            pass",
+        "def after():",
+        "    return 2"
+      ].join("\n")
+    ] as const;
+
+    for (const sourceText of sources) {
+      const facts = extractPythonFileFacts({
+        filePath: "pandas-recovery.py",
+        language: "python",
+        sourceText
+      });
+      expect(
+        facts.symbols
+          .filter((symbol) => ["class", "function", "method"].includes(symbol.kind))
+          .map((symbol) => symbol.name),
+        sourceText
+      ).toContain("after");
+    }
+
+    const recoveredClassFacts = extractPythonFileFacts({
+      filePath: "pandas-numba-recovery.py",
+      language: "python",
+      sourceText: [
+        "def box():",
+        "    with manager() as (",
+        "        first,",
+        "        second,",
+        "    ):",
+        "        with first:",
+        "            pass",
+        "class IlocType:",
+        "    def __init__(self):",
+        "        pass",
+        "    def key(self):",
+        "        return 1",
+        "class ILocModel:",
+        "    def __init__(self):",
+        "        pass"
+      ].join("\n")
+    });
+    expect(
+      recoveredClassFacts.symbols
+        .filter((symbol) => symbol.kind === "method")
+        .map((symbol) => symbol.qualifiedName)
+    ).toEqual([
+      "pandas-numba-recovery.py#IlocType.__init__",
+      "pandas-numba-recovery.py#IlocType.key",
+      "pandas-numba-recovery.py#ILocModel.__init__"
+    ]);
+  });
+
   it("keeps the frozen malformed-recovery matrix file-only", () => {
     const malformedShapes = [
       "def target():\n    pass\ndef caller(:\n    target()",

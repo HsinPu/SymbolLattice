@@ -154,9 +154,6 @@ function tokenizeR(sourceText: string): { readonly tokens: readonly RToken[]; re
           closed = true;
           break;
         }
-        if (/[\r\n]/u.test(next)) {
-          break;
-        }
         index += 1;
       }
       if (!closed) {
@@ -318,6 +315,24 @@ function previousCodeTokenIndex(tokens: readonly RToken[], index: number): numbe
   return null;
 }
 
+function startsDirectRootStatement(sourceText: string, structure: RStructure, index: number): boolean {
+  if (!startsDirectStatement(sourceText, structure.tokens, index)) return false;
+  const previousIndex = previousCodeTokenIndex(structure.tokens, index);
+  if (previousIndex === null) return true;
+  const previous = structure.tokens[previousIndex];
+  if (previous?.text === "else" || previous?.text === "repeat") return false;
+  if (previous?.text !== ")") return true;
+  let openingIndex: number | undefined;
+  for (const [opening, closing] of structure.pairedDelimiters) {
+    if (closing === previousIndex) {
+      openingIndex = opening;
+      break;
+    }
+  }
+  const control = openingIndex === undefined ? undefined : structure.tokens[openingIndex - 1]?.text;
+  return !["if", "for", "while"].includes(control ?? "");
+}
+
 function startsStandaloneAnnotation(sourceText: string, structure: RStructure, index: number): boolean {
   const annotation = structure.tokens[index];
   if (
@@ -415,7 +430,7 @@ function collectTopLevelRFunctions(
     if (
       nameToken?.kind !== "identifier" ||
       structure.depthBefore[index] !== 0 ||
-      !startsDirectStatement(sourceText, structure.tokens, index)
+      !startsDirectRootStatement(sourceText, structure, index)
     ) {
       continue;
     }
@@ -423,25 +438,62 @@ function collectTopLevelRFunctions(
     const functionToken = structure.tokens[index + 2];
     const openingParenthesis = index + 3;
     const closingParenthesis = structure.pairedDelimiters.get(openingParenthesis);
-    const bodyStart = closingParenthesis === undefined ? undefined : closingParenthesis + 1;
-    const bodyEnd = bodyStart === undefined ? undefined : structure.pairedDelimiters.get(bodyStart);
-    const bodyToken = bodyStart === undefined ? undefined : structure.tokens[bodyStart];
-    const bodyEndToken = bodyEnd === undefined ? undefined : structure.tokens[bodyEnd];
     if (
       (assignment?.text !== "<-" && assignment?.text !== "=") ||
       functionToken?.text !== "function" ||
       structure.tokens[openingParenthesis]?.text !== "(" ||
-      closingParenthesis === undefined ||
-      bodyToken?.text !== "{" ||
-      bodyEnd === undefined ||
-      bodyEndToken === undefined ||
-      !endsDirectStatement(sourceText, structure.tokens, bodyEnd)
+      closingParenthesis === undefined
     ) {
       continue;
     }
-    functions.push({ name: nameToken.text, start: nameToken.start, end: bodyEndToken.end });
+    let bodyStart = closingParenthesis + 1;
+    while (structure.tokens[bodyStart]?.kind === "comment") bodyStart += 1;
+    const bodyToken = structure.tokens[bodyStart];
+    if (bodyToken === undefined || structure.depthBefore[bodyStart] !== 0) continue;
+    if (bodyToken.text === "{") {
+      const bodyEnd = structure.pairedDelimiters.get(bodyStart);
+      const bodyEndToken = bodyEnd === undefined ? undefined : structure.tokens[bodyEnd];
+      if (bodyEnd === undefined || bodyEndToken === undefined || !endsDirectStatement(sourceText, structure.tokens, bodyEnd)) {
+        continue;
+      }
+      functions.push({ name: nameToken.text, start: nameToken.start, end: bodyEndToken.end });
+      continue;
+    }
+
+    let previousCodeIndex: number | null = null;
+    let expressionEnd: RToken | undefined;
+    for (let cursor = bodyStart; cursor < structure.tokens.length; cursor += 1) {
+      const token = structure.tokens[cursor];
+      if (token === undefined || token.kind === "comment") continue;
+      if (cursor > bodyStart && structure.depthBefore[cursor] === 0 && previousCodeIndex !== null) {
+        const previous = structure.tokens[previousCodeIndex];
+        if (token.text === ";") break;
+        if (
+          previous !== undefined &&
+          /[\r\n]/u.test(sourceText.slice(previous.end, token.start)) &&
+          !R_CONTINUATION_TOKENS.has(previous.text as never) &&
+          !R_CONTINUATION_TOKENS.has(token.text as never) &&
+          token.text !== "else"
+        ) {
+          break;
+        }
+      }
+      previousCodeIndex = cursor;
+      expressionEnd = token;
+    }
+    if (expressionEnd !== undefined) {
+      functions.push({ name: nameToken.text, start: nameToken.start, end: expressionEnd.end });
+    }
   }
-  return functions;
+  const ordered = functions.sort((left, right) => left.start - right.start || left.end - right.end);
+  const direct: StaticRFunction[] = [];
+  let coveredUntil = -1;
+  for (const declaration of ordered) {
+    if (declaration.start < coveredUntil) continue;
+    direct.push(declaration);
+    coveredUntil = declaration.end;
+  }
+  return direct;
 }
 
 function collectTopLevelRClasses(
@@ -455,7 +507,7 @@ function collectTopLevelRClasses(
       declarationToken?.kind !== "identifier" ||
       !["setClass", "setRefClass"].includes(declarationToken.text) ||
       structure.depthBefore[index] !== 0 ||
-      !startsDirectStatement(sourceText, structure.tokens, index) ||
+      !startsDirectRootStatement(sourceText, structure, index) ||
       structure.tokens[index + 1]?.text !== "("
     ) {
       continue;

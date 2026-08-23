@@ -31,6 +31,7 @@ interface LuaToken {
 interface LuaBlock {
   readonly kind: LuaBlockKind;
   readonly functionTokenIndex?: number;
+  readonly delimiterDepthAtStart?: number;
 }
 
 interface LuaDelimiterFrame {
@@ -317,8 +318,8 @@ function analyzeLuaStructure(
   const blockStack: LuaBlock[] = [];
   const delimiterStack: LuaDelimiterFrame[] = [];
   let pendingConditional: "if" | "elseif" | null = null;
-  let pendingLuauIfExpression = 0;
-  let activeLuauIfExpressions = 0;
+  const pendingLuauIfExpressions: Array<{ blockDepth: number; delimiterDepth: number }> = [];
+  const activeLuauIfExpressions: Array<{ blockDepth: number; delimiterDepth: number }> = [];
   let valid = true;
 
   const closeDelimiter = (expected: LuaDelimiter, closingIndex: number): void => {
@@ -355,34 +356,55 @@ function analyzeLuaStructure(
 
     switch (token.text) {
       case "function":
-        blockStack.push({ kind: "function", functionTokenIndex: index });
+        blockStack.push({
+          kind: "function",
+          functionTokenIndex: index,
+          delimiterDepthAtStart: delimiterStack.length
+        });
         break;
       case "if":
-        if (language !== "luau" || startsDirectStatement(sourceText, lexed.tokens, index)) {
+        const activeIfExpression = activeLuauIfExpressions.at(-1);
+        const statementDelimiterDepth = luaStatementDelimiterDepth(blockStack);
+        if (
+          language !== "luau" ||
+          ((activeIfExpression === undefined ||
+            activeIfExpression.blockDepth !== blockStack.length ||
+            activeIfExpression.delimiterDepth !== delimiterStack.length) &&
+            delimiterStack.length === statementDelimiterDepth &&
+            startsDirectStatement(sourceText, lexed.tokens, index) &&
+            !luauExpressionContinuesBefore(lexed.tokens, index))
+        ) {
           pendingConditional = "if";
         } else {
-          pendingLuauIfExpression += 1;
+          pendingLuauIfExpressions.push({
+            blockDepth: blockStack.length,
+            delimiterDepth: delimiterStack.length
+          });
         }
         break;
       case "elseif":
-        if (blockStack.at(-1)?.kind !== "if") {
-          if (language === "luau" && activeLuauIfExpressions > 0) {
-            activeLuauIfExpressions -= 1;
-            pendingLuauIfExpression += 1;
-          } else {
-            valid = false;
+        if (
+          language === "luau" &&
+          activeLuauIfExpressions.at(-1)?.blockDepth === blockStack.length &&
+          activeLuauIfExpressions.at(-1)?.delimiterDepth === delimiterStack.length
+        ) {
+          const frame = activeLuauIfExpressions.pop();
+          if (frame !== undefined) {
+            pendingLuauIfExpressions.push(frame);
           }
+        } else if (blockStack.at(-1)?.kind !== "if") {
+          valid = false;
         } else {
           pendingConditional = "elseif";
         }
         break;
       case "then":
         if (pendingConditional === null) {
-          if (language !== "luau" || pendingLuauIfExpression === 0) {
+          const frame = pendingLuauIfExpressions.pop();
+          if (language !== "luau" || frame === undefined) {
             valid = false;
           } else {
-            pendingLuauIfExpression -= 1;
-            activeLuauIfExpressions += 1;
+            activeLuauIfExpressions.push(frame);
           }
         } else if (pendingConditional === "if") {
           blockStack.push({ kind: "if" });
@@ -390,12 +412,14 @@ function analyzeLuaStructure(
         pendingConditional = null;
         break;
       case "else":
-        if (blockStack.at(-1)?.kind !== "if") {
-          if (language !== "luau" || activeLuauIfExpressions === 0) {
-            valid = false;
-          } else {
-            activeLuauIfExpressions -= 1;
-          }
+        if (
+          language === "luau" &&
+          activeLuauIfExpressions.at(-1)?.blockDepth === blockStack.length &&
+          activeLuauIfExpressions.at(-1)?.delimiterDepth === delimiterStack.length
+        ) {
+          activeLuauIfExpressions.pop();
+        } else if (blockStack.at(-1)?.kind !== "if") {
+          valid = false;
         }
         break;
       case "do":
@@ -429,12 +453,22 @@ function analyzeLuaStructure(
     blockStack.length > 0 ||
     delimiterStack.length > 0 ||
     pendingConditional !== null ||
-    pendingLuauIfExpression > 0 ||
-    activeLuauIfExpressions > 0
+    pendingLuauIfExpressions.length > 0 ||
+    activeLuauIfExpressions.length > 0
   ) {
     valid = false;
   }
   return { tokens: lexed.tokens, valid, depthBefore, functionEnds, pairedParentheses };
+}
+
+function luaStatementDelimiterDepth(blockStack: readonly LuaBlock[]): number {
+  for (let index = blockStack.length - 1; index >= 0; index -= 1) {
+    const block = blockStack[index];
+    if (block?.kind === "function") {
+      return block.delimiterDepthAtStart ?? 0;
+    }
+  }
+  return 0;
 }
 
 function lineStartsFor(sourceText: string): readonly number[] {
@@ -490,6 +524,32 @@ function startsDirectStatement(
     return false;
   }
   return previous.text === ";" || /[;\r\n]/u.test(sourceText.slice(previous.end, current.start));
+}
+
+function luauExpressionContinuesBefore(tokens: readonly LuaToken[], index: number): boolean {
+  const previous = tokens[index - 1];
+  if (previous === undefined) {
+    return false;
+  }
+  return new Set([
+    "(",
+    "[",
+    "{",
+    ",",
+    "=",
+    "+",
+    "-",
+    "*",
+    "/",
+    "%",
+    "^",
+    "#",
+    "..",
+    "and",
+    "or",
+    "not",
+    "return"
+  ]).has(previous.text);
 }
 
 function endsDirectStatement(
@@ -606,8 +666,7 @@ function matchingLuauAngleBracket(
 
 function luauFunctionHead(
   structure: LuaStructure,
-  functionIndex: number,
-  language: LuaExtractFileFactsInput["language"]
+  functionIndex: number
 ): LuauFunctionHead | null {
   let cursor = functionIndex + 1;
   const firstName = identifierText(structure.tokens[cursor]);
@@ -619,9 +678,6 @@ function luauFunctionHead(
   let member = false;
   cursor += 1;
   while (structure.tokens[cursor]?.text === "." || structure.tokens[cursor]?.text === ":") {
-    if (language !== "luau") {
-      return null;
-    }
     const separator = structure.tokens[cursor]?.text;
     const memberName = identifierText(structure.tokens[cursor + 1]);
     if (separator === undefined || memberName === null) {
@@ -651,7 +707,11 @@ function luauFunctionHead(
 }
 
 function isLuauTypeAtom(token: LuaToken | undefined): boolean {
-  return token?.kind === "identifier" || LUAU_TYPE_ATOMS.has(token?.text as never);
+  return (
+    token?.kind === "identifier" ||
+    token?.kind === "string" ||
+    LUAU_TYPE_ATOMS.has(token?.text as never)
+  );
 }
 
 function scanLuauTypeExpression(
@@ -687,10 +747,42 @@ function scanLuauTypeExpression(
     ) {
       break;
     }
+    if (token.text === "typeof" && structure.tokens[cursor + 1]?.text === "(") {
+      if (
+        seen &&
+        !["<", "{", "[", "(", ".", "|", "&", "?", ":", "-", "->", ","].includes(lastText)
+      ) {
+        return null;
+      }
+      const closingParenthesis = structure.pairedParentheses.get(cursor + 1);
+      if (closingParenthesis === undefined || closingParenthesis >= limit) {
+        return null;
+      }
+      seen = true;
+      lastText = "typeof";
+      cursor = closingParenthesis + 1;
+      continue;
+    }
+    if (
+      token.text === "." &&
+      structure.tokens[cursor + 1]?.text === "." &&
+      structure.tokens[cursor + 2]?.text === "."
+    ) {
+      seen = true;
+      const prefix = ["<", "{", "[", "(", "|", "&", ":", "->", ","].includes(lastText);
+      if (prefix && !isLuauTypeAtom(structure.tokens[cursor + 3])) {
+        return null;
+      }
+      lastText = prefix ? "..." : "pack";
+      cursor += 3;
+      continue;
+    }
     if (
       isLuauTypeAtom(token) &&
       seen &&
-      !["<", "{", "[", "(", ".", "|", "&", "?", ":", "-", "->", ","].includes(lastText)
+      !["<", "{", "[", "(", ".", "|", "&", "?", ":", "-", "->", ",", "..."].includes(
+        lastText
+      )
     ) {
       return null;
     }
@@ -707,9 +799,12 @@ function scanLuauTypeExpression(
         seen = true;
         break;
       case ">":
+        if (previousText === "-") {
+          break;
+        }
         if (angles > 0) {
           angles -= 1;
-        } else if (previousText !== "-") {
+        } else {
           return null;
         }
         break;
@@ -832,7 +927,7 @@ function collectTopLevelFunctions(
       previous?.text === "export" &&
       structure.depthBefore[index - 1] === 0 &&
       startsDirectStatement(sourceText, structure.tokens, index - 1);
-    const head = luauFunctionHead(structure, index, language);
+    const head = luauFunctionHead(structure, index);
     const endIndex = structure.functionEnds.get(index);
     const endToken = endIndex === undefined ? undefined : structure.tokens[endIndex];
     if (
@@ -850,8 +945,8 @@ function collectTopLevelFunctions(
       start: isLocal ? (previous?.start ?? functionToken.start) : functionToken.start,
       end: endToken.end,
       isLocal,
-      ...(language === "luau" ? { qualifiedName: head.qualifiedName } : {}),
-      symbolKind: language === "luau" ? head.symbolKind : "function"
+      qualifiedName: head.qualifiedName,
+      symbolKind: head.symbolKind
     });
   }
   return functions;
@@ -1729,7 +1824,7 @@ function boundedLuauFunctionSignature(
   structure: LuaStructure,
   functionIndex: number
 ): BoundedLuauFunctionSignature | null {
-  const head = luauFunctionHead(structure, functionIndex, "luau");
+  const head = luauFunctionHead(structure, functionIndex);
   const openingParenthesis = head?.openingParenthesis ?? -1;
   const closingParenthesis = structure.pairedParentheses.get(openingParenthesis);
   const functionEndIndex = structure.functionEnds.get(functionIndex);

@@ -54,4 +54,51 @@ outer <- function() {
     });
     expect(declarations(facts)).toEqual([]);
   });
+
+  it("keeps valid multiline strings opaque without rejecting later declarations", () => {
+    const facts = extractRFileFacts({
+      filePath: "R/messages.R",
+      language: "r",
+      sourceText: `message <- "first line
+second line"
+root <- function(value) {
+  value
+}
+`
+    });
+    expect(declarations(facts).map((symbol) => symbol.name)).toEqual(["root"]);
+  });
+
+  it("extracts direct expression-bodied function bindings", () => {
+    const facts = extractRFileFacts({
+      filePath: "R/expressions.R",
+      language: "r",
+      sourceText: `is_record <- function(value) inherits(value, "record")
+identity_record <- function(value) value
+continued <- function(value)
+  value +
+    1
+outer <- function()
+  inner <- function() 1
+`
+    });
+    expect(declarations(facts).map((symbol) => symbol.name)).toEqual([
+      "is_record",
+      "identity_record",
+      "continued",
+      "outer"
+    ]);
+  });
+
+  it("does not promote a braceless control-flow body to a root declaration", () => {
+    const facts = extractRFileFacts({
+      filePath: "R/control.R",
+      language: "r",
+      sourceText: `if (TRUE)
+  hidden <- function() 1
+visible <- function() 1
+`
+    });
+    expect(declarations(facts).map((symbol) => symbol.name)).toEqual(["visible"]);
+  });
 });

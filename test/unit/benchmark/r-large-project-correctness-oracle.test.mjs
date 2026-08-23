@@ -29,4 +29,37 @@ outer <- function() {
   it("defines quotas above the minimum positive evidence target", () => {
     expect(Object.values(R_POSITIVE_QUOTAS).reduce((sum, value) => sum + value, 0)).toBeGreaterThanOrEqual(300);
   });
+
+  it("excludes function-valued arguments nested in parentheses and brackets", () => {
+    const facts = collectRTruth(
+      "fixture",
+      "R/nested-arguments.r",
+      `record <- new_class(
+  constructor = function(value) { value },
+  handlers = list(error = function(error) error)
+)
+root <- function(value) value
+split <-
+  function(value) value
+`
+    );
+    expect(facts.filter((fact) => fact.kind === "identity").map((fact) => fact.target.name)).toEqual([
+      "root",
+      "split"
+    ]);
+  });
+
+  it("excludes a declaration used as a braceless control-flow body", () => {
+    const facts = collectRTruth(
+      "fixture",
+      "R/control.r",
+      `if (TRUE)
+  hidden <- function() 1
+visible <- function() 1
+`
+    );
+    expect(facts.filter((fact) => fact.kind === "identity").map((fact) => fact.target.name)).toEqual([
+      "visible"
+    ]);
+  });
 });

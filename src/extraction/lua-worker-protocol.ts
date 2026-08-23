@@ -1,6 +1,10 @@
 export const LUA_WORKER_RESPONSE_SCHEMA = "symbol-lattice-lua-worker-response-v1" as const;
 export const LUA_GRAMMAR_SHA256 =
   "609f25f03773c8eaa3e94c504f360e770c49009ba9383b65be581b2d51774b71" as const;
+export const LUA_MAXIMUM_SOURCE_BYTES = 1_048_576 as const;
+export const LUA_MAXIMUM_PHYSICAL_LINES = 16_384 as const;
+export const LUA_MAXIMUM_FUNCTIONS = 1_024 as const;
+export const LUA_MAXIMUM_NESTING = 256 as const;
 
 export type LuaFunctionForm =
   | "plain-function"
@@ -135,7 +139,7 @@ export function validateLuaWorkerResponse(
   if (decision.kind === "file-only" && value.declarations.length !== 0) {
     throw invalid("Lua worker file-only response must not contain partial declarations.");
   }
-  if (value.declarations.length > 512) {
+  if (value.declarations.length > LUA_MAXIMUM_FUNCTIONS) {
     throw invalid("Lua worker response exceeded the declaration limit.");
   }
 
@@ -231,10 +235,10 @@ function validateMetrics(value: unknown, expectedSourceBytes: number): LuaWorker
     !validOffset(metrics.functionCandidates) ||
     !validOffset(metrics.namedFunctions) ||
     !validOffset(metrics.maxDepth) ||
-    metrics.physicalLines > 4_096 ||
-    metrics.functionCandidates > 512 ||
-    metrics.namedFunctions > 512 ||
-    metrics.maxDepth > 128
+    metrics.physicalLines > LUA_MAXIMUM_PHYSICAL_LINES ||
+    metrics.functionCandidates > LUA_MAXIMUM_FUNCTIONS ||
+    metrics.namedFunctions > LUA_MAXIMUM_FUNCTIONS ||
+    metrics.maxDepth > LUA_MAXIMUM_NESTING
   ) {
     throw invalid("Lua worker metrics exceed their contract bounds.");
   }

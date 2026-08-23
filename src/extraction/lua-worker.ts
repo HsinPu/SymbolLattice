@@ -45,14 +45,15 @@ parentPort?.postMessage({ kind: "ready" });
 parentPort?.on("message", (message: LuaWorkerMessage) => {
   const sourceBytes = new Uint8Array(message.sourceBytes);
   const sourceText = new TextDecoder("utf-8", { fatal: true }).decode(sourceBytes);
-  const tree = parser.parse(sourceText);
+  const parserSourceText = sourceText.replaceAll("\r\n", "\n");
+  const tree = parser.parse(parserSourceText);
   if (tree === null) {
     parentPort?.postMessage(fileOnly(message, "ERROR", emptyLuaMetrics(sourceBytes)));
     parser.delete();
     return;
   }
   try {
-    const result = inspectLuaTree(tree.rootNode, sourceBytes);
+    const result = inspectLuaTree(tree.rootNode, sourceBytes, parserSourceText);
     parentPort?.postMessage(
       result.code === null
         ? response(message, { kind: "emit" }, result.metrics, result.declarations)

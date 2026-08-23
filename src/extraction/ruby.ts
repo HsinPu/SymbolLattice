@@ -1063,7 +1063,8 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
     function visitStructural(
       node: RubySyntaxNode,
       owner: SymbolNode,
-      scope: RubyStructuralScope
+      scope: RubyStructuralScope,
+      singletonClassReceiverPath?: string
     ): void {
       const classDeclaration = staticRubyClass(node);
       if (classDeclaration !== null) {
@@ -1091,12 +1092,17 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
       if (node.kind() === "singleton_class") {
         const children = directChildren(node);
         const body = children.find((child) => child.kind() === "body_statement");
-        if (
-          children[2]?.kind() === "self" &&
-          body !== undefined
-        ) {
+        const receiver = children[2];
+        if (receiver?.kind() === "self" && body !== undefined) {
           for (const child of directChildren(body)) {
             visitStructural(child, owner, scope);
+          }
+        } else if (receiver !== undefined && body !== undefined && (scope === "class" || scope === "module")) {
+          const receiverPath = constantPath(receiver)?.path;
+          if (receiverPath !== undefined) {
+            for (const child of directChildren(body)) {
+              visitStructural(child, owner, scope, receiverPath);
+            }
           }
         }
         return;
@@ -1117,7 +1123,16 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
       const method = staticRubyMethod(node);
       if (method !== null) {
         const symbol =
-          scope === "class" || scope === "module"
+          singletonClassReceiverPath !== undefined
+            ? addSingletonMethod(owner, {
+                name: method.name,
+                receiverPath: singletonClassReceiverPath,
+                node: method.node,
+                body: directChildren(method.node).find(
+                  (child) => child.kind() === "body_statement"
+                ) ?? null
+              })
+            : scope === "class" || scope === "module"
             ? addMethod(owner, method)
             : addFunction(owner, method);
         for (const child of directChildren(node)) {

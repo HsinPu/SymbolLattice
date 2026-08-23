@@ -9,6 +9,13 @@ describe("Luau large-project correctness oracle", () => {
       "src/probe.luau",
       `-- function fake() end
 local text = "function alsoFake() end"
+local longText = [=[😀
+function longFake() end
+]=]
+local interpolation = \`player's function interpolatedFake() end\`
+--[==[
+function commentFake() end
+]==]
 local function real<T>(value: T): T
   return value
 end

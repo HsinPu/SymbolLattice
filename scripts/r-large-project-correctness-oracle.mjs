@@ -24,7 +24,7 @@ function retainSmallest(selection, fact, quota) {
 }
 
 function maskRNonCode(sourceText) {
-  const characters = [...sourceText];
+  const characters = sourceText.split("");
   let state = "code";
   let quote = "";
   for (let index = 0; index < characters.length; index += 1) {
@@ -94,21 +94,55 @@ function declarationFromLine(project, filePath, rawLine, codeLine, lineIndex) {
   return { facts: [], next: null };
 }
 
+function splitFunctionDeclaration(project, filePath, codeLines, lineIndex) {
+  const line = codeLines[lineIndex] ?? "";
+  const match = /^\s*([A-Za-z_.][A-Za-z0-9_.]*)\s*(?:<-|=)\s*$/u.exec(line);
+  if (match === null) return [];
+  let next = lineIndex + 1;
+  while (next < codeLines.length && /^\s*$/u.test(codeLines[next] ?? "")) next += 1;
+  if (!/^\s*function\s*\(/u.test(codeLines[next] ?? "")) return [];
+  const name = match[1] ?? "";
+  const target = endpoint(filePath, name, "function", lineIndex + 1, line.indexOf(name) + 1);
+  const file = endpoint(filePath, filePath, "file", 1, 1);
+  return [
+    { project, type: "positive", stratum: "identity", kind: "identity", source: null, target, occurrence: target },
+    { project, type: "positive", stratum: "containment", kind: "contains", source: file, target, occurrence: target }
+  ];
+}
+
 export function collectRTruth(project, filePath, sourceText) {
   const masked = maskRNonCode(sourceText);
   const rawLines = sourceText.split(/\r?\n/u);
   const codeLines = masked.split(/\r?\n/u);
   const facts = [];
-  let depth = 0;
+  const delimiters = [];
+  const pairs = { ")": "(", "]": "[", "}": "{" };
+  let valid = true;
+  let suppressNextDeclaration = false;
   for (let lineIndex = 0; lineIndex < codeLines.length; lineIndex += 1) {
     const rawLine = rawLines[lineIndex] ?? "";
     const codeLine = codeLines[lineIndex] ?? "";
-    if (depth === 0) facts.push(...declarationFromLine(project, filePath, rawLine, codeLine, lineIndex).facts);
-    depth += (codeLine.match(/\{/gu) ?? []).length;
-    depth -= (codeLine.match(/\}/gu) ?? []).length;
-    if (depth < 0) depth = 0;
+    if (delimiters.length === 0) {
+      const hasCode = !/^\s*$/u.test(codeLine);
+      if (!suppressNextDeclaration) {
+        const direct = declarationFromLine(project, filePath, rawLine, codeLine, lineIndex).facts;
+        facts.push(...direct);
+        if (direct.length === 0) facts.push(...splitFunctionDeclaration(project, filePath, codeLines, lineIndex));
+      }
+      if (hasCode) suppressNextDeclaration = false;
+      if (/^\s*(?:(?:if|for|while)\s*\([^{}]*\)|(?:else|repeat))\s*$/u.test(codeLine)) {
+        suppressNextDeclaration = true;
+      }
+    }
+    for (const character of codeLine) {
+      if (["(", "[", "{"].includes(character)) {
+        delimiters.push(character);
+      } else if ([")", "]", "}"].includes(character)) {
+        if (delimiters.pop() !== pairs[character]) valid = false;
+      }
+    }
   }
-  return facts;
+  return valid && delimiters.length === 0 ? facts : [];
 }
 
 async function listRFiles(root) {

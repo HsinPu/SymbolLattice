@@ -81,4 +81,27 @@ app:get("/health", function() end)
     });
     tree!.delete();
   });
+
+  it("maps CRLF-normalized parser indexes back to exact raw byte boundaries", () => {
+    const sourceText = "local generated = 'line \\\r\ncontinued'\r\nfunction café() end\r\n";
+    const parserSourceText = sourceText.replaceAll("\r\n", "\n");
+    const sourceBytes = encoder.encode(sourceText);
+    const tree = parser.parse(parserSourceText);
+    expect(tree).not.toBeNull();
+    expect(tree!.rootNode.hasError).toBe(false);
+
+    const result = inspectLuaTree(tree!.rootNode, sourceBytes, parserSourceText);
+    const declaration = result.declarations[0];
+    const expectedStart = encoder.encode(sourceText.slice(0, sourceText.indexOf("function"))).byteLength;
+    const expectedNameStart = encoder.encode(sourceText.slice(0, sourceText.indexOf("café"))).byteLength;
+
+    expect(result.code).toBeNull();
+    expect(declaration).toMatchObject({
+      name: "café",
+      declarationStartByte: expectedStart,
+      nameStartByte: expectedNameStart,
+      nameEndByte: expectedNameStart + encoder.encode("café").byteLength
+    });
+    tree!.delete();
+  });
 });

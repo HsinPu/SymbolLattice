@@ -1,10 +1,12 @@
 import type { Node as TreeSitterNode } from "web-tree-sitter";
 
-import type {
-  LuaFileFailureCode,
-  LuaFunctionForm,
-  LuaWorkerDeclaration,
-  LuaWorkerMetrics
+import {
+  LUA_MAXIMUM_FUNCTIONS,
+  LUA_MAXIMUM_NESTING,
+  type LuaFileFailureCode,
+  type LuaFunctionForm,
+  type LuaWorkerDeclaration,
+  type LuaWorkerMetrics
 } from "./lua-worker-protocol.js";
 
 export interface LuaTreeInspection {
@@ -15,9 +17,10 @@ export interface LuaTreeInspection {
 
 export function inspectLuaTree(
   root: TreeSitterNode,
-  sourceBytes: Uint8Array
+  sourceBytes: Uint8Array,
+  parserSourceText?: string
 ): LuaTreeInspection {
-  const utf16ToByte = utf16ByteOffsetMap(sourceBytes);
+  const utf16ToByte = utf16ByteOffsetMap(sourceBytes, parserSourceText);
   let functionCandidates = 0;
   let namedFunctions = 0;
   let maxDepth = 0;
@@ -45,10 +48,10 @@ export function inspectLuaTree(
     namedFunctions,
     maxDepth
   };
-  if (functionCandidates > 512 || namedFunctions > 512) {
+  if (functionCandidates > LUA_MAXIMUM_FUNCTIONS || namedFunctions > LUA_MAXIMUM_FUNCTIONS) {
     return { code: "FUNCTION_LIMIT", metrics: cappedMetrics(metrics), declarations: [] };
   }
-  if (maxDepth > 128) {
+  if (maxDepth > LUA_MAXIMUM_NESTING) {
     return { code: "NESTING_LIMIT", metrics: cappedMetrics(metrics), declarations: [] };
   }
   if (hasMissing) return { code: "MISSING", metrics, declarations: [] };
@@ -104,9 +107,9 @@ function functionForm(prefix: string, name: string): LuaFunctionForm | null {
 function cappedMetrics(metrics: LuaWorkerMetrics): LuaWorkerMetrics {
   return {
     ...metrics,
-    functionCandidates: Math.min(512, metrics.functionCandidates),
-    namedFunctions: Math.min(512, metrics.namedFunctions),
-    maxDepth: Math.min(128, metrics.maxDepth)
+    functionCandidates: Math.min(LUA_MAXIMUM_FUNCTIONS, metrics.functionCandidates),
+    namedFunctions: Math.min(LUA_MAXIMUM_FUNCTIONS, metrics.namedFunctions),
+    maxDepth: Math.min(LUA_MAXIMUM_NESTING, metrics.maxDepth)
   };
 }
 
@@ -128,16 +131,38 @@ function decodeSlice(bytes: Uint8Array, start: number, end: number): string {
   return new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(start, end));
 }
 
-function utf16ByteOffsetMap(sourceBytes: Uint8Array): ReadonlyMap<number, number> {
+function utf16ByteOffsetMap(
+  sourceBytes: Uint8Array,
+  parserSourceText?: string
+): ReadonlyMap<number, number> {
   const sourceText = new TextDecoder("utf-8", { fatal: true }).decode(sourceBytes);
+  const parsedText = parserSourceText ?? sourceText;
+  const crlfNormalized = parsedText !== sourceText;
+  if (crlfNormalized && parsedText !== sourceText.replaceAll("\r\n", "\n")) {
+    throw new Error("Lua parser source text is not an exact CRLF normalization of the raw bytes.");
+  }
   const result = new Map<number, number>([[0, 0]]);
   const encoder = new TextEncoder();
-  let utf16Offset = 0;
+  let sourceOffset = 0;
+  let parserOffset = 0;
   let byteOffset = 0;
-  for (const point of sourceText) {
-    utf16Offset += point.length;
+  while (sourceOffset < sourceText.length) {
+    if (crlfNormalized && sourceText[sourceOffset] === "\r" && sourceText[sourceOffset + 1] === "\n") {
+      sourceOffset += 2;
+      parserOffset += 1;
+      byteOffset += 2;
+      result.set(parserOffset, byteOffset);
+      continue;
+    }
+    const codePoint = sourceText.codePointAt(sourceOffset);
+    const point = codePoint === undefined ? "" : String.fromCodePoint(codePoint);
+    sourceOffset += point.length;
+    parserOffset += point.length;
     byteOffset += encoder.encode(point).byteLength;
-    result.set(utf16Offset, byteOffset);
+    result.set(parserOffset, byteOffset);
+  }
+  if (parserOffset !== parsedText.length || byteOffset !== sourceBytes.byteLength) {
+    throw new Error("Lua parser source map did not consume the exact parser text and raw bytes.");
   }
   return result;
 }

@@ -43,9 +43,10 @@ function retainSmallest(selection, fact, quota) {
 }
 
 function maskNonCode(sourceText) {
-  const characters = [...sourceText];
+  const characters = sourceText.split("");
   let state = "code";
   let longDelimiter = "";
+  let stringDelimiter = "";
   for (let index = 0; index < characters.length; index += 1) {
     const character = characters[index] ?? "";
     const next = characters[index + 1] ?? "";
@@ -81,6 +82,17 @@ function maskNonCode(sourceText) {
       }
       continue;
     }
+    if (state === "long-string") {
+      const close = `]${longDelimiter}]`;
+      if (sourceText.startsWith(close, index)) {
+        for (let offset = 0; offset < close.length; offset += 1) characters[index + offset] = " ";
+        index += close.length - 1;
+        state = "code";
+      } else if (character !== "\n" && character !== "\r") {
+        characters[index] = " ";
+      }
+      continue;
+    }
     if (state === "string") {
       if (character === "\\") {
         characters[index] = " ";
@@ -88,7 +100,7 @@ function maskNonCode(sourceText) {
           characters[index + 1] = " ";
           index += 1;
         }
-      } else if (character === '"' || character === "'") {
+      } else if (character === stringDelimiter) {
         characters[index] = " ";
         state = "code";
       } else if (character !== "\n" && character !== "\r") {
@@ -96,9 +108,38 @@ function maskNonCode(sourceText) {
       }
       continue;
     }
+    if (state === "interpolated-string") {
+      if (character === "\\") {
+        characters[index] = " ";
+        if (index + 1 < characters.length && characters[index + 1] !== "\n" && characters[index + 1] !== "\r") {
+          characters[index + 1] = " ";
+          index += 1;
+        }
+      } else if (character === "`") {
+        characters[index] = " ";
+        state = "code";
+      } else if (character !== "\n" && character !== "\r") {
+        characters[index] = " ";
+      }
+      continue;
+    }
+    if (character === "[") {
+      const opener = sourceText.slice(index).match(/^\[(=*)\[/u);
+      if (opener) {
+        longDelimiter = opener[1] ?? "";
+        state = "long-string";
+        for (let offset = 0; offset < opener[0].length; offset += 1) characters[index + offset] = " ";
+        index += opener[0].length - 1;
+        continue;
+      }
+    }
     if (character === '"' || character === "'") {
       characters[index] = " ";
+      stringDelimiter = character;
       state = "string";
+    } else if (character === "`") {
+      characters[index] = " ";
+      state = "interpolated-string";
     }
   }
   return characters.join("");

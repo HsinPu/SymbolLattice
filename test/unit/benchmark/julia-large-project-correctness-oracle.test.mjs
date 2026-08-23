@@ -29,4 +29,56 @@ end`
   it("defines quotas above the minimum positive evidence target", () => {
     expect(Object.values(JULIA_POSITIVE_QUOTAS).reduce((sum, value) => sum + value, 0)).toBeGreaterThanOrEqual(300);
   });
+
+  it("distinguishes short-form declarations from calls and comparisons", () => {
+    const facts = collectJuliaTruth(
+      "fixture",
+      "src/short-form.jl",
+      `real(x) = x
+Base.show(x)::String where {T} = string(x)
+sum(values) == 1
+println("(S, T) = result")
+value(x)::Int`
+    );
+
+    expect(facts.filter((fact) => fact.kind === "identity").map((fact) => fact.target.name)).toEqual([
+      "real",
+      "Base.show"
+    ]);
+  });
+
+  it("masks triple strings without treating adjoint apostrophes as character literals", () => {
+    const facts = collectJuliaTruth(
+      "fixture",
+      "src/literals.jl",
+      `const docs = """function hidden() = 1
+struct Hidden end"""
+matrix = vectors' * vectors
+function visible()
+    matrix
+end`
+    );
+
+    expect(facts.filter((fact) => fact.kind === "identity").map((fact) => fact.target.name)).toEqual([
+      "visible"
+    ]);
+  });
+
+  it("keeps eval-generated declarations outside the static truth contract", () => {
+    const facts = collectJuliaTruth(
+      "fixture",
+      "src/dynamic.jl",
+      `@eval begin
+function generated()
+end
+generated_short(x) = x
+end
+function visible()
+end`
+    );
+
+    expect(facts.filter((fact) => fact.kind === "identity").map((fact) => fact.target.name)).toEqual([
+      "visible"
+    ]);
+  });
 });

@@ -32,7 +32,8 @@ export function rNegativeCases() {
     (index) => `for (item${index} in 1:2) {\n  hidden${index} <- function() { 1 }\n}`,
     (index) => `local({ setClass("Nested${index}", slots = list()) })`,
     (index) => `if (TRUE) {\n  inner${index} <- function() { 1 }\n}`,
-    (index) => `with(list(), setClass("Nested${index}", slots = list()))`
+    (index) => `with(list(), setClass("Nested${index}", slots = list()))`,
+    (index) => `if (TRUE)\n  hidden${index} <- function() 1`
   ];
   const lookalike = [
     (index) => `setClass${index}("Fake", slots = list())`,

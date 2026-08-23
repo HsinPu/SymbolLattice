@@ -24,10 +24,10 @@ function retainSmallest(selection, fact, quota) {
 }
 
 function maskNonCode(sourceText) {
-  const characters = [...sourceText];
+  const characters = sourceText.split("");
   let state = "code";
   let blockDepth = 0;
-  let quote = "";
+  let quoteDelimiter = "";
   for (let index = 0; index < characters.length; index += 1) {
     const character = characters[index] ?? "";
     const next = characters[index + 1] ?? "";
@@ -66,25 +66,38 @@ function maskNonCode(sourceText) {
       else characters[index] = " ";
       continue;
     }
-    if (state === "code" && (character === '"' || character === "'" || character === "`")) {
-      quote = character;
-      state = "quote";
-      characters[index] = " ";
-      continue;
-    }
     if (state === "quote") {
-      if (character === "\\") {
+      if (sourceText.startsWith(quoteDelimiter, index)) {
+        for (let offset = 0; offset < quoteDelimiter.length; offset += 1) {
+          characters[index + offset] = " ";
+        }
+        index += quoteDelimiter.length - 1;
+        state = "code";
+      } else if (character === "\\") {
         characters[index] = " ";
         if (index + 1 < characters.length) {
           characters[index + 1] = " ";
           index += 1;
         }
-      } else if (character === quote) {
-        characters[index] = " ";
-        state = "code";
       } else if (character !== "\n" && character !== "\r") {
         characters[index] = " ";
       }
+      continue;
+    }
+    const previous = sourceText[index - 1] ?? "";
+    const characterLiteral =
+      character === "'" &&
+      !/[\p{L}\p{Nl}\p{Mn}\p{Mc}0-9_\)\]\}]/u.test(previous);
+    if (state === "code" && (character === '"' || character === "`" || characterLiteral)) {
+      quoteDelimiter =
+        character !== "'" && sourceText.startsWith(character.repeat(3), index)
+          ? character.repeat(3)
+          : character;
+      state = "quote";
+      for (let offset = 0; offset < quoteDelimiter.length; offset += 1) {
+        characters[index + offset] = " ";
+      }
+      index += quoteDelimiter.length - 1;
     }
   }
   return characters.join("");
@@ -95,7 +108,7 @@ function declarationFromLine(project, filePath, line, lineIndex) {
     ["module", /^\s*(?:bare)?module\s+([\p{L}\p{Nl}_][\p{L}\p{Nl}\p{Mn}\p{Mc}0-9_]*!?)(?:\s|[;{<]|$)/u],
     ["type", /^\s*(?:(?:mutable\s+)?struct|abstract\s+type|primitive\s+type)\s+([\p{L}\p{Nl}_][\p{L}\p{Nl}\p{Mn}\p{Mc}0-9_]*!?)(?:\s|[;{<]|$)/u],
     ["function", /^\s*function\s+([\p{L}\p{Nl}_][\p{L}\p{Nl}\p{Mn}\p{Mc}0-9_]*!?\s*(?:\.[\p{L}\p{Nl}_][\p{L}\p{Nl}\p{Mn}\p{Mc}0-9_]*!?\s*)*)\(/u],
-    ["function", /^\s*([\p{L}\p{Nl}_][\p{L}\p{Nl}\p{Mn}\p{Mc}0-9_]*!?\s*(?:\.[\p{L}\p{Nl}_][\p{L}\p{Nl}\p{Mn}\p{Mc}0-9_]*!?\s*)*)\([^\n]*\)\s*(?:::|where\b|=)/u]
+    ["function", /^\s*([\p{L}\p{Nl}_][\p{L}\p{Nl}\p{Mn}\p{Mc}0-9_]*!?\s*(?:\.[\p{L}\p{Nl}_][\p{L}\p{Nl}\p{Mn}\p{Mc}0-9_]*!?\s*)*)\([^\n]*\)\s*(?:::[^=\n]+?)?\s*(?:where\b[^=\n]+?)?\s*=(?!=|>)/u]
   ];
   for (const [kind, pattern] of patterns) {
     const match = pattern.exec(line);
@@ -116,11 +129,82 @@ function declarationFromLine(project, filePath, line, lineIndex) {
   return [];
 }
 
+const JULIA_BLOCK_OPENERS = new Set([
+  "abstract",
+  "baremodule",
+  "begin",
+  "do",
+  "for",
+  "function",
+  "if",
+  "let",
+  "macro",
+  "module",
+  "primitive",
+  "quote",
+  "struct",
+  "try",
+  "while"
+]);
+
+const JULIA_DECLARATION_BLOCKS = new Set([
+  "abstract",
+  "baremodule",
+  "begin",
+  "function",
+  "module",
+  "primitive",
+  "struct"
+]);
+
+function topLevelJuliaBlockWords(line, initialDelimiterDepth) {
+  let delimiterDepth = initialDelimiterDepth;
+  const words = [];
+  for (let index = 0; index < line.length;) {
+    const character = line[index] ?? "";
+    if ("([{".includes(character)) {
+      delimiterDepth += 1;
+      index += 1;
+      continue;
+    }
+    if (")]}".includes(character)) {
+      delimiterDepth = Math.max(0, delimiterDepth - 1);
+      index += 1;
+      continue;
+    }
+    if (delimiterDepth === 0 && /[\p{L}\p{Nl}_]/u.test(character)) {
+      const match = /^[\p{L}\p{Nl}_][\p{L}\p{Nl}\p{Mn}\p{Mc}0-9_!]*/u.exec(line.slice(index));
+      const word = match?.[0] ?? character;
+      if (word === "end" || JULIA_BLOCK_OPENERS.has(word)) words.push(word);
+      index += word.length;
+      continue;
+    }
+    index += 1;
+  }
+  return { words, delimiterDepth };
+}
+
 export function collectJuliaTruth(project, filePath, sourceText) {
   const masked = maskNonCode(sourceText);
   const facts = [];
+  const declarationEligibility = [];
+  let delimiterDepth = 0;
   for (const [lineIndex, line] of masked.split(/\r?\n/u).entries()) {
-    facts.push(...declarationFromLine(project, filePath, line, lineIndex));
+    const dynamicMacro = /^\s*@(eval|generated)\b/u.test(line);
+    const allowed = declarationEligibility.every(Boolean) && !dynamicMacro;
+    if (allowed && delimiterDepth === 0) {
+      facts.push(...declarationFromLine(project, filePath, line, lineIndex));
+    }
+    const scanned = topLevelJuliaBlockWords(line, delimiterDepth);
+    delimiterDepth = scanned.delimiterDepth;
+    for (const word of scanned.words) {
+      if (word === "end") {
+        declarationEligibility.pop();
+        continue;
+      }
+      const parentAllowed = declarationEligibility.every(Boolean);
+      declarationEligibility.push(parentAllowed && !dynamicMacro && JULIA_DECLARATION_BLOCKS.has(word));
+    }
   }
   return facts;
 }

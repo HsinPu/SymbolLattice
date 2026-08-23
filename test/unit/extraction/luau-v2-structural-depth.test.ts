@@ -91,6 +91,33 @@ type Scalar = string | number`
     expect(facts.edges.filter((edge) => edge.kind !== "contains")).toEqual([]);
   });
 
+  it("accepts bounded singleton and typeof-based Luau aliases", () => {
+    const facts = extractLuaFileFacts({
+      filePath: "src/runtime-types.luau",
+      language: "luau",
+      sourceText: `export type Mode = "open" | "closed"
+export type Packet = { type: "full", data: string }
+export type Widget = typeof(setmetatable({} :: {}, {} :: typeof({ __index = Widget })))
+export type WrappedIterator<T...> = (...any) -> T...
+type Schedulable = ImmediateSchedulableSystem<(ImmediateRuntime, ...any) -> ()>`
+    });
+
+    expect(types(facts).map((symbol) => symbol.name)).toEqual([
+      "Mode",
+      "Packet",
+      "Widget",
+      "WrappedIterator",
+      "Schedulable"
+    ]);
+
+    const malformedPack = extractLuaFileFacts({
+      filePath: "src/malformed-pack.luau",
+      language: "luau",
+      sourceText: "type MissingElement = (...)"
+    });
+    expect(types(malformedPack)).toEqual([]);
+  });
+
   it("keeps exact calls when parameter and return annotations are bounded compound types", () => {
     const facts = extractLuaFileFacts({
       filePath: "src/compound.luau",
@@ -160,6 +187,41 @@ end`
 end`
     });
     expect(functions(malformed)).toEqual([]);
+  });
+
+  it("keeps multiline and statement-nested Luau if-expressions structurally balanced", () => {
+    const facts = extractLuaFileFacts({
+      filePath: "src/nested-if-expressions.luau",
+      language: "luau",
+      sourceText: `local function choose(flag: boolean): string
+  if flag then
+    return tostring(
+      if flag then "yes" else "no"
+    )
+  end
+
+  local value = if flag
+    then if flag then "nested" else "no"
+    else "fallback"
+  return value
+end`
+    });
+
+    expect(functions(facts).map((symbol) => symbol.name)).toEqual(["choose"]);
+
+    const callbackFacts = extractLuaFileFacts({
+      filePath: "src/callback-statements.luau",
+      language: "luau",
+      sourceText: `local function register(flag: boolean): boolean
+  return run(function()
+    if flag then
+      return true
+    end
+    return false
+  end)
+end`
+    });
+    expect(functions(callbackFacts).map((symbol) => symbol.name)).toEqual(["register"]);
   });
 
   it("fails closed for malformed generic heads and aliases", () => {
