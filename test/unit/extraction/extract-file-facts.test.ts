@@ -2926,6 +2926,38 @@ describe("source extraction", () => {
     }
   });
 
+  it("classifies functions nested in class control flow as methods", () => {
+    const facts = extractPythonFileFacts({
+      filePath: "conditional-methods.py",
+      language: "python",
+      sourceText: [
+        "def factory(enabled):",
+        "    class Conditional:",
+        "        if enabled:",
+        "            def active(self):",
+        "                def local_helper():",
+        "                    return 1",
+        "                return local_helper()",
+        "        else:",
+        "            @property",
+        "            def inactive(self):",
+        "                return 0"
+      ].join("\n")
+    });
+
+    expect(
+      facts.symbols
+        .filter((symbol) => ["class", "function", "method"].includes(symbol.kind))
+        .map((symbol) => [symbol.name, symbol.kind, symbol.qualifiedName])
+    ).toEqual([
+      ["factory", "function", "conditional-methods.py#factory"],
+      ["Conditional", "class", "conditional-methods.py#factory.Conditional"],
+      ["active", "method", "conditional-methods.py#factory.Conditional.active"],
+      ["local_helper", "function", "conditional-methods.py#factory.Conditional.active.local_helper"],
+      ["inactive", "method", "conditional-methods.py#factory.Conditional.inactive"]
+    ]);
+  });
+
   it("fails closed for Python direct calls when a wildcard import exists", () => {
     const wildcard = extractFileFacts({
       filePath: "wildcard.py",

@@ -997,6 +997,18 @@ function isDirectClassMethod(node: PythonSyntaxNode): boolean {
   return body?.name === "Body" && body.parent?.name === "ClassDefinition";
 }
 
+function isClassScopedFunction(node: PythonSyntaxNode): boolean {
+  for (let ancestor = node.parent; ancestor !== null; ancestor = ancestor.parent) {
+    if (ancestor.name === "ClassDefinition") {
+      return true;
+    }
+    if (ancestor.name === "FunctionDefinition" || ancestor.name === "Script") {
+      return false;
+    }
+  }
+  return false;
+}
+
 function isTopLevelFunction(node: PythonSyntaxNode): boolean {
   const statement = node.parent?.name === "DecoratedStatement" ? node.parent : node;
   return statement.parent?.name === "Script";
@@ -4832,7 +4844,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     const kind: SymbolKind =
       node.name === "ClassDefinition"
         ? "class"
-        : isDirectClassMethod(node)
+        : isClassScopedFunction(node)
           ? "method"
           : "function";
     const qualifiedName =

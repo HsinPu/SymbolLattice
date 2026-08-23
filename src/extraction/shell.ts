@@ -105,7 +105,8 @@ function emptyFacts(fileNode: SymbolNode): ArtifactFacts {
 
 function classifyDialect(filePath: string, sourceText: string): ShellDialect | null {
   const newlineIndex = sourceText.indexOf("\n");
-  const firstLine = newlineIndex === -1 ? sourceText : sourceText.slice(0, newlineIndex);
+  const rawFirstLine = newlineIndex === -1 ? sourceText : sourceText.slice(0, newlineIndex);
+  const firstLine = newlineIndex !== -1 && rawFirstLine.endsWith("\r") ? rawFirstLine.slice(0, -1) : rawFirstLine;
   const posixShebang = POSIX_SHEBANGS.has(firstLine);
   const bashShebang = BASH_SHEBANGS.has(firstLine);
   const anyShebang = firstLine.startsWith("#!");
@@ -115,6 +116,9 @@ function classifyDialect(filePath: string, sourceText: string): ShellDialect | n
     return !anyShebang || bashShebang ? "bash" : null;
   }
   if (normalizedPath.endsWith(".sh")) {
+    if (!anyShebang && /^[ \t]*function[ \t]+[A-Za-z_][A-Za-z0-9_.:-]*(?:[ \t]*\(\))?[ \t]*(?:\r?\n[ \t]*)*(?:\{|\()/mu.test(sourceText)) {
+      return "bash";
+    }
     if (!anyShebang || posixShebang) {
       return "posix";
     }
@@ -154,6 +158,38 @@ function utf16OffsetFor(boundaries: Uint32Array, byteOffset: number): number {
   return result;
 }
 
+function isAsciiShellNameStart(value: number | undefined): boolean {
+  return value === 0x5f ||
+    (value !== undefined && ((value >= 0x41 && value <= 0x5a) || (value >= 0x61 && value <= 0x7a)));
+}
+
+function normalizeZshEqualsExpansion(
+  source: string | Uint8Array
+): string | Uint8Array | null {
+  if (typeof source === "string") {
+    let changed = false;
+    const normalized = source.replace(/\$\{=([A-Za-z_][A-Za-z0-9_]*)/gu, (match) => {
+      changed = true;
+      return `${match.slice(0, 2)}_${match.slice(3)}`;
+    });
+    return changed ? normalized : null;
+  }
+
+  let normalized: Uint8Array | null = null;
+  for (let index = 0; index + 3 < source.byteLength; index += 1) {
+    if (
+      source[index] === 0x24 &&
+      source[index + 1] === 0x7b &&
+      source[index + 2] === 0x3d &&
+      isAsciiShellNameStart(source[index + 3])
+    ) {
+      normalized ??= source.slice();
+      normalized[index + 2] = 0x5f;
+    }
+  }
+  return normalized;
+}
+
 /**
  * Projects only syntax-valid, direct top-level mvdan FuncDecl nodes. Dialect
  * conflicts and every adapter source/parser error retain the file node alone;
@@ -170,7 +206,14 @@ export function extractShellFileFacts(
     return emptyFacts(fileNode);
   }
 
-  const parsed = parser(input.sourceBytes ?? input.sourceText, dialect);
+  const parserSource = input.sourceBytes ?? input.sourceText;
+  let parsed = parser(parserSource, dialect);
+  if (!parsed.ok && parsed.code === 6 && dialect === "bash") {
+    const normalized = normalizeZshEqualsExpansion(parserSource);
+    if (normalized !== null) {
+      parsed = parser(normalized, dialect);
+    }
+  }
   if (!parsed.ok) {
     return emptyFacts(fileNode);
   }

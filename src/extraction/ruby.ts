@@ -26,12 +26,14 @@ type RubySyntaxNode = SgNode;
 
 interface StaticRubyClass {
   readonly name: string;
+  readonly constantPath: string;
   readonly node: RubySyntaxNode;
   readonly body: RubySyntaxNode | null;
 }
 
 interface StaticRubyModule {
   readonly name: string;
+  readonly constantPath: string;
   readonly node: RubySyntaxNode;
   readonly body: RubySyntaxNode | null;
 }
@@ -43,6 +45,7 @@ interface StaticRubyMethod {
 
 interface StaticRubySingletonMethod {
   readonly name: string;
+  readonly receiverPath: string | null;
   readonly node: RubySyntaxNode;
   readonly body: RubySyntaxNode | null;
 }
@@ -216,12 +219,40 @@ function hasSyntaxError(node: RubySyntaxNode): boolean {
 
 function identifierText(node: RubySyntaxNode): string | null {
   const value = nodeText(node);
-  return /^[a-z_][a-zA-Z0-9_]*[!?=]?$/u.test(value) ? value : null;
+  return /^[a-zA-Z_][a-zA-Z0-9_]*[!?=]?$/u.test(value) ? value : null;
 }
 
 function constantText(node: RubySyntaxNode): string | null {
   const value = nodeText(node);
   return /^[A-Z][a-zA-Z0-9_]*$/u.test(value) ? value : null;
+}
+
+function constantPath(node: RubySyntaxNode): { readonly name: string; readonly path: string } | null {
+  const value = nodeText(node).replace(/^::/u, "");
+  if (!/^[A-Z][a-zA-Z0-9_]*(?:::[A-Z][a-zA-Z0-9_]*)*$/u.test(value)) {
+    return null;
+  }
+  const name = value.split("::").at(-1);
+  return name === undefined ? null : { name, path: value };
+}
+
+function rubyMethodName(node: RubySyntaxNode): string | null {
+  const value = nodeText(node);
+  if (node.kind() === "identifier") {
+    return identifierText(node);
+  }
+  if (node.kind() === "constant") {
+    return constantText(node);
+  }
+  if (node.kind() === "setter") {
+    return /^[a-z_][a-zA-Z0-9_]*=$/u.test(value) ? value : null;
+  }
+  if (node.kind() === "operator") {
+    return /^(?:\[\]=?|\+@|-@|\*\*|<<|>>|<=>|===|==|=~|<=|>=|!=|!~|[+\-*/%&|^~!<>`])$/u.test(value)
+      ? value
+      : null;
+  }
+  return null;
 }
 
 function staticPlainRubyString(node: RubySyntaxNode): string | null {
@@ -254,10 +285,14 @@ function staticRubyClass(node: RubySyntaxNode): StaticRubyClass | null {
     return null;
   }
   const children = directChildren(node);
-  const nameNode = children.find((child) => child.kind() === "constant");
+  const nameNode = children.find(
+    (child) => child.kind() === "constant" || child.kind() === "scope_resolution"
+  );
   const body = children.find((child) => child.kind() === "body_statement");
-  const name = nameNode === undefined ? null : constantText(nameNode);
-  return name === null ? null : { name, node, body: body ?? null };
+  const name = nameNode === undefined ? null : constantPath(nameNode);
+  return name === null
+    ? null
+    : { name: name.name, constantPath: name.path, node, body: body ?? null };
 }
 
 function staticRubyModule(node: RubySyntaxNode): StaticRubyModule | null {
@@ -265,22 +300,26 @@ function staticRubyModule(node: RubySyntaxNode): StaticRubyModule | null {
     return null;
   }
   const children = directChildren(node);
-  const names = children.filter((child) => child.kind() === "constant");
+  const names = children.filter(
+    (child) => child.kind() === "constant" || child.kind() === "scope_resolution"
+  );
   const bodies = children.filter((child) => child.kind() === "body_statement");
   const nameNode = names[0];
   const body = bodies[0];
-  const name = nameNode === undefined ? null : constantText(nameNode);
+  const name = nameNode === undefined ? null : constantPath(nameNode);
   return name === null || names.length !== 1 || bodies.length > 1
     ? null
-    : { name, node, body: body ?? null };
+    : { name: name.name, constantPath: name.path, node, body: body ?? null };
 }
 
 function staticRubyMethod(node: RubySyntaxNode): StaticRubyMethod | null {
   if (node.kind() !== "method") {
     return null;
   }
-  const nameNode = directChildren(node).find((child) => child.kind() === "identifier");
-  const name = nameNode === undefined ? null : identifierText(nameNode);
+  const nameNode = directChildren(node).find((child) =>
+    child.kind() === "identifier" || child.kind() === "constant" || child.kind() === "setter" || child.kind() === "operator"
+  );
+  const name = nameNode === undefined ? null : rubyMethodName(nameNode);
   return name === null ? null : { name, node };
 }
 
@@ -291,17 +330,20 @@ function staticRubySingletonMethod(node: RubySyntaxNode): StaticRubySingletonMet
   const children = directChildren(node);
   const nameNode = children[3];
   const bodies = children.filter((child) => child.kind() === "body_statement");
-  const name = nameNode === undefined ? null : identifierText(nameNode);
+  const name = nameNode === undefined ? null : rubyMethodName(nameNode);
+  const receiver = children[1];
+  const receiverPath =
+    receiver?.kind() === "self" ? null : receiver === undefined ? null : constantPath(receiver)?.path;
   return (
     name === null ||
     children[0]?.kind() !== "def" ||
-    children[1]?.kind() !== "self" ||
+    receiver === undefined ||
+    (receiver.kind() !== "self" && receiverPath === undefined) ||
     children[2]?.kind() !== "." ||
-    children.filter((child) => child.kind() === "identifier").length !== 1 ||
     bodies.length > 1
   )
     ? null
-    : { name, node, body: bodies[0] ?? null };
+    : { name, receiverPath: receiver.kind() === "self" ? null : receiverPath ?? null, node, body: bodies[0] ?? null };
 }
 
 /**
@@ -839,8 +881,13 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
     });
   }
 
-  function addClass(declaration: StaticRubyClass): SymbolNode {
-    const qualifiedName = input.filePath + "#" + declaration.name;
+  function addClass(parent: SymbolNode, declaration: StaticRubyClass): SymbolNode {
+    const qualifiedName =
+      declaration.constantPath.includes("::")
+        ? input.filePath + "#" + declaration.constantPath
+        : parent.kind === "file"
+        ? input.filePath + "#" + declaration.name
+        : parent.qualifiedName + "." + declaration.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, "class");
     const symbol: SymbolNode = {
       id: createSymbolId({
@@ -858,12 +905,24 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
       declarationOrdinal
     };
     symbols.push(symbol);
-    addContainment(fileNode, symbol, declaration.node, "language.ruby.v1_6.direct-declaration.containment");
+    addContainment(
+      parent,
+      symbol,
+      declaration.node,
+      parent.kind === "file"
+        ? "language.ruby.v1_6.direct-declaration.containment"
+        : "language.ruby.v1_6.lexical-declaration.containment"
+    );
     return symbol;
   }
 
-  function addModule(declaration: StaticRubyModule): SymbolNode {
-    const qualifiedName = input.filePath + "#" + declaration.name;
+  function addModule(parent: SymbolNode, declaration: StaticRubyModule): SymbolNode {
+    const qualifiedName =
+      declaration.constantPath.includes("::")
+        ? input.filePath + "#" + declaration.constantPath
+        : parent.kind === "file"
+        ? input.filePath + "#" + declaration.name
+        : parent.qualifiedName + "." + declaration.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, "module");
     const symbol: SymbolNode = {
       id: createSymbolId({
@@ -881,7 +940,14 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
       declarationOrdinal
     };
     symbols.push(symbol);
-    addContainment(fileNode, symbol, declaration.node, "language.ruby.v1_6.direct-declaration.containment");
+    addContainment(
+      parent,
+      symbol,
+      declaration.node,
+      parent.kind === "file"
+        ? "language.ruby.v1_6.direct-declaration.containment"
+        : "language.ruby.v1_6.lexical-declaration.containment"
+    );
     return symbol;
   }
 
@@ -912,7 +978,10 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
     parent: SymbolNode,
     declaration: StaticRubySingletonMethod
   ): SymbolNode {
-    const qualifiedName = parent.qualifiedName + "." + declaration.name;
+    const qualifiedName =
+      declaration.receiverPath === null
+        ? parent.qualifiedName + "." + declaration.name
+        : parent.qualifiedName + "." + declaration.receiverPath + "." + declaration.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, "method");
     const symbol: SymbolNode = {
       id: createSymbolId({
@@ -934,8 +1003,11 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
     return symbol;
   }
 
-  function addFunction(declaration: StaticRubyMethod): SymbolNode {
-    const qualifiedName = input.filePath + "#" + declaration.name;
+  function addFunction(parent: SymbolNode, declaration: StaticRubyMethod): SymbolNode {
+    const qualifiedName =
+      parent.kind === "file"
+        ? input.filePath + "#" + declaration.name
+        : parent.qualifiedName + "." + declaration.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, "function");
     const symbol: SymbolNode = {
       id: createSymbolId({
@@ -953,7 +1025,7 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
       declarationOrdinal
     };
     symbols.push(symbol);
-    addContainment(fileNode, symbol, declaration.node);
+    addContainment(parent, symbol, declaration.node);
     return symbol;
   }
 
@@ -987,41 +1059,80 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
   }
 
   if (!hasSyntaxError(root)) {
-    const topLevel = directChildren(root);
-    for (const classDeclaration of topLevel
-      .map((node) => staticRubyClass(node))
-      .filter((candidate): candidate is StaticRubyClass => candidate !== null)) {
-      const classSymbol = addClass(classDeclaration);
-      if (classDeclaration.body !== null) {
-        for (const methodDeclaration of directChildren(classDeclaration.body)
-          .map((node) => staticRubyMethod(node))
-          .filter((candidate): candidate is StaticRubyMethod => candidate !== null)) {
-          addMethod(classSymbol, methodDeclaration);
+    type RubyStructuralScope = "file" | "class" | "module" | "method";
+    function visitStructural(
+      node: RubySyntaxNode,
+      owner: SymbolNode,
+      scope: RubyStructuralScope
+    ): void {
+      const classDeclaration = staticRubyClass(node);
+      if (classDeclaration !== null) {
+        const symbol = addClass(owner, classDeclaration);
+        if (classDeclaration.body !== null) {
+          for (const child of directChildren(classDeclaration.body)) {
+            visitStructural(child, symbol, "class");
+          }
         }
+        return;
+      }
+      const moduleDeclaration = staticRubyModule(node);
+      if (moduleDeclaration !== null) {
+        const symbol = addModule(owner, moduleDeclaration);
+        if (moduleDeclaration.body !== null) {
+          for (const child of directChildren(moduleDeclaration.body)) {
+            visitStructural(child, symbol, "module");
+          }
+        }
+        return;
+      }
+      if (node.kind() === "class" || node.kind() === "module") {
+        return;
+      }
+      if (node.kind() === "singleton_class") {
+        const children = directChildren(node);
+        const body = children.find((child) => child.kind() === "body_statement");
+        if (
+          children[2]?.kind() === "self" &&
+          body !== undefined
+        ) {
+          for (const child of directChildren(body)) {
+            visitStructural(child, owner, scope);
+          }
+        }
+        return;
+      }
+      const singletonMethod = staticRubySingletonMethod(node);
+      if (singletonMethod !== null) {
+        const symbol =
+          scope === "class" || scope === "module"
+            ? addSingletonMethod(owner, singletonMethod)
+            : addFunction(owner, singletonMethod);
+        if (singletonMethod.body !== null) {
+          for (const child of directChildren(singletonMethod.body)) {
+            visitStructural(child, symbol, "method");
+          }
+        }
+        return;
+      }
+      const method = staticRubyMethod(node);
+      if (method !== null) {
+        const symbol =
+          scope === "class" || scope === "module"
+            ? addMethod(owner, method)
+            : addFunction(owner, method);
+        for (const child of directChildren(node)) {
+          visitStructural(child, symbol, "method");
+        }
+        return;
+      }
+      for (const child of directChildren(node)) {
+        visitStructural(child, owner, scope);
       }
     }
 
-    for (const functionDeclaration of topLevel
-      .map((node) => staticRubyMethod(node))
-      .filter((candidate): candidate is StaticRubyMethod => candidate !== null)) {
-      addFunction(functionDeclaration);
-    }
-
-    const moduleDeclarations = topLevel
-      .map((node) => staticRubyModule(node))
-      .filter((candidate): candidate is StaticRubyModule => candidate !== null);
-    for (const moduleDeclaration of moduleDeclarations) {
-      const moduleSymbol = addModule(moduleDeclaration);
-      if (moduleDeclarations.length !== 1 || topLevel.length !== 1) {
-        continue;
-      }
-      const singletonMethods = staticRubyModuleSingletonMethods(moduleDeclaration);
-      if (singletonMethods === null || hasRubyModuleSingletonAmbiguity(moduleDeclaration)) {
-        continue;
-      }
-      for (const declaration of singletonMethods) {
-        addSingletonMethod(moduleSymbol, declaration);
-      }
+    const topLevel = directChildren(root);
+    for (const node of topLevel) {
+      visitStructural(node, fileNode, "file");
     }
 
     const routeDeclarations = staticRailsDrawBodies(root)

@@ -44,6 +44,19 @@ describe("Shell structural v1.2.2 extraction", () => {
     });
   });
 
+  it("normalizes retained-byte Zsh equals expansions without shifting declaration ranges", () => {
+    const sourceText = "#!/usr/bin/env bash\r\nf() { values=( ${=parts} ); }\r\n";
+    const facts = extractShellFileFacts({
+      ...input("compat.sh", sourceText),
+      sourceBytes: new TextEncoder().encode(sourceText)
+    });
+
+    expect(facts.symbols.filter(({ kind }) => kind === "function").map(({ name, range }) => ({
+      name,
+      start: range.start
+    }))).toEqual([{ name: "f", start: { line: 2, column: 1 } }]);
+  });
+
   it("assigns duplicate ordinals in parser source order", () => {
     const facts = extractShellFileFacts(input("duplicates.sh", "dup() { :; }; dup() { :; }\n"));
     const duplicates = facts.symbols.filter(({ name }) => name === "dup");
@@ -108,6 +121,10 @@ describe("Shell structural v1.2.2 extraction", () => {
       ["foreign.sh", "#!/usr/bin/python3\nf() { :; }\n", []],
       ["foreign.bash", "#!/usr/bin/env zsh\nf() { :; }\n", []],
       ["bash-mode.sh", "#!/bin/bash\nfunction f { :; }\n", ["f"]],
+      ["bash-crlf.sh", "#!/usr/bin/env bash\r\nfunction f { :; }\r\n", ["f"]],
+      ["bash-zsh-compat.sh", "#!/usr/bin/env bash\nf() { if [[ -n ${ZSH_VERSION:-} ]]; then values=( ${=parts} ); fi; }\n", ["f"]],
+      ["bash-malformed-zsh-expansion.sh", "#!/usr/bin/env bash\nf() { printf '%s' ${=}; }\n", []],
+      ["bash-form-no-shebang.sh", "function f()\n{ :; }\n", ["f"]],
       ["tool.with.dots", "#!/usr/bin/env bash\nfunction f() { :; }\n", ["f"]]
     ] as const;
 

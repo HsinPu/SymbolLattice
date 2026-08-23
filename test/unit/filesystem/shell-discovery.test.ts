@@ -39,7 +39,7 @@ describe("Shell exact-shebang discovery", () => {
     "#!/usr/bin/env bash"
   ] as const;
 
-  it("discovers all nine exact allowlisted first lines with LF and one exact EOF line", async () => {
+  it("discovers all nine exact allowlisted first lines with LF, one CRLF line, and one exact EOF line", async () => {
     const projectPath = await createProject();
     for (const [index, shebang] of allowlist.entries()) {
       await writeFile(
@@ -48,21 +48,21 @@ describe("Shell exact-shebang discovery", () => {
         "utf8"
       );
     }
+    await writeFile(join(projectPath, "crlf.tool"), "#!/usr/bin/env bash\r\ncrlf() { :; }\r\n", "utf8");
     await writeFile(join(projectPath, "eof.tool"), "#!/bin/sh", "utf8");
 
     const files = await discoverSourceFiles(projectPath);
 
-    expect(files).toHaveLength(10);
+    expect(files).toHaveLength(11);
     expect(files.every((file) => file.language === "shell")).toBe(true);
     expect(files.map((file) => file.relativePath)).toContain("eof.tool");
   });
 
-  it("rejects CR, BOM, whitespace, arguments, env -S, and spaced marker variants", async () => {
+  it("rejects BOM, whitespace, arguments, env -S, and spaced marker variants", async () => {
     const projectPath = await createProject();
     const rejected = [
       "#!/bin/sh ",
       "#!/bin/sh\t",
-      "#!/bin/sh\r",
       "#!/bin/sh -eu",
       "#!/usr/bin/env bash -eu",
       "#!/usr/bin/env -S bash -eu",
@@ -145,6 +145,8 @@ describe("Shell exact-shebang discovery", () => {
   it("classifies source text only when an otherwise-unclassified path has an exact shebang", () => {
     expect(getSourceLanguage("scripts/release.tool")).toBeNull();
     expect(getSourceLanguage("scripts/release.tool", "#!/bin/bash\nfunction release { :; }\n"))
+      .toBe("shell");
+    expect(getSourceLanguage("scripts/release.tool", "#!/bin/bash\r\nfunction release { :; }\r\n"))
       .toBe("shell");
     expect(getSourceLanguage("scripts/release.tool", "#!/bin/bash -eu\nfunction release { :; }\n"))
       .toBeNull();

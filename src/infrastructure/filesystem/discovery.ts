@@ -127,8 +127,8 @@ export const SHELL_SHEBANG_ALLOWLIST = Object.freeze([
   "#!/usr/bin/env bash"
 ] as const);
 
-/** Longest allowlisted line plus one byte, so a suffix or LF is observable. */
-export const MAXIMUM_SHELL_SHEBANG_READ_BYTES = 20 as const;
+/** Longest allowlisted line plus two bytes, so a suffix, LF, or CRLF is observable. */
+export const MAXIMUM_SHELL_SHEBANG_READ_BYTES = 21 as const;
 
 /**
  * These directories contain neither user source nor SymbolLattice input. They
@@ -633,13 +633,17 @@ async function readShellShebangPrefix(
 
 function hasExactShellShebang(sourceText: string): boolean {
   const newlineIndex = sourceText.indexOf("\n");
-  const firstLine = newlineIndex === -1 ? sourceText : sourceText.slice(0, newlineIndex);
+  const rawFirstLine = newlineIndex === -1 ? sourceText : sourceText.slice(0, newlineIndex);
+  const firstLine = newlineIndex !== -1 && rawFirstLine.endsWith("\r") ? rawFirstLine.slice(0, -1) : rawFirstLine;
   return (SHELL_SHEBANG_ALLOWLIST as readonly string[]).includes(firstLine);
 }
 
 function hasExactShellShebangBytes(prefix: Uint8Array): boolean {
   const newlineIndex = prefix.indexOf(0x0a);
-  const firstLine = newlineIndex === -1 ? prefix : prefix.subarray(0, newlineIndex);
+  const rawFirstLine = newlineIndex === -1 ? prefix : prefix.subarray(0, newlineIndex);
+  const firstLine = newlineIndex !== -1 && rawFirstLine.at(-1) === 0x0d
+    ? rawFirstLine.subarray(0, rawFirstLine.byteLength - 1)
+    : rawFirstLine;
   return SHELL_SHEBANG_ALLOWLIST.some((shebang) => {
     const expected = Buffer.from(shebang, "ascii");
     return firstLine.byteLength === expected.byteLength &&

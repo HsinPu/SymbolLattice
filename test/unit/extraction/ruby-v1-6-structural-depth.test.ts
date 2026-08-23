@@ -7,6 +7,105 @@ function rubyFacts(sourceText: string) {
 }
 
 describe("Ruby v1.6 structural depth", () => {
+  it("extracts nested class/module declarations and lexical methods through control flow", () => {
+    const facts = rubyFacts([
+      "def factory(enabled)",
+      "  class LocalWorker",
+      "    if enabled",
+      "      def active",
+      "      end",
+      "    end",
+      "    def self.build",
+      "    end",
+      "  end",
+      "end",
+      "module Outer",
+      "  module Nested",
+      "    unless false",
+      "      def run",
+      "      end",
+      "    end",
+      "    def self.load",
+      "    end",
+      "  end",
+      "end"
+    ].join("\n"));
+
+    expect(
+      facts.symbols
+        .filter((symbol) => ["class", "module", "function", "method"].includes(symbol.kind))
+        .map((symbol) => [symbol.kind, symbol.name, symbol.qualifiedName])
+    ).toEqual([
+      ["function", "factory", "config/routes.rb#factory"],
+      ["class", "LocalWorker", "config/routes.rb#factory.LocalWorker"],
+      ["method", "active", "config/routes.rb#factory.LocalWorker.active"],
+      ["method", "build", "config/routes.rb#factory.LocalWorker.build"],
+      ["module", "Outer", "config/routes.rb#Outer"],
+      ["module", "Nested", "config/routes.rb#Outer.Nested"],
+      ["method", "run", "config/routes.rb#Outer.Nested.run"],
+      ["method", "load", "config/routes.rb#Outer.Nested.load"]
+    ]);
+    expect(facts.edges.filter((edge) => edge.kind === "contains")).toHaveLength(8);
+  });
+
+  it("keeps qualified owners and operator, setter, and singleton method names", () => {
+    const facts = rubyFacts([
+      "module T::Private",
+      "  def config=(value)",
+      "  end",
+      "  def ==(other)",
+      "  end",
+      "  def self.build! = true",
+      "  def self.current=(value)",
+      "  end",
+      "  def self.[](key)",
+      "  end",
+      "  def O0",
+      "  end",
+      "  def BasePrimitive.bit_aligned",
+      "  end",
+      "end"
+    ].join("\n"));
+
+    expect(
+      facts.symbols
+        .filter((symbol) => ["module", "method"].includes(symbol.kind))
+        .map((symbol) => [symbol.kind, symbol.name, symbol.qualifiedName])
+    ).toEqual([
+      ["module", "Private", "config/routes.rb#T::Private"],
+      ["method", "config=", "config/routes.rb#T::Private.config="],
+      ["method", "==", "config/routes.rb#T::Private.=="],
+      ["method", "build!", "config/routes.rb#T::Private.build!"],
+      ["method", "current=", "config/routes.rb#T::Private.current="],
+      ["method", "[]", "config/routes.rb#T::Private.[]"],
+      ["method", "O0", "config/routes.rb#T::Private.O0"],
+      ["method", "bit_aligned", "config/routes.rb#T::Private.BasePrimitive.bit_aligned"]
+    ]);
+  });
+
+  it("keeps singleton declarations in anonymous class blocks as lexical functions", () => {
+    const facts = rubyFacts([
+      "factory = Class.new do",
+      "  def self.build = :ok",
+      "  def run",
+      "  end",
+      "  class << self",
+      "    def alternate = :ok",
+      "  end",
+      "end"
+    ].join("\n"));
+
+    expect(
+      facts.symbols
+        .filter((symbol) => symbol.kind === "function")
+        .map((symbol) => [symbol.name, symbol.qualifiedName])
+    ).toEqual([
+      ["build", "config/routes.rb#build"],
+      ["run", "config/routes.rb#run"],
+      ["alternate", "config/routes.rb#alternate"]
+    ]);
+  });
+
   it("keeps direct class/module identities and full declaration containment in source order", () => {
     const facts = rubyFacts([
       "module Alpha",
