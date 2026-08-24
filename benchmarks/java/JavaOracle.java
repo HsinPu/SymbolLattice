@@ -68,6 +68,7 @@ public final class JavaOracle {
   private final List<CompilationUnitTree> units;
   private final Map<Element, Endpoint> endpoints = new IdentityHashMap<>();
   private final Map<Element, TreePath> declarationPaths = new IdentityHashMap<>();
+  private final Map<String, Integer> declaredTypeQualifiedNameCounts = new LinkedHashMap<>();
   private final Map<CompilationUnitTree, Endpoint> fileEndpoints = new IdentityHashMap<>();
   private final List<Fact> facts = new ArrayList<>();
 
@@ -176,7 +177,9 @@ public final class JavaOracle {
       TreePath parentPath = getCurrentPath().getParentPath();
       boolean isDirectTopLevel = parentPath != null && parentPath.getLeaf() instanceof CompilationUnitTree;
       boolean isSupportedType = element != null &&
-          (element.getKind() == ElementKind.CLASS || element.getKind() == ElementKind.INTERFACE);
+          (element.getKind() == ElementKind.CLASS ||
+           element.getKind() == ElementKind.INTERFACE ||
+           element.getKind() == ElementKind.ANNOTATION_TYPE);
       if (!isDirectTopLevel || !isSupportedType) return null;
       Endpoint endpoint = endpointFor(element, unit, tree);
       if (endpoint == null) return null;
@@ -212,6 +215,10 @@ public final class JavaOracle {
       if (element != null) {
         endpoints.put(element, endpoint);
         declarationPaths.put(element, path);
+        if (element instanceof TypeElement typeElement) {
+          declaredTypeQualifiedNameCounts.merge(
+              typeElement.getQualifiedName().toString(), 1, Integer::sum);
+        }
       }
     }
   }
@@ -268,8 +275,14 @@ public final class JavaOracle {
       Endpoint source = callables.peekLast();
       if (source == null) return super.visitAnnotation(tree, unused);
       TreePath path = new TreePath(getCurrentPath(), tree.getAnnotationType());
-      Endpoint target = endpoints.get(trees.getElement(path));
-      if (target != null) {
+      Element targetElement = trees.getElement(path);
+      Endpoint target = endpoints.get(targetElement);
+      if (target != null &&
+          targetElement != null &&
+          targetElement.getKind() == ElementKind.ANNOTATION_TYPE &&
+          targetElement instanceof TypeElement typeElement &&
+          declaredTypeQualifiedNameCounts.getOrDefault(
+              typeElement.getQualifiedName().toString(), 0) == 1) {
         facts.add(new Fact(
             "positive", "annotation", "references", source, target,
             occurrence(unit, tree.getAnnotationType(), target.name)));

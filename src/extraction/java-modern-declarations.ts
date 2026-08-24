@@ -8,6 +8,7 @@ export interface ModernJavaDeclarationRange {
 export interface ModernJavaDeclaration {
   readonly name: string;
   readonly kind: "class" | "interface" | "method";
+  readonly isAnnotation?: true;
   readonly range: ModernJavaDeclarationRange;
   readonly isExported: boolean;
   readonly parentIndex: number | null;
@@ -178,6 +179,7 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
       declarations.push({
         name,
         kind: staticTypeKind,
+        ...(node.kind() === "annotation_type_declaration" ? { isAnnotation: true as const } : {}),
         range: { start: range.start.index, end: range.end.index },
         isExported: isPublic(node),
         parentIndex

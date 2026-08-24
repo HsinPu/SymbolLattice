@@ -1688,6 +1688,8 @@ export interface JavaFacts {
 export interface JvmTypeFact {
   readonly symbolId: string;
   readonly packageName: string;
+  /** Present only when source syntax declares a Java annotation type. */
+  readonly isAnnotation?: true;
 }
 
 /** One unique, undecorated top-level Python declaration safe for B2 import resolution. */
@@ -1767,6 +1769,26 @@ export interface JvmHeritageReferenceFact {
   readonly filePath: string;
   readonly referenceName: string;
   readonly syntax: JvmHeritageSyntax;
+  readonly range: SourceRange;
+  readonly importedTypePath?: string;
+  readonly qualifiedTypePath?: string;
+}
+
+/** One exact, non-static, non-wildcard Java import retained for project-type resolution. */
+export interface JvmImportReferenceFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly importedTypePath: string;
+  readonly range: SourceRange;
+}
+
+/** One direct Java declaration annotation whose type spelling remains source-proven. */
+export interface JvmAnnotationReferenceFact {
+  readonly sourceId: string;
+  readonly declaringTypeId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
   readonly range: SourceRange;
   readonly importedTypePath?: string;
   readonly qualifiedTypePath?: string;
@@ -2258,6 +2280,10 @@ export type JavaMemberCallReferenceFact =
 export interface JvmFacts {
   readonly types: readonly JvmTypeFact[];
   readonly heritageReferences: readonly JvmHeritageReferenceFact[];
+  /** Omitted only by artifact facts persisted before v0.438. */
+  readonly importReferences?: readonly JvmImportReferenceFact[];
+  /** Omitted only by artifact facts persisted before v0.438. */
+  readonly annotationReferences?: readonly JvmAnnotationReferenceFact[];
   /** Omitted only by artifact facts persisted before v0.220. */
   readonly dependencyInjectionReferences?: readonly JvmDependencyInjectionReferenceFact[];
   /** Omitted only by artifact facts persisted before v0.297. */

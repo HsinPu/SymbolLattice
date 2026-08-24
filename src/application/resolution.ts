@@ -46,10 +46,12 @@ import {
   type GoFrameStandardRouterRequestFact,
   type GraphEdge,
   type GraphSnapshot,
+  type JvmAnnotationReferenceFact,
   type JvmCallableSignatureReferenceFact,
   type JvmDependencyInjectionReferenceFact,
   type JvmHeritageReferenceFact,
   type JvmHeritageSyntax,
+  type JvmImportReferenceFact,
   type JvmTypeFact,
   type JavaCallTypeReferenceFact,
   type JavaCallableDeclarationFact,
@@ -8386,6 +8388,216 @@ function declaredJvmProjectDependencyEvidence(input: {
   };
 }
 
+function projectJavaImportReferences(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+  readonly jvmProjectModuleEvidence?: JvmProjectModuleEvidence;
+}): readonly GraphEdge[] {
+  const typesBySymbolId = new Map<string, JvmResolvedType[]>();
+  const references: JvmImportReferenceFact[] = [];
+  for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    for (const fact of facts.jvmFacts?.types ?? []) {
+      const symbol = input.symbolsById.get(fact.symbolId);
+      if (symbol?.kind === "class" || symbol?.kind === "interface") {
+        const entries = typesBySymbolId.get(symbol.id) ?? [];
+        entries.push({ fact, symbol });
+        typesBySymbolId.set(symbol.id, entries);
+      }
+    }
+    references.push(...(facts.jvmFacts?.importReferences ?? []));
+  }
+  const typesByPath = new Map<string, JvmResolvedType[]>();
+  for (const entries of typesBySymbolId.values()) {
+    if (entries.length !== 1 || entries[0] === undefined) {
+      continue;
+    }
+    const type = entries[0];
+    const path = jvmTypePath(type);
+    const candidates = typesByPath.get(path) ?? [];
+    candidates.push(type);
+    typesByPath.set(path, candidates);
+  }
+  const membershipsByFile = jvmModuleMembershipsByFile(input.jvmProjectModuleEvidence);
+  const edges: GraphEdge[] = [];
+  for (const reference of [...references].sort((left, right) =>
+    compareStableText(
+      `${left.sourceId}\u0000${left.range.start.line}\u0000${left.range.start.column}`,
+      `${right.sourceId}\u0000${right.range.start.line}\u0000${right.range.start.column}`
+    )
+  )) {
+    const source = input.symbolsById.get(reference.sourceId);
+    if (source?.kind !== "file") {
+      continue;
+    }
+    const candidates = typesByPath.get(reference.importedTypePath) ?? [];
+    if (candidates.length !== 1 || candidates[0] === undefined || candidates[0].symbol.filePath === source.filePath) {
+      continue;
+    }
+    const target = candidates[0].symbol;
+    const declaredProjectDependency = declaredJvmProjectDependencyEvidence({
+      projectEvidence: input.jvmProjectModuleEvidence,
+      membershipsByFile,
+      sourceFilePath: source.filePath,
+      targetFilePath: target.filePath
+    });
+    edges.push({
+      id: createEdgeId({
+        sourceId: source.id,
+        targetId: target.id,
+        kind: "imports",
+        line: reference.range.start.line,
+        column: reference.range.start.column,
+        referenceName: reference.referenceName
+      }),
+      sourceId: source.id,
+      targetId: target.id,
+      kind: "imports",
+      filePath: reference.filePath,
+      range: reference.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: reference.referenceName,
+      evidence: referenceEvidence(
+        "module.java.explicit-import.project-type",
+        "module",
+        candidateSymbolIds(candidates.map((candidate) => candidate.symbol)),
+        declaredProjectDependency?.configurationPaths ?? [],
+        [reference.filePath, target.filePath]
+      )
+    });
+  }
+  return edges;
+}
+
+function projectJavaAnnotationReferences(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+  readonly jvmProjectModuleEvidence?: JvmProjectModuleEvidence;
+}): readonly GraphEdge[] {
+  const typesBySymbolId = new Map<string, JvmResolvedType[]>();
+  const references: JvmAnnotationReferenceFact[] = [];
+  for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    for (const fact of facts.jvmFacts?.types ?? []) {
+      const symbol = input.symbolsById.get(fact.symbolId);
+      if (symbol?.kind !== "class" && symbol?.kind !== "interface") {
+        continue;
+      }
+      const entries = typesBySymbolId.get(symbol.id) ?? [];
+      entries.push({ fact, symbol });
+      typesBySymbolId.set(symbol.id, entries);
+    }
+    references.push(...(facts.jvmFacts?.annotationReferences ?? []));
+  }
+  const annotationTypes = [...typesBySymbolId.values()]
+    .filter(
+      (entries) =>
+        entries.length === 1 &&
+        entries[0] !== undefined &&
+        entries[0].fact.isAnnotation === true
+    )
+    .map((entries) => entries[0] as JvmResolvedType)
+    .sort((left, right) => compareStableText(left.symbol.id, right.symbol.id));
+  const annotationTypesByPath = new Map<string, JvmResolvedType[]>();
+  const annotationTypesByPackageName = new Map<string, JvmResolvedType[]>();
+  for (const type of annotationTypes) {
+    const path = jvmTypePath(type);
+    const pathCandidates = annotationTypesByPath.get(path) ?? [];
+    pathCandidates.push(type);
+    annotationTypesByPath.set(path, pathCandidates);
+    const packageNameKey = `${type.fact.packageName}\u0000${type.symbol.name}`;
+    const packageCandidates = annotationTypesByPackageName.get(packageNameKey) ?? [];
+    packageCandidates.push(type);
+    annotationTypesByPackageName.set(packageNameKey, packageCandidates);
+  }
+  const membershipsByFile = jvmModuleMembershipsByFile(input.jvmProjectModuleEvidence);
+  const edges: GraphEdge[] = [];
+  for (const reference of [...references].sort((left, right) =>
+    compareStableText(
+      `${left.sourceId}\u0000${left.range.start.line}\u0000${left.range.start.column}`,
+      `${right.sourceId}\u0000${right.range.start.line}\u0000${right.range.start.column}`
+    )
+  )) {
+    const source = input.symbolsById.get(reference.sourceId);
+    const declaringTypeEntries = typesBySymbolId.get(reference.declaringTypeId) ?? [];
+    if (
+      source === undefined ||
+      (source.kind !== "class" && source.kind !== "interface" && source.kind !== "method") ||
+      declaringTypeEntries.length !== 1 ||
+      declaringTypeEntries[0] === undefined
+    ) {
+      continue;
+    }
+    const declaringType = declaringTypeEntries[0];
+    const targetTypePath = reference.qualifiedTypePath ?? reference.importedTypePath;
+    const resolutionProof = reference.qualifiedTypePath !== undefined
+      ? "qualified-type"
+      : reference.importedTypePath !== undefined
+        ? "explicit-import"
+        : "same-package";
+    const candidates = targetTypePath === undefined
+      ? annotationTypesByPackageName.get(
+          `${declaringType.fact.packageName}\u0000${reference.referenceName}`
+        ) ?? []
+      : annotationTypesByPath.get(targetTypePath) ?? [];
+    if (candidates.length !== 1 || candidates[0] === undefined || candidates[0].symbol.id === source.id) {
+      continue;
+    }
+    const target = candidates[0].symbol;
+    const samePackageConfigurationPaths =
+      resolutionProof !== "same-package" || source.filePath === target.filePath
+        ? []
+        : samePackageJvmModuleEvidence({
+            projectEvidence: input.jvmProjectModuleEvidence,
+            membershipsByFile,
+            sourceFilePath: source.filePath,
+            targetFilePath: target.filePath
+          });
+    if (samePackageConfigurationPaths === null) {
+      continue;
+    }
+    const declaredProjectDependency = resolutionProof === "same-package"
+      ? null
+      : declaredJvmProjectDependencyEvidence({
+          projectEvidence: input.jvmProjectModuleEvidence,
+          membershipsByFile,
+          sourceFilePath: source.filePath,
+          targetFilePath: target.filePath
+        });
+    edges.push({
+      id: createEdgeId({
+        sourceId: source.id,
+        targetId: target.id,
+        kind: "references",
+        line: reference.range.start.line,
+        column: reference.range.start.column,
+        referenceName: reference.referenceName
+      }),
+      sourceId: source.id,
+      targetId: target.id,
+      kind: "references",
+      filePath: reference.filePath,
+      range: reference.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: reference.referenceName,
+      evidence: referenceEvidence(
+        `module.java.annotation-type.${resolutionProof}.project-type`,
+        "module",
+        candidateSymbolIds(candidates.map((candidate) => candidate.symbol)),
+        resolutionProof === "same-package"
+          ? samePackageConfigurationPaths
+          : declaredProjectDependency?.configurationPaths ?? [],
+        [reference.filePath, target.filePath]
+      )
+    });
+  }
+  return edges;
+}
+
 /**
  * Projects a direct JVM parent type only when the raw facts identify exactly
  * one indexed top-level type through an explicit import, a direct qualified
@@ -12362,6 +12574,23 @@ export function resolveProjectFacts(input: {
       referenceScopeIdsByReferenceId.set(referenceScope.referenceId, referenceScope.scopeIds);
     }
   }
+
+  resolvedEdges.push(
+    ...projectJavaImportReferences({
+      factsByFile,
+      symbolsById,
+      ...(input.jvmProjectModuleEvidence === undefined
+        ? {}
+        : { jvmProjectModuleEvidence: input.jvmProjectModuleEvidence })
+    }),
+    ...projectJavaAnnotationReferences({
+      factsByFile,
+      symbolsById,
+      ...(input.jvmProjectModuleEvidence === undefined
+        ? {}
+        : { jvmProjectModuleEvidence: input.jvmProjectModuleEvidence })
+    })
+  );
 
   const jvmProjectHeritageEdges = projectJvmHeritageReferences({
     factsByFile,

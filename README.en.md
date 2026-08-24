@@ -43,6 +43,8 @@ One `init` or `sync` can process a multi-language repository. Analysis depth var
 | Data, configuration, and schemas | SQL, GraphQL, Protocol Buffers, Terraform/OpenTofu, Nix, YAML, XML, Java Properties, Solidity |
 | Functional and BEAM | Elixir, Erlang, Clojure, Haskell, OCaml |
 
+Java depth includes explicit imports plus declaration and direct-parameter annotations for unique project types; duplicate qualified types, wildcard or static imports, and external classpaths remain conservatively omitted.
+
 ## Install the CLI
 
 Requires Git, Node.js `>=22.13 <25`, npm, and Windows PowerShell 5.1 or PowerShell 7.

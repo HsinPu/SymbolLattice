@@ -43,6 +43,8 @@ SymbolLattice 可在單次 `init` 或 `sync` 中處理多語言 repository。不
 | 資料、設定與 schema | SQL、GraphQL、Protocol Buffers、Terraform/OpenTofu、Nix、YAML、XML、Java Properties、Solidity |
 | Functional 與 BEAM | Elixir、Erlang、Clojure、Haskell、OCaml |
 
+Java 深度包含唯一專案型別的明確 import、宣告與直接參數 annotation 關係；重複 qualified type、wildcard／static import 與外部 classpath 仍保守省略。
+
 ## 安裝 CLI
 
 需要 Git、Node.js `>=22.13 <25`、npm，以及 Windows PowerShell 5.1 或 PowerShell 7。

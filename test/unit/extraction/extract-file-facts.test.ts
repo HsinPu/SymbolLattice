@@ -593,6 +593,83 @@ describe("source extraction", () => {
     expect(signatureReferences.filter((reference) => ["T", "M"].includes(reference.referenceName))).toEqual([]);
   });
 
+  it("retains exact Java import and annotation type references while omitting wildcard and static imports", () => {
+    const facts = extractFileFacts({
+      filePath: "src/app/Consumer.java",
+      language: "java",
+      sourceText: [
+        "package app;",
+        "import api.Marker;",
+        "import api.*;",
+        "import static api.Constants.VALUE;",
+        "@Marker class Consumer {",
+        "  @app.LocalTag @api.Marker void run(@Marker String value) {}",
+        "}"
+      ].join("\n")
+    });
+    const symbol = (qualifiedName: string) =>
+      facts.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+
+    expect(facts.jvmFacts?.importReferences).toEqual([
+      {
+        sourceId: symbol("src/app/Consumer.java")?.id,
+        filePath: "src/app/Consumer.java",
+        referenceName: "Marker",
+        importedTypePath: "api.Marker",
+        range: {
+          start: { line: 2, column: 8 },
+          end: { line: 2, column: 18 }
+        }
+      }
+    ]);
+    expect(facts.jvmFacts?.annotationReferences).toEqual([
+      {
+        sourceId: symbol("src/app/Consumer.java#Consumer")?.id,
+        declaringTypeId: symbol("src/app/Consumer.java#Consumer")?.id,
+        filePath: "src/app/Consumer.java",
+        referenceName: "Marker",
+        importedTypePath: "api.Marker",
+        range: {
+          start: { line: 5, column: 2 },
+          end: { line: 5, column: 8 }
+        }
+      },
+      {
+        sourceId: symbol("src/app/Consumer.java#Consumer.run")?.id,
+        declaringTypeId: symbol("src/app/Consumer.java#Consumer")?.id,
+        filePath: "src/app/Consumer.java",
+        referenceName: "LocalTag",
+        qualifiedTypePath: "app.LocalTag",
+        range: {
+          start: { line: 6, column: 4 },
+          end: { line: 6, column: 16 }
+        }
+      },
+      {
+        sourceId: symbol("src/app/Consumer.java#Consumer.run")?.id,
+        declaringTypeId: symbol("src/app/Consumer.java#Consumer")?.id,
+        filePath: "src/app/Consumer.java",
+        referenceName: "Marker",
+        qualifiedTypePath: "api.Marker",
+        range: {
+          start: { line: 6, column: 18 },
+          end: { line: 6, column: 28 }
+        }
+      },
+      {
+        sourceId: symbol("src/app/Consumer.java#Consumer.run")?.id,
+        declaringTypeId: symbol("src/app/Consumer.java#Consumer")?.id,
+        filePath: "src/app/Consumer.java",
+        referenceName: "Marker",
+        importedTypePath: "api.Marker",
+        range: {
+          start: { line: 6, column: 39 },
+          end: { line: 6, column: 45 }
+        }
+      }
+    ]);
+  });
+
   it("retains Java declarations around valid class literals without accepting adjacent malformed syntax", () => {
     const facts = extractFileFacts({
       filePath: "src/ClassLiteralService.java",

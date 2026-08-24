@@ -577,6 +577,40 @@ describe("SqliteGraphStore", () => {
     expect(store.getGenerationComparisonBundle(projectPath, "generation:missing")).toBeNull();
   });
 
+  it("chunks retained snapshots before one JSON string can exceed the persistence bound", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const largeSymbols = Array.from({ length: 1_500 }, (_, index) => ({
+      ...symbol(`large-${index}`, `large${index}`),
+      qualifiedName: `src/example.ts#large${index}-${"x".repeat(1_024)}`,
+      declarationOrdinal: index
+    }));
+    const graphSnapshot = snapshot(largeSymbols);
+
+    store.replaceProjectFacts({
+      projectPath,
+      snapshot: graphSnapshot,
+      indexedAt: "2026-08-24T00:00:00.000Z",
+      artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("chunked-snapshot"),
+      resolverVersion: "test-resolver-chunked-snapshot"
+    });
+
+    const generationId = store.getStatus(projectPath).generationId!;
+    const database = new DatabaseSync(databasePathFor(projectPath), { readOnly: true });
+    const symbolParts = database
+      .prepare(
+        "SELECT COUNT(*) AS count FROM generation_snapshot_parts WHERE generation_id = ? AND section = 'symbols'"
+      )
+      .get(generationId) as unknown as { readonly count: number };
+    database.close();
+
+    expect(symbolParts.count).toBeGreaterThan(1);
+    expect(store.getGenerationSnapshotBundle(projectPath, generationId)?.snapshot).toEqual(
+      graphSnapshot
+    );
+  });
+
   it("round-trips generation-bound source-role evidence through active and retained snapshots", async () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();
@@ -1179,7 +1213,7 @@ describe("SqliteGraphStore", () => {
       {
         generationId: firstGenerationId,
         indexedAt: "2026-07-29T01:00:00.000Z",
-        snapshotVersion: 1,
+        snapshotVersion: 2,
         counts: { files: 1, symbols: 2, edges: 1, pendingReferences: 0 },
         indexWork: firstWork,
         extractorVersion: "test-extractor-v1",
@@ -1912,7 +1946,7 @@ describe("SqliteGraphStore", () => {
       generations: [
         {
           indexedAt: "2026-07-29T03:00:00.000Z",
-          snapshotVersion: 1,
+          snapshotVersion: 2,
           counts: { files: 1, symbols: 2, edges: 1, pendingReferences: 0 },
           indexWork: null,
           resolverVersion: "test-resolver-v2"
@@ -1971,7 +2005,7 @@ describe("SqliteGraphStore", () => {
       generations: [
         {
           indexedAt: "2026-07-29T04:00:00.000Z",
-          snapshotVersion: 1,
+          snapshotVersion: 2,
           counts: { files: 1, symbols: 2, edges: 1, pendingReferences: 0 },
           indexWork: null,
           resolverVersion: "test-resolver-v3"
@@ -2029,7 +2063,7 @@ describe("SqliteGraphStore", () => {
       generations: [
         {
           indexedAt: "2026-07-29T05:00:00.000Z",
-          snapshotVersion: 1,
+          snapshotVersion: 2,
           counts: { files: 1, symbols: 1, edges: 0, pendingReferences: 0 },
           indexWork: indexWork("full", "v4-before-downgrade"),
           resolverVersion: "test-resolver-v4"
@@ -2042,7 +2076,7 @@ describe("SqliteGraphStore", () => {
       throw new Error("Expected the v4 migration to backfill its active snapshot.");
     }
     expect(store.getGenerationSnapshotBundle(projectPath, generationId)).toMatchObject({
-      generation: { generationId, snapshotVersion: 1 },
+      generation: { generationId, snapshotVersion: 2 },
       snapshot: beforeMigration.snapshot
     });
     store.initialize(projectPath);

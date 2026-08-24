@@ -9,10 +9,12 @@ import {
   JAVA_NEGATED_PATTERN_MAXIMUM_GROUPING_DEPTH,
   type ArtifactFacts,
   type GraphEdge,
+  type JvmAnnotationReferenceFact,
   type JvmCallableSignatureReferenceFact,
   type JvmDependencyInjectionReferenceFact,
   type JvmFacts,
   type JvmHeritageSyntax,
+  type JvmImportReferenceFact,
   type JavaCallTypeReferenceFact,
   type JavaCallableDeclarationFact,
   type JavaChainedCallReferenceFact,
@@ -51,6 +53,7 @@ type StaticJavaAbruptTargetKind =
 interface StaticJavaAnnotation {
   readonly name: string;
   readonly node: JavaSyntaxNode;
+  readonly referenceNode: JavaSyntaxNode;
 }
 
 interface StaticJavaClass {
@@ -67,6 +70,7 @@ interface StaticJavaInterface {
   readonly name: string;
   readonly node: JavaSyntaxNode;
   readonly body: JavaSyntaxNode;
+  readonly annotations: readonly StaticJavaAnnotation[];
   readonly isExported: boolean;
 }
 
@@ -2466,7 +2470,7 @@ function staticAnnotation(input: JavaExtractFileFactsInput, node: JavaSyntaxNode
       : reference.name === "Identifier"
         ? identifierText(input, reference)
         : staticDottedIdentifier(input, reference);
-  return name === null ? null : { name, node };
+  return name === null || reference === undefined ? null : { name, node, referenceNode: reference };
 }
 
 function staticAnnotations(
@@ -2522,6 +2526,39 @@ function staticJavaImports(
     }
   }
   return imports;
+}
+
+function staticJavaImportReferences(input: {
+  readonly extraction: JavaExtractFileFactsInput;
+  readonly root: JavaSyntaxNode;
+  readonly sourceId: string;
+  readonly imports: ReadonlyMap<string, string>;
+  readonly lineStarts: readonly number[];
+}): readonly JvmImportReferenceFact[] {
+  const references: JvmImportReferenceFact[] = [];
+  for (const declaration of directChildren(input.root)) {
+    const importedTypePath = staticJavaImport(input.extraction, declaration);
+    const referenceNode = directChildren(declaration).find(
+      (child) => child.name === "Identifier" || child.name === "ScopedIdentifier"
+    );
+    const referenceName = importedTypePath?.split(".").at(-1);
+    if (
+      importedTypePath === null ||
+      referenceName === undefined ||
+      referenceNode === undefined ||
+      input.imports.get(referenceName) !== importedTypePath
+    ) {
+      continue;
+    }
+    references.push({
+      sourceId: input.sourceId,
+      filePath: input.extraction.filePath,
+      referenceName,
+      importedTypePath,
+      range: rangeFor(input.lineStarts, referenceNode.from, referenceNode.to)
+    });
+  }
+  return references;
 }
 
 function staticJavaPackage(
@@ -2762,6 +2799,7 @@ function staticJavaInterface(
     name,
     node,
     body,
+    annotations: staticAnnotations(input, node),
     isExported: modifiers !== undefined && directChildren(modifiers).some((child) => child.name === "public")
   };
 }
@@ -2938,6 +2976,23 @@ function staticJavaConstructor(
     visibility,
     isExported: visibility === "public"
   };
+}
+
+function staticJavaCallableAnnotations(
+  input: JavaExtractFileFactsInput,
+  declaration: StaticJavaMethod | StaticJavaConstructor
+): readonly StaticJavaAnnotation[] {
+  const formalParameters = directChildren(declaration.node).find(
+    (child) => child.name === "FormalParameters"
+  );
+  const parameterAnnotations = formalParameters === undefined
+    ? []
+    : directChildren(formalParameters)
+        .filter(
+          (child) => child.name === "FormalParameter" || child.name === "SpreadParameter"
+        )
+        .flatMap((parameter) => staticAnnotations(input, parameter));
+  return [...declaration.annotations, ...parameterAnnotations];
 }
 
 const JAVA_VALUE_DECLARATION_CONTAINERS = new Set([
@@ -6300,6 +6355,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   const javaClassFacts: Array<{ symbolId: string; packageName: string }> = [];
   const jvmTypeFacts: JvmFacts["types"][number][] = [];
   const jvmHeritageReferences: JvmFacts["heritageReferences"][number][] = [];
+  const jvmImportReferences: JvmImportReferenceFact[] = [];
+  const jvmAnnotationReferences: JvmAnnotationReferenceFact[] = [];
   const jvmDependencyInjectionReferences: JvmDependencyInjectionReferenceFact[] = [];
   const jvmCallableSignatureReferences: JvmCallableSignatureReferenceFact[] = [];
   const javaCallableDeclarations: JavaCallableDeclarationFact[] = [];
@@ -6639,6 +6696,38 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     });
   }
 
+  function addJvmAnnotationReferences(
+    source: SymbolNode,
+    declaringType: SymbolNode,
+    annotations: readonly StaticJavaAnnotation[],
+    imports: ReadonlyMap<string, string>
+  ): void {
+    for (const annotation of annotations) {
+      const referenceName = annotation.name.split(".").at(-1);
+      if (referenceName === undefined) {
+        continue;
+      }
+      const qualifiedTypePath = annotation.name.includes(".")
+        ? staticJavaQualifiedTopLevelTypePath(annotation.name) ?? undefined
+        : undefined;
+      if (annotation.name.includes(".") && qualifiedTypePath === undefined) {
+        continue;
+      }
+      const importedTypePath = qualifiedTypePath === undefined
+        ? imports.get(referenceName)
+        : undefined;
+      jvmAnnotationReferences.push({
+        sourceId: source.id,
+        declaringTypeId: declaringType.id,
+        filePath: input.filePath,
+        referenceName,
+        range: rangeFor(lineStarts, annotation.referenceNode.from, annotation.referenceNode.to),
+        ...(importedTypePath === undefined ? {} : { importedTypePath }),
+        ...(qualifiedTypePath === undefined ? {} : { qualifiedTypePath })
+      });
+    }
+  }
+
   function addJvmDependencyInjectionReference(
     source: SymbolNode,
     injectionReference: StaticJavaDependencyInjectionReference,
@@ -6727,6 +6816,15 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
 
   if (canUseLegacyJavaRoot) {
     const imports = staticJavaImports(input, root);
+    jvmImportReferences.push(
+      ...staticJavaImportReferences({
+        extraction: input,
+        root,
+        sourceId: fileNode.id,
+        imports,
+        lineStarts
+      })
+    );
     const types = directChildren(root)
       .map((node) => staticJavaType(input, node))
       .filter((candidate): candidate is StaticJavaType => candidate !== null)
@@ -6753,6 +6851,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
 
       if (typeDeclaration.kind === "interface") {
         declaredInterfaces.push({ declaration: typeDeclaration, symbol: typeSymbol });
+        addJvmAnnotationReferences(typeSymbol, typeSymbol, typeDeclaration.annotations, imports);
         javaFieldDeclarations.push(
           ...staticJavaFieldDeclarations({
             extraction: input,
@@ -6773,6 +6872,12 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
             methodDeclaration,
             imports,
             isJavaInterfaceMethodExported(methodDeclaration)
+          );
+          addJvmAnnotationReferences(
+            methodSymbol,
+            typeSymbol,
+            staticJavaCallableAnnotations(input, methodDeclaration),
+            imports
           );
           jvmCallableSignatureReferences.push(
             ...staticJavaCallableSignatureReferences({
@@ -6820,6 +6925,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       const classDeclaration = typeDeclaration;
       const classSymbol = typeSymbol;
       declaredClasses.push({ declaration: classDeclaration, symbol: classSymbol });
+      addJvmAnnotationReferences(classSymbol, classSymbol, classDeclaration.annotations, imports);
       for (const reference of staticSpringBootPropertiesReferences(
         input,
         classDeclaration,
@@ -6923,6 +7029,12 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       javaFieldDeclarations.push(...classFieldDeclarations);
       for (const constructorDeclaration of constructors) {
         const constructorSymbol = addMethod(classSymbol, constructorDeclaration, imports);
+        addJvmAnnotationReferences(
+          constructorSymbol,
+          classSymbol,
+          staticJavaCallableAnnotations(input, constructorDeclaration),
+          imports
+        );
         jvmCallableSignatureReferences.push(
           ...staticJavaCallableSignatureReferences({
             extraction: input,
@@ -6966,6 +7078,12 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       const symbolsByMethod = new Map<StaticJavaMethod, SymbolNode>();
       for (const methodDeclaration of methods) {
         const methodSymbol = addMethod(classSymbol, methodDeclaration, imports);
+        addJvmAnnotationReferences(
+          methodSymbol,
+          classSymbol,
+          staticJavaCallableAnnotations(input, methodDeclaration),
+          imports
+        );
         symbolsByMethod.set(methodDeclaration, methodSymbol);
         jvmCallableSignatureReferences.push(
           ...staticJavaCallableSignatureReferences({
@@ -7221,7 +7339,11 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
           if (declaration.kind === "class") {
             javaClassFacts.push({ symbolId: symbol.id, packageName });
           }
-          jvmTypeFacts.push({ symbolId: symbol.id, packageName });
+          jvmTypeFacts.push({
+            symbolId: symbol.id,
+            packageName,
+            ...(declaration.isAnnotation === true ? { isAnnotation: true } : {})
+          });
         }
       }
       projectedSymbols.set(index, symbol);
@@ -7258,6 +7380,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
     jvmFacts: {
       types: jvmTypeFacts,
       heritageReferences: jvmHeritageReferences,
+      importReferences: jvmImportReferences,
+      annotationReferences: jvmAnnotationReferences,
       dependencyInjectionReferences: jvmDependencyInjectionReferences,
       callableSignatureReferences: jvmCallableSignatureReferences,
       javaCallableDeclarations,

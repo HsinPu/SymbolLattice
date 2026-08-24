@@ -2202,6 +2202,136 @@ describe("JVM module-aware same-package heritage resolution", () => {
   });
 });
 
+describe("exact Java import and annotation type resolution", () => {
+  it("projects unique project types and fails closed for external and ambiguous targets", () => {
+    const sourceDocuments: readonly SourceDocument[] = [
+      {
+        absolutePath: "C:/project/src/api/Marker.java",
+        relativePath: "src/api/Marker.java",
+        language: "java",
+        sourceText: "package api; public @interface Marker {}\n",
+        contentHash: "marker"
+      },
+      {
+        absolutePath: "C:/project/src/app/LocalTag.java",
+        relativePath: "src/app/LocalTag.java",
+        language: "java",
+        sourceText: "package app; public @interface LocalTag {}\n",
+        contentHash: "local-tag"
+      },
+      {
+        absolutePath: "C:/project/src/app/Consumer.java",
+        relativePath: "src/app/Consumer.java",
+        language: "java",
+        sourceText: [
+          "package app;",
+          "import api.Marker;",
+          "import java.lang.Deprecated;",
+          "@Marker class Consumer {",
+          "  @LocalTag @api.Marker @Deprecated void run() {}",
+          "}"
+        ].join("\n"),
+        contentHash: "consumer"
+      },
+      {
+        absolutePath: "C:/project/duplicate-a/api/Ambiguous.java",
+        relativePath: "duplicate-a/api/Ambiguous.java",
+        language: "java",
+        sourceText: "package duplicate.api; public @interface Ambiguous {}\n",
+        contentHash: "ambiguous-a"
+      },
+      {
+        absolutePath: "C:/project/duplicate-b/api/Ambiguous.java",
+        relativePath: "duplicate-b/api/Ambiguous.java",
+        language: "java",
+        sourceText: "package duplicate.api; public @interface Ambiguous {}\n",
+        contentHash: "ambiguous-b"
+      },
+      {
+        absolutePath: "C:/project/src/app/AmbiguousConsumer.java",
+        relativePath: "src/app/AmbiguousConsumer.java",
+        language: "java",
+        sourceText: [
+          "package app;",
+          "import duplicate.api.Ambiguous;",
+          "@Ambiguous class AmbiguousConsumer {}"
+        ].join("\n"),
+        contentHash: "ambiguous-consumer"
+      }
+    ];
+    const snapshot = snapshotWithResolver(sourceDocuments, undefined);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const consumerFile = symbol("src/app/Consumer.java");
+    const consumer = symbol("src/app/Consumer.java#Consumer");
+    const run = symbol("src/app/Consumer.java#Consumer.run");
+    const marker = symbol("src/api/Marker.java#Marker");
+    const localTag = symbol("src/app/LocalTag.java#LocalTag");
+
+    expect(snapshot.edges.filter((edge) => edge.kind === "imports" && edge.sourceId === consumerFile?.id)).toEqual([
+      expect.objectContaining({
+        targetId: marker?.id,
+        referenceName: "Marker",
+        resolution: "exact",
+        confidence: 1,
+        evidence: {
+          ruleId: "module.java.explicit-import.project-type",
+          stage: "module",
+          candidateSymbolIds: [marker?.id],
+          resolutionPath: ["src/app/Consumer.java", "src/api/Marker.java"]
+        }
+      })
+    ]);
+    expect(snapshot.edges.filter((edge) => edge.kind === "references" && edge.sourceId === consumer?.id)).toEqual([
+      expect.objectContaining({
+        targetId: marker?.id,
+        referenceName: "Marker",
+        evidence: expect.objectContaining({
+          ruleId: "module.java.annotation-type.explicit-import.project-type",
+          candidateSymbolIds: [marker?.id]
+        })
+      })
+    ]);
+    expect(snapshot.edges.filter((edge) => edge.kind === "references" && edge.sourceId === run?.id)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetId: localTag?.id,
+          referenceName: "LocalTag",
+          evidence: expect.objectContaining({
+            ruleId: "module.java.annotation-type.same-package.project-type",
+            candidateSymbolIds: [localTag?.id]
+          })
+        }),
+        expect.objectContaining({
+          targetId: marker?.id,
+          referenceName: "Marker",
+          evidence: expect.objectContaining({
+            ruleId: "module.java.annotation-type.qualified-type.project-type",
+            candidateSymbolIds: [marker?.id]
+          })
+        })
+      ])
+    );
+    expect(
+      snapshot.edges.some(
+        (edge) =>
+          edge.sourceId === run?.id &&
+          edge.kind === "references" &&
+          edge.referenceName === "Deprecated"
+      )
+    ).toBe(false);
+    const ambiguousFile = symbol("src/app/AmbiguousConsumer.java");
+    const ambiguousType = symbol("src/app/AmbiguousConsumer.java#AmbiguousConsumer");
+    expect(
+      snapshot.edges.some(
+        (edge) =>
+          (edge.sourceId === ambiguousFile?.id || edge.sourceId === ambiguousType?.id) &&
+          (edge.kind === "imports" || edge.kind === "references")
+      )
+    ).toBe(false);
+  });
+});
+
 describe("literal route handler resolution", () => {
   it("resolves local, imported, and re-exported route handlers exactly", () => {
     const sourceDocuments: readonly SourceDocument[] = [

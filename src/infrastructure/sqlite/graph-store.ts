@@ -64,7 +64,8 @@ const PRE_RELEASE_SOURCE_SEARCH_SCHEMA_VERSION = "5";
 const GENERATION_SCHEMA_VERSION = "2";
 const LEGACY_SCHEMA_VERSION = "1";
 const SOURCE_DOCUMENT_PATH_QUERY_BATCH_SIZE = 500;
-const GENERATION_SNAPSHOT_VERSION = 1;
+const GENERATION_SNAPSHOT_VERSION = 2;
+const GENERATION_SNAPSHOT_PART_MAXIMUM_JSON_LENGTH = 1024 * 1024;
 const MAX_RETAINED_GENERATIONS = 5;
 
 /**
@@ -228,6 +229,15 @@ const GENERATION_SNAPSHOTS_SCHEMA = `
     snapshot_json TEXT NOT NULL,
     FOREIGN KEY(generation_id) REFERENCES generations(id) ON DELETE CASCADE
   ) STRICT;
+
+  CREATE TABLE IF NOT EXISTS generation_snapshot_parts (
+    generation_id TEXT NOT NULL,
+    section TEXT NOT NULL CHECK(section IN ('files', 'symbols', 'edges', 'pendingReferences')),
+    part_index INTEGER NOT NULL,
+    part_json TEXT NOT NULL,
+    PRIMARY KEY(generation_id, section, part_index),
+    FOREIGN KEY(generation_id) REFERENCES generations(id) ON DELETE CASCADE
+  ) STRICT;
 `;
 
 /**
@@ -369,6 +379,17 @@ interface GenerationSourceSearchRow {
 interface GenerationSnapshotRow {
   readonly snapshot_version: number;
   readonly snapshot_json: string;
+}
+
+type GenerationSnapshotSection = keyof Pick<
+  GraphSnapshot,
+  "files" | "symbols" | "edges" | "pendingReferences"
+>;
+
+interface GenerationSnapshotPartRow {
+  readonly section: GenerationSnapshotSection;
+  readonly part_index: number;
+  readonly part_json: string;
 }
 
 interface GenerationHistoryRow {
@@ -1022,11 +1043,109 @@ function insertGenerationSnapshot(
   snapshot: GraphSnapshot
 ): void {
   database
+    .prepare("DELETE FROM generation_snapshot_parts WHERE generation_id = ?")
+    .run(generationId);
+  database
     .prepare(
       `INSERT INTO generation_snapshots(generation_id, snapshot_version, snapshot_json)
        VALUES (?, ?, ?)`
     )
-    .run(generationId, GENERATION_SNAPSHOT_VERSION, JSON.stringify(snapshot));
+    .run(
+      generationId,
+      GENERATION_SNAPSHOT_VERSION,
+      JSON.stringify({ counts: snapshotCounts(snapshot) })
+    );
+
+  const insertPart = database.prepare(
+    `INSERT INTO generation_snapshot_parts(generation_id, section, part_index, part_json)
+     VALUES (?, ?, ?, ?)`
+  );
+  for (const section of ["files", "symbols", "edges", "pendingReferences"] as const) {
+    let partIndex = 0;
+    let entries: string[] = [];
+    let jsonLength = 2;
+    const flush = (): void => {
+      insertPart.run(generationId, section, partIndex, `[${entries.join(",")}]`);
+      partIndex += 1;
+      entries = [];
+      jsonLength = 2;
+    };
+    for (const value of snapshot[section]) {
+      const json = JSON.stringify(value);
+      const nextLength = jsonLength + json.length + (entries.length === 0 ? 0 : 1);
+      if (entries.length > 0 && nextLength > GENERATION_SNAPSHOT_PART_MAXIMUM_JSON_LENGTH) {
+        flush();
+      }
+      entries.push(json);
+      jsonLength += json.length + (entries.length === 1 ? 0 : 1);
+    }
+    flush();
+  }
+}
+
+function readGenerationSnapshot(
+  database: DatabaseSync,
+  generationId: string,
+  row: GenerationSnapshotRow
+): GraphSnapshot {
+  if (row.snapshot_version === 1) {
+    return parseJson<GraphSnapshot>(row.snapshot_json, `snapshot for generation ${generationId}`);
+  }
+  if (row.snapshot_version !== GENERATION_SNAPSHOT_VERSION) {
+    throw new Error(
+      `Snapshot for generation ${generationId} has unsupported version ${row.snapshot_version}.`
+    );
+  }
+  const rows = database
+    .prepare(
+      `SELECT section, part_index, part_json
+       FROM generation_snapshot_parts
+       WHERE generation_id = ?
+       ORDER BY section, part_index`
+    )
+    .all(generationId) as unknown as GenerationSnapshotPartRow[];
+  const snapshot: {
+    files: GraphSnapshot["files"][number][];
+    symbols: GraphSnapshot["symbols"][number][];
+    edges: GraphSnapshot["edges"][number][];
+    pendingReferences: GraphSnapshot["pendingReferences"][number][];
+  } = { files: [], symbols: [], edges: [], pendingReferences: [] };
+  const seenSections = new Set<GenerationSnapshotSection>();
+  for (const part of rows) {
+    const values = parseJson<unknown[]>(
+      part.part_json,
+      `${part.section} snapshot part ${part.part_index} for generation ${generationId}`
+    );
+    if (!Array.isArray(values)) {
+      throw new Error(
+        `Snapshot part ${part.section}:${part.part_index} for generation ${generationId} is not an array.`
+      );
+    }
+    seenSections.add(part.section);
+    (snapshot[part.section] as unknown[]).push(...values);
+  }
+  for (const section of ["files", "symbols", "edges", "pendingReferences"] as const) {
+    if (!seenSections.has(section)) {
+      throw new Error(`Snapshot for generation ${generationId} is missing its ${section} parts.`);
+    }
+  }
+  return snapshot;
+}
+
+function generationSnapshotCounts(row: GenerationHistoryRow): IndexCounts {
+  if (row.snapshot_version === 1) {
+    return snapshotCounts(
+      parseJson<GraphSnapshot>(row.snapshot_json, `snapshot for generation ${row.id}`)
+    );
+  }
+  const metadata = parseJson<{ readonly counts?: IndexCounts }>(
+    row.snapshot_json,
+    `snapshot metadata for generation ${row.id}`
+  );
+  if (row.snapshot_version !== GENERATION_SNAPSHOT_VERSION || metadata.counts === undefined) {
+    throw new Error(`Snapshot metadata for generation ${row.id} has an unsupported shape.`);
+  }
+  return metadata.counts;
 }
 
 function readGenerationSnapshotRow(
@@ -1114,15 +1233,11 @@ function readRetainedGenerationHistoryEntries(
   }
 
   return rows.map((row) => {
-    const snapshot = parseJson<GraphSnapshot>(
-      row.snapshot_json,
-      `snapshot for generation ${row.id}`
-    );
     return {
       generationId: row.id,
       indexedAt: row.indexed_at,
       snapshotVersion: row.snapshot_version,
-      counts: snapshotCounts(snapshot),
+      counts: generationSnapshotCounts(row),
       indexWork:
         row.work_json === null
           ? null
@@ -1175,10 +1290,7 @@ function readGenerationSnapshotBundleFromHistory(
   return {
     status: history.status,
     generation,
-    snapshot: parseJson<GraphSnapshot>(
-      snapshotRow.snapshot_json,
-      `snapshot for generation ${generationId}`
-    )
+    snapshot: readGenerationSnapshot(database, generationId, snapshotRow)
   };
 }
 
