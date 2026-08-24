@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.437.0
+目前版本：v0.438.0
 
 ## 主要能力
 
@@ -139,7 +139,7 @@ SymbolLattice serve --mcp --project C:\path\to\project
 SymbolLattice serve --mcp --project C:\path\to\project --no-auto-sync
 ```
 
-MCP 預設只暴露主要的 `SymbolLattice_explore`，降低 Agent 選錯工具的機率；其他工具仍完整保留，可透過 `SYMBOL_LATTICE_MCP_TOOLS=node,impact` 選擇性加入，或設為 `all` 恢復完整 surface。MCP query handlers 不會直接執行 `init`。MCP host 的啟動目錄沒有索引時仍會註冊工具，但不會為該目錄啟動 watcher；呼叫端應傳入實際 repository 的 `projectPath`。MCP initialize instructions 與 Codex 安裝區塊會指示具備 shell 能力的 Agent 在符合安全條件且索引缺失時自動呼叫 CLI。查詢整個 workspace 時，Agent 會對每個相關 repo 分別傳入 `projectPath` 並彙整結果；SymbolLattice 不會把多個獨立索引冒充成一張具有跨 repo edge 的圖。索引寫入、手動同步與 watcher lifecycle 仍由 CLI 控制。
+MCP 預設只暴露主要的 `SymbolLattice_explore`，降低 Agent 選錯工具的機率；它會回傳精簡 Markdown 與附行號來源，而不是完整診斷 JSON，CLI `explore --json` 仍保留機器可讀契約。其他工具仍完整保留，可透過 `SYMBOL_LATTICE_MCP_TOOLS=node,impact` 選擇性加入，或設為 `all` 恢復完整 surface。MCP query handlers 不會直接執行 `init`。MCP host 的啟動目錄沒有索引時仍會註冊工具，但不會為該目錄啟動 watcher；呼叫端應傳入實際 repository 的 `projectPath`。MCP initialize instructions 與 Codex 安裝區塊會指示具備 shell 能力的 Agent 在符合安全條件且索引缺失時自動呼叫 CLI。查詢整個 workspace 時，Agent 會對每個相關 repo 分別傳入 `projectPath` 並彙整結果；SymbolLattice 不會把多個獨立索引冒充成一張具有跨 repo edge 的圖。索引寫入、手動同步與 watcher lifecycle 仍由 CLI 控制。
 
 ## 限制
 
