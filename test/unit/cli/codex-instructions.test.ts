@@ -7,6 +7,7 @@ import {
   CODEX_INSTRUCTIONS_START,
   planCodexInstructions
 } from "../../../src/cli/codex-instructions.js";
+import { SYMBOL_LATTICE_VERSION } from "../../../src/version.js";
 
 const PROJECT = resolve("C:/projects/example");
 const INSTRUCTIONS = resolve("C:/users/example/.codex/AGENTS.md");
@@ -24,6 +25,18 @@ function fileSystem(files: Readonly<Record<string, string>>) {
 }
 
 describe("Codex instruction ownership", () => {
+  it("generates one complete versioned operational guidance block", () => {
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain(`Guidance version: \`${SYMBOL_LATTICE_VERSION}\``);
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("`.SymbolLattice/index.sqlite`");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Never run `init`, `index`, or `sync`");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("`SymbolLattice_explore`");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("`SymbolLattice_node`");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("`SymbolLattice_impact`");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("fall back to targeted `rg` and direct file reads");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("pending, unresolved, ambiguous, truncated, or low-confidence");
+    expect(CODEX_INSTRUCTIONS_BLOCK).not.toContain("SYMBOL_LATTICE_PERSONAL");
+  });
+
   it("plans a new marked block without writing or changing unrelated content", () => {
     const existing = "# My global instructions\r\n\r\nKeep this text.\r\n";
     const plan = planCodexInstructions("install", {

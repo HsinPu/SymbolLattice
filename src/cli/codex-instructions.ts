@@ -1,16 +1,34 @@
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
+import { SYMBOL_LATTICE_VERSION } from "../version.js";
+
 export const CODEX_INSTRUCTIONS_START = "<!-- SYMBOL_LATTICE_START -->";
 export const CODEX_INSTRUCTIONS_END = "<!-- SYMBOL_LATTICE_END -->";
 export const CODEX_INSTRUCTIONS_BLOCK = `${CODEX_INSTRUCTIONS_START}
 ## SymbolLattice
 
-When a repository root contains a \`.SymbolLattice\` directory:
+Guidance version: \`${SYMBOL_LATTICE_VERSION}\`
+
+### Version and activation
+
+- This installer-managed guidance was generated for SymbolLattice \`${SYMBOL_LATTICE_VERSION}\`. Before relying on version-sensitive behavior, run \`SymbolLattice --version\`; the runtime result is authoritative. If it differs, report the mismatch and refresh the Codex installation.
+- Treat a repository as queryable only when its root contains \`.SymbolLattice/index.sqlite\`. A \`.SymbolLattice\` directory by itself may contain only backups or diagnostics and does not prove that an index exists.
+- Never run \`init\`, \`index\`, or \`sync\`, and never create or rebuild an index, unless the user explicitly requests it.
+
+### Query routing
 
 - Use the \`SymbolLattice_explore\` MCP tool before grep, find, or broad file reads when locating or understanding code.
-- If MCP is unavailable, use \`SymbolLattice explore "<question>"\` from the repository root.
-- If \`.SymbolLattice\` is absent, do not create an index automatically; indexing remains the user's decision.
+- Use the narrowest follow-up tool that fits the question: \`SymbolLattice_node\`, \`SymbolLattice_file\`, or \`SymbolLattice_context\` for exact source context; \`SymbolLattice_impact\`, \`SymbolLattice_affected\`, or \`SymbolLattice_git_hunks\` for change impact; and \`SymbolLattice_history\` or \`SymbolLattice_diff\` for generation history.
+- If MCP is unavailable, use the equivalent \`SymbolLattice\` CLI command from the repository root.
+- If the index is missing, stale, incompatible, or the query returns no relevant evidence, say so briefly and fall back to targeted \`rg\` and direct file reads. Do not create or refresh the index as a side effect.
+
+### Evidence and safety
+
+- Treat exact symbols, source ranges, and edges as evidence. Treat pending, unresolved, ambiguous, truncated, or low-confidence results as incomplete rather than established facts.
+- When graph evidence conflicts with the current working tree, verify the current files directly and state the mismatch.
+- Do not edit files inside \`.SymbolLattice\` manually. Treat the directory as generated local state and do not commit it unless repository policy explicitly requires it.
+- Avoid repeated graph queries after a clear miss; switch to the smallest targeted filesystem check needed to continue.
 ${CODEX_INSTRUCTIONS_END}`;
 
 export type CodexInstructionsOperation = "install" | "uninstall";
