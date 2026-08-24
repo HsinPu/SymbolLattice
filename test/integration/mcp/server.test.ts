@@ -1777,6 +1777,7 @@ describe("SymbolLattice MCP server", () => {
                             "qualified-symbol-term",
                             "partial-symbol-term",
                             "file-name-term",
+                            "graph-expanded",
                             "graph-connected",
                             "graph-mass",
                             "graph-diffusion"
