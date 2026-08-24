@@ -1770,6 +1770,20 @@ describe("SymbolLattice MCP server", () => {
                 selection: {
                   items: {
                     properties: {
+                      reasons: {
+                        items: {
+                          enum: [
+                            "explicit-file",
+                            "exact-symbol-term",
+                            "qualified-symbol-term",
+                            "partial-symbol-term",
+                            "file-name-term",
+                            "graph-connected",
+                            "graph-mass",
+                            "graph-diffusion"
+                          ]
+                        }
+                      },
                       generated: { type: "object" },
                       graphMass: {
                         properties: {

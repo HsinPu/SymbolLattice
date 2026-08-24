@@ -1094,7 +1094,8 @@ const exploreQuerySelectionOutputSchema = z.object({
       "partial-symbol-term",
       "file-name-term",
       "graph-connected",
-      "graph-mass"
+      "graph-mass",
+      "graph-diffusion"
     ])
   )
 });
