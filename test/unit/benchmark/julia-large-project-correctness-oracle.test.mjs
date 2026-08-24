@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { collectJuliaTruth, JULIA_POSITIVE_QUOTAS } from "../../../scripts/julia-large-project-correctness-oracle.mjs";
+import { collectJuliaTruth, JULIA_POSITIVE_QUOTAS } from "../../../benchmarks/julia/correctness-oracle.mjs";
 
 describe("Julia large-project correctness oracle", () => {
   it("keeps comments and literals out of the independent declaration truth", () => {

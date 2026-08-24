@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   createSourceInstallPlan,
   parseSourceInstallArguments
-} from "../../scripts/github-source-install.mjs";
+} from "../../scripts/install/github-source-install.mjs";
 
 const OFFICIAL_REPOSITORY = "https://github.com/HsinPu/SymbolLattice.git";
 const COMMIT = "0123456789abcdef0123456789abcdef01234567";

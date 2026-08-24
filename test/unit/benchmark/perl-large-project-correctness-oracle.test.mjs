@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { collectPerlTruth, PERL_POSITIVE_QUOTAS } from "../../../scripts/perl-large-project-correctness-oracle.mjs";
+import { collectPerlTruth, PERL_POSITIVE_QUOTAS } from "../../../benchmarks/perl/correctness-oracle.mjs";
 
 describe("Perl large-project correctness oracle", () => {
   it("keeps comments, literals, and nested declarations out of independent truth", () => {

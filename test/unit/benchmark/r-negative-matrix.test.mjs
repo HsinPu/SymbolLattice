@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { runRNegativeMatrix } from "../../../scripts/r-negative-matrix.mjs";
+import { runRNegativeMatrix } from "../../../benchmarks/r/negative-matrix.mjs";
 
 describe("R negative matrix", () => {
   it("rejects 150 quoted, malformed, dynamic, nested, and lookalike cases", () => {

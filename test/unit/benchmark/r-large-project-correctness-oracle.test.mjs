@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { collectRTruth, R_POSITIVE_QUOTAS } from "../../../scripts/r-large-project-correctness-oracle.mjs";
+import { collectRTruth, R_POSITIVE_QUOTAS } from "../../../benchmarks/r/correctness-oracle.mjs";
 
 describe("R large-project correctness oracle", () => {
   it("keeps comments, strings, and nested functions out of independent truth", () => {

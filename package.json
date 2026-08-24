@@ -26,12 +26,12 @@
     "node": ">=22.13 <25"
   },
   "scripts": {
-    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json && node scripts/copy-shell-parser-assets.mjs && node scripts/copy-lua-parser-assets.mjs",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json && node scripts/build/copy-shell-parser-assets.mjs && node scripts/build/copy-lua-parser-assets.mjs",
     "check": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "release:contract": "node scripts/release-contract.mjs",
-    "verify:mcp-worker-generation": "node scripts/verify-mcp-worker-generation.mjs",
+    "release:contract": "node scripts/release/release-contract.mjs",
+    "verify:mcp-worker-generation": "node scripts/release/verify-mcp-worker-generation.mjs",
     "prepack": "npm run build",
     "start": "node dist/cli/main.js"
   },

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { runPerlNegativeMatrix } from "../../../scripts/perl-negative-matrix.mjs";
+import { runPerlNegativeMatrix } from "../../../benchmarks/perl/negative-matrix.mjs";
 
 describe("Perl negative matrix", () => {
   it("rejects 150 quoted, malformed, dynamic, nested, and lookalike cases", () => {

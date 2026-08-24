@@ -11,7 +11,7 @@ import {
   copyShellParserAssets,
   SHELL_ASSET_MANIFEST_SHA256,
   verifyShellParserAssets
-} from "../../scripts/copy-shell-parser-assets.mjs";
+} from "../../scripts/build/copy-shell-parser-assets.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const sourceDirectory = join(repositoryRoot, "src", "assets", "shell");
@@ -219,7 +219,7 @@ describe("Shell parser asset closure", () => {
   it("keeps the build hook responsible for copying assets after TypeScript", async () => {
     const packageJson = JSON.parse(await readFile(join(repositoryRoot, "package.json"), "utf8"));
 
-    expect(packageJson.scripts.build).toContain("scripts/copy-shell-parser-assets.mjs");
+    expect(packageJson.scripts.build).toContain("scripts/build/copy-shell-parser-assets.mjs");
     expect(packageJson.scripts.prepack).toBe("npm run build");
   });
 });

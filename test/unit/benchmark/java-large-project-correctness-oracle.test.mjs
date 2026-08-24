@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { scoreOracleSelection } from "../../../scripts/java-large-project-correctness-oracle.mjs";
+import { scoreOracleSelection } from "../../../benchmarks/java/correctness-oracle.mjs";
 
 const endpoint = (name, kind, line) => ({
   filePath: "src/App.java",

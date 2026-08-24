@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { collectLuauTruth, LUAU_POSITIVE_QUOTAS } from "../../../scripts/luau-large-project-correctness-oracle.mjs";
+import { collectLuauTruth, LUAU_POSITIVE_QUOTAS } from "../../../benchmarks/luau/correctness-oracle.mjs";
 
 describe("Luau large-project correctness oracle", () => {
   it("keeps comments and strings out of the independent declaration truth", () => {

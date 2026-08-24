@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   createSourceInstallPlan,
   executeSourceInstallStage3
-} from "../../scripts/github-source-install.mjs";
+} from "../../scripts/install/github-source-install.mjs";
 
 const COMMIT = "0123456789abcdef0123456789abcdef01234567";
 const VERSION = "0.421.0";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { runJuliaNegativeMatrix } from "../../../scripts/julia-negative-matrix.mjs";
+import { runJuliaNegativeMatrix } from "../../../benchmarks/julia/negative-matrix.mjs";
 
 describe("Julia negative matrix", () => {
   it("passes all 150 fail-closed cases", () => {

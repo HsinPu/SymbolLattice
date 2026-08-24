@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { runLuauNegativeMatrix } from "../../../scripts/luau-negative-matrix.mjs";
+import { runLuauNegativeMatrix } from "../../../benchmarks/luau/negative-matrix.mjs";
 
 describe("Luau negative matrix", () => {
   it("passes all 150 fail-closed cases", () => {

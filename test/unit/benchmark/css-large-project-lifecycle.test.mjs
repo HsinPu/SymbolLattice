@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { validateDisposableCssProject } from "../../../scripts/css-large-project-lifecycle.mjs";
+import { validateDisposableCssProject } from "../../../benchmarks/css/lifecycle.mjs";
 
 describe("CSS large-project lifecycle harness", () => {
   it("refuses unmarked or out-of-project mutation targets", () => {

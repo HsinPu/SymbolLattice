@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   collectJavaScriptTruth,
   scoreJavaScriptSelection
-} from "../../../scripts/javascript-large-project-correctness-oracle.mjs";
+} from "../../../benchmarks/javascript/correctness-oracle.mjs";
 
 describe("JavaScript large-project correctness oracle", () => {
   it("collects conservative ESTree identities and direct relations", () => {

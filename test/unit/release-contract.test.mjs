@@ -9,7 +9,7 @@ import {
   expectedReleaseTarballName,
   parseReleaseArguments,
   validateReleaseIdentity
-} from "../../scripts/release-contract.mjs";
+} from "../../scripts/release/release-contract.mjs";
 
 const temporaryDirectories = [];
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { scoreSets, strictHtmlTruth } from "../../../scripts/html-large-project-correctness-oracle.mjs";
+import { scoreSets, strictHtmlTruth } from "../../../benchmarks/html/correctness-oracle.mjs";
 
 describe("HTML large-project correctness oracle", () => {
   it("derives strict element identities and containment without product extraction", () => {

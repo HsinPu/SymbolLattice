@@ -10,7 +10,7 @@ import {
   copyLuaParserAssets,
   LUA_ASSET_MANIFEST_SHA256,
   verifyLuaParserAssets
-} from "../../scripts/copy-lua-parser-assets.mjs";
+} from "../../scripts/build/copy-lua-parser-assets.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const sourceDirectory = join(repositoryRoot, "src", "assets", "lua");
@@ -63,7 +63,7 @@ describe("Lua parser asset closure", () => {
     const attributes = await readFile(join(repositoryRoot, ".gitattributes"), "utf8");
 
     expect(packageJson.dependencies["web-tree-sitter"]).toBe("0.26.12");
-    expect(packageJson.scripts.build).toContain("scripts/copy-lua-parser-assets.mjs");
+    expect(packageJson.scripts.build).toContain("scripts/build/copy-lua-parser-assets.mjs");
     expect(packageJson.scripts.prepack).toBe("npm run build");
     expect(attributes).toContain("/src/assets/lua/* -text\n");
   });

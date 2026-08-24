@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { validateDisposableLuauProject } from "../../../scripts/luau-large-project-lifecycle.mjs";
+import { validateDisposableLuauProject } from "../../../benchmarks/luau/lifecycle.mjs";
 
 describe("Luau lifecycle contract", () => {
   it("rejects probes outside the disposable Luau project boundary", () => {

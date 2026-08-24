@@ -23,7 +23,7 @@ param(
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = "Stop"
 
-$plannerPath = Join-Path $PSScriptRoot "scripts\github-source-install.mjs"
+$plannerPath = Join-Path $PSScriptRoot "scripts\install\github-source-install.mjs"
 if (-not (Test-Path -LiteralPath $plannerPath -PathType Leaf)) {
     throw "The GitHub source installation planner is missing: $plannerPath"
 }

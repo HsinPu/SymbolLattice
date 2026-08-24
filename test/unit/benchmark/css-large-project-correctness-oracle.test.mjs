@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { scoreSets, strictCssTruth } from "../../../scripts/css-large-project-correctness-oracle.mjs";
+import { scoreSets, strictCssTruth } from "../../../benchmarks/css/correctness-oracle.mjs";
 
 describe("CSS large-project correctness oracle", () => {
   it("derives independent strict CSS resource and containment truths", () => {

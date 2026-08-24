@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { scoreSets, strictJspDirectiveTruth } from "../../../scripts/jsp-large-project-correctness-oracle.mjs";
+import { scoreSets, strictJspDirectiveTruth } from "../../../benchmarks/jsp/correctness-oracle.mjs";
 
 describe("JSP large-project correctness oracle", () => {
   it("derives directive, attribute, binding, and containment truth independently", () => {

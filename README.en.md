@@ -2,7 +2,7 @@
 
 # SymbolLattice
 
-**Evidence-first, local-first code graphs and bounded code context for AI agents**
+**Evidence-first local code graphs with traceable code context for developers and AI agents.**
 
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -12,67 +12,42 @@
 
 </div>
 
+SymbolLattice scans a local repository, persists files, symbols, and static relationships as a queryable code graph, and exposes search, call relationships, routes, entry points, impact analysis, and source context through a CLI and MCP.
+
+Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
+
+Current version: v0.437.0
+
+## Highlights
+
+- Scan multi-language, framework-aware repositories in one graph.
+- Query symbols, callers, callees, inheritance, imports, routes, and entry points.
+- Assess changes with `impact`, `affected`, and Git hunk information.
+- Produce bounded, source-backed agent context and `explore` results.
+- Persist generations with incremental sync, history, and diff support.
+- Use the graph through the CLI or read-only MCP query handlers.
+
 > [!IMPORTANT]
-> Current release: v0.437.0 (R structural depth).
-> v0.434.0 is a developer preview installed from a fixed revision of the official GitHub repository. MCP query tools are read-only, but `serve --mcp` starts a separate local auto-sync watcher by default. That watcher may update the project's `.SymbolLattice` index; add `--no-auto-sync` to disable it.
+> MCP queries are read-only, but `serve --mcp` can start local automatic synchronization by default and update the `.SymbolLattice` index. Add `--no-auto-sync` to disable background updates completely.
 
-## What it is
+## Supported scope
 
-v0.435.0 deepens Julia structural depth. Fixed sources are Julia `v1.12.7` (`6d172b025e4befc4d274d9fbc9339917a8a86b65`), Pluto.jl `v1.0.3` (`4c726d24aa602eb6cba0636540ce3e8f7eb42dbb`), and Flux.jl `v0.16.11` (`443ed1bc8c157168e4fe99a045f42014ae26def8`). Extractor v331 supports bounded module/baremodule, struct/mutable struct, abstract/primitive type, full-form and one-line function/qualified-method identities, and file/module containment; the reviewed exact-singleton subset reached TP 400 / FP 0 / FN 0 / evidenceInvalid 0, with 150 / 150 negative cases and lifecycle gates passing. The final fixed-source candidate scan records TP 18,292 / FP 601 / FN 5,204 and unsupported breadth recall 0.779; the candidate oracle is an independent masked-line truth, and syntax outside the reviewed subset remains unsupported rather than being presented as full Julia coverage. Macros/generated functions, runtime multiple dispatch, reflection, metaprogramming, package loading, type inference/subtype compatibility, and cross-file exact resolution are NONCLAIM.
+One `init` or `sync` can process a multi-language repository. Analysis depth varies by language; runtime or dynamic relationships that cannot be uniquely proven from static source are not presented as exact.
 
-v0.436.0 deepens Perl structural depth. Fixed sources are Perl `v5.45.2` (`6f488b9e12b015c5b1b2827a5621991e8bd30e04`), Mojolicious `v9.49` (`c2d9f035556218c628dedae2e1075e115504a2a6`), and Perl::Critic `v1.154` (`382d701fd1129822c98fdcdb08403a733a24dc08`). Extractor v332 supports bounded package/class/role/named-sub identities, forward declarations, prototype/attribute declaration ranges, and file/package containment; the reviewed exact-singleton subset reached TP 400 / FP 0 / FN 0 / evidenceInvalid 0, with 150 / 150 negative cases and lifecycle gates passing. The full fixed-source candidate scan separately records TP 5,013 / FP 2,587 / FN 6,923 and unsupported breadth recall 0.420; the candidate oracle is an independent masked-line truth, and syntax outside the reviewed subset remains unsupported rather than being presented as full Perl coverage. eval/do/require, anonymous/nested subs, qualified method dispatch, runtime reflection, metaprogramming, and cross-file exact resolution are NONCLAIM.
-
-v0.437.0 deepens R structural depth. Fixed sources are R `v4.5.1` (`1d95a4c60b0be6766490b1a621610b98a4bf5765`), Shiny `v1.14.0` (`dffc756a2867533fafc0858baf4c3fdbed165692`), and Plumber `v1.3.3` (`0f777a3f279736fe26da4d715407b573c80b5ffd`). Extractor v333 supports bounded top-level function assignments, literal S4 `setClass`/`setRefClass` identities and file containment, while retaining bounded Plumber annotation routes; the reviewed exact-singleton subset reached TP 400 / FP 0 / FN 0 / evidenceInvalid 0, with 150 / 150 negative cases and lifecycle gates passing. The full fixed-source candidate scan separately records TP 4,184 / FP 1,283 / FN 2,434 and unsupported breadth recall 0.632; the candidate oracle is an independent masked-line truth, and syntax outside the reviewed subset remains unsupported rather than being presented as full R coverage. S3/S4 method dispatch, dynamic class names, eval/parse/source/do.call/get, nested/anonymous functions, Shiny reactive runtime, and cross-file exact resolution are NONCLAIM.
-
-SymbolLattice scans a local repository, persists a code graph, and exposes CLI/MCP queries for files, symbols, calls, imports, inheritance, routes, entry points, bounded impact paths, and source-backed context. Every relationship carries source range, resolution stage, confidence, and rule evidence.
-
-Relationships that cannot be proven exactly remain unresolved or pending instead of becoming false exact edges.
-
-The previous v0.429.0 release deepened Python scanning. Fixed official GitHub source commits are CPython 3.13.11 (`627894459a84be3488a1789919679c997056a03c`), Django 5.2.15 (`21e98408f84d22191e2c7ee4052bdd12d264fd3f`), and Home Assistant Core 2026.8.0 (`4a9dce13f61d03960ad5d2710e2af9fd2a78af54`); extractor v324 and resolver v156 provide large-project evidence for declarations, containment, relative imports, bounded class instantiation, inheritance, calls, and async identities. The frozen acceptance subset reached TP 300 / FP 0 / FN 0 / evidenceInvalid 0, with 150 / 150 negative cases passing; 38 lifecycle operations covering fresh, no-op, comment, semantic, rename, delete, restore, reopen, and invalid configuration also passed. This is bounded static analysis, not a claim to support every Python runtime, reflection path, dynamic dispatch, or arbitrary metaprogramming; relationships that cannot be uniquely proven remain unresolved or pending, or are omitted.
-
-v0.431.0 deepens SQL/PostgreSQL structural depth. Fixed sources are PostgreSQL `REL_17_5` (`5e2f3df49d4298c6097789364a5a53be172f6e85`), observed Supabase PostgreSQL `develop` (`667e8c6a0d65c6f2a855b05a33f96cdc24453999`), and the Hasura v2.12.0 peeled commit (`2660015787a4de2aa52fe67e56fb90efc90148b8`). Under the structural-only v2 contract with extractor v327, resolver v157, and no new parser dependency, only complete, bounded `CREATE SCHEMA` / `CREATE TABLE` identities and file `contains` are claimed. Postfix v4 reached TP 300 / FP 0 / FN 0 / evidenceInvalid 0, 150 / 150 negatives, and targeted 16 / 16; lifecycle v8 passed 14 formal operations. This remains bounded static structural analysis: views, functions, dependencies, `search_path`, PL/pgSQL, dynamic SQL, runtime behavior, and other SQL dialects are NONCLAIM; it is not full PostgreSQL support.
-
-v0.432.0 deepens Shell (POSIX/Bash) structural depth. Fixed sources are Git v2.50.1 (`d82adb61ba2fd11d8f2587fca1b6bd7925ce4044`), nvm v0.40.6 (`b6cf55f6adf3b953d0e5e00a4049444e300e3af8`), and Kubernetes v1.36.3 (`0f29094e5b73085e3802ecc1298ecae13866bfe6`). Under extractor v328, resolver v157, and the versioned `SL-SHELL-STRUCTURAL-v1.2.3` contract, the approved subset reached TP 300 / FP 0 / FN 0 / evidenceInvalid 0, with 150 / 150 negatives and 4 / 4 controls. Lifecycle coverage includes fresh, no-op, comment, semantic, rename, delete, restore, reopen, invalid source/config, and bounded resource-recovery cases. Claims are limited to syntax-valid, bounded direct top-level function identities and file `contains`; dynamic dispatch, `export -f`, runtime behavior, cross-language relationships, and Shell semantics that cannot be uniquely proven are NONCLAIM.
-
-v0.433.0 deepens Lua structural depth. Fixed sources are LuaRocks v3.13.0, Kong 3.9.3, and Lua 5.5.1; the product uses the sole `web-tree-sitter@0.26.12` runtime with retained `tree-sitter-lua` v0.5.0 WASM (SHA-256 `609f25f03773c8eaa3e94c504f360e770c49009ba9383b65be581b2d51774b71`). The approved subset is grammar-defined direct-root named Lua functions plus file `contains`; the fixed large-source acceptance reached TP 300 / FP 0 / FN 0 / evidenceInvalid 0, with all actual/generated negatives, controls, and lifecycle gates passing. Luau typed syntax, direct-call semantics, runtime dispatch, metatables, reflection, dynamic loading, and relationships that cannot be uniquely proven remain NONCLAIM; the official Lua 5.5 `luac` oracle is not claimed as fully compatible in this release.
-
-v0.434.0 deepens Luau structural depth. Fixed sources are official Luau 0.735 (`367f9d83cc29804a6d5938ec85b6116d34d8743b`), Lute `v1.0.1-nightly.20260822` (`ccd1edc563010fbab83c16d4476e6ed5be1ff1a3`), and Fusion `v0.3-beta` (`77e603534ff4013f4049611826ff0309d6000b15`). Extractor v330 supports bounded generic/optional/union/table/function type annotations, Luau if-expressions and interpolated strings, direct-root member methods, and exported/local type aliases; the reviewed exact-singleton subset reached TP 300 / FP 0 / FN 0 / evidenceInvalid 0, with 150 / 150 negative cases and lifecycle gates passing. The full fixed-source candidate scan separately records TP 3,752 / FP 0 / FN 1,412 and unsupported breadth recall 0.727; candidates outside the approved subset remain unsupported rather than being presented as full Luau coverage. Runtime dispatch, Roblox engine semantics, metatables, reflection, dynamic require, cross-file/cross-language relationships, and type inference/subtype compatibility are NONCLAIM.
-
-## Supported languages
-
-Final v0.437.0 candidate figures are TP 4,184 / FP 1,283 / FN 2,434 with unsupported breadth recall 0.632; the reviewed subset remains TP 400 / FP 0 / FN 0 / evidenceInvalid 0.
-
-SymbolLattice currently discovers and indexes 57 languages. A single `init` or `sync` scans every matching language in the same repository; languages do not need to be selected individually. This list means the files can be scanned and represented in the graph, not that every language has identical parsing depth. Dynamic relationships that cannot be proven from static source remain unresolved or pending, or are omitted.
-
-| Category | Languages |
+| Category | Languages and formats |
 | --- | --- |
-| Recently validated deeply on large projects | TypeScript, Java, HTML, CSS, JavaScript, JSP, Python, Ruby, Shell, Luau, Julia, Perl, R |
-| Web, component, and template languages | ArkTS, Vue, Svelte, Astro, Razor, PHP, Blade, Liquid, Twig, CFML |
-| JVM, .NET, and application languages | Groovy, Kotlin, Scala, C#, F#, VB.NET, Dart |
-| Systems and native languages | C, C++, Objective-C, Rust, Go, Swift, Zig, Nim, Fortran, Ada, Pascal, COBOL |
-| Scripting and data processing | Python, Ruby, Perl, Lua, Luau, R, Julia, Shell, SQL |
-| Functional and BEAM languages | Elixir, Erlang, Clojure, Haskell, OCaml |
-| Infrastructure, data, and schemas | Terraform/OpenTofu, Nix, YAML, XML, Java Properties, GraphQL, Protocol Buffers, Solidity |
+| Deeply validated on large projects | TypeScript, Java, HTML, CSS, JavaScript, JSP, Python, Ruby, Shell, Lua, Luau, Julia, Perl, R |
+| Web and templates | ArkTS, Vue, Svelte, Astro, Razor, PHP, Blade, Liquid, Twig, CFML |
+| JVM, .NET, and applications | Groovy, Kotlin, Scala, C#, F#, VB.NET, Dart |
+| Systems and native | C, C++, Objective-C, Rust, Go, Swift, Zig, Nim, Fortran, Ada, Pascal, COBOL |
+| Data, configuration, and schemas | SQL, GraphQL, Protocol Buffers, Terraform/OpenTofu, Nix, YAML, XML, Java Properties, Solidity |
+| Functional and BEAM | Elixir, Erlang, Clojure, Haskell, OCaml |
 
-## Quick start
+## Install the CLI
 
-Requires Node.js `>=22.13 <25` and npm.
+Requires Git, Node.js `>=22.13 <25`, npm, and Windows PowerShell 5.1 or PowerShell 7.
 
-```bash
-git clone https://github.com/HsinPu/SymbolLattice.git
-cd SymbolLattice
-npm ci
-npm run build
-
-node dist/cli/main.js init /path/to/project
-node dist/cli/main.js sync /path/to/project
-node dist/cli/main.js find createOrder --project /path/to/project --json
-node dist/cli/main.js explore "Trace createOrder to persistence" --project /path/to/project --json
-```
-
-## Install the CLI from GitHub
-
-Requires Git, Node.js `>=22.13 <25`, npm, and Windows PowerShell 5.1 or PowerShell 7. Select a full 40-character commit or a version tag on GitHub first; floating refs such as `main` and `HEAD` are rejected.
+SymbolLattice is not published to the npm Registry. Install from a full 40-character commit in the official GitHub repository, or from an available version tag. Floating refs such as `main` and `HEAD` are rejected.
 
 ```powershell
 $ref = "<FULL_40_CHARACTER_COMMIT_OR_VX.Y.Z>"
@@ -83,10 +58,10 @@ try {
     git -C $bootstrap fetch --depth 1 origin $ref
     git -C $bootstrap checkout --detach FETCH_HEAD
 
-    # Preview the source, npm prefix, and steps without writing anything
+    # Preview only; this does not install or modify Codex
     & (Join-Path $bootstrap "install.ps1") -Ref $ref
 
-    # Install into the current user's npm global prefix only after review
+    # Install into the current user's npm global prefix after review
     & (Join-Path $bootstrap "install.ps1") -Ref $ref -Apply -Yes
 }
 finally {
@@ -96,98 +71,100 @@ finally {
 }
 ```
 
-The source installer clones the fixed ref again into its own unique workspace, verifies origin, commit, lockfile, type check, build, package, isolated CLI, and MCP, then installs the global CLI with rollback protection. It removes that workspace on success and retains diagnostics after a rolled-back failure. It does not edit Codex configuration or create a project index.
+The source installer verifies the fixed source, lockfile, type check, build, npm package, isolated CLI, and MCP before performing a rollback-protected global installation. It does not edit Codex configuration or create a project index.
 
-After installing the CLI, explicitly create an index in the repository where you want to use it:
+## Quick start
+
+Explicitly create an index in the repository you want to query:
 
 ```powershell
 cd C:\path\to\project
 SymbolLattice init .
+
+SymbolLattice status .
+SymbolLattice find createOrder --project . --json
+SymbolLattice explore "Trace createOrder to persistence" --project . --json
+```
+
+Explicitly synchronize after files change:
+
+```powershell
+SymbolLattice sync .
 ```
 
 ## Install for Codex
 
-The Codex installer also previews its plan by default and does not write anything:
+Codex setup is preview-only by default:
 
-```bash
+```powershell
 SymbolLattice install codex
 SymbolLattice install codex --apply --yes
 SymbolLattice doctor codex
 ```
 
-It jointly manages the `mcp_servers.SymbolLattice` table in global `~/.codex/config.toml` and the section bounded by `SYMBOL_LATTICE_START` / `SYMBOL_LATTICE_END` in global `~/.codex/AGENTS.md`. Existing files receive full backups before modification; if either file fails preflight or writing, installation stops or rolls back attempted changes.
+It manages only `mcp_servers.SymbolLattice` in global `~/.codex/config.toml` and the section bounded by `SYMBOL_LATTICE_START` / `SYMBOL_LATTICE_END` in global `~/.codex/AGENTS.md`. Existing files are backed up before writing. It never creates or deletes a project index automatically.
 
-Removal is also preview-first and removes only SymbolLattice-owned content:
+Restart Codex or open a new task after setup. Removal is also preview-first:
 
-```bash
+```powershell
 SymbolLattice uninstall codex
 SymbolLattice uninstall codex --apply --yes
 ```
-
-The installer never creates or deletes a project index automatically. Restart Codex or open a new task after installation so the new MCP configuration is loaded.
-
-## Upgrading from v0.420.0 or earlier
-
-v0.437.0 does not provide aliases for the old names and does not read the old index. Use this order:
-
-```bash
-# Remove the old Codex MCP configuration while the old CLI is still available
-symbol-lattice uninstall codex --apply --yes
-
-# Remove the old npm package, then use "Install the CLI from GitHub" above
-npm uninstall -g @hsinpu/symbol-lattice
-
-# Install the new Codex configuration and create a new index in each project
-SymbolLattice install codex --apply --yes
-cd /path/to/project
-SymbolLattice init .
-SymbolLattice doctor codex
-```
-
-| Previous surface | v0.437.0 |
-| --- | --- |
-| npm package | `@hsinpu/symbollattice` |
-| CLI | `SymbolLattice` |
-| Codex MCP entry | `mcp_servers.SymbolLattice` |
-| MCP tools | `SymbolLattice_*` |
-| Project index | `.SymbolLattice` |
-
-If the old CLI is no longer available, remove the old MCP table from `~/.codex/config.toml` manually before running the new installer. The old `.symbol-lattice` directory is never deleted automatically; retain it for rollback until the new `.SymbolLattice` queries are verified, then clean it up manually.
-
-## MCP
-
-```bash
-node dist/cli/main.js serve --mcp --project /path/to/project
-
-# Disable background index updates completely
-node dist/cli/main.js serve --mcp --project /path/to/project --no-auto-sync
-```
-
-MCP queries do not directly run `init` or `sync`. Use the CLI's `init`, `sync`, or `watch` when you need to control indexing.
 
 ## Common commands
 
 | Command | Purpose |
 | --- | --- |
-| `init` / `sync` | Build or explicitly refresh a project graph. |
-| `status` | Inspect generation and freshness. |
+| `init` / `sync` | Build or explicitly refresh a code graph. |
+| `status` / `history` / `diff` | Inspect freshness and generation changes. |
 | `files` / `file` | List or read persisted source. |
-| `find` / `node` | Find and inspect a symbol. |
-| `callers` / `callees` | Query static call relationships. |
-| `routes` / `entrypoints` | Inspect framework routes and entry points. |
-| `impact` / `affected` | Run bounded impact analysis. |
-| `context` / `explore` | Retrieve agent-ready code context. |
+| `find` / `node` / `search` | Find and inspect symbols or source. |
+| `callers` / `callees` / `hierarchy` | Query static relationships. |
+| `routes` / `entrypoints` | Inspect framework entry points. |
+| `impact` / `affected` / `git-hunks` | Assess change impact. |
+| `context` / `explore` / `investigate` | Retrieve source-backed agent context. |
 | `explain-edge` | Inspect the complete evidence for one edge. |
+| `serve --mcp` | Start the MCP stdio server. |
 
-Run `node dist/cli/main.js <command> --help` for all options.
+Run `SymbolLattice <command> --help` for complete options.
+
+## MCP and synchronization
+
+```powershell
+SymbolLattice serve --mcp --project C:\path\to\project
+
+# Disable background index updates
+SymbolLattice serve --mcp --project C:\path\to\project --no-auto-sync
+```
+
+MCP query handlers do not directly execute `init`. Index creation, manual synchronization, and watcher lifecycle remain explicit CLI operations.
 
 ## Limits
 
-SymbolLattice is a static code graph and code-intelligence tool. It is not a complete compiler, type checker, runtime tracer, RDF ontology, or general reasoning engine. Dynamic dispatch, reflection, macros, code generation, dependency injection, and external package types may remain unresolved.
+SymbolLattice is a static code-graph and code-intelligence tool. It is not a complete compiler, type checker, runtime tracer, RDF ontology, or general reasoning engine. Dynamic dispatch, reflection, macros, code generation, dependency injection, metaprogramming, and external package types may remain unresolved or pending, or be omitted.
 
-## Verification
+## Upgrading from v0.420.0 or earlier
+
+Legacy names and indexes are not migrated or deleted automatically. Keep rollback copies, then use this order:
+
+```powershell
+symbol-lattice uninstall codex --apply --yes
+npm uninstall -g @hsinpu/symbol-lattice
+
+# Install the new CLI with the fixed-ref GitHub flow above
+SymbolLattice install codex --apply --yes
+cd C:\path\to\project
+SymbolLattice init .
+```
+
+Remove old state only after the new CLI, Codex MCP entry, and `.SymbolLattice` index are verified.
+
+## Development and verification
 
 ```bash
+git clone https://github.com/HsinPu/SymbolLattice.git
+cd SymbolLattice
+npm ci
 npm run check
 npm test
 npm run build

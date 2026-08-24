@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   createSourceInstallPlan,
   executeSourceInstallStage2
-} from "../../scripts/github-source-install.mjs";
+} from "../../scripts/install/github-source-install.mjs";
 
 const COMMIT = "0123456789abcdef0123456789abcdef01234567";
 const VERSION = "0.421.0";
@@ -260,13 +260,16 @@ describe("GitHub source installation Stage 2 execution", () => {
     expect(fixture.calls.some((call) => call.step === "install-dependencies")).toBe(false);
   });
 
-  it("rejects a pack manifest with source leakage before isolated installation", async () => {
-    const fixture = await executionFixture({ packFiles: [...REQUIRED_PACKAGE_FILES, "src/private.ts"] });
+  it.each(["src/private.ts", "benchmarks/r/correctness-oracle.mjs"])(
+    "rejects a pack manifest with source leakage before isolated installation: %s",
+    async (leakedPath) => {
+      const fixture = await executionFixture({ packFiles: [...REQUIRED_PACKAGE_FILES, leakedPath] });
 
-    await expect(executeSourceInstallStage2(fixture.plan, fixture.dependencies)).rejects.toMatchObject({
-      name: "SourceInstallStage2Error",
-      step: "pack"
-    });
-    expect(fixture.calls.some((call) => call.step === "isolated-install")).toBe(false);
-  });
+      await expect(executeSourceInstallStage2(fixture.plan, fixture.dependencies)).rejects.toMatchObject({
+        name: "SourceInstallStage2Error",
+        step: "pack"
+      });
+      expect(fixture.calls.some((call) => call.step === "isolated-install")).toBe(false);
+    }
+  );
 });
