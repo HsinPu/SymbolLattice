@@ -30,6 +30,7 @@ describe("public SymbolLattice installation documentation", () => {
       expect(primary).toContain("-Apply -Yes");
       expect(primary).toContain("SymbolLattice install codex --apply --yes");
       expect(primary).toContain("SymbolLattice doctor codex");
+      expect(primary).toContain("dist/cli/main.js");
       expect(primary).toContain("SymbolLattice init .");
       expect(primary).toContain("monorepo");
       expect(primary).toContain("workspace");

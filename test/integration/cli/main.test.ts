@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
@@ -3291,7 +3291,10 @@ describe("SymbolLattice v0.10 foreground watch CLI", () => {
         resolveClosed?.();
       }
     };
-    const service = { assertSafeProjectPath(): void {} } as unknown as SymbolLatticeService;
+    const service = {
+      assertSafeProjectPath(): void {},
+      async getStatus(): Promise<SearchResult["status"]> { return resultStatus(); }
+    } as unknown as SymbolLatticeService;
     const running = runMcpWithAutoSync(
       service,
       {
@@ -3338,6 +3341,60 @@ describe("SymbolLattice v0.10 foreground watch CLI", () => {
     expect(hostRecords).toEqual([
       expect.objectContaining({ kind: "mcp-auto-sync", pid: process.pid, version: SYMBOL_LATTICE_VERSION })
     ]);
+  });
+
+  it("starts the installed MCP host without a watcher when its runtime cwd has no index", async () => {
+    const projectPath = "C:/workspace-container";
+    const getStatus = vi.fn(async (): Promise<SearchResult["status"]> => ({
+      ...resultStatus(),
+      initialized: false,
+      projectPath,
+      indexedAt: null,
+      generationId: null,
+      counts: { files: 0, symbols: 0, edges: 0, pendingReferences: 0 }
+    }));
+    const assertSafeProjectPath = vi.fn();
+    const watchStarter = vi.fn(async (): Promise<ForegroundWatchSession> => {
+      throw new Error("a host without a default index must not start a watcher");
+    });
+    const ownerLeaseFactory = vi.fn<McpAutoSyncOwnerLeaseFactory>(() => {
+      throw new Error("a host without a default index must not acquire an owner lease");
+    });
+    const journal: AutoSyncDiagnosticJournal = {
+      append: vi.fn(),
+      diagnostics: vi.fn(() => autoSyncJournalResult())
+    };
+    const journalFactory = vi.fn<McpAutoSyncJournalFactory>(() => journal);
+    const mcpSession: McpServerSession = {
+      closed: Promise.resolve(),
+      async close(): Promise<void> {}
+    };
+    let observed: AutoSyncDiagnosticsResult | null = null;
+
+    await runMcpWithAutoSync(
+      { assertSafeProjectPath, getStatus } as unknown as SymbolLatticeService,
+      { projectPath },
+      async (receivedService, defaultProjectPath): Promise<McpServerSession> => {
+        expect(defaultProjectPath).toBe(projectPath);
+        observed = await (receivedService as SymbolLatticeService & {
+          autoSyncDiagnostics(): Promise<AutoSyncDiagnosticsResult>;
+        }).autoSyncDiagnostics();
+        return mcpSession;
+      },
+      watchStarter,
+      journalFactory,
+      ownerLeaseFactory
+    );
+
+    expect(getStatus).toHaveBeenCalledWith(projectPath);
+    expect(journalFactory).toHaveBeenCalledWith(projectPath, false);
+    expect(assertSafeProjectPath).not.toHaveBeenCalled();
+    expect(ownerLeaseFactory).not.toHaveBeenCalled();
+    expect(watchStarter).not.toHaveBeenCalled();
+    expect(observed).toMatchObject({
+      index: { status: { initialized: false, projectPath }, error: null },
+      autoSync: { enabled: false, state: "disabled", watcherMode: "disabled" }
+    });
   });
 
   it("feeds watcher receipts into the MCP host's read-only auto-sync status", async () => {
@@ -3654,7 +3711,10 @@ describe("SymbolLattice v0.10 foreground watch CLI", () => {
 
     await expect(
       runMcpWithAutoSync(
-        { assertSafeProjectPath } as unknown as SymbolLatticeService,
+        {
+          assertSafeProjectPath,
+          async getStatus(): Promise<SearchResult["status"]> { return resultStatus(); }
+        } as unknown as SymbolLatticeService,
         { projectPath: "C:/broad-project", force: false },
         serverRunner,
         watchStarter,
@@ -4100,7 +4160,13 @@ describe("SymbolLattice v0.10 foreground watch CLI", () => {
     );
     const doctor = JSON.parse(String(write.mock.calls.at(-1)?.[0]));
     expect(doctor).toMatchObject({ mode: "read-only", target: "codex" });
-    expect(doctor.expected.server.args).toEqual(["serve", "--mcp"]);
+    expect(doctor.expected.server.command).toBe(process.execPath);
+    expect(doctor.expected.server.args).toEqual([
+      expect.stringMatching(/[\\/]src[\\/]cli[\\/]main\.ts$/u),
+      "serve",
+      "--mcp"
+    ]);
+    expect(isAbsolute(doctor.expected.server.args[0])).toBe(true);
     expect(doctor.instructions).toMatchObject({ action: "create" });
 
     await createProgram({} as SymbolLatticeService).parseAsync(

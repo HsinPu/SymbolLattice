@@ -932,10 +932,7 @@ async function runStdioMcpSmoke({ entryPath, projectPath }) {
   const child = spawn(process.execPath, [
     entryPath,
     "serve",
-    "--mcp",
-    "--no-auto-sync",
-    "--project",
-    projectPath
+    "--mcp"
   ], {
     cwd: projectPath,
     env: { ...process.env, NO_COLOR: "1" },

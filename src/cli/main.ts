@@ -480,7 +480,7 @@ function requireSimplifiedCodexTarget(target: string): "codex" {
 
 function createSimplifiedCodexMcpOptions(options: McpConfigCommandOptions): McpConfigOptions {
   return {
-    ...createMcpCommandOptions(options),
+    ...createMcpCommandOptions({ ...options, source: true }),
     projectBinding: "runtime-working-directory"
   };
 }
@@ -1048,7 +1048,16 @@ export async function runMcpWithAutoSync(
   stopControlFactory: AutoSyncStopControlFactory = (projectPath, registry) =>
     new FileSystemAutoSyncStopControl(projectPath, registry, { version: SYMBOL_LATTICE_VERSION })
 ): Promise<void> {
-  const autoSyncEnabled = options.autoSync ?? true;
+  const autoSyncRequested = options.autoSync ?? true;
+  let defaultProjectMissing = false;
+  if (autoSyncRequested) {
+    try {
+      defaultProjectMissing = !(await service.getStatus(options.projectPath)).initialized;
+    } catch {
+      // Preserve the existing watcher retry path for temporarily unreadable indexes.
+    }
+  }
+  const autoSyncEnabled = autoSyncRequested && !defaultProjectMissing;
   const journalWritable = autoSyncEnabled && (options.diagnosticJournal ?? true);
   const journal = journalFactory(options.projectPath, journalWritable);
   const hostId = randomUUID();
