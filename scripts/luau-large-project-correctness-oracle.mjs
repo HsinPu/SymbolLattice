@@ -16,7 +16,7 @@ export const LUAU_POSITIVE_QUOTAS = Object.freeze({
   typeIdentity: 80
 });
 
-const IGNORED_DIRECTORIES = new Set([".git", ".SymbolLattice", ".codegraph", "node_modules"]);
+const IGNORED_DIRECTORIES = new Set([".git", ".SymbolLattice", "node_modules"]);
 
 function slash(value) {
   return value.replaceAll("\\", "/");

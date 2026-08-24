@@ -8,7 +8,7 @@ import { ARTIFACT_FACTS_EXTRACTOR_VERSION, PROJECT_RESOLVER_VERSION } from "../d
 import { SYMBOL_LATTICE_VERSION } from "../dist/version.js";
 
 export const R_POSITIVE_QUOTAS = Object.freeze({ identity: 170, containment: 170, typeIdentity: 60 });
-const IGNORED_DIRECTORIES = new Set([".git", ".SymbolLattice", ".codegraph", "node_modules"]);
+const IGNORED_DIRECTORIES = new Set([".git", ".SymbolLattice", "node_modules"]);
 
 function slash(value) { return value.replaceAll("\\", "/"); }
 function stableHash(value) { return createHash("sha256").update(value).digest("hex"); }

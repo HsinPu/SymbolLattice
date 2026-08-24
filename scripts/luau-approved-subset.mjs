@@ -28,7 +28,7 @@ async function sourceEvidence(corpus) {
 async function walk(directory) {
   const files = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
-    if ([".git", ".SymbolLattice", ".codegraph", "node_modules"].includes(entry.name)) continue;
+    if ([".git", ".SymbolLattice", "node_modules"].includes(entry.name)) continue;
     const path = join(directory, entry.name);
     if (entry.isDirectory()) files.push(...await walk(path));
     else if (entry.isFile() && entry.name.endsWith(".luau")) files.push(path);

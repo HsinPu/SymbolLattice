@@ -21,7 +21,7 @@ export const JAVASCRIPT_POSITIVE_QUOTAS = Object.freeze({
 });
 
 const JAVASCRIPT_EXTENSIONS = new Set([".js", ".mjs", ".jsx", ".cjs"]);
-const IGNORED_DIRECTORIES = new Set([".git", ".SymbolLattice", ".codegraph", "node_modules"]);
+const IGNORED_DIRECTORIES = new Set([".git", ".SymbolLattice", "node_modules"]);
 
 function slash(path) {
   return path.replaceAll("\\", "/");
