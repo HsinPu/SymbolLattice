@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
+import { AUTOMATIC_PROJECT_INDEX_GUIDANCE } from "../agent-guidance.js";
 import { SYMBOL_LATTICE_VERSION } from "../version.js";
 
 export const CODEX_INSTRUCTIONS_START = "<!-- SYMBOL_LATTICE_START -->";
@@ -14,14 +15,14 @@ Guidance version: \`${SYMBOL_LATTICE_VERSION}\`
 
 - This installer-managed guidance was generated for SymbolLattice \`${SYMBOL_LATTICE_VERSION}\`. Before relying on version-sensitive behavior, run \`SymbolLattice --version\`; the runtime result is authoritative. If it differs, report the mismatch and refresh the Codex installation.
 - Treat a repository as queryable only when its root contains \`.SymbolLattice/index.sqlite\`. A \`.SymbolLattice\` directory by itself may contain only backups or diagnostics and does not prove that an index exists.
-- Never run \`init\`, \`index\`, or \`sync\`, and never create or rebuild an index, unless the user explicitly requests it.
+${AUTOMATIC_PROJECT_INDEX_GUIDANCE}
 
 ### Query routing
 
 - Use the \`SymbolLattice_explore\` MCP tool before grep, find, or broad file reads when locating or understanding code.
 - Use the narrowest follow-up tool that fits the question: \`SymbolLattice_node\`, \`SymbolLattice_file\`, or \`SymbolLattice_context\` for exact source context; \`SymbolLattice_impact\`, \`SymbolLattice_affected\`, or \`SymbolLattice_git_hunks\` for change impact; and \`SymbolLattice_history\` or \`SymbolLattice_diff\` for generation history.
 - If MCP is unavailable, use the equivalent \`SymbolLattice\` CLI command from the repository root.
-- If the index is missing, stale, incompatible, or the query returns no relevant evidence, say so briefly and fall back to targeted \`rg\` and direct file reads. Do not create or refresh the index as a side effect.
+- If an existing index is stale, incompatible, or the query returns no relevant evidence, say so briefly and fall back to targeted \`rg\` and direct file reads. A missing index follows the automatic initialization policy above.
 
 ### Evidence and safety
 

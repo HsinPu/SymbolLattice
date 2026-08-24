@@ -139,6 +139,27 @@ describe("MCP doctor", () => {
     expect(Object.hasOwn(virtual.files, join(projectPath, ".mcp.json"))).toBe(false);
   });
 
+  it("explains that installed guidance automatically initializes a recognized repository", () => {
+    const projectPath = join("C:", "workspace", "missing-index");
+    const homeDirectory = join("C:", "home", "user");
+    const files = {
+      [join("C:", "tools", "SymbolLattice.CMD")]: "@echo off",
+      [join(projectPath, ".mcp.json")]: standardJson(projectPath)
+    };
+    const virtual = createVirtualFiles(files);
+
+    const result = createMcpDoctor(
+      "claude",
+      { projectPath },
+      doctorDependencies(virtual.fileSystem, homeDirectory)
+    );
+
+    expect(result.project.indexStatus).toBe("missing");
+    expect(result.notes).toContain(
+      "No project index database exists yet; installed agent guidance directs code-capable agents to run init automatically when they begin code work in this recognized software repository."
+    );
+  });
+
   it("distinguishes invalid JSON from a parsed but different server entry", () => {
     const projectPath = join("C:", "workspace", "invalid-json");
     const homeDirectory = join("C:", "home", "user");

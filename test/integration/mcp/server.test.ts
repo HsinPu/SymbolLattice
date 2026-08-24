@@ -1312,6 +1312,26 @@ function explainEdgeResult(): ExplainEdgeResult {
 }
 
 describe("SymbolLattice MCP server", () => {
+  it("delivers automatic project-index activation guidance during MCP initialization", async () => {
+    const server = createMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        }
+      },
+      "C:/default-project"
+    );
+    const client = new Client({ name: "SymbolLattice-instructions-test", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    expect(client.getInstructions()).toContain("run `SymbolLattice status . --json`");
+    expect(client.getInstructions()).toContain("run `SymbolLattice init .` automatically");
+    expect(client.getInstructions()).toContain("Never initialize a filesystem root, home directory, Desktop root");
+  });
+
   it("owns a close-aware stdio session and releases its parent-input listeners", async () => {
     const [serverTransport] = InMemoryTransport.createLinkedPair();
     const lifecycleInput = new FakeLifecycleInput();

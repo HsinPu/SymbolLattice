@@ -102,7 +102,7 @@ SymbolLattice install codex --apply --yes
 SymbolLattice doctor codex
 ```
 
-It manages only `mcp_servers.SymbolLattice` in global `~/.codex/config.toml` and the section bounded by `SYMBOL_LATTICE_START` / `SYMBOL_LATTICE_END` in global `~/.codex/AGENTS.md`. Existing files are backed up before writing. It never creates or deletes a project index automatically.
+It manages only `mcp_servers.SymbolLattice` in global `~/.codex/config.toml` and the section bounded by `SYMBOL_LATTICE_START` / `SYMBOL_LATTICE_END` in global `~/.codex/AGENTS.md`. Existing files are backed up before writing. Setup itself does not immediately create or delete a project index. After setup, when an agent recognizes a software repository and the task requires understanding or changing code, the guidance tells it to run `SymbolLattice init .` automatically from the repository root if the index is missing. Filesystem roots, home directories, Desktop roots, temporary directories, and dependency directories are never initialized automatically.
 
 Restart Codex or open a new task after setup. Removal is also preview-first:
 
@@ -137,7 +137,7 @@ SymbolLattice serve --mcp --project C:\path\to\project
 SymbolLattice serve --mcp --project C:\path\to\project --no-auto-sync
 ```
 
-MCP query handlers do not directly execute `init`. Index creation, manual synchronization, and watcher lifecycle remain explicit CLI operations.
+MCP query handlers do not directly execute `init`. MCP initialize instructions and the Codex-managed guidance tell shell-capable agents to invoke the CLI automatically when the safety conditions are met and the index is missing. Index writes, manual synchronization, and watcher lifecycle remain CLI-controlled operations.
 
 ## Limits
 

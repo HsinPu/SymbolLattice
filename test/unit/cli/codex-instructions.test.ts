@@ -28,7 +28,10 @@ describe("Codex instruction ownership", () => {
   it("generates one complete versioned operational guidance block", () => {
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain(`Guidance version: \`${SYMBOL_LATTICE_VERSION}\``);
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("`.SymbolLattice/index.sqlite`");
-    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Never run `init`, `index`, or `sync`");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("run `SymbolLattice status . --json`");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("run `SymbolLattice init .` automatically");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Desktop root");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Never run `index` or rebuild an existing index");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("`SymbolLattice_explore`");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("`SymbolLattice_node`");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("`SymbolLattice_impact`");

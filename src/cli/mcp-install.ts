@@ -332,7 +332,9 @@ function buildInstallNotes(mode: McpInstallMode, plan: InstallPlan, didWrite: bo
     notes.push("The configuration can be installed, but the configured MCP command is not currently available through its explicit path or PATH.");
   }
   if (plan.diagnosis.project.indexStatus === "missing") {
-    notes.push("The MCP entry is independent of graph creation; run init or sync explicitly before querying this project.");
+    notes.push(
+      "The MCP entry does not create a graph during installation; installed agent guidance directs code-capable agents to run init automatically when they begin code work in a recognized software repository."
+    );
   }
   return notes;
 }

@@ -98,6 +98,25 @@ describe("MCP preview-first installer", () => {
     }
   });
 
+  it("explains deferred automatic initialization when the project index is missing", () => {
+    const projectPath = join("C:", "workspace", "missing-index");
+    const homeDirectory = join("C:", "home", "user");
+    const virtual = createVirtualFiles({
+      [join("C:", "tools", "SymbolLattice.CMD")]: "@echo off"
+    });
+
+    const result = createMcpInstall(
+      "claude",
+      { projectPath },
+      installDependencies(virtual.fileSystem, homeDirectory)
+    );
+
+    expect(result.prerequisites.project.indexStatus).toBe("missing");
+    expect(result.notes).toContain(
+      "The MCP entry does not create a graph during installation; installed agent guidance directs code-capable agents to run init automatically when they begin code work in a recognized software repository."
+    );
+  });
+
   it("previews a Claude update without reading unrelated values into its result or writing files", () => {
     const projectPath = join("C:", "workspace", "preview");
     const homeDirectory = join("C:", "home", "user");

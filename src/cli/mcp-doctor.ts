@@ -822,7 +822,9 @@ function buildNotes(
     notes.push("The source-built CLI entrypoint recorded by --source no longer exists.");
   }
   if (indexStatus === "missing") {
-    notes.push("No project index database exists yet; run init or sync explicitly before querying this project.");
+    notes.push(
+      "No project index database exists yet; installed agent guidance directs code-capable agents to run init automatically when they begin code work in this recognized software repository."
+    );
   }
   return notes;
 }

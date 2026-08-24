@@ -3,6 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { z } from "zod";
 
+import { SYMBOL_LATTICE_MCP_INSTRUCTIONS } from "../agent-guidance.js";
 import { SymbolLatticeError } from "../application/errors.js";
 import {
   INVESTIGATION_SOURCE_ALLOCATION_POLICY,
@@ -3150,7 +3151,10 @@ export function createMcpServer(
   defaultProjectPath: string,
   options: CreateMcpServerOptions = {}
 ): McpServer {
-  const server = new McpServer({ name: "SymbolLattice", version: SYMBOL_LATTICE_VERSION });
+  const server = new McpServer(
+    { name: "SymbolLattice", version: SYMBOL_LATTICE_VERSION },
+    { instructions: SYMBOL_LATTICE_MCP_INSTRUCTIONS }
+  );
   const readQueryExecutor = options.readQueryExecutor;
   const investigateSourceSession = new McpInvestigateSourceSession({
     maximumProjects: MCP_INVESTIGATE_SOURCE_SESSION_LIMITS.maximumProjects,
