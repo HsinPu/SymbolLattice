@@ -1329,6 +1329,10 @@ describe("SymbolLattice MCP server", () => {
 
     expect(client.getInstructions()).toContain("run `SymbolLattice status . --json`");
     expect(client.getInstructions()).toContain("run `SymbolLattice init .` automatically");
+    expect(client.getInstructions()).toContain("one outer `.git` root is a monorepo");
+    expect(client.getInstructions()).toContain("initialize each relevant repository separately");
+    expect(client.getInstructions()).toContain("pass its own `projectPath`");
+    expect(client.getInstructions()).toContain("Do not infer cross-repository edges");
     expect(client.getInstructions()).toContain("Never initialize a filesystem root, home directory, Desktop root");
   });
 

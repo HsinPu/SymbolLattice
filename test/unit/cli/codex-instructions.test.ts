@@ -30,6 +30,11 @@ describe("Codex instruction ownership", () => {
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("`.SymbolLattice/index.sqlite`");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("run `SymbolLattice status . --json`");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("run `SymbolLattice init .` automatically");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("one outer `.git` root is a monorepo");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("workspace container");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("initialize each relevant repository separately");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("pass its own `projectPath`");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Do not infer cross-repository edges");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Desktop root");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Never run `index` or rebuild an existing index");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("`SymbolLattice_explore`");
