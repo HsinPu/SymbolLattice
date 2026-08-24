@@ -622,6 +622,120 @@ describe("source extraction", () => {
     expect(malformed.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
   });
 
+  it("uses the clean modern Java parse for declaration identity without enabling recovered relations", () => {
+    const facts = extractFileFacts({
+      filePath: "src/ModernDeclarations.java",
+      language: "java",
+      sourceText: [
+        "@interface Marker { String value(); }",
+        "enum State {",
+        "  ON;",
+        "  int code() { return 1; }",
+        "}",
+        "class ModernDeclarations {",
+        "  Class<?> type() { return String.class; }",
+        "  void compare(Object to) { accept(to, Object.class); }",
+        "}"
+      ].join("\r\n")
+    });
+
+    expect(
+      facts.symbols
+        .filter((symbol) => ["class", "interface", "method"].includes(symbol.kind))
+        .map((symbol) => [symbol.kind, symbol.name])
+    ).toEqual([
+      ["interface", "Marker"],
+      ["method", "value"],
+      ["class", "State"],
+      ["method", "code"],
+      ["class", "ModernDeclarations"],
+      ["method", "type"],
+      ["method", "compare"]
+    ]);
+    expect(facts.edges.filter((edge) => edge.kind === "calls")).toEqual([]);
+  });
+
+  it("projects syntax-proven named nested and local Java declarations but not anonymous members", () => {
+    const facts = extractFileFacts({
+      filePath: "src/NestedDeclarations.java",
+      language: "java",
+      sourceText: [
+        "class NestedDeclarations {",
+        "  interface Port { void run(); }",
+        "  enum State { ON; int code() { return 1; } }",
+        "  record Pair(int left, int right) { int sum() { return left + right; } }",
+        "  @interface Tag { String value(); }",
+        "  void entry() {",
+        "    class Local { void act() {} }",
+        "    Runnable ignored = new Runnable() {",
+        "      class NamedInsideAnonymous { void nested() {} }",
+        "      public void run() {}",
+        "    };",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+
+    expect(
+      facts.symbols
+        .filter((symbol) => ["class", "interface", "method"].includes(symbol.kind))
+        .map((symbol) => [symbol.kind, symbol.name])
+    ).toEqual([
+      ["class", "NestedDeclarations"],
+      ["interface", "Port"],
+      ["method", "run"],
+      ["class", "State"],
+      ["method", "code"],
+      ["class", "Pair"],
+      ["method", "sum"],
+      ["interface", "Tag"],
+      ["method", "value"],
+      ["method", "entry"],
+      ["class", "Local"],
+      ["method", "act"],
+      ["class", "NamedInsideAnonymous"],
+      ["method", "nested"]
+    ]);
+  });
+
+  it("uses bounded Java record-pattern compatibility only for declaration projection", () => {
+    const facts = extractFileFacts({
+      filePath: "src/RecordPatternHost.java",
+      language: "java",
+      sourceText: [
+        "interface Cache { record Some(int number) {} }",
+        "class RecordPatternHost {",
+        "  int resolve(Object value) {",
+        "    if (value instanceof Cache.Some(int number)) return number;",
+        "    return 0;",
+        "  }",
+        "  interface Nested { void run(); }",
+        "}"
+      ].join("\n")
+    });
+
+    expect(
+      facts.symbols
+        .filter((symbol) => ["class", "interface", "method"].includes(symbol.kind))
+        .map((symbol) => [symbol.kind, symbol.name])
+    ).toEqual(expect.arrayContaining([
+      ["interface", "Cache"],
+      ["class", "Some"],
+      ["class", "RecordPatternHost"],
+      ["method", "resolve"],
+      ["interface", "Nested"],
+      ["method", "run"]
+    ]));
+    expect(facts.edges.filter((edge) => edge.kind === "calls")).toEqual([]);
+
+    const malformed = extractFileFacts({
+      filePath: "src/MalformedRecordPattern.java",
+      language: "java",
+      sourceText: "class MalformedRecordPattern { boolean test(Object value) { return value instanceof Some(int); } }"
+    });
+    expect(malformed.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
+  });
+
   it("extracts exact same-file Java and Kotlin interface hierarchy evidence", () => {
     const java = extractFileFacts({
       filePath: "src/java-interfaces.java",
@@ -10620,7 +10734,7 @@ describe("source extraction", () => {
     ).toEqual([[], [], [], []]);
   });
 
-  it("retains unaffected Java class facts while excluding nested record components", () => {
+  it("retains nested Java record identity while excluding unsupported nested record components", () => {
     const facts = extractFileFacts({
       filePath: "src/config/Host.java",
       language: "java",
@@ -10637,7 +10751,8 @@ describe("source extraction", () => {
     const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
 
     expect(facts.symbols.filter((symbol) => symbol.kind === "class").map((symbol) => symbol.name)).toEqual([
-      "Host"
+      "Host",
+      "NestedRecord"
     ]);
     expect(facts.symbols.filter((symbol) => symbol.kind === "method")).toEqual([]);
     expect(
@@ -10743,7 +10858,7 @@ describe("source extraction", () => {
     ).toEqual([[], [], [], [], []]);
   });
 
-  it("retains unaffected Java class @ConfigurationProperties facts while excluding nested records", () => {
+  it("retains nested Java record identity without projecting unsupported nested properties", () => {
     const facts = extractFileFacts({
       filePath: "src/config/HostProperties.java",
       language: "java",
@@ -10760,7 +10875,8 @@ describe("source extraction", () => {
     const symbolsById = new Map(facts.symbols.map((symbol) => [symbol.id, symbol]));
 
     expect(facts.symbols.filter((symbol) => symbol.kind === "class").map((symbol) => symbol.name)).toEqual([
-      "HostProperties"
+      "HostProperties",
+      "NestedProperties"
     ]);
     expect(
       facts.springBootPropertiesFacts?.configurationPropertiesPrefixes.map(

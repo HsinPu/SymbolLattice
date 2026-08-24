@@ -30,6 +30,7 @@ import {
 } from "../domain/index.js";
 import { parse as parseAstGrep, type SgNode } from "./ast-grep-languages.js";
 import { frameworkCapability } from "./framework-capabilities.js";
+import { inspectModernJavaDeclarations } from "./java-modern-declarations.js";
 import { inspectJavaRecords, type StaticJavaRecord } from "./java-records.js";
 
 export interface JavaExtractFileFactsInput {
@@ -6291,6 +6292,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   const root = parser.parse(input.sourceText).topNode;
   const instanceofAndPatternInspection = inspectJavaInstanceofAndPatterns(input);
   const recordInspection = inspectJavaRecords({ sourceText: input.sourceText });
+  const modernDeclarationInspection = inspectModernJavaDeclarations(input.sourceText);
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
@@ -7174,6 +7176,55 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
           range: rangeFor(lineStarts, referenceRange.start.index, referenceRange.end.index)
         });
       }
+    }
+  }
+
+  if (modernDeclarationInspection.isSyntaxClean) {
+    const projectedSymbols = new Map<number, SymbolNode>();
+    for (const [index, declaration] of modernDeclarationInspection.declarations.entries()) {
+      const parent = declaration.parentIndex === null
+        ? fileNode
+        : projectedSymbols.get(declaration.parentIndex);
+      if (parent === undefined) {
+        continue;
+      }
+      const declarationRange = rangeFor(lineStarts, declaration.range.start, declaration.range.end);
+      let symbol = symbols.find(
+        (symbol) =>
+          symbol.kind === declaration.kind &&
+          symbol.name === declaration.name &&
+          symbol.range.start.line === declarationRange.start.line
+      );
+      if (symbol === undefined) {
+        const qualifiedName = parent.kind === "file"
+          ? `${input.filePath}#${declaration.name}`
+          : `${parent.qualifiedName}.${declaration.name}`;
+        const declarationOrdinal = nextOrdinal(qualifiedName, declaration.kind);
+        symbol = {
+          id: createSymbolId({
+            filePath: input.filePath,
+            qualifiedName,
+            kind: declaration.kind,
+            declarationOrdinal
+          }),
+          name: declaration.name,
+          qualifiedName,
+          kind: declaration.kind,
+          filePath: input.filePath,
+          range: declarationRange,
+          isExported: declaration.isExported,
+          declarationOrdinal
+        };
+        symbols.push(symbol);
+        addContainmentAtRange(parent, symbol, declarationRange);
+        if (packageName !== null && declaration.kind !== "method") {
+          if (declaration.kind === "class") {
+            javaClassFacts.push({ symbolId: symbol.id, packageName });
+          }
+          jvmTypeFacts.push({ symbolId: symbol.id, packageName });
+        }
+      }
+      projectedSymbols.set(index, symbol);
     }
   }
 
