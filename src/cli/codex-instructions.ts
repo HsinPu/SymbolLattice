@@ -11,26 +11,23 @@ export const CODEX_INSTRUCTIONS_BLOCK = `${CODEX_INSTRUCTIONS_START}
 
 Guidance version: \`${SYMBOL_LATTICE_VERSION}\`
 
-### Version and activation
+### Activation and indexing
 
-- This installer-managed guidance was generated for SymbolLattice \`${SYMBOL_LATTICE_VERSION}\`. Before relying on version-sensitive behavior, run \`SymbolLattice --version\`; the runtime result is authoritative. If it differs, report the mismatch and refresh the Codex installation.
-- Treat a repository as queryable only when its root contains \`.SymbolLattice/index.sqlite\`. A \`.SymbolLattice\` directory by itself may contain only backups or diagnostics and does not prove that an index exists.
+- Before relying on version-sensitive behavior, run \`SymbolLattice --version\`. If it differs from the guidance version, report the mismatch and refresh the Codex installation.
+- A repository is queryable only when its resolved root contains \`.SymbolLattice/index.sqlite\`. A \`.SymbolLattice\` directory alone does not prove that an index exists.
 ${AUTOMATIC_PROJECT_INDEX_GUIDANCE}
 
 ### Query routing
 
 - Use \`SymbolLattice_explore\` before Read, Grep, or broad file reads for any task that locates, explains, reads, or changes indexed code. Include the question plus relevant file or symbol names when known.
-- Treat source returned by explore as already read. Do not repeat the same discovery with grep or delegate it to a file-reading sub-agent; call explore again with a more specific query when more indexed detail is needed.
-- The default MCP surface intentionally exposes only \`SymbolLattice_explore\`. Optional specialist tools remain available through \`SYMBOL_LATTICE_MCP_TOOLS\`; use them only when the client actually lists them.
-- If MCP is unavailable, use the equivalent \`SymbolLattice\` CLI command from the repository root.
-- If an existing index is stale while MCP auto-sync is active, allow one bounded catch-up and retry explore once. If it remains stale, is incompatible, or returns no relevant evidence, say so briefly and fall back to targeted \`rg\` and direct file reads. A missing index follows the automatic initialization policy above.
+- Treat source returned by explore as already read. Do not repeat the same discovery with filesystem tools; refine the explore query when more indexed detail is needed.
+- Use optional specialist tools only when the client lists them. If MCP is unavailable, use the equivalent \`SymbolLattice\` CLI command from the repository root.
 
 ### Evidence and safety
 
-- Treat exact symbols, source ranges, and edges as evidence. Treat pending, unresolved, ambiguous, truncated, or low-confidence results as incomplete rather than established facts.
+- Treat exact symbols, source ranges, and edges as evidence. Treat pending, unresolved, ambiguous, truncated, or low-confidence results as incomplete.
 - When graph evidence conflicts with the current working tree, verify the current files directly and state the mismatch.
 - Do not edit files inside \`.SymbolLattice\` manually. Treat the directory as generated local state and do not commit it unless repository policy explicitly requires it.
-- Avoid repeated graph queries after a clear miss; switch to the smallest targeted filesystem check needed to continue.
 ${CODEX_INSTRUCTIONS_END}`;
 
 export type CodexInstructionsOperation = "install" | "uninstall";

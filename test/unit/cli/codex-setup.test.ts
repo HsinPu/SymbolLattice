@@ -68,6 +68,22 @@ function options(fileSystem: MemoryFileSystem, apply = false) {
 }
 
 describe("Codex two-file setup", () => {
+  it("writes the compact SymbolLattice guidance when both Codex files are missing", () => {
+    const fs = new MemoryFileSystem();
+    const result = createCodexInstall(options(fs, true));
+
+    expect(result).toMatchObject({
+      mode: "apply",
+      status: "applied",
+      configuration: { action: "create" },
+      instructions: { action: "create" },
+      transaction: { backups: "not-needed", writes: "completed", consistent: true }
+    });
+    expect(fs.files.get(INSTRUCTIONS)).toContain("### Activation and indexing");
+    expect(fs.files.get(INSTRUCTIONS)).toContain("run `SymbolLattice init .` automatically");
+    expect(fs.files.get(INSTRUCTIONS)).not.toContain("CodeGraph");
+  });
+
   it("previews both missing files without writing", () => {
     const fs = new MemoryFileSystem();
     const result = createCodexInstall(options(fs));

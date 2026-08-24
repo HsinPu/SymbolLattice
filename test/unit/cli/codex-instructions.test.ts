@@ -27,23 +27,25 @@ function fileSystem(files: Readonly<Record<string, string>>) {
 describe("Codex instruction ownership", () => {
   it("generates one complete versioned operational guidance block", () => {
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain(`Guidance version: \`${SYMBOL_LATTICE_VERSION}\``);
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("### Activation and indexing");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("`.SymbolLattice/index.sqlite`");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("run `SymbolLattice status . --json`");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("run `SymbolLattice init .` automatically");
-    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("one outer `.git` root is a monorepo");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("one outer `.git` repository as one monorepo");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("workspace container");
-    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("initialize each relevant repository separately");
-    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("pass its own `projectPath`");
-    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Do not infer cross-repository edges");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("every relevant repository separately with its own `projectPath`");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("without claiming cross-repository edges");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Desktop root");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Never run `index` or rebuild an existing index");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("`SymbolLattice_explore`");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("before Read, Grep, or broad file reads");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Treat source returned by explore as already read");
-    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("`SYMBOL_LATTICE_MCP_TOOLS`");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Use optional specialist tools only when the client lists them");
     expect(CODEX_INSTRUCTIONS_BLOCK).not.toContain("Prefer narrower SymbolLattice tools");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("fall back to targeted `rg` and direct file reads");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("pending, unresolved, ambiguous, truncated, or low-confidence");
+    expect(CODEX_INSTRUCTIONS_BLOCK).not.toContain("CodeGraph");
+    expect(CODEX_INSTRUCTIONS_BLOCK.length).toBeLessThan(4_000);
     expect(CODEX_INSTRUCTIONS_BLOCK).not.toContain("SYMBOL_LATTICE_PERSONAL");
   });
 

@@ -1329,10 +1329,9 @@ describe("SymbolLattice MCP server", () => {
 
     expect(client.getInstructions()).toContain("run `SymbolLattice status . --json`");
     expect(client.getInstructions()).toContain("run `SymbolLattice init .` automatically");
-    expect(client.getInstructions()).toContain("one outer `.git` root is a monorepo");
-    expect(client.getInstructions()).toContain("initialize each relevant repository separately");
-    expect(client.getInstructions()).toContain("pass its own `projectPath`");
-    expect(client.getInstructions()).toContain("Do not infer cross-repository edges");
+    expect(client.getInstructions()).toContain("one outer `.git` repository as one monorepo");
+    expect(client.getInstructions()).toContain("every relevant repository separately with its own `projectPath`");
+    expect(client.getInstructions()).toContain("without claiming cross-repository edges");
     expect(client.getInstructions()).toContain("call `SymbolLattice_explore` before Read or Grep");
     expect(client.getInstructions()).toContain("Treat source returned by explore as already read");
     expect(client.getInstructions()).toContain("Do not delegate indexed-code discovery");
