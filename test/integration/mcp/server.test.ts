@@ -1333,7 +1333,68 @@ describe("SymbolLattice MCP server", () => {
     expect(client.getInstructions()).toContain("initialize each relevant repository separately");
     expect(client.getInstructions()).toContain("pass its own `projectPath`");
     expect(client.getInstructions()).toContain("Do not infer cross-repository edges");
+    expect(client.getInstructions()).toContain("call `SymbolLattice_explore` before Read or Grep");
+    expect(client.getInstructions()).toContain("Treat source returned by explore as already read");
+    expect(client.getInstructions()).toContain("Do not delegate indexed-code discovery");
+    expect(client.getInstructions()).not.toContain("Prefer narrower SymbolLattice tools");
     expect(client.getInstructions()).toContain("Never initialize a filesystem root, home directory, Desktop root");
+  });
+
+  it("lists only explore on the default stdio host surface", async () => {
+    const serverTransportPair = InMemoryTransport.createLinkedPair();
+    const session = await startMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        },
+        async node(): Promise<NodeResult> {
+          return nodeResult();
+        },
+        async impact(): Promise<ImpactResult> {
+          return impactResult();
+        }
+      },
+      "C:/default-project",
+      { transport: serverTransportPair[0], environment: {} }
+    );
+    const client = new Client({ name: "SymbolLattice-default-tools-test", version: "1.0.0" });
+    await client.connect(serverTransportPair[1]);
+    closeCallbacks.push(() => client.close(), () => session.close());
+
+    expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual([
+      "SymbolLattice_explore"
+    ]);
+  });
+
+  it("adds explicitly allowed optional tools to the stdio host surface", async () => {
+    const serverTransportPair = InMemoryTransport.createLinkedPair();
+    const session = await startMcpServer(
+      {
+        async explore(): Promise<ExploreResult> {
+          return exploreResult();
+        },
+        async node(): Promise<NodeResult> {
+          return nodeResult();
+        },
+        async impact(): Promise<ImpactResult> {
+          return impactResult();
+        }
+      },
+      "C:/default-project",
+      {
+        transport: serverTransportPair[0],
+        environment: { SYMBOL_LATTICE_MCP_TOOLS: "node,impact" }
+      }
+    );
+    const client = new Client({ name: "SymbolLattice-opt-in-tools-test", version: "1.0.0" });
+    await client.connect(serverTransportPair[1]);
+    closeCallbacks.push(() => client.close(), () => session.close());
+
+    expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual([
+      "SymbolLattice_explore",
+      "SymbolLattice_node",
+      "SymbolLattice_impact"
+    ]);
   });
 
   it("owns a close-aware stdio session and releases its parent-input listeners", async () => {
@@ -1492,6 +1553,8 @@ describe("SymbolLattice MCP server", () => {
       "SymbolLattice_explain_edge"
     ]);
     const exploreTool = tools.tools.find((tool) => tool.name === "SymbolLattice_explore");
+    expect(exploreTool?.description).toContain("Call it before Read or Grep");
+    expect(exploreTool?.description).toContain("treat returned source as already read");
     expect(exploreTool?.outputSchema).toMatchObject({
       type: "object",
       properties: {

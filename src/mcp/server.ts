@@ -173,6 +173,11 @@ import {
   type McpReadQueryPoolStatusService
 } from "./read-query-pool.js";
 import type { McpReadToolName } from "./read-query-protocol.js";
+import {
+  SYMBOL_LATTICE_MCP_TOOLS_ENVIRONMENT_VARIABLE,
+  resolveMcpToolSelection,
+  type SymbolLatticeMcpToolName
+} from "./tool-selection.js";
 
 export interface ExploreService {
   explore(projectPath: string, reference: string): Promise<ExploreResult>;
@@ -523,6 +528,15 @@ export type QueryPoolStatusToolResponse = ReadOnlyToolResponse;
 export interface CreateMcpServerOptions {
   readonly readQueryExecutor?: McpReadQueryExecutor | undefined;
   readonly queryPoolStatusService?: QueryPoolStatusService | undefined;
+  /** Undefined preserves the complete programmatic surface; stdio hosts pass an explicit selection. */
+  readonly enabledTools?: ReadonlySet<SymbolLatticeMcpToolName> | undefined;
+}
+
+function isMcpToolEnabled(
+  enabledTools: ReadonlySet<SymbolLatticeMcpToolName> | undefined,
+  toolName: SymbolLatticeMcpToolName
+): boolean {
+  return toolName === "explore" || enabledTools === undefined || enabledTools.has(toolName);
 }
 
 function executeReadTool<TResponse extends ReadOnlyToolResponse>(
@@ -3170,7 +3184,7 @@ export function createMcpServer(
     {
       title: "Explore a SymbolLattice code graph",
       description:
-        "Explores either one exact symbol or a bounded question with named-file-first focus, exact selected connections, short exact path spines, and generation-bound source evidence. Question mode can add source-worth-weighted call-site and bridge windows inside the same 24,000-character source envelope: persisted generated evidence reduces byte worth, a bounded relative cliff preserves receipt-only visibility, exact path spines are exempt, and eligible unselected bridges may expand to whole persisted files through bounded grace or a shared buy pool. This tool reports index freshness and never creates or refreshes an index.",
+        "Primary read-equivalent code-intelligence tool. Call it before Read or Grep for code questions, architecture, flows, bug fixes, feature work, or a named file or symbol. It returns generation-bound line-numbered source, exact connections and paths, plus bounded impact context; treat returned source as already read. It reports index freshness and never creates or refreshes an index.",
       inputSchema: {
         query: z.string().trim().min(1).describe("Exact symbol reference or a bounded question containing project-relative file and identifier clues."),
         projectPath: z.string().trim().min(1).optional().describe("Optional path to an already indexed project."),
@@ -3191,7 +3205,7 @@ export function createMcpServer(
   );
 
   const queryPoolStatusService = options.queryPoolStatusService ?? null;
-  if (queryPoolStatusService !== null) {
+  if (queryPoolStatusService !== null && isMcpToolEnabled(options.enabledTools, "query_pool_status")) {
     server.registerTool(
       "SymbolLattice_query_pool_status",
       {
@@ -3210,7 +3224,7 @@ export function createMcpServer(
   }
 
   const autoSyncStatusService = supportsAutoSyncStatus(service) ? service : null;
-  if (autoSyncStatusService !== null) {
+  if (autoSyncStatusService !== null && isMcpToolEnabled(options.enabledTools, "auto_sync_status")) {
     server.registerTool(
       "SymbolLattice_auto_sync_status",
       {
@@ -3229,7 +3243,7 @@ export function createMcpServer(
   }
 
   const autoSyncDiagnosticsService = supportsAutoSyncDiagnostics(service) ? service : null;
-  if (autoSyncDiagnosticsService !== null) {
+  if (autoSyncDiagnosticsService !== null && isMcpToolEnabled(options.enabledTools, "auto_sync_diagnostics")) {
     server.registerTool(
       "SymbolLattice_auto_sync_diagnostics",
       {
@@ -3256,7 +3270,7 @@ export function createMcpServer(
   }
 
   const autoSyncDiagnosticJournalService = supportsAutoSyncDiagnosticJournal(service) ? service : null;
-  if (autoSyncDiagnosticJournalService !== null) {
+  if (autoSyncDiagnosticJournalService !== null && isMcpToolEnabled(options.enabledTools, "auto_sync_journal")) {
     server.registerTool(
       "SymbolLattice_auto_sync_journal",
       {
@@ -3284,7 +3298,7 @@ export function createMcpServer(
   }
 
   const nodeService = supportsNode(service) ? service : null;
-  if (nodeService !== null) {
+  if (nodeService !== null && isMcpToolEnabled(options.enabledTools, "node")) {
     server.registerTool(
       "SymbolLattice_node",
       {
@@ -3312,7 +3326,7 @@ export function createMcpServer(
   }
 
   const contextService = supportsContext(service) ? service : null;
-  if (contextService !== null) {
+  if (contextService !== null && isMcpToolEnabled(options.enabledTools, "context")) {
     server.registerTool(
       "SymbolLattice_context",
       {
@@ -3379,7 +3393,7 @@ export function createMcpServer(
   }
 
   const affectedTestsService = supportsAffectedTests(service) ? service : null;
-  if (affectedTestsService !== null) {
+  if (affectedTestsService !== null && isMcpToolEnabled(options.enabledTools, "affected")) {
     server.registerTool(
       "SymbolLattice_affected",
       {
@@ -3429,7 +3443,7 @@ export function createMcpServer(
   }
 
   const gitAffectedTestsService = supportsGitAffectedTests(service) ? service : null;
-  if (gitAffectedTestsService !== null) {
+  if (gitAffectedTestsService !== null && isMcpToolEnabled(options.enabledTools, "affected_git")) {
     server.registerTool(
       "SymbolLattice_affected_git",
       {
@@ -3485,7 +3499,7 @@ export function createMcpServer(
   }
 
   const gitHunksService = supportsGitHunks(service) ? service : null;
-  if (gitHunksService !== null) {
+  if (gitHunksService !== null && isMcpToolEnabled(options.enabledTools, "git_hunks")) {
     server.registerTool(
       "SymbolLattice_git_hunks",
       {
@@ -3526,7 +3540,7 @@ export function createMcpServer(
   }
 
   const searchService = supportsSearch(service) ? service : null;
-  if (searchService !== null) {
+  if (searchService !== null && isMcpToolEnabled(options.enabledTools, "search")) {
     server.registerTool(
       "SymbolLattice_search",
       {
@@ -3554,7 +3568,7 @@ export function createMcpServer(
   }
 
   const investigateService = supportsInvestigate(service) ? service : null;
-  if (investigateService !== null) {
+  if (investigateService !== null && isMcpToolEnabled(options.enabledTools, "investigate")) {
     server.registerTool(
       "SymbolLattice_investigate",
       {
@@ -3651,7 +3665,7 @@ export function createMcpServer(
   }
 
   const impactService = supportsImpact(service) ? service : null;
-  if (impactService !== null) {
+  if (impactService !== null && isMcpToolEnabled(options.enabledTools, "impact")) {
     server.registerTool(
       "SymbolLattice_impact",
       {
@@ -3690,7 +3704,7 @@ export function createMcpServer(
   }
 
   const filesService = supportsFiles(service) ? service : null;
-  if (filesService !== null) {
+  if (filesService !== null && isMcpToolEnabled(options.enabledTools, "files")) {
     server.registerTool(
       "SymbolLattice_files",
       {
@@ -3732,7 +3746,7 @@ export function createMcpServer(
   }
 
   const fileViewService = supportsFileView(service) ? service : null;
-  if (fileViewService !== null) {
+  if (fileViewService !== null && isMcpToolEnabled(options.enabledTools, "file")) {
     server.registerTool(
       "SymbolLattice_file",
       {
@@ -3763,7 +3777,7 @@ export function createMcpServer(
   }
 
   const routesService = supportsRoutes(service) ? service : null;
-  if (routesService !== null) {
+  if (routesService !== null && isMcpToolEnabled(options.enabledTools, "routes")) {
     server.registerTool(
       "SymbolLattice_routes",
       {
@@ -3812,7 +3826,7 @@ export function createMcpServer(
   }
 
   const entrypointsService = supportsEntrypoints(service) ? service : null;
-  if (entrypointsService !== null) {
+  if (entrypointsService !== null && isMcpToolEnabled(options.enabledTools, "entrypoints")) {
     server.registerTool(
       "SymbolLattice_entrypoints",
       {
@@ -3856,7 +3870,7 @@ export function createMcpServer(
   }
 
   const hierarchyService = supportsHierarchy(service) ? service : null;
-  if (hierarchyService !== null) {
+  if (hierarchyService !== null && isMcpToolEnabled(options.enabledTools, "hierarchy")) {
     server.registerTool(
       "SymbolLattice_hierarchy",
       {
@@ -3888,7 +3902,7 @@ export function createMcpServer(
   }
 
   const generationHistoryService = supportsGenerationHistory(service) ? service : null;
-  if (generationHistoryService !== null) {
+  if (generationHistoryService !== null && isMcpToolEnabled(options.enabledTools, "history")) {
     server.registerTool(
       "SymbolLattice_history",
       {
@@ -3919,7 +3933,7 @@ export function createMcpServer(
   }
 
   const generationDiffService = supportsGenerationDiff(service) ? service : null;
-  if (generationDiffService !== null) {
+  if (generationDiffService !== null && isMcpToolEnabled(options.enabledTools, "diff")) {
     server.registerTool(
       "SymbolLattice_diff",
       {
@@ -3961,7 +3975,7 @@ export function createMcpServer(
   }
 
   const explainEdgeService = supportsExplainEdge(service) ? service : null;
-  if (explainEdgeService !== null) {
+  if (explainEdgeService !== null && isMcpToolEnabled(options.enabledTools, "explain_edge")) {
     server.registerTool(
       "SymbolLattice_explain_edge",
       {
@@ -4016,6 +4030,8 @@ export interface McpServerOptions {
   readonly readQueryExecutor?: McpReadQueryExecutor;
   /** Optional host-owned status surface for the read-query executor. */
   readonly queryPoolStatusService?: QueryPoolStatusService;
+  /** Injectable environment used only to select the stdio MCP tool surface. */
+  readonly environment?: Readonly<Record<string, string | undefined>>;
 }
 
 /**
@@ -4030,9 +4046,13 @@ export async function startMcpServer(
   defaultProjectPath: string,
   options: McpServerOptions = {}
 ): Promise<McpServerSession> {
+  const environment = options.environment ?? process.env;
   const server = createMcpServer(service, defaultProjectPath, {
     readQueryExecutor: options.readQueryExecutor,
-    queryPoolStatusService: options.queryPoolStatusService
+    queryPoolStatusService: options.queryPoolStatusService,
+    enabledTools: resolveMcpToolSelection(
+      environment[SYMBOL_LATTICE_MCP_TOOLS_ENVIRONMENT_VARIABLE]
+    )
   });
   const transport = options.transport ?? new StdioServerTransport();
   const lifecycleInput = options.lifecycleInput ?? process.stdin;

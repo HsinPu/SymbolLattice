@@ -34,6 +34,7 @@ describe("public SymbolLattice installation documentation", () => {
       expect(primary).toContain("monorepo");
       expect(primary).toContain("workspace");
       expect(primary).toContain("projectPath");
+      expect(primary).toContain("SYMBOL_LATTICE_MCP_TOOLS");
       expect(primary).toContain("mcp_servers.SymbolLattice");
       expect(primary).toContain(".SymbolLattice");
       expect(primary).not.toContain("npm install -g @hsinpu/symbollattice");

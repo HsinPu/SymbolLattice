@@ -137,7 +137,7 @@ SymbolLattice serve --mcp --project C:\path\to\project
 SymbolLattice serve --mcp --project C:\path\to\project --no-auto-sync
 ```
 
-MCP query handlers 不會直接執行 `init`。MCP initialize instructions 與 Codex 安裝區塊會指示具備 shell 能力的 Agent 在符合安全條件且索引缺失時自動呼叫 CLI。查詢整個 workspace 時，Agent 會對每個相關 repo 分別傳入 `projectPath` 並彙整結果；SymbolLattice 不會把多個獨立索引冒充成一張具有跨 repo edge 的圖。索引寫入、手動同步與 watcher lifecycle 仍由 CLI 控制。
+MCP 預設只暴露主要的 `SymbolLattice_explore`，降低 Agent 選錯工具的機率；其他工具仍完整保留，可透過 `SYMBOL_LATTICE_MCP_TOOLS=node,impact` 選擇性加入，或設為 `all` 恢復完整 surface。MCP query handlers 不會直接執行 `init`。MCP initialize instructions 與 Codex 安裝區塊會指示具備 shell 能力的 Agent 在符合安全條件且索引缺失時自動呼叫 CLI。查詢整個 workspace 時，Agent 會對每個相關 repo 分別傳入 `projectPath` 並彙整結果；SymbolLattice 不會把多個獨立索引冒充成一張具有跨 repo edge 的圖。索引寫入、手動同步與 watcher lifecycle 仍由 CLI 控制。
 
 ## 限制
 

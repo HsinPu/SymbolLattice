@@ -19,10 +19,11 @@ ${AUTOMATIC_PROJECT_INDEX_GUIDANCE}
 
 ### Query routing
 
-- Use the \`SymbolLattice_explore\` MCP tool before grep, find, or broad file reads when locating or understanding code.
-- Use the narrowest follow-up tool that fits the question: \`SymbolLattice_node\`, \`SymbolLattice_file\`, or \`SymbolLattice_context\` for exact source context; \`SymbolLattice_impact\`, \`SymbolLattice_affected\`, or \`SymbolLattice_git_hunks\` for change impact; and \`SymbolLattice_history\` or \`SymbolLattice_diff\` for generation history.
+- Use \`SymbolLattice_explore\` before Read, Grep, or broad file reads for any task that locates, explains, reads, or changes indexed code. Include the question plus relevant file or symbol names when known.
+- Treat source returned by explore as already read. Do not repeat the same discovery with grep or delegate it to a file-reading sub-agent; call explore again with a more specific query when more indexed detail is needed.
+- The default MCP surface intentionally exposes only \`SymbolLattice_explore\`. Optional specialist tools remain available through \`SYMBOL_LATTICE_MCP_TOOLS\`; use them only when the client actually lists them.
 - If MCP is unavailable, use the equivalent \`SymbolLattice\` CLI command from the repository root.
-- If an existing index is stale, incompatible, or the query returns no relevant evidence, say so briefly and fall back to targeted \`rg\` and direct file reads. A missing index follows the automatic initialization policy above.
+- If an existing index is stale while MCP auto-sync is active, allow one bounded catch-up and retry explore once. If it remains stale, is incompatible, or returns no relevant evidence, say so briefly and fall back to targeted \`rg\` and direct file reads. A missing index follows the automatic initialization policy above.
 
 ### Evidence and safety
 

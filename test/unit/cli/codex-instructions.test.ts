@@ -38,8 +38,10 @@ describe("Codex instruction ownership", () => {
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Desktop root");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Never run `index` or rebuild an existing index");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("`SymbolLattice_explore`");
-    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("`SymbolLattice_node`");
-    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("`SymbolLattice_impact`");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("before Read, Grep, or broad file reads");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Treat source returned by explore as already read");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("`SYMBOL_LATTICE_MCP_TOOLS`");
+    expect(CODEX_INSTRUCTIONS_BLOCK).not.toContain("Prefer narrower SymbolLattice tools");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("fall back to targeted `rg` and direct file reads");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("pending, unresolved, ambiguous, truncated, or low-confidence");
     expect(CODEX_INSTRUCTIONS_BLOCK).not.toContain("SYMBOL_LATTICE_PERSONAL");
