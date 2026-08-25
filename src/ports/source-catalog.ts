@@ -23,12 +23,22 @@ export interface ProjectFreshnessVerificationInput {
 }
 
 /**
- * A non-mutating freshness verdict based on full source hashes and the same
- * configuration discovery used by a full scan. It deliberately carries no
- * source text or resolver so a proven no-op remains memory-bounded.
+ * Optional hints for a freshness check. The full verification implementation
+ * may ignore these hints; they are additive so custom catalogs can continue to
+ * implement the existing two-argument method.
  */
-export interface ProjectFreshnessVerification {
-  readonly policy: "streaming-full-content-configuration-candidates-v4";
+export interface ProjectFreshnessVerificationOptions {
+  /** Exact project-relative paths that may be checked before a full walk. */
+  readonly priorityPaths?: readonly string[];
+  /** Permit a future implementation to return after proving a source change. */
+  readonly allowEarlySourceExit?: boolean;
+}
+
+/**
+ * Common fields for a non-mutating freshness verdict. It deliberately carries
+ * no source text or resolver so a proven no-op remains memory-bounded.
+ */
+interface ProjectFreshnessVerificationBase {
   readonly outcome: "proven-unchanged" | "source-files-changed" | "project-inputs-changed";
   readonly filesChecked: number;
   readonly sourceHash: "sha256";
@@ -48,6 +58,29 @@ export interface ProjectFreshnessVerification {
     readonly phases: readonly IndexPerformanceSubphase[];
   };
 }
+
+/** Receipt emitted by the v0.441 freshness contract. */
+export interface ProjectFreshnessVerificationV4 extends ProjectFreshnessVerificationBase {
+  readonly policy: "streaming-full-content-configuration-candidates-v4";
+}
+
+/**
+ * Complete v0.442 freshness evidence. Both stale reasons are retained even
+ * when source fingerprints and configuration candidates changed together.
+ */
+export interface ProjectFreshnessVerificationV5 extends ProjectFreshnessVerificationBase {
+  readonly policy: "streaming-full-content-configuration-candidates-v5";
+  readonly sourceFilesChanged: boolean;
+  readonly projectInputsChanged: boolean;
+  /** False only for a future bounded early-exit receipt. */
+  readonly complete: boolean;
+  readonly priorityDetection: "full-verification" | "priority-paths";
+}
+
+/** Freshness receipts accepted by services and custom source catalogs. */
+export type ProjectFreshnessVerification =
+  | ProjectFreshnessVerificationV4
+  | ProjectFreshnessVerificationV5;
 
 export type ModuleResolutionStrategy =
   | "relative"
@@ -138,7 +171,8 @@ export interface SourceCatalog {
   /** Optional additive fast path; older/custom catalogs continue through `scan`. */
   verifyFreshness?(
     projectPath: string,
-    input: ProjectFreshnessVerificationInput
+    input: ProjectFreshnessVerificationInput,
+    options?: ProjectFreshnessVerificationOptions
   ): Promise<ProjectFreshnessVerification>;
   read(projectPath: string, relativePath: string): Promise<string>;
   isUnsafeProjectPath(projectPath: string): boolean;

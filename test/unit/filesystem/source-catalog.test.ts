@@ -64,8 +64,12 @@ describe("filesystem source catalog freshness", () => {
       ])
     );
     expect(verification).toEqual({
-      policy: "streaming-full-content-configuration-candidates-v4",
+      policy: "streaming-full-content-configuration-candidates-v5",
       outcome: "proven-unchanged",
+      sourceFilesChanged: false,
+      projectInputsChanged: false,
+      complete: true,
+      priorityDetection: "full-verification",
       filesChecked: 1,
       sourceHash: "sha256",
       retainedSourceText: false,
@@ -90,6 +94,105 @@ describe("filesystem source catalog freshness", () => {
       phase.residentSetSize.unit === "bytes" &&
       phase.residentSetSize.samplingPolicy === "phase-boundary-v1"
     )).toBe(true);
+  });
+
+  it("retains both source and project-input stale reasons in one complete receipt", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-source-catalog-both-stale-"));
+    temporaryDirectories.push(projectPath);
+    await mkdir(join(projectPath, "src"), { recursive: true });
+    await writeFile(join(projectPath, "package.json"), "{\"private\":true}\n", "utf8");
+    await writeFile(join(projectPath, "src", "entry.ts"), "export const answer = 42;\n", "utf8");
+    const catalog = new FileSystemSourceCatalog();
+    const scan = await catalog.scan(projectPath);
+
+    await writeFile(join(projectPath, "package.json"), "{\"private\":false}\n", "utf8");
+    await writeFile(join(projectPath, "src", "entry.ts"), "export const answer = 43;\n", "utf8");
+
+    const verification = await catalog.verifyFreshness(projectPath, {
+      files: scan.sourceDocuments.map((document) => ({
+        path: document.relativePath,
+        language: document.language,
+        contentHash: document.contentHash,
+        indexedAt: "2026-08-25T00:00:00.000Z"
+      })),
+      indexInputs: scan.indexInputs
+    });
+
+    expect(verification).toMatchObject({
+      policy: "streaming-full-content-configuration-candidates-v5",
+      outcome: "source-files-changed",
+      sourceFilesChanged: true,
+      projectInputsChanged: true,
+      complete: true,
+      priorityDetection: "full-verification"
+    });
+    expect(verification.configurationCandidatesChecked).toBeGreaterThanOrEqual(2);
+    expect(verification.performance.phases).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "freshness-configuration-snapshot" })
+      ])
+    );
+  });
+
+  it("reports a source-only change without inventing a project-input change", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-source-catalog-source-only-"));
+    temporaryDirectories.push(projectPath);
+    await mkdir(join(projectPath, "src"), { recursive: true });
+    await writeFile(join(projectPath, "package.json"), "{\"private\":true}\n", "utf8");
+    await writeFile(join(projectPath, "src", "entry.ts"), "export const answer = 42;\n", "utf8");
+    const catalog = new FileSystemSourceCatalog();
+    const scan = await catalog.scan(projectPath);
+
+    await writeFile(join(projectPath, "src", "entry.ts"), "export const answer = 43;\n", "utf8");
+
+    const verification = await catalog.verifyFreshness(projectPath, {
+      files: scan.sourceDocuments.map((document) => ({
+        path: document.relativePath,
+        language: document.language,
+        contentHash: document.contentHash,
+        indexedAt: "2026-08-25T00:00:00.000Z"
+      })),
+      indexInputs: scan.indexInputs
+    });
+
+    expect(verification).toMatchObject({
+      outcome: "source-files-changed",
+      sourceFilesChanged: true,
+      projectInputsChanged: false,
+      complete: true
+    });
+    expect(verification.configurationCandidatesChecked).toBeGreaterThanOrEqual(2);
+  });
+
+  it("accepts priority options while this catalog performs the complete verification", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-source-catalog-priority-options-"));
+    temporaryDirectories.push(projectPath);
+    await mkdir(join(projectPath, "src"), { recursive: true });
+    await writeFile(join(projectPath, "src", "entry.ts"), "export const answer = 42;\n", "utf8");
+    const catalog = new FileSystemSourceCatalog();
+    const scan = await catalog.scan(projectPath);
+
+    const verification = await catalog.verifyFreshness(projectPath, {
+      files: scan.sourceDocuments.map((document) => ({
+        path: document.relativePath,
+        language: document.language,
+        contentHash: document.contentHash,
+        indexedAt: "2026-08-25T00:00:00.000Z"
+      })),
+      indexInputs: scan.indexInputs
+    }, {
+      priorityPaths: ["src/entry.ts"],
+      allowEarlySourceExit: true
+    });
+
+    expect(verification).toMatchObject({
+      policy: "streaming-full-content-configuration-candidates-v5",
+      outcome: "proven-unchanged",
+      sourceFilesChanged: false,
+      projectInputsChanged: false,
+      complete: true,
+      priorityDetection: "full-verification"
+    });
   });
 
   it("fails closed to a full project-input check for an index without discovery identity", async () => {
@@ -118,7 +221,11 @@ describe("filesystem source catalog freshness", () => {
 
     expect(verification).toMatchObject({
       outcome: "project-inputs-changed",
-      configurationCandidatesChecked: 0
+      configurationCandidatesChecked: 0,
+      sourceFilesChanged: false,
+      projectInputsChanged: true,
+      complete: true,
+      priorityDetection: "full-verification"
     });
   });
 
@@ -149,7 +256,11 @@ describe("filesystem source catalog freshness", () => {
     expect(verification).toMatchObject({
       outcome: "project-inputs-changed",
       configurationPolicy: "configuration-candidates-v2",
-      discoveryPolicy: "single-project-walk-v2"
+      discoveryPolicy: "single-project-walk-v2",
+      sourceFilesChanged: false,
+      projectInputsChanged: true,
+      complete: true,
+      priorityDetection: "full-verification"
     });
   });
 });

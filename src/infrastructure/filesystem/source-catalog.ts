@@ -8,6 +8,7 @@ import type {
 import type {
   ProjectFreshnessVerification,
   ProjectFreshnessVerificationInput,
+  ProjectFreshnessVerificationOptions,
   ProjectScan,
   ProjectScanOptions,
   SourceCatalog,
@@ -282,8 +283,13 @@ export class FileSystemSourceCatalog implements SourceCatalog {
 
   public async verifyFreshness(
     projectPath: string,
-    input: ProjectFreshnessVerificationInput
+    input: ProjectFreshnessVerificationInput,
+    options?: ProjectFreshnessVerificationOptions
   ): Promise<ProjectFreshnessVerification> {
+    // The v5 contract reserves these hints for the dirty-path fast path. This
+    // slice intentionally performs the complete verification while exposing
+    // the additive options to callers and custom catalog implementations.
+    void options;
     const normalizedProjectPath = resolve(projectPath);
     const performancePhases: IndexPerformanceSubphase[] = [];
     const discoveryStartedAt = startFreshnessPerformance();
@@ -301,7 +307,7 @@ export class FileSystemSourceCatalog implements SourceCatalog {
     );
     performancePhases.push(endFreshnessPerformance("freshness-source-hash", sourceHashStartedAt));
     const receiptBase = {
-      policy: "streaming-full-content-configuration-candidates-v4" as const,
+      policy: "streaming-full-content-configuration-candidates-v5" as const,
       filesChecked: fingerprints.length,
       sourceHash: "sha256" as const,
       retainedSourceText: false as const,
@@ -315,42 +321,43 @@ export class FileSystemSourceCatalog implements SourceCatalog {
         phases: performancePhases
       }
     };
-    if (!freshnessFilesMatch(fingerprints, input.files)) {
-      return {
-        ...receiptBase,
-        configurationCandidatesChecked: 0,
-        outcome: "source-files-changed"
-      };
-    }
+    const sourceFilesChanged = !freshnessFilesMatch(fingerprints, input.files);
 
     const expectedConfigurationDiscovery = input.indexInputs.configurationInputs.find(
       (configurationInput) => configurationInput.kind === "configuration-discovery"
     );
-    if (expectedConfigurationDiscovery === undefined) {
-      return {
-        ...receiptBase,
-        configurationCandidatesChecked: 0,
-        outcome: "project-inputs-changed"
-      };
+    let configurationCandidatesChecked = 0;
+    let projectInputsChanged = expectedConfigurationDiscovery === undefined;
+    if (expectedConfigurationDiscovery !== undefined) {
+      const configurationSnapshotStartedAt = startFreshnessPerformance();
+      const configurationSnapshot = await discoverConfigurationCandidateSnapshot(
+        normalizedProjectPath,
+        input.indexInputs.configurationInputs,
+        paths.configurationPaths,
+        this.filesystemReader
+      );
+      performancePhases.push(endFreshnessPerformance(
+        "freshness-configuration-snapshot",
+        configurationSnapshotStartedAt
+      ));
+      configurationCandidatesChecked = configurationSnapshot.candidatesChecked;
+      projectInputsChanged = configurationSnapshot.input.contentHash !== expectedConfigurationDiscovery.contentHash;
     }
-    const configurationSnapshotStartedAt = startFreshnessPerformance();
-    const configurationSnapshot = await discoverConfigurationCandidateSnapshot(
-      normalizedProjectPath,
-      input.indexInputs.configurationInputs,
-      paths.configurationPaths,
-      this.filesystemReader
-    );
-    performancePhases.push(endFreshnessPerformance(
-      "freshness-configuration-snapshot",
-      configurationSnapshotStartedAt
-    ));
+
+    const outcome = sourceFilesChanged
+      ? "source-files-changed"
+      : projectInputsChanged
+        ? "project-inputs-changed"
+        : "proven-unchanged";
 
     return {
       ...receiptBase,
-      configurationCandidatesChecked: configurationSnapshot.candidatesChecked,
-      outcome: configurationSnapshot.input.contentHash === expectedConfigurationDiscovery.contentHash
-        ? "proven-unchanged"
-        : "project-inputs-changed"
+      configurationCandidatesChecked,
+      outcome,
+      sourceFilesChanged,
+      projectInputsChanged,
+      complete: true,
+      priorityDetection: "full-verification"
     };
   }
 
