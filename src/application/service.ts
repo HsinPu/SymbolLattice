@@ -95,11 +95,16 @@ import type {
   GenerationHistoryEntry,
   GraphStore,
   ProjectFreshnessVerification,
+  ProjectFreshnessVerificationOptions,
   ProjectScan,
   ProjectScanOptions,
   SourceCatalog,
   SourceDocument
 } from "../ports/index.js";
+import type {
+  WatchFreshnessObservation,
+  WatchPendingBatch
+} from "./watch.js";
 import { ProjectConfigurationError } from "../domain/configuration.js";
 import { ProjectPathUnreadableError } from "../domain/project-path-access.js";
 import { SymbolLatticeError } from "./errors.js";
@@ -1507,6 +1512,20 @@ export class SymbolLatticeService {
   }
 
   public async sync(options: IndexOptions): Promise<GraphContext["status"]> {
+    return this.syncProject(options, null);
+  }
+
+  public async syncObserved(
+    options: IndexOptions,
+    observation: WatchFreshnessObservation
+  ): Promise<GraphContext["status"]> {
+    return this.syncProject(options, observation);
+  }
+
+  private async syncProject(
+    options: IndexOptions,
+    observation: WatchFreshnessObservation | null
+  ): Promise<GraphContext["status"]> {
     this.assertSafeProjectPath(options);
     const performance = new IndexPerformanceRecorder("sync");
     const projectPath = resolve(options.projectPath);
@@ -1555,7 +1574,18 @@ export class SymbolLatticeService {
       statusBundle.extractorVersion !== this.activeArtifactFactsExtractorVersion;
     const sourceSearchChanged = this.sourceSearchProjectionChanged(statusBundle.sourceSearchVersion);
     const verifyFreshness = this.sourceCatalog.verifyFreshness;
+    const canReuseObservation =
+      observation !== null &&
+      observation.knownStale &&
+      observation.status.stale &&
+      observation.expectedGenerationId !== null &&
+      observation.expectedGenerationId === statusBundle.status.generationId;
+    if (canReuseObservation) {
+      const observationReuseStartedAt = performance.start();
+      performance.end("freshness-observation-reuse", observationReuseStartedAt);
+    }
     if (
+      !canReuseObservation &&
       typeof readStatusBundle === "function" &&
       typeof verifyFreshness === "function" &&
       statusBundle.indexInputs !== null &&
@@ -1730,6 +1760,39 @@ export class SymbolLatticeService {
       ? readStatusBundle.call(this.graphStore, normalizedProjectPath)
       : this.getActiveGraphBundle(normalizedProjectPath);
     return this.getStatusForBundle(normalizedProjectPath, bundle);
+  }
+
+  public async observeFreshness(
+    projectPath: string,
+    pendingBatch: WatchPendingBatch
+  ): Promise<WatchFreshnessObservation> {
+    const normalizedProjectPath = resolve(projectPath);
+    const readStatusBundle = this.graphStore.getActiveStatusBundle;
+    const bundle = typeof readStatusBundle === "function"
+      ? readStatusBundle.call(this.graphStore, normalizedProjectPath)
+      : this.getActiveGraphBundle(normalizedProjectPath);
+    let freshness: ProjectFreshnessVerification | undefined;
+    const priorityOptions: ProjectFreshnessVerificationOptions | undefined =
+      pendingBatch.complete && pendingBatch.paths.length > 0
+        ? {
+            priorityPaths: pendingBatch.paths,
+            allowEarlySourceExit: true
+          }
+        : undefined;
+    const status = await this.getStatusForBundle(
+      normalizedProjectPath,
+      bundle,
+      priorityOptions,
+      (receipt) => {
+        freshness = receipt;
+      }
+    );
+    return {
+      status,
+      expectedGenerationId: bundle.status.generationId,
+      knownStale: status.stale,
+      ...(freshness === undefined ? {} : { freshness })
+    };
   }
 
   /**
@@ -5029,7 +5092,9 @@ export class SymbolLatticeService {
 
   private async getStatusForBundle(
     normalizedProjectPath: string,
-    bundle: ActiveGraphBundle | ActiveStatusBundle
+    bundle: ActiveGraphBundle | ActiveStatusBundle,
+    freshnessOptions?: ProjectFreshnessVerificationOptions,
+    observeFreshness?: (freshness: ProjectFreshnessVerification) => void
   ): Promise<GraphContext["status"]> {
     const persistedStatus = bundle.status;
     if (!persistedStatus.initialized) {
@@ -5067,10 +5132,14 @@ export class SymbolLatticeService {
         const freshness = await verifyFreshness.call(this.sourceCatalog, normalizedProjectPath, {
           files: statusBundleFiles(bundle),
           indexInputs: persistedInputs
-        });
+        }, freshnessOptions);
+        observeFreshness?.(freshness);
         const canProjectStatus =
           freshness.policy === "streaming-full-content-configuration-candidates-v5"
-            ? freshness.complete && !freshness.projectInputsChanged
+            ? !freshness.projectInputsChanged &&
+              (freshness.complete ||
+                (freshnessOptions?.allowEarlySourceExit === true &&
+                  freshness.sourceFilesChanged))
             : freshness.outcome !== "project-inputs-changed";
         if (canProjectStatus) {
           const staleReasons = [

@@ -12,6 +12,8 @@ import {
   validateWatchInterval,
   type ForegroundWatchOptions,
   type IndexWatchService,
+  type WatchFreshnessObservation,
+  type WatchPendingBatch,
   type WatchEventCallbacks,
   type WatchEventSource,
   type WatchReceipt,
@@ -765,6 +767,122 @@ describe("foreground index watch", () => {
     });
     expect(scheduler.scheduledDelays).toEqual([1_000]);
 
+    await session.stop();
+  });
+
+  it("reuses one exact-path freshness observation for an event-driven sync", async () => {
+    const scheduler = new ManualScheduler();
+    const receipts: WatchReceipt[] = [];
+    const source = new FakeWatchEventSource();
+    const initial = status("generation:one");
+    const stale = status("generation:one", true);
+    const synced = status("generation:two", false, indexWork());
+    const observation: WatchFreshnessObservation = {
+      status: stale,
+      expectedGenerationId: "generation:one",
+      knownStale: true
+    };
+    const getStatusCalls: string[] = [];
+    const syncCalls: unknown[] = [];
+    const observeCalls: Array<{
+      readonly projectPath: string;
+      readonly pendingBatch: WatchPendingBatch;
+    }> = [];
+    const syncObservedCalls: WatchFreshnessObservation[] = [];
+    const service: IndexWatchService = {
+      assertSafeProjectPath() {},
+      async getStatus(projectPath) {
+        getStatusCalls.push(projectPath);
+        return initial;
+      },
+      async sync(options) {
+        syncCalls.push(options);
+        return synced;
+      },
+      async observeFreshness(projectPath, pendingBatch) {
+        observeCalls.push({ projectPath, pendingBatch });
+        return observation;
+      },
+      async syncObserved(_options, receivedObservation) {
+        syncObservedCalls.push(receivedObservation);
+        return synced;
+      }
+    };
+    const session = await startForegroundWatch(
+      service,
+      {
+        ...watchOptions(receipts),
+        intervalMs: 1_000,
+        eventSource: source
+      },
+      scheduler
+    );
+
+    source.emitChange("src/z.ts");
+    source.emitChange("src/a.ts");
+    scheduler.fireNext();
+    await settle();
+
+    expect(getStatusCalls).toEqual(["C:/project"]);
+    expect(syncCalls).toEqual([]);
+    expect(observeCalls).toEqual([{
+      projectPath: "C:/project",
+      pendingBatch: {
+        paths: ["src/a.ts", "src/z.ts"],
+        complete: true
+      }
+    }]);
+    expect(syncObservedCalls).toEqual([observation]);
+    expect(receipts.map((receipt) => receipt.event)).toEqual([
+      "started",
+      "event-watch-active",
+      "event-pending",
+      "event-pending",
+      "stale-detected",
+      "synced"
+    ]);
+
+    await session.stop();
+  });
+
+  it("marks an unknown event batch incomplete before observation", async () => {
+    const scheduler = new ManualScheduler();
+    const receipts: WatchReceipt[] = [];
+    const source = new FakeWatchEventSource();
+    const observedBatches: WatchPendingBatch[] = [];
+    const fresh = status("generation:one");
+    const service: IndexWatchService = {
+      assertSafeProjectPath() {},
+      async getStatus() {
+        return fresh;
+      },
+      async sync() {
+        return fresh;
+      },
+      async observeFreshness(_projectPath, pendingBatch) {
+        observedBatches.push(pendingBatch);
+        return {
+          status: fresh,
+          expectedGenerationId: "generation:one",
+          knownStale: false
+        };
+      }
+    };
+    const session = await startForegroundWatch(
+      service,
+      {
+        ...watchOptions(receipts),
+        intervalMs: 1_000,
+        eventSource: source
+      },
+      scheduler
+    );
+
+    source.emitChange(null);
+    scheduler.fireNext();
+    await settle();
+
+    expect(observedBatches).toEqual([{ paths: [], complete: false }]);
     await session.stop();
   });
 

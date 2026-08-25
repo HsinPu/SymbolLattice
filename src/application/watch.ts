@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { IndexWork } from "../domain/index-work.js";
 import type { IndexStatus } from "../domain/types.js";
+import type { ProjectFreshnessVerification } from "../ports/source-catalog.js";
 
 import type { AutoSyncOwnerLeaseStatus } from "./auto-sync-owner.js";
 import { SymbolLatticeError } from "./errors.js";
@@ -365,6 +366,31 @@ export interface IndexWatchService {
   assertSafeProjectPath(options: IndexOptions): void;
   getStatus(projectPath: string): Promise<IndexStatus>;
   sync(options: IndexOptions): Promise<IndexStatus>;
+  /** Optional event-aware freshness observation; older/custom services keep the legacy path. */
+  observeFreshness?(
+    projectPath: string,
+    pendingBatch: WatchPendingBatch
+  ): Promise<WatchFreshnessObservation>;
+  /** Optional sync that may reuse a generation-bound stale observation. */
+  syncObserved?(
+    options: IndexOptions,
+    observation: WatchFreshnessObservation
+  ): Promise<IndexStatus>;
+}
+
+/** Exact watcher paths are only a priority hint; incomplete batches require a full verification. */
+export interface WatchPendingBatch {
+  readonly paths: readonly string[];
+  readonly complete: boolean;
+}
+
+/** Internal, generation-bound freshness evidence passed from watch observation to sync. */
+export interface WatchFreshnessObservation {
+  readonly status: IndexStatus;
+  readonly expectedGenerationId: string | null;
+  readonly knownStale: boolean;
+  /** Optional typed evidence used only by services that implement the fast path. */
+  readonly freshness?: ProjectFreshnessVerification;
 }
 
 /** Callbacks supplied to an optional local project-change event source. */
@@ -782,8 +808,17 @@ class ForegroundWatch implements ForegroundWatchSession {
       revision: this.pendingEventRevision
     };
     let status: IndexStatus;
+    let observation: WatchFreshnessObservation | null = null;
     try {
-      status = await this.service.getStatus(this.options.projectPath);
+      if (this.service.observeFreshness === undefined) {
+        status = await this.service.getStatus(this.options.projectPath);
+      } else {
+        observation = await this.service.observeFreshness(
+          this.options.projectPath,
+          this.pendingBatch()
+        );
+        status = observation.status;
+      }
     } catch (error) {
       if (isMissingIndexError(error)) {
         this.terminate(error, this.lastStatus);
@@ -805,12 +840,13 @@ class ForegroundWatch implements ForegroundWatchSession {
     }
 
     this.startEventWatch();
-    return this.reconcile(status, pendingReconciliation);
+    return this.reconcile(status, pendingReconciliation, observation);
   }
 
   private async reconcile(
     status: IndexStatus,
-    pendingReconciliation: { readonly hadPendingEvents: boolean; readonly revision: number } | null = null
+    pendingReconciliation: { readonly hadPendingEvents: boolean; readonly revision: number } | null = null,
+    observation: WatchFreshnessObservation | null = null
   ): Promise<number | null> {
     if (!status.stale || this.stopped) {
       const recoveredFromFailure = this.consecutiveFailures > 0;
@@ -840,10 +876,17 @@ class ForegroundWatch implements ForegroundWatchSession {
     const previousGenerationId = statusGenerationId(status);
     this.emit("stale-detected", status, previousGenerationId, previousGenerationId);
     try {
-      const synced = await this.service.sync({
+      const syncOptions = {
         projectPath: this.options.projectPath,
         force: this.options.force ?? false
-      });
+      };
+      const synced =
+        observation !== null &&
+        observation.knownStale &&
+        observation.status.stale &&
+        this.service.syncObserved !== undefined
+          ? await this.service.syncObserved(syncOptions, observation)
+          : await this.service.sync(syncOptions);
       this.lastStatus = synced;
       this.consecutiveFailures = 0;
       this.clearPendingAfterSuccessfulReconciliation(pendingReconciliation);
@@ -909,6 +952,13 @@ class ForegroundWatch implements ForegroundWatchSession {
       this.pendingFilesTruncated ||
       this.pendingFilesUnknown
     );
+  }
+
+  private pendingBatch(): WatchPendingBatch {
+    return {
+      paths: Array.from(this.pendingFiles).sort(),
+      complete: !this.pendingFilesTruncated && !this.pendingFilesUnknown
+    };
   }
 
   private clearPendingAfterSuccessfulReconciliation(

@@ -12202,6 +12202,85 @@ describe("SymbolLatticeService", () => {
     expect(fullScans).toBe(0);
   });
 
+  it("reuses a generation-bound watch observation without a second freshness preflight", async () => {
+    const projectPath = await createInlineProject({
+      "src/value.ts": "export const value = 'before';\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    const backingCatalog = new FileSystemSourceCatalog();
+    let fullScans = 0;
+    let freshnessChecks = 0;
+    const sourceCatalog: SourceCatalog = {
+      scan: async (...args) => {
+        fullScans += 1;
+        return backingCatalog.scan(...args);
+      },
+      verifyFreshness: async (...args) => {
+        freshnessChecks += 1;
+        return backingCatalog.verifyFreshness(...args);
+      },
+      read: (...args) => backingCatalog.read(...args),
+      isUnsafeProjectPath: (...args) => backingCatalog.isUnsafeProjectPath(...args)
+    };
+    const service = new SymbolLatticeService(graphStore, sourceCatalog);
+    await service.init({ projectPath });
+    const generationId = graphStore.getStatus(projectPath).generationId;
+    fullScans = 0;
+    freshnessChecks = 0;
+    await writeFile(join(projectPath, "src", "value.ts"), "export const value = 'after';\n", "utf8");
+
+    const observation = await service.observeFreshness(projectPath, {
+      paths: ["src/value.ts"],
+      complete: true
+    });
+    const status = await service.syncObserved({ projectPath }, observation);
+
+    expect(observation).toMatchObject({
+      expectedGenerationId: generationId,
+      knownStale: true,
+      status: { stale: true, staleReasons: ["source-files-changed"] },
+      freshness: {
+        complete: false,
+        priorityDetection: "priority-paths",
+        filesChecked: 1
+      }
+    });
+    expect(freshnessChecks).toBe(1);
+    expect(fullScans).toBe(1);
+    expect(status.generationId).not.toBe(generationId);
+    expect(status.operationPerformance?.phases.map((phase) => phase.name)).toContain(
+      "freshness-observation-reuse"
+    );
+    expect(status.operationPerformance?.phases.map((phase) => phase.name)).not.toContain(
+      "freshness-preflight"
+    );
+  });
+
+  it("discards a stale observation when another sync already switched generation", async () => {
+    const projectPath = await createInlineProject({
+      "src/value.ts": "export const value = 'before';\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    await writeFile(join(projectPath, "src", "value.ts"), "export const value = 'after';\n", "utf8");
+    const observation = await service.observeFreshness(projectPath, {
+      paths: ["src/value.ts"],
+      complete: true
+    });
+    const switched = await service.sync({ projectPath });
+
+    const status = await service.syncObserved({ projectPath }, observation);
+
+    expect(status.generationId).toBe(switched.generationId);
+    expect(status.operationPerformance?.phases.map((phase) => phase.name)).toContain(
+      "freshness-preflight"
+    );
+    expect(status.operationPerformance?.phases.map((phase) => phase.name)).not.toContain(
+      "freshness-observation-reuse"
+    );
+  });
+
   it("detects same-size source edits even when the modification time is restored", async () => {
     const projectPath = await createInlineProject({
       "src/value.ts": "export const value = 'before';\n"
