@@ -83,6 +83,28 @@ function freshnessFilesMatch(
   });
 }
 
+const MAXIMUM_FRESHNESS_PRIORITY_PATHS = 25;
+
+function indexedPriorityFiles(
+  input: ProjectFreshnessVerificationInput,
+  options: ProjectFreshnessVerificationOptions | undefined
+): ProjectFreshnessVerificationInput["files"] | null {
+  if (
+    options?.allowEarlySourceExit !== true ||
+    options.priorityPaths === undefined ||
+    options.priorityPaths.length < 1 ||
+    options.priorityPaths.length > MAXIMUM_FRESHNESS_PRIORITY_PATHS
+  ) {
+    return null;
+  }
+  const indexedByPath = new Map(input.files.map((file) => [file.path, file]));
+  const paths = [...new Set(options.priorityPaths)].sort();
+  const files = paths.map((path) => indexedByPath.get(path));
+  return files.every((file) => file !== undefined)
+    ? files as ProjectFreshnessVerificationInput["files"]
+    : null;
+}
+
 interface FreshnessPerformanceToken {
   readonly startedAt: number;
   readonly rssStartBytes: number;
@@ -286,12 +308,44 @@ export class FileSystemSourceCatalog implements SourceCatalog {
     input: ProjectFreshnessVerificationInput,
     options?: ProjectFreshnessVerificationOptions
   ): Promise<ProjectFreshnessVerification> {
-    // The v5 contract reserves these hints for the dirty-path fast path. This
-    // slice intentionally performs the complete verification while exposing
-    // the additive options to callers and custom catalog implementations.
-    void options;
     const normalizedProjectPath = resolve(projectPath);
     const performancePhases: IndexPerformanceSubphase[] = [];
+    const priorityFiles = indexedPriorityFiles(input, options);
+    if (priorityFiles !== null) {
+      const priorityHashStartedAt = startFreshnessPerformance();
+      const priorityFingerprints = await fingerprintSourcePaths(
+        normalizedProjectPath,
+        priorityFiles.map((file) => resolve(normalizedProjectPath, ...file.path.split("/"))),
+        this.filesystemReader
+      );
+      performancePhases.push(endFreshnessPerformance(
+        "freshness-source-hash",
+        priorityHashStartedAt
+      ));
+      if (!freshnessFilesMatch(priorityFingerprints, priorityFiles)) {
+        return {
+          policy: "streaming-full-content-configuration-candidates-v5",
+          outcome: "source-files-changed",
+          sourceFilesChanged: true,
+          projectInputsChanged: false,
+          complete: false,
+          priorityDetection: "priority-paths",
+          filesChecked: priorityFingerprints.length,
+          sourceHash: "sha256",
+          retainedSourceText: false,
+          configurationPolicy: CONFIGURATION_DISCOVERY_POLICY,
+          configurationCandidatesChecked: 0,
+          sourceReadPolicy: SOURCE_FINGERPRINT_READ_POLICY,
+          configurationReadPolicy: STREAMING_UTF8_HASH_POLICY,
+          discoveryPolicy: FRESHNESS_PATH_DISCOVERY_POLICY,
+          maximumConcurrentReads: MAXIMUM_FRESHNESS_CONCURRENT_READS,
+          performance: {
+            policy: "freshness-performance-v1",
+            phases: performancePhases
+          }
+        };
+      }
+    }
     const discoveryStartedAt = startFreshnessPerformance();
     const paths = await discoverFreshnessProjectPaths(normalizedProjectPath, {
       scopeRoots: input.indexInputs.scopeRoots,

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -192,6 +192,106 @@ describe("filesystem source catalog freshness", () => {
       projectInputsChanged: false,
       complete: true,
       priorityDetection: "full-verification"
+    });
+  });
+
+  it("returns an incomplete stale receipt after an exact indexed priority path changes", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-source-catalog-priority-stale-"));
+    temporaryDirectories.push(projectPath);
+    await mkdir(join(projectPath, "src"), { recursive: true });
+    await writeFile(join(projectPath, "src", "entry.ts"), "export const answer = 42;\n", "utf8");
+    const catalog = new FileSystemSourceCatalog();
+    const scan = await catalog.scan(projectPath);
+    await writeFile(join(projectPath, "src", "entry.ts"), "export const answer = 43;\n", "utf8");
+
+    const verification = await catalog.verifyFreshness(projectPath, {
+      files: scan.sourceDocuments.map((document) => ({
+        path: document.relativePath,
+        language: document.language,
+        contentHash: document.contentHash,
+        indexedAt: "2026-08-25T00:00:00.000Z"
+      })),
+      indexInputs: scan.indexInputs
+    }, {
+      priorityPaths: ["src/entry.ts"],
+      allowEarlySourceExit: true
+    });
+
+    expect(verification).toMatchObject({
+      policy: "streaming-full-content-configuration-candidates-v5",
+      outcome: "source-files-changed",
+      sourceFilesChanged: true,
+      projectInputsChanged: false,
+      complete: false,
+      priorityDetection: "priority-paths",
+      filesChecked: 1,
+      configurationCandidatesChecked: 0,
+      performance: {
+        phases: [expect.objectContaining({ name: "freshness-source-hash" })]
+      }
+    });
+  });
+
+  it("detects deletion of an exact indexed priority path without a full walk", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-source-catalog-priority-delete-"));
+    temporaryDirectories.push(projectPath);
+    await mkdir(join(projectPath, "src"), { recursive: true });
+    const sourcePath = join(projectPath, "src", "entry.ts");
+    await writeFile(sourcePath, "export const answer = 42;\n", "utf8");
+    const catalog = new FileSystemSourceCatalog();
+    const scan = await catalog.scan(projectPath);
+    await unlink(sourcePath);
+
+    const verification = await catalog.verifyFreshness(projectPath, {
+      files: scan.sourceDocuments.map((document) => ({
+        path: document.relativePath,
+        language: document.language,
+        contentHash: document.contentHash,
+        indexedAt: "2026-08-25T00:00:00.000Z"
+      })),
+      indexInputs: scan.indexInputs
+    }, {
+      priorityPaths: ["src/entry.ts"],
+      allowEarlySourceExit: true
+    });
+
+    expect(verification).toMatchObject({
+      sourceFilesChanged: true,
+      projectInputsChanged: false,
+      complete: false,
+      priorityDetection: "priority-paths",
+      filesChecked: 0,
+      configurationCandidatesChecked: 0
+    });
+  });
+
+  it("falls back to complete verification for a priority path absent from the active index", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-source-catalog-priority-new-"));
+    temporaryDirectories.push(projectPath);
+    await mkdir(join(projectPath, "src"), { recursive: true });
+    await writeFile(join(projectPath, "src", "entry.ts"), "export const answer = 42;\n", "utf8");
+    const catalog = new FileSystemSourceCatalog();
+    const scan = await catalog.scan(projectPath);
+    await writeFile(join(projectPath, "src", "new.ts"), "export const created = true;\n", "utf8");
+
+    const verification = await catalog.verifyFreshness(projectPath, {
+      files: scan.sourceDocuments.map((document) => ({
+        path: document.relativePath,
+        language: document.language,
+        contentHash: document.contentHash,
+        indexedAt: "2026-08-25T00:00:00.000Z"
+      })),
+      indexInputs: scan.indexInputs
+    }, {
+      priorityPaths: ["src/new.ts"],
+      allowEarlySourceExit: true
+    });
+
+    expect(verification).toMatchObject({
+      sourceFilesChanged: true,
+      complete: true,
+      priorityDetection: "full-verification",
+      filesChecked: 2
     });
   });
 
