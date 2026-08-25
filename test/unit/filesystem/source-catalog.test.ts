@@ -57,7 +57,7 @@ describe("filesystem source catalog freshness", () => {
       indexInputs: scan.indexInputs
     });
 
-    expect(scan.indexInputs).toMatchObject({ formatVersion: "project-inputs-v8" });
+    expect(scan.indexInputs).toMatchObject({ formatVersion: "project-inputs-v9" });
     expect(scan.indexInputs.configurationInputs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: "configuration-discovery" })

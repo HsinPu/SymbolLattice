@@ -3,7 +3,7 @@
  * resolved. Persisting this compact identity lets a read-only status request
  * detect configuration-only drift without reconstructing a graph first.
  */
-export const PROJECT_INDEX_INPUTS_FORMAT_VERSION = "project-inputs-v8";
+export const PROJECT_INDEX_INPUTS_FORMAT_VERSION = "project-inputs-v9";
 
 export const PROJECT_CONFIGURATION_INPUT_KINDS = [
   "root-gitignore",
@@ -51,7 +51,8 @@ export const INDEX_STALENESS_REASONS = [
   "project-inputs-changed",
   "indexer-version-changed",
   "configuration-invalid",
-  "configuration-untracked"
+  "configuration-untracked",
+  "project-path-unreadable"
 ] as const;
 
 export type IndexStalenessReason = (typeof INDEX_STALENESS_REASONS)[number];

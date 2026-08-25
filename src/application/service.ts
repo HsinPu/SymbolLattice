@@ -100,6 +100,7 @@ import type {
   SourceDocument
 } from "../ports/index.js";
 import { ProjectConfigurationError } from "../domain/configuration.js";
+import { ProjectPathUnreadableError } from "../domain/project-path-access.js";
 import { SymbolLatticeError } from "./errors.js";
 import {
   canonicalSourceDeliverySlice,
@@ -1556,6 +1557,9 @@ export class SymbolLatticeService {
       } catch (error) {
         if (error instanceof ProjectConfigurationError) {
           throw new SymbolLatticeError("INVALID_PROJECT_CONFIGURATION", error.message);
+        }
+        if (error instanceof ProjectPathUnreadableError) {
+          throw new SymbolLatticeError("PROJECT_PATH_UNREADABLE", error.message);
         }
         throw error;
       }
@@ -5052,6 +5056,16 @@ export class SymbolLatticeService {
           ]
         };
       }
+      if (error instanceof ProjectPathUnreadableError) {
+        return {
+          ...persistedStatus,
+          stale: true,
+          staleReasons: [
+            "project-path-unreadable",
+            ...(versionChanged ? (["indexer-version-changed"] as const) : [])
+          ]
+        };
+      }
       throw error;
     }
     const staleReasons = [
@@ -5099,6 +5113,9 @@ export class SymbolLatticeService {
     } catch (error) {
       if (error instanceof ProjectConfigurationError) {
         throw new SymbolLatticeError("INVALID_PROJECT_CONFIGURATION", error.message);
+      }
+      if (error instanceof ProjectPathUnreadableError) {
+        throw new SymbolLatticeError("PROJECT_PATH_UNREADABLE", error.message);
       }
       throw error;
     }

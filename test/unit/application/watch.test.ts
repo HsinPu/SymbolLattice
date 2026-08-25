@@ -465,6 +465,44 @@ describe("foreground index watch", () => {
     await session.stop();
   });
 
+  it("keeps the old generation and reports unreadable project paths until recovery", async () => {
+    const scheduler = new ManualScheduler();
+    const receipts: WatchReceipt[] = [];
+    const unreadableStatus = {
+      ...status("generation:one", true),
+      staleReasons: ["project-path-unreadable" as const]
+    };
+    const service = new FakeWatchService(
+      [unreadableStatus, unreadableStatus],
+      [
+        new SymbolLatticeError(
+          "PROJECT_PATH_UNREADABLE",
+          "Unable to read 1 project path: private/cache [EACCES]."
+        ),
+        status("generation:two")
+      ]
+    );
+
+    const session = await startForegroundWatch(service, watchOptions(receipts), scheduler);
+    expect(receipts.map((receipt) => receipt.event)).toEqual([
+      "started",
+      "stale-detected",
+      "sync-failed"
+    ]);
+    expect(receipts.at(-1)).toMatchObject({
+      generationId: "generation:one",
+      error: {
+        code: "PROJECT_PATH_UNREADABLE",
+        message: "Unable to read 1 project path: private/cache [EACCES]."
+      }
+    });
+
+    scheduler.fireNext();
+    await settle();
+    expect(receipts.at(-1)).toMatchObject({ event: "synced", generationId: "generation:two" });
+    await session.stop();
+  });
+
   it("emits fresh-observed when a retrying status check later recovers without pending events", async () => {
     const scheduler = new ManualScheduler();
     const receipts: WatchReceipt[] = [];

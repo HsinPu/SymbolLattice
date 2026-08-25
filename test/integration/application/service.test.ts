@@ -34,6 +34,7 @@ import {
   ARTIFACT_FACTS_EXTRACTOR_VERSION,
   createEdgeId,
   PROJECT_RESOLVER_VERSION,
+  ProjectPathUnreadableError,
   SOURCE_ROLE_CLASSIFIER_VERSION,
   SOURCE_SEARCH_INDEX_VERSION,
   type GraphSnapshot,
@@ -108,6 +109,22 @@ async function createInlineProject(files: Readonly<Record<string, string>>): Pro
 
 function createService(): SymbolLatticeService {
   return new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+}
+
+function unreadableSourceCatalog(
+  error: ProjectPathUnreadableError,
+  backingCatalog = new FileSystemSourceCatalog()
+): SourceCatalog {
+  return {
+    async scan() {
+      throw error;
+    },
+    async verifyFreshness() {
+      throw error;
+    },
+    read: (...args) => backingCatalog.read(...args),
+    isUnsafeProjectPath: (...args) => backingCatalog.isUnsafeProjectPath(...args)
+  };
 }
 
 function gitChangeSet(
@@ -11948,6 +11965,77 @@ describe("SymbolLatticeService", () => {
     });
     expect(graphStore.getStatus(projectPath).generationId).toBe(generationId);
     expect(graphStore.getSnapshot(projectPath)).toEqual(before);
+  });
+
+  it("does not publish an initial generation when a project path is unreadable", async () => {
+    const projectPath = await createInlineProject({
+      "src/entry.ts": "export const entry = true;\n"
+    });
+    const graphStore = new SqliteGraphStore();
+    const unreadable = new ProjectPathUnreadableError([
+      { path: "locked", code: "EACCES" },
+      { path: "private/config.json", code: "EPERM" }
+    ]);
+    const service = new SymbolLatticeService(graphStore, unreadableSourceCatalog(unreadable));
+
+    const error = await service.init({ projectPath }).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SymbolLatticeError);
+    expect(error).toMatchObject({
+      code: "PROJECT_PATH_UNREADABLE",
+      message: "Unable to read 2 project paths: locked [EACCES], private/config.json [EPERM]."
+    });
+    expect(graphStore.isInitialized(projectPath)).toBe(false);
+    expect(graphStore.getStatus(projectPath)).toMatchObject({
+      initialized: false,
+      generationId: null
+    });
+  });
+
+  it("keeps the active generation readable and atomic while project paths are unreadable", async () => {
+    const projectPath = await createFixtureProject();
+    const graphStore = new SqliteGraphStore();
+    const healthyService = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+    const initial = await healthyService.init({ projectPath });
+    const beforeSnapshot = graphStore.getSnapshot(projectPath);
+    await writeFile(
+      join(projectPath, "src", "math.ts"),
+      "export function add(left: number, right: number) { return left + right + 1; }\n",
+      "utf8"
+    );
+    const unreadable = new ProjectPathUnreadableError([
+      { path: ".tmp/pytest-history", code: "EACCES" }
+    ]);
+    const service = new SymbolLatticeService(graphStore, unreadableSourceCatalog(unreadable));
+
+    await expect(service.getStatus(projectPath)).resolves.toMatchObject({
+      initialized: true,
+      generationId: initial.generationId,
+      stale: true,
+      staleReasons: ["project-path-unreadable"]
+    });
+    const explored = await service.explore(projectPath, "src/math.ts#add");
+    expect(explored.status).toMatchObject({
+      generationId: initial.generationId,
+      stale: true,
+      staleReasons: ["project-path-unreadable"]
+    });
+    expect(explored).toMatchObject({
+      match: {
+        status: "exact",
+        symbol: { qualifiedName: "src/math.ts#add" }
+      },
+      source: { text: expect.stringContaining("return left + right") },
+      sourceAvailability: "active-generation"
+    });
+    await expect(service.sync({ projectPath })).rejects.toMatchObject({
+      code: "PROJECT_PATH_UNREADABLE"
+    });
+    expect(graphStore.getStatus(projectPath).generationId).toBe(initial.generationId);
+    expect(graphStore.getSnapshot(projectPath)).toEqual(beforeSnapshot);
+
+    const recovered = await healthyService.sync({ projectPath });
+    expect(recovered.generationId).not.toBe(initial.generationId);
+    expect(recovered).toMatchObject({ stale: false, staleReasons: [] });
   });
 
   it("re-extracts only dirty source artifacts and persists the reverse dependency plan", async () => {
