@@ -9,6 +9,7 @@ export * from "./index-inputs.js";
 export * from "./index-work.js";
 export * from "./order.js";
 export * from "./project-path.js";
+export * from "./project-path-access.js";
 export * from "./source-search.js";
 export * from "./source-roles.js";
 export * from "./types.js";

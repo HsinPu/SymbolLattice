@@ -28,7 +28,7 @@ describe("repository automation layout", () => {
 
   it("keeps benchmark executables below their evidence domains", async () => {
     await expect(rootLayout("benchmarks")).resolves.toEqual({
-      directories: ["css", "html", "java", "javascript", "jsp", "julia", "luau", "mcp", "perl", "r"],
+      directories: ["css", "filesystem", "html", "java", "javascript", "jsp", "julia", "luau", "mcp", "perl", "r"],
       executableFiles: []
     });
   });
