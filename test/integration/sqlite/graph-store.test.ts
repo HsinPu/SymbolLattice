@@ -7,6 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type {
+  GraphEdge,
   GraphSnapshot,
   IndexedSourceDocument,
   IndexWork,
@@ -88,6 +89,93 @@ function snapshot(symbols: readonly SymbolNode[]): GraphSnapshot {
           ]
         : [],
     pendingReferences: []
+  };
+}
+
+function boundedSymbol(
+  id: string,
+  name: string,
+  filePath: string,
+  declarationOrdinal = 0
+): SymbolNode {
+  return {
+    id,
+    name,
+    qualifiedName: `${filePath}#${name}`,
+    kind: "function",
+    filePath,
+    range: {
+      start: { line: declarationOrdinal + 1, column: 1 },
+      end: { line: declarationOrdinal + 2, column: 1 }
+    },
+    isExported: true,
+    declarationOrdinal
+  };
+}
+
+function boundedEdge(id: string, sourceId: string, targetId: string, filePath: string): GraphEdge {
+  return {
+    id,
+    sourceId,
+    targetId,
+    kind: "calls",
+    filePath,
+    range: {
+      start: { line: 1, column: 1 },
+      end: { line: 1, column: 8 }
+    },
+    resolution: "exact",
+    confidence: 1,
+    referenceName: targetId
+  };
+}
+
+function boundedGraphSnapshot(): GraphSnapshot {
+  const files = ["src/a.ts", "src/b.ts", "src/c.ts"].map((path, index) => ({
+    path,
+    contentHash: `hash-${index}`,
+    language: "typescript" as const,
+    indexedAt: "2026-08-25T00:00:00.000Z"
+  }));
+  const symbols = [
+    boundedSymbol("a-root", "Root", "src/a.ts"),
+    boundedSymbol("a-helper", "RootHelper", "src/a.ts", 1),
+    boundedSymbol("b-target", "Target", "src/b.ts"),
+    boundedSymbol("c-tail", "Tail", "src/c.ts")
+  ];
+  return {
+    files,
+    symbols,
+    edges: [
+      boundedEdge("edge-a-b", "a-root", "b-target", "src/a.ts"),
+      boundedEdge("edge-b-c", "b-target", "c-tail", "src/b.ts"),
+      {
+        ...boundedEdge("edge-unresolved", "a-helper", "b-target", "src/a.ts"),
+        resolution: "unresolved"
+      }
+    ],
+    pendingReferences: []
+  };
+}
+
+function boundedRequest(query: string, overrides: Partial<{
+  readonly maxSeedFiles: number;
+  readonly maxSeedSymbols: number;
+  readonly maxSymbolsPerFile: number;
+  readonly maxNodes: number;
+  readonly maxRelationships: number;
+  readonly maxHops: number;
+}> = {}) {
+  return {
+    query,
+    terms: sourceSearchTerms(query),
+    maxSeedFiles: 64,
+    maxSeedSymbols: 256,
+    maxSymbolsPerFile: 4,
+    maxNodes: 4096,
+    maxRelationships: 16384,
+    maxHops: 4,
+    ...overrides
   };
 }
 
@@ -2117,5 +2205,162 @@ describe("SqliteGraphStore", () => {
     expect(() => store.initialize(projectPath)).toThrow(/schema version \"99\" is unsupported/i);
     expect(readJournalMode(projectPath)).toBe("delete");
     expect(() => store.getStatus(projectPath)).toThrow(/schema version \"99\" is unsupported/i);
+  });
+
+  it("returns an exact and qualified bounded graph projection with complete file metadata", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const graphSnapshot = boundedGraphSnapshot();
+    store.replaceProjectFacts({
+      projectPath,
+      snapshot: graphSnapshot,
+      indexedAt: "2026-08-25T01:00:00.000Z",
+      artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("bounded-exact"),
+      resolverVersion: "bounded-resolver-v1",
+      sourceDocuments: sourceDocuments(graphSnapshot, "Root Target Tail"),
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION
+    });
+
+    const exact = store.getActiveBoundedGraphBundle?.(
+      projectPath,
+      boundedRequest("Target")
+    );
+    expect(exact).toBeDefined();
+    expect(exact?.snapshot.files.map((file) => file.path)).toEqual([
+      "src/a.ts",
+      "src/b.ts",
+      "src/c.ts"
+    ]);
+    expect(exact?.snapshot.pendingReferences).toEqual([]);
+    expect(exact?.snapshot.symbols.map((node) => node.id)).toContain("b-target");
+    expect(exact?.snapshot.edges.map((edge) => edge.id)).toEqual(["edge-a-b", "edge-b-c"]);
+    expect(exact?.indexInputs).toEqual(indexInputs("bounded-exact"));
+    expect(exact?.extractorVersion).toBe("test-extractor-v1");
+    expect(exact?.resolverVersion).toBe("bounded-resolver-v1");
+
+    const qualified = store.getActiveBoundedGraphBundle?.(
+      projectPath,
+      boundedRequest("src/b.ts#Target")
+    );
+    expect(qualified?.snapshot.symbols.map((node) => node.id)).toContain("b-target");
+    expect(qualified?.fallbackRequired).toBe(false);
+
+    const partial = store.getActiveBoundedGraphBundle?.(
+      projectPath,
+      boundedRequest("RootHel")
+    );
+    expect(partial?.snapshot.symbols.map((node) => node.id)).toContain("a-helper");
+
+    const file = store.getActiveBoundedGraphBundle?.(projectPath, {
+      ...boundedRequest("src/c.ts"),
+      terms: ["src/c.ts"]
+    });
+    expect(file?.snapshot.symbols.map((node) => node.id)).toContain("c-tail");
+  });
+
+  it("uses source-search file seeds, keeps adjacency deterministic, and omits non-exact edges", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const graphSnapshot = boundedGraphSnapshot();
+    store.replaceProjectFacts({
+      projectPath,
+      snapshot: graphSnapshot,
+      indexedAt: "2026-08-25T02:00:00.000Z",
+      artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("bounded-fts"),
+      resolverVersion: "bounded-resolver-v2",
+      sourceDocuments: sourceDocuments(graphSnapshot, "needle natural language"),
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION
+    });
+
+    const request = boundedRequest("needle natural");
+    const first = store.getActiveBoundedGraphBundle?.(projectPath, request);
+    const second = store.getActiveBoundedGraphBundle?.(projectPath, request);
+    expect(first).toEqual(second);
+    expect(first?.diagnostics.usedSourceSearch).toBe(true);
+    expect(first?.diagnostics.fallbackRequired).toBe(false);
+    expect(first?.snapshot.edges.map((edge) => edge.id)).toEqual(["edge-a-b", "edge-b-c"]);
+  });
+
+  it("enforces node, relationship, seed-file, per-file, and hop caps", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const graphSnapshot = boundedGraphSnapshot();
+    store.replaceProjectFacts({
+      projectPath,
+      snapshot: graphSnapshot,
+      indexedAt: "2026-08-25T03:00:00.000Z",
+      artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("bounded-caps"),
+      resolverVersion: "bounded-resolver-v3"
+    });
+
+    const result = store.getActiveBoundedGraphBundle?.(
+      projectPath,
+      boundedRequest("Root", {
+        maxSeedFiles: 1,
+        maxSeedSymbols: 2,
+        maxSymbolsPerFile: 1,
+        maxNodes: 1,
+        maxRelationships: 1,
+        maxHops: 1
+      })
+    );
+    expect(result?.snapshot.symbols.length).toBeLessThanOrEqual(1);
+    expect(result?.snapshot.edges.length).toBeLessThanOrEqual(1);
+    expect(result?.diagnostics.seedFiles).toBeLessThanOrEqual(1);
+    expect(result?.diagnostics.seedSymbols).toBeLessThanOrEqual(2);
+    expect(result?.diagnostics.traversedHops).toBeLessThanOrEqual(1);
+    expect(result?.diagnostics.truncated).toBe(true);
+  });
+
+  it("requests legacy fallback only for natural-language queries without graph seeds", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const graphSnapshot = boundedGraphSnapshot();
+    store.replaceProjectFacts({
+      projectPath,
+      snapshot: graphSnapshot,
+      indexedAt: "2026-08-25T04:00:00.000Z",
+      artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("bounded-fallback"),
+      resolverVersion: "bounded-resolver-v4"
+    });
+
+    const natural = store.getActiveBoundedGraphBundle?.(
+      projectPath,
+      boundedRequest("where is an unknown behavior")
+    );
+    expect(natural?.fallbackRequired).toBe(true);
+    expect(natural?.diagnostics.sourceSearchAvailable).toBe(false);
+
+    const exact = store.getActiveBoundedGraphBundle?.(
+      projectPath,
+      boundedRequest("does-not-exist")
+    );
+    expect(exact?.fallbackRequired).toBe(false);
+  });
+
+  it("reports a generation mismatch without mixing graph data", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const graphSnapshot = boundedGraphSnapshot();
+    store.replaceProjectFacts({
+      projectPath,
+      snapshot: graphSnapshot,
+      indexedAt: "2026-08-25T05:00:00.000Z",
+      artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("bounded-generation"),
+      resolverVersion: "bounded-resolver-v5"
+    });
+
+    const result = store.getActiveBoundedGraphBundle?.(projectPath, {
+      ...boundedRequest("Root"),
+      expectedGenerationId: "generation:stale"
+    });
+    expect(result?.diagnostics.generationMatched).toBe(false);
+    expect(result?.snapshot.symbols).toEqual([]);
+    expect(result?.snapshot.edges).toEqual([]);
   });
 });

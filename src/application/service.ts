@@ -87,6 +87,7 @@ import {
   type GitRevisionSource
 } from "../ports/git-change-set.js";
 import type {
+  ActiveBoundedGraphBundle,
   ActiveGraphBundle,
   ActiveGenerationBundle,
   ActiveStatusBundle,
@@ -119,6 +120,7 @@ import {
 } from "./file-inventory.js";
 import { rankGeneratedValues, type GeneratedRankingItem } from "./generated-ranking.js";
 import {
+  EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS,
   EXPLORE_QUERY_LIMITS,
   planExploreQuery,
   type ExploreQueryPlan
@@ -2755,11 +2757,7 @@ export class SymbolLatticeService {
 
   public async explore(projectPath: string, reference: string): Promise<ExploreResult> {
     const normalizedProjectPath = resolve(projectPath);
-    const graphBundle = measureQueryTiming(
-      this.queryTimingSink,
-      "snapshot",
-      () => this.getActiveGraphBundle(normalizedProjectPath)
-    );
+    const graphBundle = this.getExploreGraphBundle(normalizedProjectPath, reference);
     if (!graphBundle.status.initialized) {
       throw new SymbolLatticeError(
         "MISSING_INDEX",
@@ -2791,12 +2789,7 @@ export class SymbolLatticeService {
         );
         if (!sourceProjection.generationMatched) {
           if (attempt === 0) {
-            bundle = measureQueryTiming(
-              this.queryTimingSink,
-              "snapshot",
-              () => this.getActiveGraphBundle(normalizedProjectPath),
-              { retry: true }
-            );
+            bundle = this.getExploreGraphBundle(normalizedProjectPath, reference, true);
             const rematch = matchSymbol(bundle.snapshot, reference);
             if (rematch.status !== "exact") {
               return this.exploreQuery(normalizedProjectPath, reference, bundle);
@@ -2961,11 +2954,14 @@ export class SymbolLatticeService {
           () => planExploreQuery(bundle.snapshot, query),
           { retry: attempt > 0 }
         );
-        const pathSpinePlan = measureQueryTiming(
-          this.queryTimingSink,
-          "path-spine",
-          () => planExplorePathSpines(bundle.snapshot, plan.selection, graphView),
-          { retry: attempt > 0 }
+        const pathSpinePlan = this.markBoundedTraversal(
+          bundle,
+          measureQueryTiming(
+            this.queryTimingSink,
+            "path-spine",
+            () => planExplorePathSpines(bundle.snapshot, plan.selection, graphView),
+            { retry: attempt > 0 }
+          )
         );
         if (plan.selection.length === 0 || bundle.status.generationId === null) {
           return this.exploreQueryResultForBundle(
@@ -3007,12 +3003,7 @@ export class SymbolLatticeService {
           );
         }
         if (attempt === 0) {
-          bundle = measureQueryTiming(
-            this.queryTimingSink,
-            "snapshot",
-            () => this.getActiveGraphBundle(normalizedProjectPath),
-            { retry: true }
-          );
+          bundle = this.getExploreGraphBundle(normalizedProjectPath, query, true);
           continue;
         }
         return this.exploreQueryResultForBundle(
@@ -3029,7 +3020,10 @@ export class SymbolLatticeService {
 
     let graphView = createGraphQueryView(initialBundle.snapshot);
     let plan = planExploreQuery(initialBundle.snapshot, query);
-    let pathSpinePlan = planExplorePathSpines(initialBundle.snapshot, plan.selection, graphView);
+    let pathSpinePlan = this.markBoundedTraversal(
+      initialBundle,
+      planExplorePathSpines(initialBundle.snapshot, plan.selection, graphView)
+    );
     const getActiveSourceDocumentsBundle = this.graphStore.getActiveSourceDocumentsBundle;
     if (typeof getActiveSourceDocumentsBundle !== "function" || plan.selection.length === 0) {
       return this.exploreQueryResultForBundle(
@@ -3052,7 +3046,10 @@ export class SymbolLatticeService {
       );
       graphView = createGraphQueryView(sourceBundle.snapshot);
       plan = planExploreQuery(sourceBundle.snapshot, query);
-      pathSpinePlan = planExplorePathSpines(sourceBundle.snapshot, plan.selection, graphView);
+      pathSpinePlan = this.markBoundedTraversal(
+        sourceBundle,
+        planExplorePathSpines(sourceBundle.snapshot, plan.selection, graphView)
+      );
       const currentFilePaths = this.exploreQueryFilePaths(plan, pathSpinePlan);
       const documentsByFilePath = new Map(
         sourceBundle.documents.map(
@@ -3079,10 +3076,13 @@ export class SymbolLatticeService {
 
     const fallbackPlan = planExploreQuery(initialBundle.snapshot, query);
     const fallbackGraphView = createGraphQueryView(initialBundle.snapshot);
-    const fallbackPathSpinePlan = planExplorePathSpines(
-      initialBundle.snapshot,
-      fallbackPlan.selection,
-      fallbackGraphView
+    const fallbackPathSpinePlan = this.markBoundedTraversal(
+      initialBundle,
+      planExplorePathSpines(
+        initialBundle.snapshot,
+        fallbackPlan.selection,
+        fallbackGraphView
+      )
     );
     return this.exploreQueryResultForBundle(
       normalizedProjectPath,
@@ -3987,7 +3987,8 @@ export class SymbolLatticeService {
     matches: readonly SymbolMatch[],
     bundle: ActiveGraphBundle,
     bounds: ContextBounds,
-    graphView?: GraphQueryView
+    graphView?: GraphQueryView,
+    graphProjectionTruncated = false
   ): readonly ContextEvidencePath[] {
     const paths: ContextEvidencePath[] = [];
     for (let index = 1; index < matches.length; index += 1) {
@@ -4021,7 +4022,7 @@ export class SymbolLatticeService {
         toReference: to.reference,
         status:
           evidence.path === null
-            ? evidence.truncated
+            ? evidence.truncated || graphProjectionTruncated
               ? "truncated"
               : "no-path"
             : from.symbol.id === to.symbol.id
@@ -5321,7 +5322,13 @@ export class SymbolLatticeService {
       sourceWindowPlan,
       sourceWindows,
       sourceWindowAllocation,
-      evidencePaths: this.contextEvidencePaths(matches, bundle, bounds, graphView)
+      evidencePaths: this.contextEvidencePaths(
+        matches,
+        bundle,
+        bounds,
+        graphView,
+        this.isBoundedTraversalTruncated(bundle)
+      )
     };
   }
 
@@ -5405,6 +5412,63 @@ export class SymbolLatticeService {
       extractorVersion: legacyBundle.extractorVersion,
       resolverVersion: legacyBundle.resolverVersion,
       sourceSearchVersion: legacyBundle.sourceSearchVersion ?? null
+    };
+  }
+
+  private getExploreGraphBundle(
+    projectPath: string,
+    query: string,
+    retry = false
+  ): ActiveGraphBundle {
+    const readBoundedGraphBundle = this.graphStore.getActiveBoundedGraphBundle;
+    if (typeof readBoundedGraphBundle === "function") {
+      const boundedBundle = measureQueryTiming(
+        this.queryTimingSink,
+        "seed-retrieval",
+        () => readBoundedGraphBundle.call(this.graphStore, projectPath, {
+          query,
+          terms: sourceSearchTerms(query),
+          maxSeedFiles: EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedFiles,
+          maxSeedSymbols: EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedSymbols,
+          maxSymbolsPerFile:
+            EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedSymbolsPerFile,
+          maxNodes: EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumNodes,
+          maxRelationships: EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumRelationships,
+          maxHops: EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumHops
+        }),
+        { retry }
+      );
+      if (boundedBundle.diagnostics.generationMatched && !boundedBundle.fallbackRequired) {
+        return boundedBundle;
+      }
+    }
+
+    return measureQueryTiming(
+      this.queryTimingSink,
+      "snapshot",
+      () => this.getActiveGraphBundle(projectPath),
+      { retry }
+    );
+  }
+
+  private isBoundedTraversalTruncated(bundle: ActiveGraphBundle): boolean {
+    return "diagnostics" in bundle &&
+      (bundle as ActiveBoundedGraphBundle).diagnostics.truncated;
+  }
+
+  private markBoundedTraversal(
+    bundle: ActiveGraphBundle,
+    plan: ExplorePathSpinePlan
+  ): ExplorePathSpinePlan {
+    if (!this.isBoundedTraversalTruncated(bundle) || plan.summary.traversalTruncated) {
+      return plan;
+    }
+    return {
+      ...plan,
+      summary: {
+        ...plan.summary,
+        traversalTruncated: true
+      }
     };
   }
 

@@ -84,6 +84,47 @@ export interface ActiveSourceDocumentsProjection {
   readonly documents: readonly IndexedSourceDocument[];
 }
 
+/**
+ * Bounded query input for the SQLite-backed explore read projection. The
+ * limits are deliberately carried by the request so the application can keep
+ * the retrieval policy in one place while the store enforces hard caps.
+ */
+export interface BoundedGraphQueryRequest {
+  readonly query: string;
+  readonly terms: readonly string[];
+  readonly maxSeedFiles: number;
+  readonly maxSeedSymbols: number;
+  readonly maxSymbolsPerFile: number;
+  readonly maxNodes: number;
+  readonly maxRelationships: number;
+  readonly maxHops: number;
+  /** Optional generation fence for callers that already read the active graph. */
+  readonly expectedGenerationId?: string;
+}
+
+export interface BoundedGraphQueryDiagnostics {
+  readonly generationMatched: boolean;
+  readonly seedFiles: number;
+  readonly seedSymbols: number;
+  readonly returnedNodes: number;
+  readonly returnedRelationships: number;
+  readonly traversedHops: number;
+  readonly truncated: boolean;
+  readonly sourceSearchAvailable: boolean;
+  readonly usedSourceSearch: boolean;
+  readonly fallbackRequired: boolean;
+}
+
+/**
+ * Active-generation graph metadata plus a bounded symbol/edge projection.
+ * Files remain complete for freshness checks; pending references are omitted
+ * because they are not needed by the bounded read path.
+ */
+export interface ActiveBoundedGraphBundle extends ActiveGraphBundle {
+  readonly diagnostics: BoundedGraphQueryDiagnostics;
+  readonly fallbackRequired: boolean;
+}
+
 /** Metadata for one immutable snapshot retained by a history-capable store. */
 export interface GenerationHistoryEntry {
   readonly generationId: string;
@@ -164,6 +205,11 @@ export interface GraphStore {
     expectedGenerationId: string,
     filePaths: readonly string[]
   ): ActiveSourceDocumentsProjection;
+  /** Optional SQLite-driven bounded graph projection for explore queries. */
+  getActiveBoundedGraphBundle?(
+    projectPath: string,
+    request: BoundedGraphQueryRequest
+  ): ActiveBoundedGraphBundle;
   /**
    * Optional v0.11 retained-history capability. `null` means this adapter or
    * index cannot provide a trustworthy history (including an active generation

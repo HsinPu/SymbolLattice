@@ -37,9 +37,12 @@ import type {
   ActiveGraphBundle,
   ActiveStatusBundle,
   ActiveGenerationBundle,
+  ActiveBoundedGraphBundle,
   ActiveSourceDocumentsBundle,
   ActiveSourceDocumentsProjection,
   ActiveSourceSearchBundle,
+  BoundedGraphQueryRequest,
+  BoundedGraphQueryDiagnostics,
   GenerationComparisonBundle,
   GenerationHistoryBundle,
   GenerationHistoryEntry,
@@ -68,6 +71,13 @@ const SOURCE_DOCUMENT_PATH_QUERY_BATCH_SIZE = 500;
 const GENERATION_SNAPSHOT_VERSION = 2;
 const GENERATION_SNAPSHOT_PART_MAXIMUM_JSON_LENGTH = 1024 * 1024;
 const MAX_RETAINED_GENERATIONS = 5;
+const MAX_BOUNDED_SEED_FILES = 64;
+const MAX_BOUNDED_SEED_SYMBOLS = 256;
+const MAX_BOUNDED_SYMBOLS_PER_FILE = 4;
+const MAX_BOUNDED_NODES = 4096;
+const MAX_BOUNDED_RELATIONSHIPS = 16384;
+const MAX_BOUNDED_HOPS = 4;
+const BOUNDED_QUERY_PARAMETER_BATCH_SIZE = 500;
 
 /**
  * The v0.1 snapshot tables remain deliberately unpartitioned. They are a fast
@@ -283,6 +293,18 @@ const SOURCE_SEARCH_SCHEMA = `
   );
 `;
 
+/** Additive lookup indexes used by the bounded explore read projection. */
+const BOUNDED_GRAPH_QUERY_INDEXES_SCHEMA = `
+  CREATE INDEX IF NOT EXISTS symbols_by_lower_name
+    ON symbols(lower(name));
+  CREATE INDEX IF NOT EXISTS symbols_by_lower_qualified_name
+    ON symbols(lower(qualified_name));
+  CREATE INDEX IF NOT EXISTS edges_by_file_path
+    ON edges(file_path);
+  CREATE INDEX IF NOT EXISTS pending_refs_by_file_path
+    ON pending_refs(file_path);
+`;
+
 type SupportedSchemaVersion =
   | typeof LEGACY_SCHEMA_VERSION
   | typeof GENERATION_SCHEMA_VERSION
@@ -407,6 +429,11 @@ interface SourceSearchRow {
   readonly file_path: string;
   readonly language: ArtifactLanguage;
   readonly source_text: string;
+  readonly relevance: number;
+}
+
+interface SourceSearchPathRow {
+  readonly file_path: string;
   readonly relevance: number;
 }
 
@@ -588,6 +615,7 @@ function migrateDatabaseToCurrent(database: DatabaseSync): void {
     // additions are independent side tables, so this is a strictly additive
     // upgrade that preserves the active graph and any raw facts already there.
     installCurrentAdditiveSchema(database);
+    database.exec(BOUNDED_GRAPH_QUERY_INDEXES_SCHEMA);
     ensurePendingReferenceExtensionColumn(database);
     ensureGeneratedFileColumns(database);
     cleanOrphanedSourceSearchRows(database);
@@ -606,6 +634,7 @@ function initializeNewDatabase(database: DatabaseSync): void {
   try {
     database.exec(SNAPSHOT_SCHEMA);
     installCurrentAdditiveSchema(database);
+    database.exec(BOUNDED_GRAPH_QUERY_INDEXES_SCHEMA);
     ensurePendingReferenceExtensionColumn(database);
     ensureGeneratedFileColumns(database);
     backfillActiveGenerationSnapshot(database);
@@ -636,6 +665,7 @@ function ensureSchema(database: DatabaseSync, databaseExisted: boolean): void {
   database.exec("BEGIN IMMEDIATE");
   try {
     installCurrentAdditiveSchema(database);
+    database.exec(BOUNDED_GRAPH_QUERY_INDEXES_SCHEMA);
     ensurePendingReferenceExtensionColumn(database);
     ensureGeneratedFileColumns(database);
     cleanOrphanedSourceSearchRows(database);
@@ -1741,6 +1771,508 @@ function readActiveSourceDocuments(
   });
 }
 
+function boundedQueryLimit(value: number, maximum: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.min(Math.max(Math.trunc(value), 0), maximum);
+}
+
+function boundedGraphQueryBounds(request: BoundedGraphQueryRequest): {
+  readonly maxSeedFiles: number;
+  readonly maxSeedSymbols: number;
+  readonly maxSymbolsPerFile: number;
+  readonly maxNodes: number;
+  readonly maxRelationships: number;
+  readonly maxHops: number;
+} {
+  return {
+    maxSeedFiles: boundedQueryLimit(request.maxSeedFiles, MAX_BOUNDED_SEED_FILES),
+    maxSeedSymbols: boundedQueryLimit(request.maxSeedSymbols, MAX_BOUNDED_SEED_SYMBOLS),
+    maxSymbolsPerFile: boundedQueryLimit(
+      request.maxSymbolsPerFile,
+      MAX_BOUNDED_SYMBOLS_PER_FILE
+    ),
+    maxNodes: boundedQueryLimit(request.maxNodes, MAX_BOUNDED_NODES),
+    maxRelationships: boundedQueryLimit(
+      request.maxRelationships,
+      MAX_BOUNDED_RELATIONSHIPS
+    ),
+    maxHops: boundedQueryLimit(request.maxHops, MAX_BOUNDED_HOPS)
+  };
+}
+
+function boundedIdentifierTerms(request: BoundedGraphQueryRequest): readonly string[] {
+  const values = [
+    ...request.terms,
+    ...(request.query.trim().length === 0 || /\s/gu.test(request.query) ? [] : [request.query])
+  ];
+  return [
+    ...new Set(
+      values
+        .map((value) => value.trim().replaceAll("\\", "/"))
+        .filter((value) => value.length > 0 && !/\s/gu.test(value))
+    )
+  ].sort();
+}
+
+function boundedLexicalTerms(request: BoundedGraphQueryRequest): readonly string[] {
+  return [
+    ...new Set([
+      ...request.terms.flatMap((term) => sourceSearchTerms(term)),
+      ...sourceSearchTerms(request.query)
+    ])
+  ].sort();
+}
+
+function likelyNaturalLanguageQuery(
+  request: BoundedGraphQueryRequest,
+  lexicalTerms: readonly string[]
+): boolean {
+  const query = request.query.trim();
+  void lexicalTerms;
+  return /\s/gu.test(query);
+}
+
+function readBoundedFileSeedPaths(
+  database: DatabaseSync,
+  identifierTerms: readonly string[],
+  maxFiles: number
+): readonly string[] {
+  if (maxFiles === 0 || identifierTerms.length === 0) {
+    return [];
+  }
+
+  const pathTerms = identifierTerms.filter(
+    (term) => /[\\/]/u.test(term) || /\.[A-Za-z0-9_-]+$/u.test(term)
+  );
+  if (pathTerms.length === 0) {
+    return [];
+  }
+
+  const exactPlaceholders = pathTerms.map(() => "?").join(", ");
+  const rows = database
+    .prepare(
+      `SELECT path
+       FROM files
+       WHERE path IN (${exactPlaceholders})
+          OR path LIKE ? ESCAPE '\\'
+       ORDER BY path
+       LIMIT ?`
+    )
+    .all(
+      ...pathTerms,
+      `%${escapeLike(pathTerms[0] ?? "")}%`,
+      maxFiles
+    ) as unknown as readonly { readonly path: string }[];
+  return rows.map((row) => row.path);
+}
+
+function readBoundedSourceSeedPaths(
+  database: DatabaseSync,
+  activeGenerationId: string | null,
+  sourceSearchVersion: string | null,
+  lexicalTerms: readonly string[],
+  maxFiles: number
+): readonly string[] {
+  if (
+    maxFiles === 0 ||
+    activeGenerationId === null ||
+    sourceSearchVersion === null ||
+    !supportsSourceSearch(database)
+  ) {
+    return [];
+  }
+
+  const matchQuery = sourceSearchPrefixQuery(lexicalTerms);
+  if (matchQuery === null) {
+    return [];
+  }
+
+  const rows = database
+    .prepare(
+      `SELECT source_search.file_path, 0 AS relevance
+       FROM source_search
+       INNER JOIN source_documents
+         ON source_documents.generation_id = source_search.generation_id
+         AND source_documents.file_path = source_search.file_path
+       WHERE source_search MATCH ?
+         AND source_search.generation_id = ?
+       GROUP BY source_search.file_path
+       ORDER BY source_search.file_path ASC
+       LIMIT ?`
+    )
+    .all(matchQuery, activeGenerationId, maxFiles) as unknown as SourceSearchPathRow[];
+  return rows.map((row) => row.file_path);
+}
+
+function symbolProjectionSelect(): string {
+  return `SELECT id, name, qualified_name, kind, file_path,
+    start_line, start_column, end_line, end_column,
+    is_exported, declaration_ordinal
+    FROM symbols`;
+}
+
+function readBoundedSymbolRows(
+  database: DatabaseSync,
+  identifierTerms: readonly string[],
+  lexicalTerms: readonly string[],
+  filePaths: readonly string[],
+  limit: number
+): readonly SymbolRow[] {
+  if (limit === 0 || (identifierTerms.length === 0 && lexicalTerms.length === 0 && filePaths.length === 0)) {
+    return [];
+  }
+
+  const where: string[] = [];
+  const parameters: (string | number)[] = [];
+  if (identifierTerms.length > 0) {
+    const placeholders = identifierTerms.map(() => "?").join(", ");
+    const lowerTerms = identifierTerms.map((term) => term.toLowerCase());
+    const lowerPlaceholders = lowerTerms.map(() => "?").join(", ");
+    where.push(
+      `(name IN (${placeholders}) OR qualified_name IN (${placeholders})
+        OR lower(name) IN (${lowerPlaceholders})
+        OR lower(qualified_name) IN (${lowerPlaceholders}))`
+    );
+    parameters.push(
+      ...identifierTerms,
+      ...identifierTerms,
+      ...lowerTerms,
+      ...lowerTerms
+    );
+  }
+
+  if (filePaths.length > 0) {
+    where.push(`file_path IN (${filePaths.map(() => "?").join(", ")})`);
+    parameters.push(...filePaths);
+  }
+
+  const partialTerms = lexicalTerms.filter((term) => term.length >= 2);
+  if (partialTerms.length > 0) {
+    const partialClauses: string[] = [];
+    for (const term of partialTerms) {
+      partialClauses.push("lower(name) LIKE ? ESCAPE '\\'");
+      parameters.push(`${escapeLike(term.toLowerCase())}%`);
+      partialClauses.push("instr(lower(qualified_name), ?) > 0");
+      parameters.push(term.toLowerCase());
+    }
+    where.push(`(${partialClauses.join(" OR ")})`);
+  }
+
+  const exactOrderParameters: (string | number)[] = [];
+  const exactOrder =
+    identifierTerms.length === 0
+      ? "2"
+      : (() => {
+          const placeholders = identifierTerms.map(() => "?").join(", ");
+          const lowerTerms = identifierTerms.map((term) => term.toLowerCase());
+          const lowerPlaceholders = lowerTerms.map(() => "?").join(", ");
+          exactOrderParameters.push(
+            ...identifierTerms,
+            ...identifierTerms,
+            ...lowerTerms,
+            ...lowerTerms
+          );
+          return `CASE WHEN name IN (${placeholders})
+              OR qualified_name IN (${placeholders})
+              OR lower(name) IN (${lowerPlaceholders})
+              OR lower(qualified_name) IN (${lowerPlaceholders})
+            THEN 0
+            WHEN file_path IN (${filePaths.map(() => "?").join(", ") || "NULL"}) THEN 1
+            ELSE 2 END`;
+        })();
+  if (identifierTerms.length > 0 && filePaths.length > 0) {
+    exactOrderParameters.push(...filePaths);
+  }
+
+  return database
+    .prepare(
+      `${symbolProjectionSelect()}
+       WHERE ${where.join(" OR ")}
+       ORDER BY ${exactOrder}, file_path, start_line, start_column, name, id
+       LIMIT ?`
+    )
+    .all(...parameters, ...exactOrderParameters, limit) as unknown as SymbolRow[];
+}
+
+function toSymbolNode(row: SymbolRow): SymbolNode {
+  return {
+    id: row.id,
+    name: row.name,
+    qualifiedName: row.qualified_name,
+    kind: row.kind,
+    filePath: row.file_path,
+    range: toRange(row),
+    isExported: row.is_exported === 1,
+    declarationOrdinal: row.declaration_ordinal
+  };
+}
+
+function readSymbolRowsByIds(
+  database: DatabaseSync,
+  ids: readonly string[]
+): readonly SymbolRow[] {
+  const rows: SymbolRow[] = [];
+  for (
+    let start = 0;
+    start < ids.length;
+    start += BOUNDED_QUERY_PARAMETER_BATCH_SIZE
+  ) {
+    const batch = ids.slice(start, start + BOUNDED_QUERY_PARAMETER_BATCH_SIZE);
+    if (batch.length === 0) continue;
+    rows.push(
+      ...(database
+        .prepare(
+          `${symbolProjectionSelect()}
+           WHERE id IN (${batch.map(() => "?").join(", ")})`
+        )
+        .all(...batch) as unknown as SymbolRow[])
+    );
+  }
+  return rows.sort(compareSymbolRows);
+}
+
+function compareSymbolRows(left: SymbolRow, right: SymbolRow): number {
+  return (
+    left.file_path.localeCompare(right.file_path) ||
+    left.start_line - right.start_line ||
+    left.start_column - right.start_column ||
+    left.name.localeCompare(right.name) ||
+    left.id.localeCompare(right.id)
+  );
+}
+
+function readExistingSymbolIds(
+  database: DatabaseSync,
+  ids: readonly string[]
+): ReadonlySet<string> {
+  const existing = new Set<string>();
+  for (
+    let start = 0;
+    start < ids.length;
+    start += BOUNDED_QUERY_PARAMETER_BATCH_SIZE
+  ) {
+    const batch = ids.slice(start, start + BOUNDED_QUERY_PARAMETER_BATCH_SIZE);
+    if (batch.length === 0) continue;
+    const rows = database
+      .prepare(`SELECT id FROM symbols WHERE id IN (${batch.map(() => "?").join(", ")})`)
+      .all(...batch) as unknown as readonly { readonly id: string }[];
+    for (const row of rows) existing.add(row.id);
+  }
+  return existing;
+}
+
+function compareEdgeRows(left: EdgeRow, right: EdgeRow): number {
+  return (
+    left.file_path.localeCompare(right.file_path) ||
+    left.start_line - right.start_line ||
+    left.start_column - right.start_column ||
+    left.kind.localeCompare(right.kind) ||
+    left.id.localeCompare(right.id)
+  );
+}
+
+function readBoundedEdgesByIds(
+  database: DatabaseSync,
+  activeGenerationId: string | null,
+  ids: readonly string[]
+): readonly EdgeRow[] {
+  const rowsById = new Map<string, EdgeRow>();
+  for (
+    let start = 0;
+    start < ids.length;
+    start += BOUNDED_QUERY_PARAMETER_BATCH_SIZE
+  ) {
+    const batch = ids.slice(start, start + BOUNDED_QUERY_PARAMETER_BATCH_SIZE);
+    if (batch.length === 0) continue;
+    const placeholders = batch.map(() => "?").join(", ");
+    const evidenceSelect = activeGenerationId === null ? "" : ", ee.evidence_json";
+    const evidenceJoin =
+      activeGenerationId === null
+        ? ""
+        : "LEFT JOIN edge_evidence AS ee ON ee.generation_id = ? AND ee.edge_id = e.id";
+    const base = `SELECT e.id, e.source_id, e.target_id, e.kind, e.file_path,
+      e.start_line, e.start_column, e.end_line, e.end_column,
+      e.resolution, e.confidence, e.reference_name${evidenceSelect}
+      FROM edges AS e ${evidenceJoin}`;
+    const parameters = activeGenerationId === null ? [...batch] : [activeGenerationId, ...batch];
+    const outgoing = database
+      .prepare(`${base} WHERE e.resolution = 'exact' AND e.source_id IN (${placeholders})`)
+      .all(...parameters) as unknown as EdgeRow[];
+    const incoming = database
+      .prepare(`${base} WHERE e.resolution = 'exact' AND e.target_id IN (${placeholders})`)
+      .all(...parameters) as unknown as EdgeRow[];
+    for (const row of [...outgoing, ...incoming]) rowsById.set(row.id, row);
+  }
+  return [...rowsById.values()].sort(compareEdgeRows);
+}
+
+function readActiveBoundedGraphBundle(
+  database: DatabaseSync,
+  projectPath: string,
+  request: BoundedGraphQueryRequest
+): ActiveBoundedGraphBundle {
+  const active = readActiveStatusState(database, projectPath);
+  const sourceSearchVersion = readActiveSourceSearchVersion(database, active.generationId);
+  const bounds = boundedGraphQueryBounds(request);
+  const generationMatched =
+    request.expectedGenerationId === undefined ||
+    request.expectedGenerationId === active.generationId;
+  const files = readActiveFiles(database);
+  const identifierTerms = boundedIdentifierTerms(request);
+  const lexicalTerms = boundedLexicalTerms(request);
+  const sourceSearchAvailable =
+    sourceSearchVersion !== null && supportsSourceSearch(database) && active.generationId !== null;
+
+  if (!generationMatched || bounds.maxNodes === 0) {
+    const diagnostics: BoundedGraphQueryDiagnostics = {
+      generationMatched,
+      seedFiles: 0,
+      seedSymbols: 0,
+      returnedNodes: 0,
+      returnedRelationships: 0,
+      traversedHops: 0,
+      truncated: false,
+      sourceSearchAvailable,
+      usedSourceSearch: false,
+      fallbackRequired: false
+    };
+    return {
+      status: active.status,
+      snapshot: { files, symbols: [], edges: [], pendingReferences: [] },
+      indexInputs: readActiveIndexInputs(database, active.schemaVersion, active.generationId),
+      extractorVersion: active.generation?.extractor_version ?? null,
+      resolverVersion: active.generation?.resolver_version ?? null,
+      sourceSearchVersion,
+      diagnostics,
+      fallbackRequired: false
+    };
+  }
+
+  const fileSeeds = readBoundedFileSeedPaths(database, identifierTerms, bounds.maxSeedFiles);
+  const sourceSeeds = readBoundedSourceSeedPaths(
+    database,
+    active.generationId,
+    sourceSearchVersion,
+    lexicalTerms,
+    bounds.maxSeedFiles
+  );
+  const directSymbolRows = readBoundedSymbolRows(
+    database,
+    identifierTerms,
+    lexicalTerms,
+    [],
+    bounds.maxSeedSymbols
+  );
+  const selectedFilePaths = [...new Set([...fileSeeds, ...directSymbolRows.map((row) => row.file_path), ...sourceSeeds])]
+    .sort()
+    .slice(0, bounds.maxSeedFiles);
+  const candidateSymbolRows = readBoundedSymbolRows(
+    database,
+    identifierTerms,
+    lexicalTerms,
+    selectedFilePaths,
+    Math.min(bounds.maxSeedSymbols * Math.max(bounds.maxSymbolsPerFile, 1), MAX_BOUNDED_SEED_SYMBOLS)
+  );
+  const seedRows: SymbolRow[] = [];
+  const selectedPathSet = new Set(selectedFilePaths);
+  const symbolsPerFile = new Map<string, number>();
+  const seenSeedIds = new Set<string>();
+  for (const row of [...directSymbolRows, ...candidateSymbolRows]) {
+    if (!selectedPathSet.has(row.file_path)) continue;
+    if (seenSeedIds.has(row.id)) continue;
+    const count = symbolsPerFile.get(row.file_path) ?? 0;
+    if (count >= bounds.maxSymbolsPerFile || seedRows.length >= bounds.maxSeedSymbols) continue;
+    seenSeedIds.add(row.id);
+    symbolsPerFile.set(row.file_path, count + 1);
+    seedRows.push(row);
+  }
+
+  const naturalLanguage = likelyNaturalLanguageQuery(request, lexicalTerms);
+  const noSeeds = seedRows.length === 0;
+  const fallbackRequired = naturalLanguage && noSeeds;
+  const usedSourceSearch = sourceSeeds.length > 0;
+  const allSeedIds = [...new Set(seedRows.map((row) => row.id))];
+  const seedIds = allSeedIds.slice(0, bounds.maxNodes);
+  const knownNodeIds = new Set(seedIds);
+  let truncated = seedIds.length < allSeedIds.length;
+  const returnedEdgeRows = new Map<string, EdgeRow>();
+  let frontier = seedIds;
+  let traversedHops = 0;
+
+  for (let hop = 1; hop <= bounds.maxHops && frontier.length > 0; hop += 1) {
+    const edgeRows = readBoundedEdgesByIds(database, active.generationId, frontier);
+    if (edgeRows.length === 0) break;
+    const candidateIds = edgeRows.flatMap((row) =>
+      row.target_id === null ? [row.source_id] : [row.source_id, row.target_id]
+    );
+    const existingIds = readExistingSymbolIds(database, candidateIds);
+    const nextFrontier: string[] = [];
+    const nextFrontierSet = new Set<string>();
+    for (const row of edgeRows) {
+      if (returnedEdgeRows.has(row.id) || row.target_id === null) continue;
+      if (!existingIds.has(row.source_id) || !existingIds.has(row.target_id)) continue;
+      if (returnedEdgeRows.size >= bounds.maxRelationships) {
+        truncated = true;
+        break;
+      }
+      const sourceKnown = knownNodeIds.has(row.source_id);
+      const targetKnown = knownNodeIds.has(row.target_id);
+      const newNodeId = sourceKnown === targetKnown ? null : sourceKnown ? row.target_id : row.source_id;
+      if (newNodeId !== null && !knownNodeIds.has(newNodeId)) {
+        if (knownNodeIds.size >= bounds.maxNodes) {
+          truncated = true;
+          continue;
+        }
+        knownNodeIds.add(newNodeId);
+        if (!nextFrontierSet.has(newNodeId)) {
+          nextFrontierSet.add(newNodeId);
+          nextFrontier.push(newNodeId);
+        }
+      }
+      returnedEdgeRows.set(row.id, row);
+    }
+    traversedHops = hop;
+    frontier = nextFrontier.sort();
+    if (returnedEdgeRows.size >= bounds.maxRelationships) break;
+  }
+
+  const symbolRows = readSymbolRowsByIds(database, [...knownNodeIds]);
+  const symbolIds = new Set(symbolRows.map((row) => row.id));
+  const edges = [...returnedEdgeRows.values()]
+    .filter((row) => row.target_id !== null && symbolIds.has(row.source_id) && symbolIds.has(row.target_id))
+    .sort(compareEdgeRows)
+    .map(toGraphEdge);
+  const diagnostics: BoundedGraphQueryDiagnostics = {
+    generationMatched,
+    seedFiles: selectedFilePaths.length,
+    seedSymbols: Math.min(seedRows.length, bounds.maxNodes),
+    returnedNodes: symbolRows.length,
+    returnedRelationships: edges.length,
+    traversedHops,
+    truncated,
+    sourceSearchAvailable,
+    usedSourceSearch,
+    fallbackRequired
+  };
+  return {
+    status: active.status,
+    snapshot: {
+      files,
+      symbols: symbolRows.map(toSymbolNode),
+      edges,
+      pendingReferences: []
+    },
+    indexInputs: readActiveIndexInputs(database, active.schemaVersion, active.generationId),
+    extractorVersion: active.generation?.extractor_version ?? null,
+    resolverVersion: active.generation?.resolver_version ?? null,
+    sourceSearchVersion,
+    diagnostics,
+    fallbackRequired
+  };
+}
+
 function readActiveGraphBundle(
   database: DatabaseSync,
   projectPath: string
@@ -2043,6 +2575,41 @@ export class SqliteGraphStore implements GraphStore {
           : []
       };
     });
+  }
+
+  public getActiveBoundedGraphBundle(
+    projectPath: string,
+    request: BoundedGraphQueryRequest
+  ): ActiveBoundedGraphBundle {
+    const normalizedProjectPath = resolve(projectPath);
+    if (!this.isInitialized(normalizedProjectPath)) {
+      const status = uninitializedStatus(normalizedProjectPath);
+      return {
+        status,
+        snapshot: emptySnapshot(),
+        indexInputs: null,
+        extractorVersion: null,
+        resolverVersion: null,
+        sourceSearchVersion: null,
+        diagnostics: {
+          generationMatched: request.expectedGenerationId === undefined,
+          seedFiles: 0,
+          seedSymbols: 0,
+          returnedNodes: 0,
+          returnedRelationships: 0,
+          traversedHops: 0,
+          truncated: false,
+          sourceSearchAvailable: false,
+          usedSourceSearch: false,
+          fallbackRequired: false
+        },
+        fallbackRequired: false
+      };
+    }
+
+    return this.withReadDatabase(normalizedProjectPath, (database) =>
+      readActiveBoundedGraphBundle(database, normalizedProjectPath, request)
+    );
   }
 
   public getGenerationHistoryBundle(projectPath: string): GenerationHistoryBundle | null {

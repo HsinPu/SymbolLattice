@@ -50,10 +50,12 @@ import { FileSystemSourceCatalog } from "../../../src/infrastructure/filesystem/
 import { SqliteGraphStore } from "../../../src/infrastructure/sqlite/index.js";
 import { RecordingQueryTimingSink } from "../../../src/application/query-timing.js";
 import type {
+  ActiveBoundedGraphBundle,
   ActiveGraphBundle,
   ActiveGenerationBundle,
   ActiveSourceDocumentsBundle,
   ActiveSourceDocumentsProjection,
+  BoundedGraphQueryRequest,
   GenerationComparisonBundle,
   GenerationHistoryEntry,
   GitChangeSet,
@@ -446,6 +448,76 @@ function createSourceOnlyExploreGraphStore(
     replaceProjectFacts: () => {}
   };
   return { graphStore, graphReadCount: () => graphIndex, sourceDocumentRequests };
+}
+
+function boundedRaceBundle(
+  bundle: ActiveGraphBundle,
+  options: { readonly fallbackRequired?: boolean; readonly truncated?: boolean } = {}
+): ActiveBoundedGraphBundle {
+  const fallbackRequired = options.fallbackRequired ?? false;
+  return {
+    ...bundle,
+    fallbackRequired,
+    diagnostics: {
+      generationMatched: true,
+      seedFiles: 1,
+      seedSymbols: bundle.snapshot.symbols.length,
+      returnedNodes: bundle.snapshot.symbols.length,
+      returnedRelationships: bundle.snapshot.edges.length,
+      traversedHops: 0,
+      truncated: options.truncated ?? false,
+      sourceSearchAvailable: true,
+      usedSourceSearch: true,
+      fallbackRequired
+    }
+  };
+}
+
+function createBoundedExploreGraphStore(
+  boundedBundles: readonly ActiveBoundedGraphBundle[],
+  sourceProjections: readonly ActiveSourceDocumentsProjection[],
+  fallbackBundle?: ActiveGraphBundle
+): {
+  readonly graphStore: GraphStore;
+  readonly boundedRequests: readonly BoundedGraphQueryRequest[];
+  readonly fullGraphReadCount: () => number;
+} {
+  let boundedIndex = 0;
+  let sourceIndex = 0;
+  let fullGraphReads = 0;
+  const boundedRequests: BoundedGraphQueryRequest[] = [];
+  const baseline = fallbackBundle ?? boundedBundles[0]!;
+  const graphStore: GraphStore = {
+    isInitialized: () => true,
+    initialize: () => {},
+    getStatus: () => baseline.status,
+    getSnapshot: () => baseline.snapshot,
+    getArtifactFacts: () => [],
+    getIndexInputs: () => baseline.indexInputs,
+    getActiveGraphBundle: () => {
+      fullGraphReads += 1;
+      if (fallbackBundle === undefined) {
+        throw new Error("Bounded explore must not materialize the full graph.");
+      }
+      return fallbackBundle;
+    },
+    getActiveBoundedGraphBundle: (_projectPath, request) => {
+      boundedRequests.push(request);
+      const bundle = boundedBundles[boundedIndex];
+      boundedIndex += 1;
+      if (bundle === undefined) throw new Error("Unexpected bounded graph read.");
+      return bundle;
+    },
+    getActiveGenerationBundle: () => ({ ...baseline, artifactFacts: [] }),
+    getActiveSourceDocuments: () => {
+      const projection = sourceProjections[sourceIndex];
+      sourceIndex += 1;
+      if (projection === undefined) throw new Error("Unexpected source-only read.");
+      return projection;
+    },
+    replaceProjectFacts: () => {}
+  };
+  return { graphStore, boundedRequests, fullGraphReadCount: () => fullGraphReads };
 }
 
 /** Simulates a migrated v0.3 graph whose source-search projection was not yet present. */
@@ -11349,6 +11421,134 @@ describe("SymbolLatticeService", () => {
       "source",
       "context",
       "status"
+    ]);
+  });
+
+  it("prefers the SQLite bounded graph projection for explore queries", async () => {
+    const graph = raceSourceDocumentsBundle(
+      "generation:A",
+      "src/stable.ts",
+      'export function raceTarget() { return "A evidence"; }\n',
+      []
+    );
+    const { graphStore, boundedRequests, fullGraphReadCount } = createBoundedExploreGraphStore(
+      [boundedRaceBundle(graph)],
+      [
+        raceSourceDocumentsProjection(
+          "generation:A",
+          "src/stable.ts",
+          'export function raceTarget() { return "A evidence"; }\n'
+        )
+      ]
+    );
+    const timing = new RecordingQueryTimingSink();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog(), {
+      queryTimingSink: timing
+    });
+
+    const exploration = await service.explore(
+      "C:/SymbolLattice-race-project",
+      "trace raceTarget flow"
+    );
+
+    expect(exploration).toMatchObject({
+      mode: "query",
+      status: { generationId: "generation:A" },
+      queryPlan: { selection: [{ symbol: { filePath: "src/stable.ts" } }] }
+    });
+    expect(fullGraphReadCount()).toBe(0);
+    expect(boundedRequests).toEqual([
+      expect.objectContaining({
+        query: "trace raceTarget flow",
+        maxSeedFiles: 64,
+        maxSeedSymbols: 256,
+        maxSymbolsPerFile: 4,
+        maxNodes: 4096,
+        maxRelationships: 16384,
+        maxHops: 4
+      })
+    ]);
+    expect(timing.events().map((event) => event.stage)).toEqual([
+      "seed-retrieval",
+      "planning",
+      "path-spine",
+      "source",
+      "context",
+      "status"
+    ]);
+  });
+
+  it("falls back to the legacy planner only when the bounded projection requires it", async () => {
+    const graph = raceSourceDocumentsBundle(
+      "generation:A",
+      "src/stable.ts",
+      'export function raceTarget() { return "A evidence"; }\n',
+      []
+    );
+    const { graphStore, fullGraphReadCount } = createBoundedExploreGraphStore(
+      [boundedRaceBundle(graph, { fallbackRequired: true })],
+      [
+        raceSourceDocumentsProjection(
+          "generation:A",
+          "src/stable.ts",
+          'export function raceTarget() { return "A evidence"; }\n'
+        )
+      ],
+      graph
+    );
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await expect(
+      service.explore("C:/SymbolLattice-race-project", "trace raceTarget flow")
+    ).resolves.toMatchObject({ mode: "query", status: { generationId: "generation:A" } });
+    expect(fullGraphReadCount()).toBe(1);
+  });
+
+  it("reports bounded projection exhaustion as truncated instead of no-path", async () => {
+    const first = raceSnapshot("src/alpha.ts");
+    const second = raceSnapshot("src/beta.ts");
+    const snapshot: GraphSnapshot = {
+      files: [...first.files, ...second.files],
+      symbols: [
+        { ...first.symbols[0]!, id: "symbol:alpha", name: "alpha", qualifiedName: "src/alpha.ts#alpha" },
+        { ...second.symbols[0]!, id: "symbol:beta", name: "beta", qualifiedName: "src/beta.ts#beta" }
+      ],
+      edges: [],
+      pendingReferences: []
+    };
+    const graph: ActiveGraphBundle = {
+      status: {
+        ...raceStatus("generation:A"),
+        counts: { files: 2, symbols: 2, edges: 0, pendingReferences: 0 }
+      },
+      snapshot,
+      indexInputs: null,
+      extractorVersion: null,
+      resolverVersion: null,
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION
+    };
+    const { graphStore } = createBoundedExploreGraphStore(
+      [boundedRaceBundle(graph, { truncated: true })],
+      [{
+        status: graph.status,
+        sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION,
+        generationMatched: true,
+        documents: []
+      }]
+    );
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const exploration = await service.explore(
+      "C:/SymbolLattice-race-project",
+      "connect alpha beta"
+    );
+
+    expect(exploration).toMatchObject({
+      mode: "query",
+      pathSpinePlan: { summary: { traversalTruncated: true } }
+    });
+    expect(exploration.evidencePaths).toEqual([
+      expect.objectContaining({ status: "truncated", path: null })
     ]);
   });
 
