@@ -13,13 +13,13 @@ import {
   type SymbolNode
 } from "../domain/index.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v10" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v11" as const;
 export const EXPLORE_QUERY_SOURCE_WORTH_POLICY = "explore-query-source-worth-v1" as const;
 export const EXPLORE_QUERY_GRAPH_MASS_POLICY = "explore-query-graph-mass-v2" as const;
 export const EXPLORE_QUERY_GRAPH_EXPANSION_POLICY =
   "explore-query-graph-expansion-v2" as const;
 export const EXPLORE_QUERY_GRAPH_DIFFUSION_POLICY =
-  "explore-query-graph-diffusion-v2" as const;
+  "explore-query-graph-diffusion-v3" as const;
 export const EXPLORE_QUERY_LOW_VALUE_FILTER_POLICY =
   "explore-query-low-value-filter-v2" as const;
 export const EXPLORE_GENERATED_SOURCE_WORTH = 0.3 as const;

@@ -2850,10 +2850,7 @@ export class SymbolLatticeService {
             reference,
             bundle,
             null,
-            sourceProjection.sourceSearchVersion === null ||
-              sourceProjection.sourceSearchVersion === undefined
-              ? "not-applicable"
-              : "unavailable"
+            "unavailable"
           );
         }
         const sourceDraft = contextSourceDraftFromPersistedText({

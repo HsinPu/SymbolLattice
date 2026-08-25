@@ -1041,10 +1041,10 @@ describe("SymbolLatticeService", () => {
       sourceAvailability: "not-applicable",
       source: null,
       queryPlan: {
-        policy: "explore-query-plan-v10",
+        policy: "explore-query-plan-v11",
         ranking: {
           graphDiffusion: {
-            policy: "explore-query-graph-diffusion-v2",
+            policy: "explore-query-graph-diffusion-v3",
             reason: "completed",
             applied: true,
             seedMode: "strong-lexical",
@@ -1115,7 +1115,7 @@ describe("SymbolLatticeService", () => {
         summary: { candidateCount: 4 }
       },
       pathSpinePlan: {
-        policy: "explore-path-spines-v1",
+        policy: "explore-path-spines-v2",
         summary: { selectedSpineCount: 0, bridgeSymbolCount: 0 }
       },
       sourceWindowPlan: {
@@ -1170,7 +1170,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v10",
+      policy: "explore-query-plan-v11",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -1247,7 +1247,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "dispatch behavior");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v10",
+      policy: "explore-query-plan-v11",
       ranking: {
         graphExpansion: {
           policy: "explore-query-graph-expansion-v2",
@@ -1262,7 +1262,7 @@ describe("SymbolLatticeService", () => {
           rejectedExistingFileCount: 1
         },
         graphDiffusion: {
-          policy: "explore-query-graph-diffusion-v2",
+          policy: "explore-query-graph-diffusion-v3",
           reason: "completed",
           applied: true,
           seedMode: "strong-lexical",
@@ -1384,7 +1384,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "dispatch pipeline");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v10",
+      policy: "explore-query-plan-v11",
       scoreFloor: {
         policy: "explore-query-relative-file-score-floor-v1",
         reason: "relative-floor-applied",
@@ -1434,7 +1434,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v10",
+      policy: "explore-query-plan-v11",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1480,7 +1480,7 @@ describe("SymbolLatticeService", () => {
 
     const general = await service.explore(projectPath, "renderAsset");
     expect(general.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v10",
+      policy: "explore-query-plan-v11",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1572,7 +1572,7 @@ describe("SymbolLatticeService", () => {
       mode: "query",
       status: { stale: true },
       pathSpinePlan: {
-        policy: "explore-path-spines-v1",
+        policy: "explore-path-spines-v2",
         summary: { selectedSpineCount: 1, bridgeSymbolCount: 1 },
         spines: [{ bridgeSymbols: [{ name: "bridgeFlow", filePath: "src/bridge.ts" }] }]
       }

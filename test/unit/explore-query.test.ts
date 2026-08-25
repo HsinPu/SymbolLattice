@@ -98,7 +98,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v10",
+      policy: "explore-query-plan-v11",
       queryIntent: {
         tests: false,
         icons: false,
@@ -216,7 +216,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v10",
+      policy: "explore-query-plan-v11",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -448,7 +448,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v10",
+      policy: "explore-query-plan-v11",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -872,7 +872,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v10",
+      policy: "explore-query-plan-v11",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v2",
@@ -959,7 +959,7 @@ describe("explore query planning", () => {
 
     expect(reversed).toEqual(plan);
     expect(plan.ranking.graphDiffusion).toMatchObject({
-      policy: "explore-query-graph-diffusion-v2",
+      policy: "explore-query-graph-diffusion-v3",
       reason: "completed",
       applied: true,
       seedMode: "strong-lexical",
@@ -982,7 +982,7 @@ describe("explore query planning", () => {
     expect(plan.selection[1]).toMatchObject({
       reasons: expect.arrayContaining(["graph-diffusion"]),
       graphDiffusion: {
-        policy: "explore-query-graph-diffusion-v2",
+        policy: "explore-query-graph-diffusion-v3",
         state: "reached",
         seed: false,
         seedWeight: 0,
@@ -1570,7 +1570,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v10",
+      policy: "explore-query-plan-v11",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,

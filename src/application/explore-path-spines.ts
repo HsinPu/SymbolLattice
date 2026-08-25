@@ -7,7 +7,7 @@ import {
 import type { GraphSnapshot, SymbolNode } from "../domain/types.js";
 import type { ExploreQuerySelection } from "./explore-query.js";
 
-export const EXPLORE_PATH_SPINE_POLICY = "explore-path-spines-v1" as const;
+export const EXPLORE_PATH_SPINE_POLICY = "explore-path-spines-v2" as const;
 export const EXPLORE_PATH_SPINE_LIMITS = {
   maximumPairAttempts: 16,
   maximumHops: 4,

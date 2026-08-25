@@ -227,7 +227,7 @@ describe("explore source window planning", () => {
     const first = edge("entry-bridge", entry, bridge, 5);
     const second = edge("bridge-target", bridge, target, 12);
     const spinePlan: ExplorePathSpinePlan = {
-      policy: "explore-path-spines-v1",
+      policy: "explore-path-spines-v2",
       limits: {
         maximumPairAttempts: 16,
         maximumHops: 4,
