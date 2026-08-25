@@ -3277,6 +3277,7 @@ describe("SymbolLattice v0.10 foreground watch CLI", () => {
       stop: stopped
     };
     let capturedWatchOptions: ForegroundWatchOptions | null = null;
+    let readFreshnessReceipt: (() => unknown) | undefined;
     let resolveServerStarted: (() => void) | null = null;
     const serverStarted = new Promise<void>((resolve) => {
       resolveServerStarted = resolve;
@@ -3302,8 +3303,9 @@ describe("SymbolLattice v0.10 foreground watch CLI", () => {
         force: true,
         intervalMs: 750
       },
-      async (_receivedService, projectPath): Promise<McpServerSession> => {
+      async (_receivedService, projectPath, serverOptions): Promise<McpServerSession> => {
         expect(projectPath).toBe("C:/chosen-project");
+        readFreshnessReceipt = serverOptions?.readFreshnessReceipt;
         calls.push("mcp-start");
         resolveServerStarted?.();
         return mcpSession;
@@ -3311,6 +3313,7 @@ describe("SymbolLattice v0.10 foreground watch CLI", () => {
       async (_receivedService, options): Promise<ForegroundWatchSession> => {
         calls.push("watch-start");
         capturedWatchOptions = options;
+        options.onReceipt?.(watchReceipt("started"));
         return watchSession;
       },
       undefined,
@@ -3328,6 +3331,10 @@ describe("SymbolLattice v0.10 foreground watch CLI", () => {
       intervalMs: 750
     });
     expect(capturedWatchOptions?.eventSource).toBeDefined();
+    expect(readFreshnessReceipt?.()).toEqual({
+      expectedGenerationId: "generation:test",
+      freshnessVerified: true
+    });
 
     requestCooperativeStop?.();
     await running;

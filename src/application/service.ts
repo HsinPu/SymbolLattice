@@ -1,4 +1,5 @@
 import { isAbsolute, relative, resolve, sep } from "node:path";
+import { isMainThread } from "node:worker_threads";
 
 import {
   AFFECTED_TEST_EDGE_KINDS,
@@ -63,18 +64,14 @@ import {
   type SymbolNode,
   type TestFileClassifier
 } from "../domain/index.js";
-import {
-  createFrameworkFactPluginExtractor,
-  extractFileFacts,
-  type ExtractFileFactsInput,
-  type ExtractedFileFacts,
-  type FrameworkFactPluginRegistry
+import type {
+  ExtractFileFactsInput,
+  ExtractedFileFacts,
+  FrameworkFactPluginRegistry
 } from "../extraction/index.js";
-import { projectLuaStructuralFacts } from "../extraction/lua-structural.js";
-import {
-  createLuaWorkerRuntime,
-  type LuaWorkerFactory,
-  type LuaWorkerRuntime
+import type {
+  LuaWorkerFactory,
+  LuaWorkerRuntime
 } from "../extraction/lua-worker-runtime.js";
 import {
   GitChangeSetError,
@@ -125,6 +122,10 @@ import {
   planExploreQuery,
   type ExploreQueryPlan
 } from "./explore-query.js";
+import {
+  ReadQueryGenerationMismatchError,
+  type ReadQueryFreshnessReceipt
+} from "./read-query-freshness.js";
 import {
   planExplorePathSpines,
   type ExplorePathSpinePlan
@@ -226,6 +227,33 @@ import {
   NOOP_QUERY_TIMING_SINK,
   type QueryTimingSink
 } from "./query-timing.js";
+
+const extractionRuntime = isMainThread
+  ? await import("../extraction/index.js")
+  : null;
+const luaStructuralRuntime = isMainThread
+  ? await import("../extraction/lua-structural.js")
+  : null;
+const luaWorkerRuntimeModule = isMainThread
+  ? await import("../extraction/lua-worker-runtime.js")
+  : null;
+const extractFileFacts = extractionRuntime?.extractFileFacts ?? (() => {
+  throw new Error("Artifact extraction is unavailable in a read-only query worker.");
+});
+const createFrameworkFactPluginExtractor = extractionRuntime?.createFrameworkFactPluginExtractor ?? (() => {
+  throw new Error("Framework extraction is unavailable in a read-only query worker.");
+});
+type ProjectLuaStructuralFacts =
+  typeof import("../extraction/lua-structural.js").projectLuaStructuralFacts;
+const projectLuaStructuralFacts: ProjectLuaStructuralFacts =
+  luaStructuralRuntime?.projectLuaStructuralFacts ?? (() => {
+    throw new Error("Lua extraction is unavailable in a read-only query worker.");
+  });
+const createLuaWorkerRuntime = luaWorkerRuntimeModule?.createLuaWorkerRuntime ?? (() => ({
+  async parse() {
+    throw new Error("Lua parsing is unavailable in a read-only query worker.");
+  }
+}));
 import type {
   AffectedTestEvidence,
   AffectedTestsBounds,
@@ -326,6 +354,8 @@ export interface SymbolLatticeServiceExtensions {
   readonly luaWorkerFactory?: LuaWorkerFactory;
   /** Optional no-output timing seam for read-query profiling and benchmarks. */
   readonly queryTimingSink?: QueryTimingSink;
+  /** Internal MCP worker seam; absent for CLI and no-auto-sync reads. */
+  readonly readQueryFreshnessReceipt?: () => ReadQueryFreshnessReceipt | null;
 }
 
 function artifactFactsExtractorVersion(extractor: ArtifactFactsExtractor): string {
@@ -1365,6 +1395,7 @@ export class SymbolLatticeService {
   private readonly activeProjectResolverVersion: string;
   private readonly luaWorkerRuntime: LuaWorkerRuntime;
   private readonly queryTimingSink: QueryTimingSink;
+  private readonly readQueryFreshnessReceipt: (() => ReadQueryFreshnessReceipt | null) | undefined;
 
   public constructor(
     graphStore: GraphStore,
@@ -1396,6 +1427,7 @@ export class SymbolLatticeService {
     this.referenceResolverPlugins = extensions?.referenceResolverPlugins;
     this.frameworkProjectPlugins = extensions?.frameworkProjectPlugins;
     this.queryTimingSink = extensions?.queryTimingSink ?? NOOP_QUERY_TIMING_SINK;
+    this.readQueryFreshnessReceipt = extensions?.readQueryFreshnessReceipt;
     this.luaWorkerRuntime = createLuaWorkerRuntime(
       extensions?.luaWorkerFactory === undefined
         ? {}
@@ -1987,6 +2019,10 @@ export class SymbolLatticeService {
     options: FilesOptions = {}
   ): Promise<FilesResult> {
     const request = this.filesRequest(options);
+    const readFileSummaryPage = this.graphStore.getActiveFileSummaryPage;
+    if (typeof readFileSummaryPage === "function" && request.pattern === undefined) {
+      return this.filesFromSummaryPage(resolve(projectPath), request, readFileSummaryPage);
+    }
     const context = await this.requireGraph(projectPath);
     const declarationCounts = new Map<string, number>();
     const edgeCounts = new Map<string, number>();
@@ -4978,6 +5014,14 @@ export class SymbolLatticeService {
       return persistedStatus;
     }
 
+    const freshnessReceipt = this.readQueryFreshnessReceipt?.();
+    if (
+      freshnessReceipt?.freshnessVerified === true &&
+      freshnessReceipt.expectedGenerationId === persistedStatus.generationId
+    ) {
+      return persistedStatus;
+    }
+
     const versionChanged =
       statusBundleFiles(bundle).length > 0 &&
       (bundle.extractorVersion !== this.activeArtifactFactsExtractorVersion ||
@@ -5415,6 +5459,105 @@ export class SymbolLatticeService {
     };
   }
 
+  private async filesFromSummaryPage(
+    normalizedProjectPath: string,
+    request: NormalizedFilesRequest,
+    readFileSummaryPage: NonNullable<GraphStore["getActiveFileSummaryPage"]>
+  ): Promise<FilesResult> {
+    const selectionFingerprint = fileSelectionFingerprint(request);
+    let cursor: ReturnType<typeof decodeFilePageCursor> | undefined;
+    if (request.cursor !== undefined) {
+      try {
+        cursor = decodeFilePageCursor(request.cursor);
+      } catch (error) {
+        if (error instanceof InvalidFilePageCursorError) {
+          throw new SymbolLatticeError("INVALID_FILE_CURSOR", error.message);
+        }
+        throw error;
+      }
+      if (cursor.selectionFingerprint !== selectionFingerprint) {
+        throw new SymbolLatticeError(
+          "FILE_CURSOR_FILTER_MISMATCH",
+          "File cursor does not match the current file-selection filters."
+        );
+      }
+    }
+    const freshnessReceipt = this.readQueryFreshnessReceipt?.() ?? null;
+    const page = readFileSummaryPage.call(this.graphStore, normalizedProjectPath, {
+      limit: request.limit,
+      ...(request.pathPrefix === undefined ? {} : { pathPrefix: request.pathPrefix }),
+      ...(request.language === undefined ? {} : { language: request.language }),
+      ...(cursor === undefined ? {} : { afterFilePath: cursor.afterFilePath }),
+      ...(cursor !== undefined
+        ? { expectedGenerationId: cursor.generationId }
+        : freshnessReceipt === null
+          ? {}
+          : { expectedGenerationId: freshnessReceipt.expectedGenerationId })
+    });
+    if (!page.status.initialized) {
+      throw new SymbolLatticeError(
+        "MISSING_INDEX",
+        `No SymbolLattice index exists for ${normalizedProjectPath}. Run "SymbolLattice init ${normalizedProjectPath}" first.`
+      );
+    }
+    if (!page.generationMatched) {
+      if (cursor !== undefined) {
+        throw new SymbolLatticeError(
+          "FILE_CURSOR_GENERATION_MISMATCH",
+          "File cursor belongs to a different active generation."
+        );
+      }
+      throw new ReadQueryGenerationMismatchError();
+    }
+    if (!page.cursorMatched) {
+      throw new SymbolLatticeError(
+        "INVALID_FILE_CURSOR",
+        "File cursor does not identify a record in the selected generation."
+      );
+    }
+    const status = await this.getStatusForBundle(normalizedProjectPath, page);
+    const returnedFiles: readonly IndexedFileSummary[] = page.rows.map((row) => ({
+      filePath: row.file.path,
+      language: row.file.language,
+      indexedAt: row.file.indexedAt,
+      generated: generatedClassificationFor(row.file),
+      sourceRole: sourceRoleClassificationFor(row.file),
+      declarationCount: row.declarationCount,
+      edgeCount: row.edgeCount,
+      pendingReferenceCount: row.pendingReferenceCount
+    }));
+    const generationId = status.generationId;
+    if (generationId === null) {
+      throw new SymbolLatticeError("MISSING_INDEX", "The active file generation is unavailable.");
+    }
+    const nextCursor = page.remainingFileCount > 0 && returnedFiles.length > 0
+      ? encodeFilePageCursor({
+          generationId,
+          selectionFingerprint,
+          afterFilePath: returnedFiles.at(-1)!.filePath
+        })
+      : null;
+    return {
+      status,
+      bounds: { limit: request.limit, maximumLimit: MAX_FILE_LIMIT },
+      format: request.format,
+      matchedFileCount: page.matchedFileCount,
+      pagination: {
+        returnedFileCount: returnedFiles.length,
+        remainingFileCount: page.remainingFileCount,
+        nextCursor
+      },
+      files: returnedFiles,
+      ...(request.format === "tree"
+        ? { tree: buildFileTree(returnedFiles, request.maxDepth) }
+        : {}),
+      ...(request.format === "grouped"
+        ? { groups: buildFileLanguageGroups(returnedFiles) }
+        : {}),
+      truncated: page.remainingFileCount > 0
+    };
+  }
+
   private getExploreGraphBundle(
     projectPath: string,
     query: string,
@@ -5422,6 +5565,7 @@ export class SymbolLatticeService {
   ): ActiveGraphBundle {
     const readBoundedGraphBundle = this.graphStore.getActiveBoundedGraphBundle;
     if (typeof readBoundedGraphBundle === "function") {
+      const freshnessReceipt = this.readQueryFreshnessReceipt?.() ?? null;
       const boundedBundle = measureQueryTiming(
         this.queryTimingSink,
         "seed-retrieval",
@@ -5434,11 +5578,19 @@ export class SymbolLatticeService {
             EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedSymbolsPerFile,
           maxNodes: EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumNodes,
           maxRelationships: EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumRelationships,
-          maxHops: EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumHops
+          maxHops: EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumHops,
+          ...(freshnessReceipt === null
+            ? {}
+            : {
+                expectedGenerationId: freshnessReceipt.expectedGenerationId
+              })
         }),
         { retry }
       );
-      if (boundedBundle.diagnostics.generationMatched && !boundedBundle.fallbackRequired) {
+      if (!boundedBundle.diagnostics.generationMatched) {
+        throw new ReadQueryGenerationMismatchError();
+      }
+      if (!boundedBundle.fallbackRequired) {
         return boundedBundle;
       }
     }

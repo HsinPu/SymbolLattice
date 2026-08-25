@@ -81,6 +81,7 @@ import {
   type HierarchyOptions,
   type SearchOptions,
   type RoutesOptions,
+  type ReadQueryFreshnessReceipt,
   type SymbolLatticeServiceExtensions,
   type WatchReceipt
 } from "../application/index.js";
@@ -326,7 +327,10 @@ export interface McpAutoSyncOptions {
 /** Injectable MCP session seam for CLI lifecycle and option coverage. */
 export type McpServerRunner = (
   service: SymbolLatticeService,
-  defaultProjectPath: string
+  defaultProjectPath: string,
+  options?: {
+    readonly readFreshnessReceipt?: (() => ReadQueryFreshnessReceipt | null) | undefined;
+  }
 ) => Promise<McpServerSession>;
 
 /** Injectable freshness-watcher seam; MCP handlers never receive this capability. */
@@ -1075,6 +1079,7 @@ export async function runMcpWithAutoSync(
   let cooperativeStopRequested = false;
   let watchStopPromise: Promise<void> | null = null;
   let mcpClosePromise: Promise<void> | null = null;
+  let latestFreshGenerationId: string | null = null;
   const stopWatchOnce = (): Promise<void> => {
     if (watchSession === null) return Promise.resolve();
     watchStopPromise ??= watchSession.stop();
@@ -1092,6 +1097,12 @@ export async function runMcpWithAutoSync(
   };
   const recordReceipt = (receipt: WatchReceipt): void => {
     const event = tracker.record(receipt);
+    latestFreshGenerationId =
+      tracker.snapshot().state === "fresh" &&
+      receipt.status?.stale === false &&
+      receipt.generationId !== null
+        ? receipt.generationId
+        : null;
     if (event !== null && journalWritable) {
       journal.append(event);
     }
@@ -1129,7 +1140,14 @@ export async function runMcpWithAutoSync(
         recordReceipt(ownerLeaseUnavailableReceipt(options.projectPath, acquired.error));
       }
     }
-    mcpSession = await serverRunner(mcpService, options.projectPath);
+    mcpSession = await serverRunner(mcpService, options.projectPath, {
+      readFreshnessReceipt: () => latestFreshGenerationId === null
+        ? null
+        : {
+            expectedGenerationId: latestFreshGenerationId,
+            freshnessVerified: true
+          }
+    });
     if (cooperativeStopRequested) {
       await closeMcpOnce();
     }

@@ -2,6 +2,7 @@ import { availableParallelism } from "node:os";
 import { Worker } from "node:worker_threads";
 
 import type { ReadOnlyToolResponse } from "./server.js";
+import type { ReadQueryFreshnessReceipt } from "../application/read-query-freshness.js";
 import { isMcpReadToolName } from "./read-query-protocol.js";
 import type {
   McpReadToolName,
@@ -87,6 +88,8 @@ export interface McpReadQueryPoolOptions {
   readonly queueTimeoutMs?: number | undefined;
   /** Injectable worker factory for deterministic pool tests. */
   readonly createWorker?: (() => McpReadQueryWorker) | undefined;
+  /** Host-owned auto-sync receipt; absent for CLI/no-auto-sync correctness. */
+  readonly readFreshnessReceipt?: (() => ReadQueryFreshnessReceipt | null) | undefined;
 }
 
 interface QueryJob {
@@ -164,6 +167,7 @@ export class McpReadQueryPool implements McpReadQueryExecutor, McpReadQueryPoolS
   private readonly maxSize: number;
   private readonly queueTimeoutMs: number;
   private readonly createWorker: () => McpReadQueryWorker;
+  private readonly readFreshnessReceipt: (() => ReadQueryFreshnessReceipt | null) | undefined;
   private readonly workers = new Set<McpReadQueryWorker>();
   private readonly pendingWorkers = new Set<McpReadQueryWorker>();
   private readonly inflight = new Map<McpReadQueryWorker, QueryJob>();
@@ -192,6 +196,7 @@ export class McpReadQueryPool implements McpReadQueryExecutor, McpReadQueryPoolS
       options.queueTimeoutMs,
       DEFAULT_MCP_READ_QUERY_QUEUE_TIMEOUT_MS
     );
+    this.readFreshnessReceipt = options.readFreshnessReceipt;
     this.createWorker =
       options.createWorker ??
       (() =>
@@ -362,6 +367,21 @@ export class McpReadQueryPool implements McpReadQueryExecutor, McpReadQueryPoolS
       this.drain();
       return;
     }
+    if (typed.fallbackReason === "host-only") {
+      this.settleWithFallback(job, "unsupportedTool");
+      this.drain();
+      return;
+    }
+    if (typed.retryReason === "generation-mismatch") {
+      if (job.retries < MAX_MCP_READ_QUERY_RETRIES && this.healthy) {
+        job.retries += 1;
+        this.queue.unshift(job);
+      } else {
+        this.settleWithFallback(job, "workerFailure");
+      }
+      this.drain();
+      return;
+    }
     if (isReadOnlyToolResponse(typed.response)) {
       this.settle(job, typed.response);
     } else {
@@ -426,11 +446,13 @@ export class McpReadQueryPool implements McpReadQueryExecutor, McpReadQueryPoolS
 
       this.inflight.set(worker, job);
       try {
+        const freshnessReceipt = this.readFreshnessReceipt?.() ?? null;
         worker.postMessage({
           type: "execute",
           id: job.id,
           toolName: job.toolName,
-          arguments_: job.arguments_
+          arguments_: job.arguments_,
+          ...(freshnessReceipt === null ? {} : { freshnessReceipt })
         });
       } catch {
         this.onWorkerGone(worker);

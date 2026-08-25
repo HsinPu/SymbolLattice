@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 
 import { McpReadQueryPool } from "../../dist/mcp/read-query-pool.js";
+import { SqliteGraphStore } from "../../dist/infrastructure/sqlite/graph-store.js";
 import { SYMBOL_LATTICE_VERSION } from "../../dist/version.js";
 
 function argument(name) {
@@ -22,8 +23,24 @@ function percentile(values, fraction) {
 }
 
 export async function runConcurrency({ projectPath, poolSize, concurrency, requests = 24, warmupRequests = 4 }) {
-  const pool = new McpReadQueryPool({ defaultProjectPath: resolve(projectPath), size: poolSize });
+  const normalizedProjectPath = resolve(projectPath);
+  const statusStore = new SqliteGraphStore({
+    persistentReadProjectPath: normalizedProjectPath,
+    readOnly: true
+  });
+  const generationId = statusStore.getStatus(normalizedProjectPath).generationId;
+  if (generationId === null) throw new Error("MCP concurrency benchmark requires an active generation.");
+  const pool = new McpReadQueryPool({
+    defaultProjectPath: normalizedProjectPath,
+    size: poolSize,
+    readFreshnessReceipt: () => ({ expectedGenerationId: generationId, freshnessVerified: true })
+  });
+  const effectivePoolSize = pool.queryPoolStatus().capacity;
   const latencies = [];
+  let peakRssBytes = process.memoryUsage().rss;
+  const rssSampler = setInterval(() => {
+    peakRssBytes = Math.max(peakRssBytes, process.memoryUsage().rss);
+  }, 20);
   const fallback = async () => { throw new Error("Ready MCP worker unexpectedly used fallback."); };
   const one = async () => {
     const start = performance.now();
@@ -34,12 +51,12 @@ export async function runConcurrency({ projectPath, poolSize, concurrency, reque
   try {
     await waitForReady(pool);
     let workerStartupQueries = 0;
-    while (pool.liveWorkerCount < poolSize) {
+    while (pool.liveWorkerCount < effectivePoolSize) {
       const startupBatchSize = pool.liveWorkerCount + 1;
       await Promise.all(Array.from({ length: startupBatchSize }, () => one()));
       workerStartupQueries += startupBatchSize;
     }
-    await Promise.all(Array.from({ length: poolSize }, () => one()));
+    await Promise.all(Array.from({ length: effectivePoolSize }, () => one()));
     for (let index = 0; index < warmupRequests; index += 1) await one();
     latencies.length = 0;
     const wallStart = performance.now();
@@ -54,11 +71,12 @@ export async function runConcurrency({ projectPath, poolSize, concurrency, reque
       productVersion: SYMBOL_LATTICE_VERSION,
       configuration: {
         poolSize,
+        effectivePoolSize,
         concurrency,
         requests,
         warmupRequests,
         workerStartupQueries,
-        workerWarmupQueries: poolSize
+        workerWarmupQueries: effectivePoolSize
       },
       concurrent: {
         wallMs: Number(wallMs.toFixed(3)),
@@ -68,12 +86,16 @@ export async function runConcurrency({ projectPath, poolSize, concurrency, reque
       fallbacks: diagnostics.fallbacks.total,
       errors: 0,
       workerCrashes: diagnostics.workers.crashes,
+      peakRssBytes,
+      peakRssMiB: Number((peakRssBytes / (1024 * 1024)).toFixed(3)),
       allAssertionsPassed: diagnostics.fallbacks.total === 0 && diagnostics.workers.crashes === 0
     };
     if (!report.allAssertionsPassed) throw new Error(`MCP concurrency assertions failed: ${JSON.stringify(report)}`);
     return report;
   } finally {
+    clearInterval(rssSampler);
     await pool.close();
+    statusStore.close();
   }
 }
 

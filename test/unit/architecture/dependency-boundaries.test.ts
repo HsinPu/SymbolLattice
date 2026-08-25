@@ -40,4 +40,24 @@ describe("architecture boundaries", () => {
       expect(text).not.toMatch(/from\s+["']\.\.\/(?:cli|mcp)\//);
     }
   });
+
+  it("keeps the MCP read worker on direct read adapters without eager indexing imports", async () => {
+    const worker = await readFile(
+      join(projectRoot, "src", "mcp", "read-query-worker.ts"),
+      "utf8"
+    );
+    const service = await readFile(
+      join(projectRoot, "src", "application", "service.ts"),
+      "utf8"
+    );
+
+    expect(worker).toContain("../application/read-query-service.js");
+    expect(worker).not.toContain("../application/service.js");
+    expect(worker).not.toMatch(/infrastructure\/(?:filesystem|git|sqlite)\/index\.js/);
+    expect(worker).not.toMatch(/extraction|auto-sync|watch\.js/);
+    expect(service).not.toMatch(
+      /import\s+(?!type\b)[^;]+from\s+["']\.\.\/extraction\//
+    );
+    expect(service).toContain("isMainThread\n  ? await import(\"../extraction/index.js\")");
+  });
 });

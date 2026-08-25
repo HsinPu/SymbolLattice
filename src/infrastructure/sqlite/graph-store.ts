@@ -38,6 +38,8 @@ import type {
   ActiveStatusBundle,
   ActiveGenerationBundle,
   ActiveBoundedGraphBundle,
+  ActiveFileSummaryPage,
+  ActiveFileSummaryRequest,
   ActiveSourceDocumentsBundle,
   ActiveSourceDocumentsProjection,
   ActiveSourceSearchBundle,
@@ -328,6 +330,13 @@ interface FileRow {
   readonly generated: number;
   readonly generated_evidence_json: string | null;
   readonly source_role_json: string | null;
+}
+
+interface FileSummaryRow {
+  readonly path: string;
+  readonly declaration_count: number;
+  readonly edge_count: number;
+  readonly pending_reference_count: number;
 }
 
 interface SymbolRow {
@@ -1419,6 +1428,97 @@ function readActiveFiles(database: DatabaseSync): readonly IndexedFile[] {
       ...(sourceRole === null ? {} : { sourceRole })
     };
   });
+}
+
+function readActiveFileSummaryPage(
+  database: DatabaseSync,
+  projectPath: string,
+  request: ActiveFileSummaryRequest
+): ActiveFileSummaryPage {
+  const active = readActiveStatusState(database, projectPath);
+  const files = readActiveFiles(database);
+  const generationMatched =
+    request.expectedGenerationId === undefined ||
+    request.expectedGenerationId === active.generationId;
+  const baseConditions: string[] = [];
+  const baseParameters: (string | number)[] = [];
+  if (request.pathPrefix !== undefined) {
+    baseConditions.push("(f.path = ? OR f.path LIKE ? ESCAPE '\\')");
+    baseParameters.push(request.pathPrefix, `${escapeLike(request.pathPrefix)}/%`);
+  }
+  if (request.language !== undefined) {
+    baseConditions.push("f.language = ?");
+    baseParameters.push(request.language);
+  }
+  const baseWhere = baseConditions.length === 0 ? "" : `WHERE ${baseConditions.join(" AND ")}`;
+  const matchedFileCount = generationMatched
+    ? (database.prepare(`SELECT count(*) AS count FROM files f ${baseWhere}`)
+        .get(...baseParameters) as unknown as CountRow).count
+    : 0;
+  const cursorMatched = request.afterFilePath === undefined || (
+    generationMatched &&
+    (database.prepare(
+      `SELECT count(*) AS count FROM files f ${
+        baseConditions.length === 0 ? "WHERE" : `${baseWhere} AND`
+      } f.path = ?`
+    ).get(...baseParameters, request.afterFilePath) as unknown as CountRow).count === 1
+  );
+  const pageConditions = [...baseConditions];
+  const pageParameters = [...baseParameters];
+  if (request.afterFilePath !== undefined) {
+    pageConditions.push("f.path > ?");
+    pageParameters.push(request.afterFilePath);
+  }
+  const pageWhere = pageConditions.length === 0 ? "" : `WHERE ${pageConditions.join(" AND ")}`;
+  const pageMatchCount = generationMatched && cursorMatched
+    ? (database.prepare(`SELECT count(*) AS count FROM files f ${pageWhere}`)
+        .get(...pageParameters) as unknown as CountRow).count
+    : 0;
+  const rows = generationMatched && cursorMatched
+    ? database.prepare(
+      `SELECT f.path,
+        COALESCE(s.declaration_count, 0) AS declaration_count,
+        COALESCE(e.edge_count, 0) AS edge_count,
+        COALESCE(p.pending_reference_count, 0) AS pending_reference_count
+       FROM files f
+       LEFT JOIN (
+         SELECT file_path, count(*) AS declaration_count
+         FROM symbols WHERE kind <> 'file' GROUP BY file_path
+       ) s ON s.file_path = f.path
+       LEFT JOIN (
+         SELECT file_path, count(*) AS edge_count FROM edges GROUP BY file_path
+       ) e ON e.file_path = f.path
+       LEFT JOIN (
+         SELECT file_path, count(*) AS pending_reference_count
+         FROM pending_refs GROUP BY file_path
+       ) p ON p.file_path = f.path
+       ${pageWhere}
+       ORDER BY f.path
+       LIMIT ?`
+    ).all(...pageParameters, request.limit) as unknown as FileSummaryRow[]
+    : [];
+  const fileByPath = new Map(files.map((file) => [file.path, file]));
+  return {
+    status: active.status,
+    files,
+    indexInputs: readActiveIndexInputs(database, active.schemaVersion, active.generationId),
+    extractorVersion: active.generation?.extractor_version ?? null,
+    resolverVersion: active.generation?.resolver_version ?? null,
+    sourceSearchVersion: readActiveSourceSearchVersion(database, active.generationId),
+    generationMatched,
+    cursorMatched,
+    matchedFileCount,
+    remainingFileCount: Math.max(0, pageMatchCount - rows.length),
+    rows: rows.flatMap((row) => {
+      const file = fileByPath.get(row.path);
+      return file === undefined ? [] : [{
+        file,
+        declarationCount: row.declaration_count,
+        edgeCount: row.edge_count,
+        pendingReferenceCount: row.pending_reference_count
+      }];
+    })
+  };
 }
 
 function readSnapshotProjection(
@@ -2609,6 +2709,31 @@ export class SqliteGraphStore implements GraphStore {
 
     return this.withReadDatabase(normalizedProjectPath, (database) =>
       readActiveBoundedGraphBundle(database, normalizedProjectPath, request)
+    );
+  }
+
+  public getActiveFileSummaryPage(
+    projectPath: string,
+    request: ActiveFileSummaryRequest
+  ): ActiveFileSummaryPage {
+    const normalizedProjectPath = resolve(projectPath);
+    if (!this.isInitialized(normalizedProjectPath)) {
+      return {
+        status: uninitializedStatus(normalizedProjectPath),
+        files: [],
+        indexInputs: null,
+        extractorVersion: null,
+        resolverVersion: null,
+        sourceSearchVersion: null,
+        generationMatched: request.expectedGenerationId === undefined,
+        cursorMatched: request.afterFilePath === undefined,
+        matchedFileCount: 0,
+        remainingFileCount: 0,
+        rows: []
+      };
+    }
+    return this.withReadDatabase(normalizedProjectPath, (database) =>
+      readActiveFileSummaryPage(database, normalizedProjectPath, request)
     );
   }
 

@@ -26,6 +26,7 @@ export interface McpReadWorkerRequest {
   readonly id: number;
   readonly toolName: McpReadToolName;
   readonly arguments_: unknown;
+  readonly freshnessReceipt?: ReadQueryFreshnessReceipt | undefined;
 }
 
 export interface McpReadWorkerReadyMessage {
@@ -38,6 +39,8 @@ export interface McpReadWorkerResultMessage {
   readonly type: "result";
   readonly id: number;
   readonly response: unknown;
+  readonly retryReason?: "generation-mismatch" | undefined;
+  readonly fallbackReason?: "host-only" | undefined;
 }
 
 export type McpReadWorkerMessage = McpReadWorkerReadyMessage | McpReadWorkerResultMessage;
@@ -45,3 +48,4 @@ export type McpReadWorkerMessage = McpReadWorkerReadyMessage | McpReadWorkerResu
 export function isMcpReadToolName(value: unknown): value is McpReadToolName {
   return typeof value === "string" && MCP_READ_TOOL_NAMES.includes(value as McpReadToolName);
 }
+import type { ReadQueryFreshnessReceipt } from "../application/read-query-freshness.js";

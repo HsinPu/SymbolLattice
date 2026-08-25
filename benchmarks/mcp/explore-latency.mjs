@@ -63,7 +63,7 @@ async function openPersistentClient({ projectPath, cli }) {
   };
   const transport = new StdioClientTransport({
     command: process.execPath,
-    args: [cli, "serve", "--mcp", "--project", projectPath, "--no-auto-sync"],
+    args: [cli, "serve", "--mcp", "--project", projectPath],
     cwd: process.cwd(),
     env: environment,
     stderr: "pipe"
@@ -119,6 +119,7 @@ async function runBenchmark(options) {
       poolSize: 1,
       sourceSessionMode: "full",
       persistentSession: true,
+      autoSync: true,
       warmupRequests: options.warmupRequests,
       measuredRequests: options.measuredRequests,
       queries: DEFAULT_QUERIES

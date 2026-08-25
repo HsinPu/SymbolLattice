@@ -142,6 +142,7 @@ import {
   type McpReadQueryExecutor,
   type McpReadQueryPoolStatusService
 } from "./read-query-pool.js";
+import type { ReadQueryFreshnessReceipt } from "../application/read-query-freshness.js";
 import type { McpReadToolName } from "./read-query-protocol.js";
 import {
   SYMBOL_LATTICE_MCP_TOOLS_ENVIRONMENT_VARIABLE,
@@ -1964,7 +1965,7 @@ export async function runExploreTool(
   try {
     const result = await service.explore(arguments_.projectPath ?? defaultProjectPath, arguments_.query);
     return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      content: [],
       structuredContent: result as unknown as Record<string, unknown>
     };
   } catch (error) {
@@ -2425,7 +2426,8 @@ export function createMcpServer(
       const projected = sourceSession.project(
         response,
         "explore",
-        arguments_.sourceSessionMode ?? "deduplicate"
+        arguments_.sourceSessionMode ?? "deduplicate",
+        "preserve"
       );
       return renderExploreToolTextResponse(projected);
     }
@@ -3350,13 +3352,16 @@ export async function startMcpServer(
 export async function startMcpServerWithReadQueryPool(
   service: ExploreService,
   defaultProjectPath: string,
-  options: Omit<McpServerOptions, "readQueryExecutor" | "queryPoolStatusService"> = {}
+  options: Omit<McpServerOptions, "readQueryExecutor" | "queryPoolStatusService"> & {
+    readonly readFreshnessReceipt?: (() => ReadQueryFreshnessReceipt | null) | undefined;
+  } = {}
 ): Promise<McpServerSession> {
-  const readQueryPool = new McpReadQueryPool({ defaultProjectPath });
+  const { readFreshnessReceipt, ...serverOptions } = options;
+  const readQueryPool = new McpReadQueryPool({ defaultProjectPath, readFreshnessReceipt });
   let session: McpServerSession;
   try {
     session = await startMcpServer(service, defaultProjectPath, {
-      ...options,
+      ...serverOptions,
       readQueryExecutor: readQueryPool,
       queryPoolStatusService: readQueryPool
     });

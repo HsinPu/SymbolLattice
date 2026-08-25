@@ -50,6 +50,15 @@ class FakeQueryWorker implements McpReadQueryWorker {
     this.emitMessage({ type: "result", id: request.id, response });
   }
 
+  public requestGenerationRetry(request: McpReadWorkerRequest): void {
+    this.emitMessage({
+      type: "result",
+      id: request.id,
+      response: response("generation changed"),
+      retryReason: "generation-mismatch"
+    });
+  }
+
   public exit(code: number): void {
     for (const listener of this.exitListeners) {
       listener(code);
@@ -289,6 +298,46 @@ describe("McpReadQueryPool", () => {
 
     await expect(pending).resolves.toEqual(response("retried"));
     expect(fallbackCalls).toBe(0);
+    await pool.close();
+  });
+
+  it("refreshes the host receipt and retries one generation mismatch without fallback", async () => {
+    const worker = new FakeQueryWorker();
+    let generationId = "generation:A";
+    const pool = new McpReadQueryPool({
+      defaultProjectPath: "C:/project",
+      createWorker: () => worker,
+      readFreshnessReceipt: () => ({
+        expectedGenerationId: generationId,
+        freshnessVerified: true
+      })
+    });
+    worker.ready();
+    let fallbackCalls = 0;
+    const pending = pool.execute("explore", { query: "App" }, async () => {
+      fallbackCalls += 1;
+      return response("fallback");
+    });
+    const first = worker.requests[0];
+    expect(first?.freshnessReceipt).toEqual({
+      expectedGenerationId: "generation:A",
+      freshnessVerified: true
+    });
+    if (first === undefined) throw new Error("Expected the first worker request.");
+
+    generationId = "generation:B";
+    worker.requestGenerationRetry(first);
+    const second = worker.requests[1];
+    expect(second?.freshnessReceipt).toEqual({
+      expectedGenerationId: "generation:B",
+      freshnessVerified: true
+    });
+    if (second === undefined) throw new Error("Expected the retried worker request.");
+    worker.respond(second, response("generation B"));
+
+    await expect(pending).resolves.toEqual(response("generation B"));
+    expect(fallbackCalls).toBe(0);
+    expect(pool.queryPoolStatus().fallbacks.total).toBe(0);
     await pool.close();
   });
 

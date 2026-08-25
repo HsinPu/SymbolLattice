@@ -1,9 +1,16 @@
 import { parentPort, workerData } from "node:worker_threads";
 
-import { SymbolLatticeService } from "../application/service.js";
-import { FileSystemSourceCatalog } from "../infrastructure/filesystem/index.js";
-import { FileSystemGitChangeSetProvider } from "../infrastructure/git/index.js";
-import { SqliteGraphStore } from "../infrastructure/sqlite/index.js";
+import {
+  createReadQueryService,
+  type ReadQueryService
+} from "../application/read-query-service.js";
+import {
+  ReadQueryGenerationMismatchError,
+  type ReadQueryFreshnessReceipt
+} from "../application/read-query-freshness.js";
+import { FileSystemSourceCatalog } from "../infrastructure/filesystem/source-catalog.js";
+import { FileSystemGitChangeSetProvider } from "../infrastructure/git/change-set.js";
+import { SqliteGraphStore } from "../infrastructure/sqlite/graph-store.js";
 import {
   runAffectedTestsTool,
   runContextTool,
@@ -55,6 +62,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function isFreshnessReceipt(value: unknown): value is ReadQueryFreshnessReceipt {
+  return isRecord(value) &&
+    typeof value.expectedGenerationId === "string" &&
+    value.expectedGenerationId.length > 0 &&
+    value.freshnessVerified === true;
+}
+
 function workerConfiguration(value: unknown): WorkerConfiguration | null {
   if (!isRecord(value) || typeof value.defaultProjectPath !== "string" || value.defaultProjectPath.length === 0) {
     return null;
@@ -69,7 +83,8 @@ function isWorkerRequest(value: unknown): value is McpReadWorkerRequest {
     value.type === "execute" &&
     typeof value.id === "number" &&
     Number.isSafeInteger(value.id) &&
-    isMcpReadToolName(value.toolName)
+    isMcpReadToolName(value.toolName) &&
+    (value.freshnessReceipt === undefined || isFreshnessReceipt(value.freshnessReceipt))
   );
 }
 
@@ -80,8 +95,11 @@ function errorResponse(message: string): ReadOnlyToolResponse {
   };
 }
 
-function createReadOnlyService(defaultProjectPath: string): {
-  readonly service: SymbolLatticeService;
+function createReadOnlyService(
+  defaultProjectPath: string,
+  readFreshnessReceipt: () => ReadQueryFreshnessReceipt | null
+): {
+  readonly service: ReadQueryService;
   readonly close: () => void;
 } {
   const gitChangeSetProvider = new FileSystemGitChangeSetProvider();
@@ -90,10 +108,10 @@ function createReadOnlyService(defaultProjectPath: string): {
     readOnly: true
   });
   return {
-    service: new SymbolLatticeService(
+    service: createReadQueryService(
       graphStore,
       new FileSystemSourceCatalog(),
-      undefined,
+      { readQueryFreshnessReceipt: readFreshnessReceipt },
       gitChangeSetProvider,
       gitChangeSetProvider
     ),
@@ -102,7 +120,7 @@ function createReadOnlyService(defaultProjectPath: string): {
 }
 
 async function execute(
-  service: SymbolLatticeService,
+  service: ReadQueryService,
   defaultProjectPath: string,
   toolName: McpReadToolName,
   arguments_: unknown
@@ -148,7 +166,8 @@ async function execute(
 if (parentPort !== null) {
   const port = parentPort;
   const configuration = workerConfiguration(workerData);
-  let service: SymbolLatticeService | null = null;
+  let service: ReadQueryService | null = null;
+  let currentFreshnessReceipt: ReadQueryFreshnessReceipt | null = null;
   let closeReadStore: (() => void) | null = null;
   let initializationError: string | null = null;
 
@@ -156,7 +175,10 @@ if (parentPort !== null) {
     if (configuration === null) {
       throw new Error("Missing MCP worker default project path.");
     }
-    const readOnlyService = createReadOnlyService(configuration.defaultProjectPath);
+    const readOnlyService = createReadOnlyService(
+      configuration.defaultProjectPath,
+      () => currentFreshnessReceipt
+    );
     service = readOnlyService.service;
     closeReadStore = readOnlyService.close;
   } catch (error) {
@@ -183,11 +205,36 @@ if (parentPort !== null) {
     }
 
     void (async (): Promise<void> => {
-      const response =
-        service === null || configuration === null
-          ? errorResponse(`SymbolLattice MCP query worker is unavailable: ${initializationError ?? "unknown error"}`)
-          : await execute(service, configuration.defaultProjectPath, message.toolName, message.arguments_);
-      port.postMessage({ type: "result", id: message.id, response });
+      currentFreshnessReceipt = message.freshnessReceipt ?? null;
+      try {
+        if (message.toolName === "git-hunks") {
+          port.postMessage({
+            type: "result",
+            id: message.id,
+            response: errorResponse("Git hunk attribution runs in the MCP host."),
+            fallbackReason: "host-only"
+          });
+          return;
+        }
+        const response =
+          service === null || configuration === null
+            ? errorResponse(`SymbolLattice MCP query worker is unavailable: ${initializationError ?? "unknown error"}`)
+            : await execute(service, configuration.defaultProjectPath, message.toolName, message.arguments_);
+        port.postMessage({ type: "result", id: message.id, response });
+      } catch (error) {
+        if (error instanceof ReadQueryGenerationMismatchError) {
+          port.postMessage({
+            type: "result",
+            id: message.id,
+            response: errorResponse(error.message),
+            retryReason: "generation-mismatch"
+          });
+          return;
+        }
+        throw error;
+      } finally {
+        currentFreshnessReceipt = null;
+      }
     })().catch((error: unknown) => {
       const detail = error instanceof Error ? error.message : String(error);
       port.postMessage({

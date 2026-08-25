@@ -21,3 +21,5 @@ export * from "./service.js";
 export * from "./types.js";
 export * from "./watch.js";
 export * from "./query-timing.js";
+export * from "./read-query-freshness.js";
+export * from "./read-query-service.js";

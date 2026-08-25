@@ -125,6 +125,30 @@ export interface ActiveBoundedGraphBundle extends ActiveGraphBundle {
   readonly fallbackRequired: boolean;
 }
 
+export interface ActiveFileSummaryRequest {
+  readonly limit: number;
+  readonly pathPrefix?: string | undefined;
+  readonly language?: IndexedFile["language"] | undefined;
+  readonly afterFilePath?: string | undefined;
+  readonly expectedGenerationId?: string | undefined;
+}
+
+export interface ActiveFileSummaryRow {
+  readonly file: IndexedFile;
+  readonly declarationCount: number;
+  readonly edgeCount: number;
+  readonly pendingReferenceCount: number;
+}
+
+/** SQL-paged file inventory with aggregate counts and no graph materialization. */
+export interface ActiveFileSummaryPage extends ActiveStatusBundle {
+  readonly generationMatched: boolean;
+  readonly cursorMatched: boolean;
+  readonly matchedFileCount: number;
+  readonly remainingFileCount: number;
+  readonly rows: readonly ActiveFileSummaryRow[];
+}
+
 /** Metadata for one immutable snapshot retained by a history-capable store. */
 export interface GenerationHistoryEntry {
   readonly generationId: string;
@@ -210,6 +234,11 @@ export interface GraphStore {
     projectPath: string,
     request: BoundedGraphQueryRequest
   ): ActiveBoundedGraphBundle;
+  /** Optional SQLite-native file pagination and aggregate-count projection. */
+  getActiveFileSummaryPage?(
+    projectPath: string,
+    request: ActiveFileSummaryRequest
+  ): ActiveFileSummaryPage;
   /**
    * Optional v0.11 retained-history capability. `null` means this adapter or
    * index cannot provide a trustworthy history (including an active generation

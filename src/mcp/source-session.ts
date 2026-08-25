@@ -21,6 +21,7 @@ import {
 export const MCP_SOURCE_SESSION_POLICY = "mcp-session-source-dedup-v6" as const;
 export const MCP_SOURCE_SESSION_MODES = ["deduplicate", "full"] as const;
 export type McpSourceSessionMode = (typeof MCP_SOURCE_SESSION_MODES)[number];
+export type McpSourceSessionContentMode = "json" | "preserve";
 export type McpSourceTool = "node" | "investigate" | "file" | "explore" | "context";
 
 export const MCP_SOURCE_SESSION_LIMITS = {
@@ -383,7 +384,8 @@ export class McpSourceSession {
   public project<TResponse extends SourceSessionResponse>(
     response: TResponse,
     tool: McpSourceTool,
-    mode: McpSourceSessionMode
+    mode: McpSourceSessionMode,
+    contentMode: McpSourceSessionContentMode = "json"
   ): TResponse {
     if (!MCP_SOURCE_SESSION_MODES.includes(mode)) return response;
     const header = responseHeader(response);
@@ -450,7 +452,9 @@ export class McpSourceSession {
     };
     return {
       ...response,
-      content: [{ type: "text", text: JSON.stringify(structuredContent, null, 2) }],
+      content: contentMode === "preserve"
+        ? response.content
+        : [{ type: "text", text: JSON.stringify(structuredContent, null, 2) }],
       structuredContent
     };
   }
