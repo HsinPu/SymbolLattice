@@ -48,10 +48,12 @@ import { LUA_GRAMMAR_SHA256 } from "../../../src/extraction/lua-worker-protocol.
 import type { LuaWorkerFactory } from "../../../src/extraction/lua-worker-runtime.js";
 import { FileSystemSourceCatalog } from "../../../src/infrastructure/filesystem/index.js";
 import { SqliteGraphStore } from "../../../src/infrastructure/sqlite/index.js";
+import { RecordingQueryTimingSink } from "../../../src/application/query-timing.js";
 import type {
   ActiveGraphBundle,
   ActiveGenerationBundle,
   ActiveSourceDocumentsBundle,
+  ActiveSourceDocumentsProjection,
   GenerationComparisonBundle,
   GenerationHistoryEntry,
   GitChangeSet,
@@ -267,6 +269,20 @@ function raceSourceDocumentsBundle(
   };
 }
 
+function raceSourceDocumentsProjection(
+  generationId: string,
+  filePath: string,
+  sourceText: string,
+  generationMatched = true
+): ActiveSourceDocumentsProjection {
+  return {
+    status: raceStatus(generationId),
+    sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION,
+    generationMatched,
+    documents: generationMatched ? [raceSourceDocument(filePath, sourceText)] : []
+  };
+}
+
 function raceGenerationHistoryEntry(generationId: string): GenerationHistoryEntry {
   return {
     generationId,
@@ -384,6 +400,52 @@ function createSequencedSourceDocumentGraphStore(
     replaceProjectFacts: () => {}
   };
   return { graphStore, sourceDocumentRequests };
+}
+
+function createSourceOnlyExploreGraphStore(
+  graphBundles: readonly ActiveGraphBundle[],
+  sourceProjections: readonly ActiveSourceDocumentsProjection[]
+): {
+  readonly graphStore: GraphStore;
+  readonly graphReadCount: () => number;
+  readonly sourceDocumentRequests: readonly {
+    readonly expectedGenerationId: string;
+    readonly filePaths: readonly string[];
+  }[];
+} {
+  let graphIndex = 0;
+  let sourceIndex = 0;
+  const sourceDocumentRequests: {
+    expectedGenerationId: string;
+    filePaths: readonly string[];
+  }[] = [];
+  const graphStore: GraphStore = {
+    isInitialized: () => true,
+    initialize: () => {},
+    getStatus: () => graphBundles[0]!.status,
+    getSnapshot: () => graphBundles[0]!.snapshot,
+    getArtifactFacts: () => [],
+    getIndexInputs: () => graphBundles[0]!.indexInputs,
+    getActiveGraphBundle: () => {
+      const bundle = graphBundles[graphIndex];
+      graphIndex += 1;
+      if (bundle === undefined) throw new Error("Unexpected active graph read.");
+      return bundle;
+    },
+    getActiveGenerationBundle: () => ({ ...graphBundles[0]!, artifactFacts: [] }),
+    getActiveSourceDocumentsBundle: () => {
+      throw new Error("Explore must prefer the source-only generation read.");
+    },
+    getActiveSourceDocuments: (_projectPath, expectedGenerationId, filePaths) => {
+      sourceDocumentRequests.push({ expectedGenerationId, filePaths: [...filePaths] });
+      const projection = sourceProjections[sourceIndex];
+      sourceIndex += 1;
+      if (projection === undefined) throw new Error("Unexpected source-only read.");
+      return projection;
+    },
+    replaceProjectFacts: () => {}
+  };
+  return { graphStore, graphReadCount: () => graphIndex, sourceDocumentRequests };
 }
 
 /** Simulates a migrated v0.3 graph whose source-search projection was not yet present. */
@@ -11214,6 +11276,162 @@ describe("SymbolLatticeService", () => {
       "C evidence"
     );
     expect(sourceDocumentRequests).toEqual([["src/before.ts"], ["src/after.ts"]]);
+  });
+
+  it("uses a source-only read without reloading or replanning a stable explore generation", async () => {
+    const initialBundle = raceSourceDocumentsBundle(
+      "generation:A",
+      "src/stable.ts",
+      'export function raceTarget() { return "A evidence"; }\n',
+      []
+    );
+    const { graphStore, graphReadCount, sourceDocumentRequests } = createSourceOnlyExploreGraphStore(
+      [initialBundle],
+      [
+        raceSourceDocumentsProjection(
+          "generation:A",
+          "src/stable.ts",
+          'export function raceTarget() { return "A evidence"; }\n'
+        )
+      ]
+    );
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const exploration = await service.explore(
+      "C:/SymbolLattice-race-project",
+      "trace raceTarget flow"
+    );
+
+    expect(exploration).toMatchObject({
+      mode: "query",
+      status: { generationId: "generation:A" },
+      queryPlan: { selection: [{ symbol: { filePath: "src/stable.ts" } }] },
+      focuses: [{ sourceAvailability: "active-generation", source: { filePath: "src/stable.ts" } }]
+    });
+    expect(graphReadCount()).toBe(1);
+    expect(sourceDocumentRequests).toEqual([
+      { expectedGenerationId: "generation:A", filePaths: ["src/stable.ts"] }
+    ]);
+  });
+
+  it("records bounded explore timing stages without changing the result", async () => {
+    const initialBundle = raceSourceDocumentsBundle(
+      "generation:A",
+      "src/stable.ts",
+      'export function raceTarget() { return "A evidence"; }\n',
+      []
+    );
+    const { graphStore } = createSourceOnlyExploreGraphStore(
+      [initialBundle],
+      [
+        raceSourceDocumentsProjection(
+          "generation:A",
+          "src/stable.ts",
+          'export function raceTarget() { return "A evidence"; }\n'
+        )
+      ]
+    );
+    const timing = new RecordingQueryTimingSink();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog(), {
+      queryTimingSink: timing
+    });
+
+    const result = await service.explore(
+      "C:/SymbolLattice-race-project",
+      "trace raceTarget flow"
+    );
+
+    expect(result).toMatchObject({ mode: "query", status: { generationId: "generation:A" } });
+    expect(timing.events().map((event) => event.stage)).toEqual([
+      "snapshot",
+      "planning",
+      "path-spine",
+      "source",
+      "context",
+      "status"
+    ]);
+  });
+
+  it("uses a source-only read for an exact explore match", async () => {
+    const initialBundle = raceSourceDocumentsBundle(
+      "generation:A",
+      "src/stable.ts",
+      'export function raceTarget() { return "A evidence"; }\n',
+      []
+    );
+    const { graphStore, graphReadCount, sourceDocumentRequests } = createSourceOnlyExploreGraphStore(
+      [initialBundle],
+      [
+        raceSourceDocumentsProjection(
+          "generation:A",
+          "src/stable.ts",
+          'export function raceTarget() { return "A evidence"; }\n'
+        )
+      ]
+    );
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const exploration = await service.explore("C:/SymbolLattice-race-project", "raceTarget");
+
+    expect(exploration).toMatchObject({
+      status: { generationId: "generation:A" },
+      match: { status: "exact", symbol: { filePath: "src/stable.ts" } },
+      sourceAvailability: "active-generation",
+      source: { filePath: "src/stable.ts" }
+    });
+    expect(graphReadCount()).toBe(1);
+    expect(sourceDocumentRequests).toEqual([
+      { expectedGenerationId: "generation:A", filePaths: ["src/stable.ts"] }
+    ]);
+  });
+
+  it("restarts a source-only explore read once when the active generation changes", async () => {
+    const before = raceSourceDocumentsBundle(
+      "generation:A",
+      "src/before.ts",
+      'export function raceTarget() { return "A evidence"; }\n',
+      []
+    );
+    const after = raceSourceDocumentsBundle(
+      "generation:B",
+      "src/after.ts",
+      'export function raceTarget() { return "B evidence"; }\n',
+      []
+    );
+    const { graphStore, graphReadCount, sourceDocumentRequests } = createSourceOnlyExploreGraphStore(
+      [before, after],
+      [
+        raceSourceDocumentsProjection(
+          "generation:B",
+          "src/after.ts",
+          'export function raceTarget() { return "B evidence"; }\n',
+          false
+        ),
+        raceSourceDocumentsProjection(
+          "generation:B",
+          "src/after.ts",
+          'export function raceTarget() { return "B evidence"; }\n'
+        )
+      ]
+    );
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    const exploration = await service.explore(
+      "C:/SymbolLattice-race-project",
+      "trace raceTarget flow"
+    );
+
+    expect(exploration).toMatchObject({
+      mode: "query",
+      status: { generationId: "generation:B" },
+      queryPlan: { selection: [{ symbol: { filePath: "src/after.ts" } }] },
+      focuses: [{ sourceAvailability: "active-generation", source: { filePath: "src/after.ts" } }]
+    });
+    expect(graphReadCount()).toBe(2);
+    expect(sourceDocumentRequests).toEqual([
+      { expectedGenerationId: "generation:A", filePaths: ["src/before.ts"] },
+      { expectedGenerationId: "generation:B", filePaths: ["src/after.ts"] }
+    ]);
   });
 
   it("retries a context source bundle once when an exact symbol moves during sync", async () => {

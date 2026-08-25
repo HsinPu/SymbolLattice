@@ -38,6 +38,7 @@ import type {
   ActiveStatusBundle,
   ActiveGenerationBundle,
   ActiveSourceDocumentsBundle,
+  ActiveSourceDocumentsProjection,
   ActiveSourceSearchBundle,
   GenerationComparisonBundle,
   GenerationHistoryBundle,
@@ -2002,6 +2003,44 @@ export class SqliteGraphStore implements GraphStore {
           graphBundle.sourceSearchVersion ?? null,
           filePaths
         )
+      };
+    });
+  }
+
+  public getActiveSourceDocuments(
+    projectPath: string,
+    expectedGenerationId: string,
+    filePaths: readonly string[]
+  ): ActiveSourceDocumentsProjection {
+    const normalizedProjectPath = resolve(projectPath);
+    if (!this.isInitialized(normalizedProjectPath)) {
+      return {
+        status: uninitializedStatus(normalizedProjectPath),
+        sourceSearchVersion: null,
+        generationMatched: false,
+        documents: []
+      };
+    }
+
+    return this.withReadDatabase(normalizedProjectPath, (database) => {
+      const active = readActiveStatusState(database, normalizedProjectPath);
+      const sourceSearchVersion = readActiveSourceSearchVersion(
+        database,
+        active.generationId
+      );
+      const generationMatched = active.generationId === expectedGenerationId;
+      return {
+        status: active.status,
+        sourceSearchVersion,
+        generationMatched,
+        documents: generationMatched
+          ? readActiveSourceDocuments(
+              database,
+              active.generationId,
+              sourceSearchVersion,
+              filePaths
+            )
+          : []
       };
     });
   }

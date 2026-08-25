@@ -1716,6 +1716,25 @@ describe("SqliteGraphStore", () => {
     ]);
     expect(bundle.documents).toEqual([documents[3], documents[0], documents[2]]);
     expect(store.getActiveSourceDocumentsBundle(projectPath, []).documents).toEqual([]);
+
+    const sourceOnly = store.getActiveSourceDocuments(
+      projectPath,
+      bundle.status.generationId!,
+      ["src/worker.js", "missing.ts", "src/a.ts"]
+    );
+    expect(sourceOnly).toMatchObject({
+      status: { generationId: bundle.status.generationId },
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION,
+      generationMatched: true,
+      documents: [documents[2], documents[0]]
+    });
+    expect(
+      store.getActiveSourceDocuments(projectPath, "generation:stale", ["src/a.ts"])
+    ).toMatchObject({
+      status: { generationId: bundle.status.generationId },
+      generationMatched: false,
+      documents: []
+    });
   });
 
   it("keeps source retrieval unavailable for a v0.3-shaped replacement", async () => {

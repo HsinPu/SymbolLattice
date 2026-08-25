@@ -6,6 +6,7 @@ import {
   planExplorePathSpines
 } from "../../src/application/explore-path-spines.js";
 import type { ExploreQuerySelection } from "../../src/application/explore-query.js";
+import { createGraphQueryView } from "../../src/domain/graph.js";
 import type { GraphEdge, GraphSnapshot, SymbolNode } from "../../src/domain/types.js";
 
 function symbol(id: string, filePath: string, line = 1): SymbolNode {
@@ -86,6 +87,12 @@ describe("explore path spine planning", () => {
       selection(1, entry, 90),
       selection(2, target, 70)
     ]);
+    const viewPlan = planExplorePathSpines(
+      graph,
+      [selection(1, entry, 90), selection(2, target, 70)],
+      createGraphQueryView(graph)
+    );
+    expect(viewPlan).toEqual(plan);
 
     expect(plan).toMatchObject({
       policy: EXPLORE_PATH_SPINE_POLICY,

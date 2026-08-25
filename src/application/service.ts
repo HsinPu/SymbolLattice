@@ -6,6 +6,7 @@ import {
   ARTIFACT_LANGUAGES,
   attributeGitHunkSide,
   classifyTestFile,
+  createGraphQueryView,
   diffGenerationSnapshots,
   DEFAULT_EXACT_IMPACT_EDGE_KINDS,
   DEFAULT_EXACT_TOPOLOGY_EDGE_KINDS,
@@ -35,6 +36,7 @@ import {
   sourceRoleClassificationFor,
   summarizeImpactPaths,
   type GraphSnapshot,
+  type GraphQueryView,
   type ArtifactLanguage,
   type EntryPointOperation,
   type EntryPointTransport,
@@ -217,6 +219,11 @@ import {
   NODE_SOURCE_CHARACTER_LIMIT,
   NODE_SOURCE_LINE_LIMIT
 } from "./types.js";
+import {
+  measureQueryTiming,
+  NOOP_QUERY_TIMING_SINK,
+  type QueryTimingSink
+} from "./query-timing.js";
 import type {
   AffectedTestEvidence,
   AffectedTestsBounds,
@@ -315,6 +322,8 @@ export interface SymbolLatticeServiceExtensions {
   readonly referenceResolverPlugins?: ReferenceResolverPluginRegistry;
   /** Test composition seam; production callers use the fixed worker factory. */
   readonly luaWorkerFactory?: LuaWorkerFactory;
+  /** Optional no-output timing seam for read-query profiling and benchmarks. */
+  readonly queryTimingSink?: QueryTimingSink;
 }
 
 function artifactFactsExtractorVersion(extractor: ArtifactFactsExtractor): string {
@@ -1353,6 +1362,7 @@ export class SymbolLatticeService {
   private readonly activeArtifactFactsExtractorVersion: string;
   private readonly activeProjectResolverVersion: string;
   private readonly luaWorkerRuntime: LuaWorkerRuntime;
+  private readonly queryTimingSink: QueryTimingSink;
 
   public constructor(
     graphStore: GraphStore,
@@ -1383,6 +1393,7 @@ export class SymbolLatticeService {
     this.gitRevisionHunkProvider = gitRevisionHunkProvider;
     this.referenceResolverPlugins = extensions?.referenceResolverPlugins;
     this.frameworkProjectPlugins = extensions?.frameworkProjectPlugins;
+    this.queryTimingSink = extensions?.queryTimingSink ?? NOOP_QUERY_TIMING_SINK;
     this.luaWorkerRuntime = createLuaWorkerRuntime(
       extensions?.luaWorkerFactory === undefined
         ? {}
@@ -2744,7 +2755,11 @@ export class SymbolLatticeService {
 
   public async explore(projectPath: string, reference: string): Promise<ExploreResult> {
     const normalizedProjectPath = resolve(projectPath);
-    const graphBundle = this.getActiveGraphBundle(normalizedProjectPath);
+    const graphBundle = measureQueryTiming(
+      this.queryTimingSink,
+      "snapshot",
+      () => this.getActiveGraphBundle(normalizedProjectPath)
+    );
     if (!graphBundle.status.initialized) {
       throw new SymbolLatticeError(
         "MISSING_INDEX",
@@ -2755,6 +2770,87 @@ export class SymbolLatticeService {
     let match = matchSymbol(graphBundle.snapshot, reference);
     if (match.status !== "exact") {
       return this.exploreQuery(normalizedProjectPath, reference, graphBundle);
+    }
+
+    const getActiveSourceDocuments = this.graphStore.getActiveSourceDocuments;
+    if (typeof getActiveSourceDocuments === "function") {
+      let bundle = graphBundle;
+      let sourceMatch = match;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const generationId = bundle.status.generationId;
+        if (generationId === null) break;
+        const sourceProjection = measureQueryTiming(
+          this.queryTimingSink,
+          "source",
+          () => getActiveSourceDocuments.call(
+            this.graphStore,
+            normalizedProjectPath,
+            generationId,
+            [sourceMatch.symbol.filePath]
+          )
+        );
+        if (!sourceProjection.generationMatched) {
+          if (attempt === 0) {
+            bundle = measureQueryTiming(
+              this.queryTimingSink,
+              "snapshot",
+              () => this.getActiveGraphBundle(normalizedProjectPath),
+              { retry: true }
+            );
+            const rematch = matchSymbol(bundle.snapshot, reference);
+            if (rematch.status !== "exact") {
+              return this.exploreQuery(normalizedProjectPath, reference, bundle);
+            }
+            sourceMatch = rematch;
+            continue;
+          }
+          return this.exploreResultForBundle(
+            normalizedProjectPath,
+            reference,
+            bundle,
+            null,
+            "unavailable"
+          );
+        }
+        const sourceDocument = sourceProjection.documents.find(
+          (document) => document.filePath === sourceMatch.symbol.filePath
+        );
+        if (sourceDocument === undefined) {
+          return this.exploreResultForBundle(
+            normalizedProjectPath,
+            reference,
+            bundle,
+            null,
+            sourceProjection.sourceSearchVersion === null ||
+              sourceProjection.sourceSearchVersion === undefined
+              ? "not-applicable"
+              : "unavailable"
+          );
+        }
+        const sourceDraft = contextSourceDraftFromPersistedText({
+          referenceIndex: 0,
+          reference: sourceMatch.symbol.qualifiedName,
+          filePath: sourceDocument.filePath,
+          sourceText: sourceDocument.sourceText,
+          centerLine: sourceMatch.symbol.range.start.line
+        });
+        const source = sourceDraft === null
+          ? null
+          : renderContextSource(
+              sourceDraft,
+              Math.min(
+                sourceDraft.endOffset - sourceDraft.startOffset,
+                DEFAULT_CONTEXT_SOURCE_CHARACTER_BUDGET
+              )
+            );
+        return this.exploreResultForBundle(
+          normalizedProjectPath,
+          reference,
+          bundle,
+          source,
+          source === null ? "unavailable" : "active-generation"
+        );
+      }
     }
 
     const getActiveSourceDocumentsBundle = this.graphStore.getActiveSourceDocumentsBundle;
@@ -2854,8 +2950,86 @@ export class SymbolLatticeService {
     query: string,
     initialBundle: ActiveGraphBundle
   ): Promise<ExploreResult> {
+    const getActiveSourceDocuments = this.graphStore.getActiveSourceDocuments;
+    if (typeof getActiveSourceDocuments === "function") {
+      let bundle = initialBundle;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const graphView = createGraphQueryView(bundle.snapshot);
+        const plan = measureQueryTiming(
+          this.queryTimingSink,
+          "planning",
+          () => planExploreQuery(bundle.snapshot, query),
+          { retry: attempt > 0 }
+        );
+        const pathSpinePlan = measureQueryTiming(
+          this.queryTimingSink,
+          "path-spine",
+          () => planExplorePathSpines(bundle.snapshot, plan.selection, graphView),
+          { retry: attempt > 0 }
+        );
+        if (plan.selection.length === 0 || bundle.status.generationId === null) {
+          return this.exploreQueryResultForBundle(
+            normalizedProjectPath,
+            query,
+            bundle,
+            plan,
+            pathSpinePlan,
+            new Map(),
+            graphView
+          );
+        }
+        const requestedFilePaths = this.exploreQueryFilePaths(plan, pathSpinePlan);
+        const sourceProjection = measureQueryTiming(
+          this.queryTimingSink,
+          "source",
+          () => getActiveSourceDocuments.call(
+            this.graphStore,
+            normalizedProjectPath,
+            bundle.status.generationId!,
+            requestedFilePaths
+          ),
+          { retry: attempt > 0, requestedFiles: requestedFilePaths.length }
+        );
+        if (sourceProjection.generationMatched) {
+          const documentsByFilePath = new Map(
+            sourceProjection.documents.map(
+              (document): readonly [string, IndexedSourceDocument] => [document.filePath, document]
+            )
+          );
+          return this.exploreQueryResultForBundle(
+            normalizedProjectPath,
+            query,
+            bundle,
+            plan,
+            pathSpinePlan,
+            documentsByFilePath,
+            graphView
+          );
+        }
+        if (attempt === 0) {
+          bundle = measureQueryTiming(
+            this.queryTimingSink,
+            "snapshot",
+            () => this.getActiveGraphBundle(normalizedProjectPath),
+            { retry: true }
+          );
+          continue;
+        }
+        return this.exploreQueryResultForBundle(
+          normalizedProjectPath,
+          query,
+          bundle,
+          plan,
+          pathSpinePlan,
+          new Map(),
+          graphView
+        );
+      }
+    }
+
+    let graphView = createGraphQueryView(initialBundle.snapshot);
     let plan = planExploreQuery(initialBundle.snapshot, query);
-    let pathSpinePlan = planExplorePathSpines(initialBundle.snapshot, plan.selection);
+    let pathSpinePlan = planExplorePathSpines(initialBundle.snapshot, plan.selection, graphView);
     const getActiveSourceDocumentsBundle = this.graphStore.getActiveSourceDocumentsBundle;
     if (typeof getActiveSourceDocumentsBundle !== "function" || plan.selection.length === 0) {
       return this.exploreQueryResultForBundle(
@@ -2864,7 +3038,8 @@ export class SymbolLatticeService {
         initialBundle,
         plan,
         pathSpinePlan,
-        new Map()
+        new Map(),
+        graphView
       );
     }
 
@@ -2875,8 +3050,9 @@ export class SymbolLatticeService {
         normalizedProjectPath,
         requestedFilePaths
       );
+      graphView = createGraphQueryView(sourceBundle.snapshot);
       plan = planExploreQuery(sourceBundle.snapshot, query);
-      pathSpinePlan = planExplorePathSpines(sourceBundle.snapshot, plan.selection);
+      pathSpinePlan = planExplorePathSpines(sourceBundle.snapshot, plan.selection, graphView);
       const currentFilePaths = this.exploreQueryFilePaths(plan, pathSpinePlan);
       const documentsByFilePath = new Map(
         sourceBundle.documents.map(
@@ -2896,14 +3072,17 @@ export class SymbolLatticeService {
         sourceBundle,
         plan,
         pathSpinePlan,
-        documentsByFilePath
+        documentsByFilePath,
+        graphView
       );
     }
 
     const fallbackPlan = planExploreQuery(initialBundle.snapshot, query);
+    const fallbackGraphView = createGraphQueryView(initialBundle.snapshot);
     const fallbackPathSpinePlan = planExplorePathSpines(
       initialBundle.snapshot,
-      fallbackPlan.selection
+      fallbackPlan.selection,
+      fallbackGraphView
     );
     return this.exploreQueryResultForBundle(
       normalizedProjectPath,
@@ -2911,7 +3090,8 @@ export class SymbolLatticeService {
       initialBundle,
       fallbackPlan,
       fallbackPathSpinePlan,
-      new Map()
+      new Map(),
+      fallbackGraphView
     );
   }
 
@@ -3652,7 +3832,11 @@ export class SymbolLatticeService {
     return left.length === right.length && left.every((filePath, index) => filePath === right[index]);
   }
 
-  private symbolContextPack(read: ContextRead, bounds: ContextBounds): SymbolContextPack {
+  private symbolContextPack(
+    read: ContextRead,
+    bounds: ContextBounds,
+    graphView?: GraphQueryView
+  ): SymbolContextPack {
     const drafts = new Map<number, ContextSourceDraft>();
     const sourceProjectionAvailable =
       read.bundle.sourceSearchVersion !== null && read.bundle.sourceSearchVersion !== undefined;
@@ -3718,7 +3902,8 @@ export class SymbolLatticeService {
           match,
           read,
           bounds,
-          sources.get(referenceIndex) ?? null
+          sources.get(referenceIndex) ?? null,
+          graphView
         )
       ),
       allocation
@@ -3730,7 +3915,8 @@ export class SymbolLatticeService {
     match: SymbolMatch,
     read: ContextRead,
     bounds: ContextBounds,
-    source: DeliveredSourceExcerpt | null
+    source: DeliveredSourceExcerpt | null,
+    graphView?: GraphQueryView
   ): SymbolContext {
     const boundedMatch = this.boundedContextMatch(match, bounds.matchCandidateLimit);
     if (match.status !== "exact") {
@@ -3746,9 +3932,15 @@ export class SymbolLatticeService {
       };
     }
 
-    const callers = getCallers(read.bundle.snapshot, match.symbol.id);
-    const callees = getCallees(read.bundle.snapshot, match.symbol.id);
-    const impact = getImpactPaths(read.bundle.snapshot, match.symbol.id, bounds.impactDepth);
+    const callers = getCallers(read.bundle.snapshot, match.symbol.id, graphView);
+    const callees = getCallees(read.bundle.snapshot, match.symbol.id, graphView);
+    const impact = getImpactPaths(
+      read.bundle.snapshot,
+      match.symbol.id,
+      bounds.impactDepth,
+      undefined,
+      graphView
+    );
 
     return {
       reference,
@@ -3794,7 +3986,8 @@ export class SymbolLatticeService {
   private contextEvidencePaths(
     matches: readonly SymbolMatch[],
     bundle: ActiveGraphBundle,
-    bounds: ContextBounds
+    bounds: ContextBounds,
+    graphView?: GraphQueryView
   ): readonly ContextEvidencePath[] {
     const paths: ContextEvidencePath[] = [];
     for (let index = 1; index < matches.length; index += 1) {
@@ -3819,7 +4012,9 @@ export class SymbolLatticeService {
         from.symbol.id,
         to.symbol.id,
         bounds.maxHops,
-        bounds.maxVisitedSymbolsPerPath
+        bounds.maxVisitedSymbolsPerPath,
+        undefined,
+        graphView
       );
       paths.push({
         fromReference: from.reference,
@@ -4945,7 +5140,8 @@ export class SymbolLatticeService {
     bundle: ActiveGraphBundle,
     plan: ExploreQueryPlan,
     pathSpinePlan: ExplorePathSpinePlan,
-    documentsByFilePath: ReadonlyMap<string, IndexedSourceDocument>
+    documentsByFilePath: ReadonlyMap<string, IndexedSourceDocument>,
+    graphView: GraphQueryView
   ): Promise<ExploreResult> {
     const matches: readonly SymbolMatch[] = plan.selection.map(({ symbol }) => ({
       status: "exact",
@@ -4957,7 +5153,12 @@ export class SymbolLatticeService {
       sourceCharacterBudget: DEFAULT_CONTEXT_SOURCE_CHARACTER_BUDGET
     });
     const read: ContextRead = { bundle, matches, documentsByFilePath };
-    const contextPack = this.symbolContextPack(read, bounds);
+    const contextPack = measureQueryTiming(
+      this.queryTimingSink,
+      "context",
+      () => this.symbolContextPack(read, bounds, graphView),
+      { focusCount: matches.length }
+    );
     const focuses: readonly ExploreFocus[] = plan.selection.map((selection, index) => ({
       ...selection,
       ...(contextPack.contexts[index] ?? this.toSymbolContext(
@@ -4970,7 +5171,8 @@ export class SymbolLatticeService {
         },
         read,
         bounds,
-        null
+        null,
+        graphView
       ))
     }));
     const rankBySymbolId = new Map(
@@ -5098,7 +5300,11 @@ export class SymbolLatticeService {
     };
 
     return {
-      status: await this.getStatusForBundle(normalizedProjectPath, bundle),
+      status: await measureQueryTiming(
+        this.queryTimingSink,
+        "status",
+        () => this.getStatusForBundle(normalizedProjectPath, bundle)
+      ),
       mode: "query",
       match: matchSymbol(bundle.snapshot, query),
       sourceAvailability: "not-applicable",
@@ -5115,7 +5321,7 @@ export class SymbolLatticeService {
       sourceWindowPlan,
       sourceWindows,
       sourceWindowAllocation,
-      evidencePaths: this.contextEvidencePaths(matches, bundle, bounds)
+      evidencePaths: this.contextEvidencePaths(matches, bundle, bounds, graphView)
     };
   }
 
@@ -5127,7 +5333,11 @@ export class SymbolLatticeService {
     sourceAvailability: NonNullable<ExploreResult["sourceAvailability"]>
   ): Promise<ExploreResult> {
     const match = matchSymbol(bundle.snapshot, reference);
-    const status = await this.getStatusForBundle(normalizedProjectPath, bundle);
+    const status = await measureQueryTiming(
+      this.queryTimingSink,
+      "status",
+      () => this.getStatusForBundle(normalizedProjectPath, bundle)
+    );
     if (match.status !== "exact") {
       return {
         status,
@@ -5147,15 +5357,26 @@ export class SymbolLatticeService {
       };
     }
 
+    const graphView = createGraphQueryView(bundle.snapshot);
+    const relations = measureQueryTiming(
+      this.queryTimingSink,
+      "context",
+      () => ({
+        callers: getCallers(bundle.snapshot, match.symbol.id, graphView),
+        callees: getCallees(bundle.snapshot, match.symbol.id, graphView),
+        impact: getImpactPaths(bundle.snapshot, match.symbol.id, 2, undefined, graphView)
+      }),
+      { focusCount: 1 }
+    );
     return {
       status,
       mode: "exact-symbol",
       match,
       sourceAvailability,
       source,
-      callers: getCallers(bundle.snapshot, match.symbol.id),
-      callees: getCallees(bundle.snapshot, match.symbol.id),
-      impact: getImpactPaths(bundle.snapshot, match.symbol.id, 2),
+      callers: relations.callers,
+      callees: relations.callees,
+      impact: relations.impact,
       queryPlan: null,
       focuses: [],
       connections: [],

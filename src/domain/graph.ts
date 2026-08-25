@@ -93,6 +93,117 @@ export interface SymbolGraph {
   readonly edges: readonly GraphEdge[];
 }
 
+/**
+ * Request-scoped indexes used by graph traversal helpers.
+ *
+ * The legacy traversal functions accept a bare {@link SymbolGraph} and remain
+ * the public compatibility surface.  Callers that perform several traversals
+ * for one query can create one view and pass it to those functions so symbol
+ * and edge adjacency is built once instead of scanning the complete edge list
+ * for every visited symbol.
+ */
+export interface GraphQueryView {
+  readonly graph: SymbolGraph;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+  readonly symbolsByFilePath: ReadonlyMap<string, readonly SymbolNode[]>;
+  readonly outgoingExactRelationsBySymbolId: ReadonlyMap<string, readonly GraphRelation[]>;
+  readonly incomingExactRelationsBySymbolId: ReadonlyMap<string, readonly GraphRelation[]>;
+  readonly outgoingResolvedRelationsBySymbolId: ReadonlyMap<string, readonly GraphRelation[]>;
+  readonly incomingResolvedRelationsBySymbolId: ReadonlyMap<string, readonly GraphRelation[]>;
+  readonly incomingExactFileRelationsBySymbolId: ReadonlyMap<string, readonly GraphRelation[]>;
+}
+
+function appendRelation(
+  relationsBySymbolId: Map<string, GraphRelation[]>,
+  symbolId: string,
+  relation: GraphRelation
+): void {
+  const relations = relationsBySymbolId.get(symbolId) ?? [];
+  relations.push(relation);
+  relationsBySymbolId.set(symbolId, relations);
+}
+
+function sortRelationIndex(
+  relationsBySymbolId: Map<string, GraphRelation[]>
+): ReadonlyMap<string, readonly GraphRelation[]> {
+  const sorted = new Map<string, readonly GraphRelation[]>();
+  for (const [symbolId, relations] of [...relationsBySymbolId.entries()].sort(([left], [right]) =>
+    compareText(left, right)
+  )) {
+    sorted.set(symbolId, relations.sort(compareRelations));
+  }
+  return sorted;
+}
+
+/**
+ * Builds all request-scoped symbol and relation indexes in one graph pass.
+ *
+ * Exact indexes retain every exact, resolved edge; consumers filter by edge
+ * kind for their particular traversal.  The resolved indexes intentionally
+ * include ambiguous-but-resolved edges to preserve the historical caller and
+ * callee semantics.
+ */
+export function createGraphQueryView(graph: SymbolGraph): GraphQueryView {
+  const symbolsById = createSymbolIndex(graph.symbols);
+  const symbolsByFilePathMutable = new Map<string, SymbolNode[]>();
+  for (const symbol of sortSymbols(graph.symbols)) {
+    const symbols = symbolsByFilePathMutable.get(symbol.filePath) ?? [];
+    symbols.push(symbol);
+    symbolsByFilePathMutable.set(symbol.filePath, symbols);
+  }
+
+  const outgoingExactRelationsBySymbolId = new Map<string, GraphRelation[]>();
+  const incomingExactRelationsBySymbolId = new Map<string, GraphRelation[]>();
+  const outgoingResolvedRelationsBySymbolId = new Map<string, GraphRelation[]>();
+  const incomingResolvedRelationsBySymbolId = new Map<string, GraphRelation[]>();
+  const incomingExactFileRelationsBySymbolId = new Map<string, GraphRelation[]>();
+
+  for (const edge of graph.edges) {
+    if (!isResolvedGraphEdge(edge)) {
+      continue;
+    }
+
+    const source = symbolsById.get(edge.sourceId);
+    const target = symbolsById.get(edge.targetId);
+    if (source === undefined || target === undefined) {
+      continue;
+    }
+
+    const relationFromSource: GraphRelation = { symbol: target, edge };
+    const relationFromTarget: GraphRelation = { symbol: source, edge };
+    appendRelation(outgoingResolvedRelationsBySymbolId, source.id, relationFromSource);
+    appendRelation(incomingResolvedRelationsBySymbolId, target.id, relationFromTarget);
+
+    if (edge.resolution !== "exact") {
+      continue;
+    }
+
+    appendRelation(outgoingExactRelationsBySymbolId, source.id, relationFromSource);
+    appendRelation(incomingExactRelationsBySymbolId, target.id, relationFromTarget);
+    if ((edge.kind === "imports" || edge.kind === "exports") && source.kind === "file") {
+      appendRelation(incomingExactFileRelationsBySymbolId, target.id, relationFromTarget);
+    }
+  }
+
+  const symbolsByFilePath = new Map<string, readonly SymbolNode[]>();
+  for (const [filePath, symbols] of [...symbolsByFilePathMutable.entries()].sort(([left], [right]) =>
+    compareText(left, right)
+  )) {
+    symbolsByFilePath.set(filePath, symbols);
+  }
+
+  return {
+    graph,
+    symbolsById,
+    symbolsByFilePath,
+    outgoingExactRelationsBySymbolId: sortRelationIndex(outgoingExactRelationsBySymbolId),
+    incomingExactRelationsBySymbolId: sortRelationIndex(incomingExactRelationsBySymbolId),
+    outgoingResolvedRelationsBySymbolId: sortRelationIndex(outgoingResolvedRelationsBySymbolId),
+    incomingResolvedRelationsBySymbolId: sortRelationIndex(incomingResolvedRelationsBySymbolId),
+    incomingExactFileRelationsBySymbolId: sortRelationIndex(incomingExactFileRelationsBySymbolId)
+  };
+}
+
 export interface ExactSymbolMatch {
   readonly status: "exact";
   readonly reference: string;
@@ -883,61 +994,37 @@ export function summarizeImpactPaths(
 }
 
 /** Returns all resolved static call, reference, route, or entrypoint-handler bindings targeting a symbol. */
-export function getCallers(graph: SymbolGraph, symbolId: string): readonly GraphRelation[] {
-  const symbolsById = createSymbolIndex(graph.symbols);
-  if (!symbolsById.has(symbolId)) {
+export function getCallers(
+  graph: SymbolGraph,
+  symbolId: string,
+  queryView?: GraphQueryView
+): readonly GraphRelation[] {
+  const view = queryView ?? createGraphQueryView(graph);
+  if (!view.symbolsById.has(symbolId)) {
     return [];
   }
 
-  const callers: GraphRelation[] = [];
-  for (const edge of graph.edges) {
-    if (
-      (edge.kind !== "calls" &&
-        edge.kind !== "references" &&
-        edge.kind !== "routes" &&
-        edge.kind !== "handles") ||
-      !isResolvedGraphEdge(edge) ||
-      edge.targetId !== symbolId
-    ) {
-      continue;
-    }
-
-    const caller = symbolsById.get(edge.sourceId);
-    if (caller !== undefined) {
-      callers.push({ symbol: caller, edge });
-    }
-  }
-
-  return callers.sort(compareRelations);
+  const allowedKinds = new Set<EdgeKind>(["calls", "references", "routes", "handles"]);
+  return (view.incomingResolvedRelationsBySymbolId.get(symbolId) ?? []).filter((relation) =>
+    allowedKinds.has(relation.edge.kind)
+  );
 }
 
 /** Returns all resolved static call, reference, route, or entrypoint-handler targets referenced by a symbol. */
-export function getCallees(graph: SymbolGraph, symbolId: string): readonly GraphRelation[] {
-  const symbolsById = createSymbolIndex(graph.symbols);
-  if (!symbolsById.has(symbolId)) {
+export function getCallees(
+  graph: SymbolGraph,
+  symbolId: string,
+  queryView?: GraphQueryView
+): readonly GraphRelation[] {
+  const view = queryView ?? createGraphQueryView(graph);
+  if (!view.symbolsById.has(symbolId)) {
     return [];
   }
 
-  const callees: GraphRelation[] = [];
-  for (const edge of graph.edges) {
-    if (
-      (edge.kind !== "calls" &&
-        edge.kind !== "references" &&
-        edge.kind !== "routes" &&
-        edge.kind !== "handles") ||
-      !isResolvedGraphEdge(edge) ||
-      edge.sourceId !== symbolId
-    ) {
-      continue;
-    }
-
-    const callee = symbolsById.get(edge.targetId);
-    if (callee !== undefined) {
-      callees.push({ symbol: callee, edge });
-    }
-  }
-
-  return callees.sort(compareRelations);
+  const allowedKinds = new Set<EdgeKind>(["calls", "references", "routes", "handles"]);
+  return (view.outgoingResolvedRelationsBySymbolId.get(symbolId) ?? []).filter((relation) =>
+    allowedKinds.has(relation.edge.kind)
+  );
 }
 
 function createEvidenceRootPath(root: SymbolNode): EvidencePath {
@@ -962,30 +1049,13 @@ function extendEvidencePath(
 }
 
 function outgoingExactRelations(
-  graph: SymbolGraph,
-  symbolsById: ReadonlyMap<string, SymbolNode>,
+  queryView: GraphQueryView,
   sourceId: string,
   edgeKinds: ReadonlySet<EdgeKind>
 ): GraphRelation[] {
-  const relations: GraphRelation[] = [];
-
-  for (const edge of graph.edges) {
-    if (
-      !isResolvedGraphEdge(edge) ||
-      edge.resolution !== "exact" ||
-      edge.sourceId !== sourceId ||
-      !edgeKinds.has(edge.kind)
-    ) {
-      continue;
-    }
-
-    const target = symbolsById.get(edge.targetId);
-    if (target !== undefined) {
-      relations.push({ symbol: target, edge });
-    }
-  }
-
-  return relations.sort(compareRelations);
+  return (queryView.outgoingExactRelationsBySymbolId.get(sourceId) ?? []).filter((relation) =>
+    edgeKinds.has(relation.edge.kind)
+  );
 }
 
 function assertNonnegativeHops(maxHops: number): void {
@@ -1013,14 +1083,15 @@ export function findEvidencePath(
   toSymbolId: string,
   maxHops = 4,
   maxVisitedSymbols = 500,
-  edgeKinds: readonly EdgeKind[] = DEFAULT_IMPACT_EDGE_KINDS
+  edgeKinds: readonly EdgeKind[] = DEFAULT_IMPACT_EDGE_KINDS,
+  queryView?: GraphQueryView
 ): EvidencePathResult {
   assertNonnegativeHops(maxHops);
   assertPositiveVisitCap(maxVisitedSymbols);
 
-  const symbolsById = createSymbolIndex(graph.symbols);
-  const root = symbolsById.get(fromSymbolId);
-  const target = symbolsById.get(toSymbolId);
+  const view = queryView ?? createGraphQueryView(graph);
+  const root = view.symbolsById.get(fromSymbolId);
+  const target = view.symbolsById.get(toSymbolId);
   if (root === undefined || target === undefined) {
     return { path: null, truncated: false };
   }
@@ -1044,8 +1115,7 @@ export function findEvidencePath(
     }
 
     const relations = outgoingExactRelations(
-      graph,
-      symbolsById,
+      view,
       state.terminal.id,
       allowedEdgeKinds
     );
@@ -1128,82 +1198,30 @@ function compareImpactPaths(left: ImpactPath, right: ImpactPath): number {
 }
 
 function incomingResolvedRelations(
-  graph: SymbolGraph,
-  symbolsById: ReadonlyMap<string, SymbolNode>,
+  queryView: GraphQueryView,
   targetId: string,
-  edgeKinds: readonly EdgeKind[]
+  edgeKinds: ReadonlySet<EdgeKind>
 ): GraphRelation[] {
-  const relations: GraphRelation[] = [];
-
-  for (const edge of graph.edges) {
-    if (
-      !isResolvedGraphEdge(edge) ||
-      edge.targetId !== targetId ||
-      !edgeKinds.includes(edge.kind)
-    ) {
-      continue;
-    }
-
-    const source = symbolsById.get(edge.sourceId);
-    if (source !== undefined) {
-      relations.push({ symbol: source, edge });
-    }
-  }
-
-  return relations.sort(compareRelations);
+  return (queryView.incomingResolvedRelationsBySymbolId.get(targetId) ?? []).filter((relation) =>
+    edgeKinds.has(relation.edge.kind)
+  );
 }
 
 function incomingExactRelations(
-  graph: SymbolGraph,
-  symbolsById: ReadonlyMap<string, SymbolNode>,
+  queryView: GraphQueryView,
   targetId: string,
-  edgeKinds: readonly EdgeKind[]
+  edgeKinds: ReadonlySet<EdgeKind>
 ): GraphRelation[] {
-  const relations: GraphRelation[] = [];
-
-  for (const edge of graph.edges) {
-    if (
-      !isResolvedGraphEdge(edge) ||
-      edge.resolution !== "exact" ||
-      edge.targetId !== targetId ||
-      !edgeKinds.includes(edge.kind)
-    ) {
-      continue;
-    }
-
-    const source = symbolsById.get(edge.sourceId);
-    if (source !== undefined) {
-      relations.push({ symbol: source, edge });
-    }
-  }
-
-  return relations.sort(compareRelations);
+  return (queryView.incomingExactRelationsBySymbolId.get(targetId) ?? []).filter((relation) =>
+    edgeKinds.has(relation.edge.kind)
+  );
 }
 
 function incomingExactFileRelations(
-  graph: SymbolGraph,
-  symbolsById: ReadonlyMap<string, SymbolNode>,
+  queryView: GraphQueryView,
   targetId: string
 ): GraphRelation[] {
-  const relations: GraphRelation[] = [];
-
-  for (const edge of graph.edges) {
-    if (
-      !isResolvedGraphEdge(edge) ||
-      edge.resolution !== "exact" ||
-      edge.targetId !== targetId ||
-      (edge.kind !== "imports" && edge.kind !== "exports")
-    ) {
-      continue;
-    }
-
-    const source = symbolsById.get(edge.sourceId);
-    if (source?.kind === "file") {
-      relations.push({ symbol: source, edge });
-    }
-  }
-
-  return relations.sort(compareRelations);
+  return [...(queryView.incomingExactFileRelationsBySymbolId.get(targetId) ?? [])];
 }
 
 function assertPositiveDepth(maxDepth: number): void {
@@ -1474,15 +1492,16 @@ export function getBoundedExactTopologyRelevance(
 export function findAffectedTestPaths(
   graph: SymbolGraph,
   changedFileSymbolId: string,
-  options: AffectedTestTraversalOptions
+  options: AffectedTestTraversalOptions,
+  queryView?: GraphQueryView
 ): AffectedTestTraversalResult {
   assertPositiveDepth(options.maxDepth);
   assertPositiveBound(options.maxResults, "maxResults");
   assertPositiveBound(options.maxVisitedFiles, "maxVisitedFiles");
   const testClassifier = options.testClassifier ?? classifyTestFile;
 
-  const symbolsById = createSymbolIndex(graph.symbols);
-  const root = symbolsById.get(changedFileSymbolId);
+  const view = queryView ?? createGraphQueryView(graph);
+  const root = view.symbolsById.get(changedFileSymbolId);
   if (root?.kind !== "file") {
     return {
       paths: [],
@@ -1503,7 +1522,7 @@ export function findAffectedTestPaths(
   for (let depth = 0; depth <= options.maxDepth && frontier.length > 0; depth += 1) {
     const nextFrontier: TraversalState[] = [];
     for (const state of frontier.sort((left, right) => compareImpactPaths(left.path, right.path))) {
-      const relations = incomingExactFileRelations(graph, symbolsById, state.terminal.id);
+      const relations = incomingExactFileRelations(view, state.terminal.id);
       if (depth >= options.maxDepth) {
         if (relations.some((relation) => !seenFileSymbolIds.has(relation.symbol.id))) {
           depthLimitReached = true;
@@ -1557,16 +1576,18 @@ export function getImpactPaths(
   graph: SymbolGraph,
   symbolId: string,
   maxDepth = 1,
-  edgeKinds: readonly EdgeKind[] = DEFAULT_IMPACT_EDGE_KINDS
+  edgeKinds: readonly EdgeKind[] = DEFAULT_IMPACT_EDGE_KINDS,
+  queryView?: GraphQueryView
 ): readonly ImpactPath[] {
   assertPositiveDepth(maxDepth);
 
-  const symbolsById = createSymbolIndex(graph.symbols);
-  const root = symbolsById.get(symbolId);
+  const view = queryView ?? createGraphQueryView(graph);
+  const root = view.symbolsById.get(symbolId);
   if (root === undefined) {
     return [];
   }
 
+  const allowedEdgeKinds = new Set(edgeKinds);
   const seenSymbolIds = new Set<string>([root.id]);
   const impactedPaths: ImpactPath[] = [];
   let frontier: TraversalState[] = [{ terminal: root, path: createRootPath(root) }];
@@ -1576,10 +1597,9 @@ export function getImpactPaths(
 
     for (const state of frontier.sort((left, right) => compareImpactPaths(left.path, right.path))) {
       const relations = incomingResolvedRelations(
-        graph,
-        symbolsById,
+        view,
         state.terminal.id,
-        edgeKinds
+        allowedEdgeKinds
       );
 
       for (const relation of relations) {
@@ -1613,18 +1633,20 @@ export function getImpactPaths(
 export function getBoundedExactImpactPaths(
   graph: SymbolGraph,
   symbolId: string,
-  options: ExactImpactTraversalOptions
+  options: ExactImpactTraversalOptions,
+  queryView?: GraphQueryView
 ): ExactImpactTraversalResult {
   assertPositiveDepth(options.maxDepth);
   assertPositiveBound(options.maxResults, "maxResults");
   const edgeKinds = options.edgeKinds ?? DEFAULT_EXACT_IMPACT_EDGE_KINDS;
 
-  const symbolsById = createSymbolIndex(graph.symbols);
-  const root = symbolsById.get(symbolId);
+  const view = queryView ?? createGraphQueryView(graph);
+  const root = view.symbolsById.get(symbolId);
   if (root === undefined) {
     return { paths: [], resultLimitReached: false };
   }
 
+  const allowedEdgeKinds = new Set(edgeKinds);
   const seenSymbolIds = new Set<string>([root.id]);
   const paths: ImpactPath[] = [];
   let resultLimitReached = false;
@@ -1635,10 +1657,9 @@ export function getBoundedExactImpactPaths(
 
     for (const state of frontier.sort((left, right) => compareImpactPaths(left.path, right.path))) {
       const relations = incomingExactRelations(
-        graph,
-        symbolsById,
+        view,
         state.terminal.id,
-        edgeKinds
+        allowedEdgeKinds
       );
 
       for (const relation of relations) {

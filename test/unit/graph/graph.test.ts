@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   classifyTestFile,
+  createGraphQueryView,
   findAffectedTestPaths,
   findEvidencePath,
   findSymbols,
@@ -130,6 +131,40 @@ describe("pure graph traversal", () => {
     expect(getCallees(graph, "direct").map((relation) => relation.symbol.id)).toEqual([
       "changed",
       "changed"
+    ]);
+  });
+
+  it("builds deterministic request-scoped symbol and exact adjacency indexes", () => {
+    const view = createGraphQueryView(graph);
+
+    expect(view.symbolsById.get("changed")).toBe(changed);
+    expect(view.symbolsByFilePath.get("src/example.ts")?.map((item) => item.id)).toEqual([
+      "changed",
+      "direct",
+      "transitive"
+    ]);
+    expect(
+      view.incomingExactRelationsBySymbolId.get("changed")?.map((relation) => relation.edge.id)
+    ).toEqual(["contains", "direct-calls-changed"]);
+    expect(
+      view.outgoingExactRelationsBySymbolId.get("direct")?.map((relation) => relation.edge.id)
+    ).toEqual(["direct-calls-changed"]);
+
+    expect(getCallers(graph, "changed", view).map((relation) => relation.edge.id)).toEqual([
+      "direct-calls-changed",
+      "heuristic"
+    ]);
+    expect(getCallees(graph, "direct", view).map((relation) => relation.symbol.id)).toEqual([
+      "changed",
+      "changed"
+    ]);
+    expect(
+      findEvidencePath(graph, "changed", "transitive", 4, 500, undefined, view).path?.edges.map(
+        (item) => item.id
+      )
+    ).toEqual(["cycle"]);
+    expect(getImpactPaths(graph, "changed", 1, undefined, view).map((path) => path.symbols.at(-1)?.id)).toEqual([
+      "direct"
     ]);
   });
 

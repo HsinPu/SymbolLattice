@@ -71,6 +71,19 @@ export interface ActiveSourceDocumentsBundle extends ActiveGraphBundle {
   readonly documents: readonly IndexedSourceDocument[];
 }
 
+/**
+ * A bounded source-only read from one expected active generation. Unlike
+ * `ActiveSourceDocumentsBundle`, this projection deliberately omits the graph
+ * snapshot so a query that already owns the matching graph does not materialize
+ * every symbol, edge, and pending reference a second time.
+ */
+export interface ActiveSourceDocumentsProjection {
+  readonly status: IndexStatus;
+  readonly sourceSearchVersion?: string | null;
+  readonly generationMatched: boolean;
+  readonly documents: readonly IndexedSourceDocument[];
+}
+
 /** Metadata for one immutable snapshot retained by a history-capable store. */
 export interface GenerationHistoryEntry {
   readonly generationId: string;
@@ -141,6 +154,16 @@ export interface GraphStore {
     projectPath: string,
     filePaths: readonly string[]
   ): ActiveSourceDocumentsBundle;
+  /**
+   * Optional source-only optimization for callers that already hold an active
+   * graph bundle. A generation mismatch returns no documents so callers can
+   * restart the complete read once without mixing generations.
+   */
+  getActiveSourceDocuments?(
+    projectPath: string,
+    expectedGenerationId: string,
+    filePaths: readonly string[]
+  ): ActiveSourceDocumentsProjection;
   /**
    * Optional v0.11 retained-history capability. `null` means this adapter or
    * index cannot provide a trustworthy history (including an active generation

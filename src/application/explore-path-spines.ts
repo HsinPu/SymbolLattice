@@ -1,4 +1,9 @@
-import { findEvidencePath, type EvidencePath } from "../domain/graph.js";
+import {
+  createGraphQueryView,
+  findEvidencePath,
+  type EvidencePath,
+  type GraphQueryView
+} from "../domain/graph.js";
 import type { GraphSnapshot, SymbolNode } from "../domain/types.js";
 import type { ExploreQuerySelection } from "./explore-query.js";
 
@@ -71,8 +76,10 @@ function pairCandidates(selections: readonly ExploreQuerySelection[]): readonly 
  */
 export function planExplorePathSpines(
   graph: GraphSnapshot,
-  selections: readonly ExploreQuerySelection[]
+  selections: readonly ExploreQuerySelection[],
+  queryView?: GraphQueryView
 ): ExplorePathSpinePlan {
+  const view = queryView ?? createGraphQueryView(graph);
   const pairs = pairCandidates(selections);
   const selectedSymbolIds = new Set(selections.map((selection) => selection.symbol.id));
   const attemptedPairs = pairs.slice(0, EXPLORE_PATH_SPINE_LIMITS.maximumPairAttempts);
@@ -85,7 +92,9 @@ export function planExplorePathSpines(
       pair.from.symbol.id,
       pair.to.symbol.id,
       EXPLORE_PATH_SPINE_LIMITS.maximumHops,
-      EXPLORE_PATH_SPINE_LIMITS.maximumVisitedSymbolsPerPair
+      EXPLORE_PATH_SPINE_LIMITS.maximumVisitedSymbolsPerPair,
+      undefined,
+      view
     );
     traversalTruncated ||= result.truncated;
     const path = result.path;
