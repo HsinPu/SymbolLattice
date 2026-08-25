@@ -45,6 +45,8 @@ SymbolLattice 可在單次 `init` 或 `sync` 中處理多語言 repository。不
 
 Java 深度包含唯一專案型別的明確 import、annotation、泛型 direct heritage／object creation，以及 `build.gradle(.kts)` 或 module-named Gradle build script 證據；重複 qualified type、wildcard／static import、lambda 內建立、anonymous interface 與外部 classpath 仍保守省略。
 
+v0.441.0 預設略過常見 cache 與 generated directories，但不會全面排除 dot directories；`.github`、`.devcontainer`、`.storybook` 等未列入排除集的來源仍可被索引。明確 scope 可選入 default-excluded 路徑，hard exclusions 仍不可覆寫；root 與 nested `.gitignore` 依 Git parent re-inclusion 語意套用。若非排除路徑發生 `EACCES`／`EPERM`，index／sync 不會發布 partial generation，既有查詢會保留舊 generation 並標示 stale。
+
 ## 安裝 CLI
 
 需要 Git、Node.js `>=22.13 <25`、npm，以及 Windows PowerShell 5.1 或 PowerShell 7。
@@ -141,7 +143,7 @@ SymbolLattice serve --mcp --project C:\path\to\project
 SymbolLattice serve --mcp --project C:\path\to\project --no-auto-sync
 ```
 
-MCP 預設只暴露主要的 `SymbolLattice_explore`，降低 Agent 選錯工具的機率；它會回傳精簡 Markdown 與附行號來源，而不是完整診斷 JSON，CLI `explore --json` 仍保留機器可讀契約。v0.440.0 會從 SQLite 讀取有界局部子圖、重用 request-scoped adjacency，並在 auto-sync host 已驗證 generation 時省略 worker 內的重複 freshness 掃描。其他工具仍完整保留，可透過 `SYMBOL_LATTICE_MCP_TOOLS=node,impact` 選擇性加入，或設為 `all` 恢復完整 surface。MCP query handlers 不會直接執行 `init`。MCP host 的啟動目錄沒有索引時仍會註冊工具，但不會為該目錄啟動 watcher；呼叫端應傳入實際 repository 的 `projectPath`。MCP initialize instructions 與 Codex 安裝區塊會指示具備 shell 能力的 Agent 在符合安全條件且索引缺失時自動呼叫 CLI。查詢整個 workspace 時，Agent 會對每個相關 repo 分別傳入 `projectPath` 並彙整結果；SymbolLattice 不會把多個獨立索引冒充成一張具有跨 repo edge 的圖。索引寫入、手動同步與 watcher lifecycle 仍由 CLI 控制。
+MCP 預設只暴露主要的 `SymbolLattice_explore`，降低 Agent 選錯工具的機率；它會回傳精簡 Markdown 與附行號來源，而不是完整診斷 JSON，CLI `explore --json` 仍保留機器可讀契約。v0.441.0 保留 v0.440.0 的 SQLite 有界局部子圖、request-scoped adjacency 與 verified-generation freshness fast path，並加入 resilient filesystem discovery。其他工具仍完整保留，可透過 `SYMBOL_LATTICE_MCP_TOOLS=node,impact` 選擇性加入，或設為 `all` 恢復完整 surface。MCP query handlers 不會直接執行 `init`。MCP host 的啟動目錄沒有索引時仍會註冊工具，但不會為該目錄啟動 watcher；呼叫端應傳入實際 repository 的 `projectPath`。MCP initialize instructions 與 Codex 安裝區塊會指示具備 shell 能力的 Agent 在符合安全條件且索引缺失時自動呼叫 CLI。查詢整個 workspace 時，Agent 會對每個相關 repo 分別傳入 `projectPath` 並彙整結果；SymbolLattice 不會把多個獨立索引冒充成一張具有跨 repo edge 的圖。索引寫入、手動同步與 watcher lifecycle 仍由 CLI 控制。
 
 ## 限制
 
