@@ -5,7 +5,7 @@ import type {
   WatchEventSource,
   WatchEventSubscription
 } from "../../application/watch.js";
-import { HARD_EXCLUDED_DIRECTORY_NAMES } from "./discovery.js";
+import { containsHardExcludedDirectory } from "./project-filesystem.js";
 
 export interface FileSystemWatchOptions {
   readonly recursive: true;
@@ -50,10 +50,7 @@ export function shouldTriggerProjectWatchEvent(filename: string | null): boolean
     return true;
   }
 
-  return !filename
-    .replaceAll("\\", "/")
-    .split("/")
-    .some((segment) => HARD_EXCLUDED_DIRECTORY_NAMES.has(segment));
+  return !containsHardExcludedDirectory(filename);
 }
 
 function toWatchFilename(filename: FileSystemWatchFilename): string | null {

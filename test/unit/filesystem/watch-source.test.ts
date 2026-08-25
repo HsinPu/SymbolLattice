@@ -75,6 +75,10 @@ describe("project filesystem watch events", () => {
   it("filters hard-excluded directory segments after normalizing Windows separators", () => {
     expect(shouldTriggerProjectWatchEvent("src/index.ts")).toBe(true);
     expect(shouldTriggerProjectWatchEvent("tsconfig.json")).toBe(true);
+    expect(shouldTriggerProjectWatchEvent(".tmp/pytest-history/state.json")).toBe(true);
+    expect(shouldTriggerProjectWatchEvent("src/.cache/result.json")).toBe(true);
+    expect(shouldTriggerProjectWatchEvent("src/nested/.gitignore")).toBe(true);
+    expect(shouldTriggerProjectWatchEvent(".github/workflows/ci.yml")).toBe(true);
     expect(shouldTriggerProjectWatchEvent("src\\node_modules\\library\\index.js")).toBe(false);
     expect(shouldTriggerProjectWatchEvent(".SymbolLattice/state.db")).toBe(false);
     expect(shouldTriggerProjectWatchEvent("node_modules")).toBe(false);

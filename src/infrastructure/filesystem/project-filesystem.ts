@@ -48,6 +48,14 @@ export const DEFAULT_EXCLUDED_DIRECTORY_NAMES: ReadonlySet<string> = new Set([
   "target"
 ]);
 
+/** True when a normalized project-relative path crosses a hard exclusion. */
+export function containsHardExcludedDirectory(relativePath: string): boolean {
+  const normalized = relativePath.replaceAll("\\", "/");
+  return normalized !== "." && normalized
+    .split("/")
+    .some((name) => HARD_EXCLUDED_DIRECTORY_NAMES.has(name));
+}
+
 export interface ProjectFilesystemEntry {
   readonly name: string;
   isDirectory(): boolean;

@@ -5,6 +5,7 @@ import ignore, { type Ignore } from "ignore";
 import {
   DEFAULT_EXCLUDED_DIRECTORY_NAMES,
   HARD_EXCLUDED_DIRECTORY_NAMES,
+  containsHardExcludedDirectory,
   nativeProjectFilesystemReader,
   ProjectPathAccessCollector,
   projectFilesystemMissingCode,
@@ -47,14 +48,6 @@ interface SourcePathEntry {
 /** Stable byte-wise ordering for normalized project-relative paths. */
 export function compareScopedProjectPaths(left: string, right: string): number {
   return left === right ? 0 : left < right ? -1 : 1;
-}
-
-/** True when any path segment belongs to the non-overridable exclusion set. */
-export function containsHardExcludedDirectory(relativePath: string): boolean {
-  const normalized = relativePath.replaceAll("\\", "/");
-  return normalized !== "." && normalized
-    .split("/")
-    .some((name) => HARD_EXCLUDED_DIRECTORY_NAMES.has(name));
 }
 
 /**
