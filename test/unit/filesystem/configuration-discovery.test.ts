@@ -7,6 +7,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { ProjectConfigurationInput } from "../../../src/domain/index-inputs.js";
 import { hashSource } from "../../../src/infrastructure/filesystem/discovery.js";
 import { discoverConfigurationCandidateInput } from "../../../src/infrastructure/filesystem/configuration-discovery.js";
+import {
+  nativeProjectFilesystemReader,
+  type ProjectFilesystemReader
+} from "../../../src/infrastructure/filesystem/project-filesystem.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -86,6 +90,47 @@ describe("configuration discovery identity", () => {
     await rm(join(projectPath, "packages", "worker", "package.json"));
     const removed = await discoverConfigurationCandidateInput(projectPath, []);
     expect(removed).toEqual(changed);
+  });
+
+  it("tracks nested gitignore contents while excluding default cache candidates", async () => {
+    const projectPath = await createProject();
+    await mkdir(join(projectPath, "nested"), { recursive: true });
+    await mkdir(join(projectPath, ".tmp", "pytest-history"), { recursive: true });
+    await writeFile(join(projectPath, "nested", ".gitignore"), "hidden.ts\n", "utf8");
+
+    const before = await discoverConfigurationCandidateInput(projectPath, []);
+    await writeFile(join(projectPath, "nested", ".gitignore"), "ignored.ts\n", "utf8");
+    const changedIgnore = await discoverConfigurationCandidateInput(projectPath, []);
+    expect(changedIgnore.contentHash).not.toBe(before.contentHash);
+
+    await writeFile(
+      join(projectPath, ".tmp", "pytest-history", "package.json"),
+      "{\"name\":\"ignored\"}\n",
+      "utf8"
+    );
+    const afterDefaultExcludedCandidate = await discoverConfigurationCandidateInput(projectPath, []);
+    expect(afterDefaultExcludedCandidate).toEqual(changedIgnore);
+  });
+
+  it("reports unreadable configuration candidates with project-relative evidence", async () => {
+    const projectPath = await createProject();
+    await writeFile(join(projectPath, "package.json"), "{\"private\":true}\n", "utf8");
+    const reader: ProjectFilesystemReader = {
+      ...nativeProjectFilesystemReader,
+      async readFile(filePath) {
+        if (filePath.endsWith("package.json")) {
+          throw Object.assign(new Error("denied"), { code: "EPERM", path: filePath });
+        }
+        return nativeProjectFilesystemReader.readFile(filePath);
+      }
+    };
+
+    await expect(discoverConfigurationCandidateInput(projectPath, [], reader)).rejects.toMatchObject({
+      code: "PROJECT_PATH_UNREADABLE",
+      evidence: [{ path: "package.json", code: "EPERM" }],
+      total: 1,
+      truncated: false
+    });
   });
 
   it.each([

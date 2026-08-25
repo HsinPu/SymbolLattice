@@ -1,20 +1,26 @@
-import { readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import type { ProjectConfigurationInput } from "../../domain/index-inputs.js";
 import {
-  HARD_EXCLUDED_DIRECTORY_NAMES,
   compareProjectPaths,
   hashSource,
-  hashUtf8File,
-  toProjectRelativePath
+  hashUtf8File
 } from "./discovery.js";
+import {
+  nativeProjectFilesystemReader,
+  ProjectPathAccessCollector,
+  projectFilesystemMissingCode,
+  readProjectFilesystemText,
+  type ProjectFilesystemReader
+} from "./project-filesystem.js";
+import { walkScopedProject } from "./scoped-walker.js";
 
 export const CONFIGURATION_DISCOVERY_INPUT_PATH =
   ".SymbolLattice/configuration-candidates.json";
-export const CONFIGURATION_DISCOVERY_POLICY = "configuration-candidates-v1" as const;
+export const CONFIGURATION_DISCOVERY_POLICY = "configuration-candidates-v2" as const;
 
 const CONFIGURATION_CANDIDATE_NAMES: ReadonlySet<string> = new Set([
+  ".gitignore",
   "Cargo.toml",
   "astro.config.cjs",
   "astro.config.cts",
@@ -56,48 +62,36 @@ function isVirtualConfigurationInput(input: ProjectConfigurationInput): boolean 
   );
 }
 
-async function discoverPresentCandidatePaths(projectPath: string): Promise<readonly string[]> {
-  const paths: string[] = [];
-
-  async function visit(directoryPath: string): Promise<void> {
-    const entries = await readdir(directoryPath, { withFileTypes: true });
-    for (const entry of entries.sort((left, right) => compareProjectPaths(left.name, right.name))) {
-      const entryPath = resolve(directoryPath, entry.name);
-      if (entry.isDirectory()) {
-        if (!HARD_EXCLUDED_DIRECTORY_NAMES.has(entry.name)) {
-          await visit(entryPath);
-        }
-        continue;
-      }
-      if (entry.isFile() && isConfigurationCandidateFileName(entry.name)) {
-        paths.push(toProjectRelativePath(projectPath, entryPath));
-      }
-    }
-  }
-
-  await visit(resolve(projectPath));
-  return paths.sort(compareProjectPaths);
+async function discoverPresentCandidatePaths(
+  projectPath: string,
+  filesystemReader: ProjectFilesystemReader
+): Promise<readonly string[]> {
+  return (await walkScopedProject(projectPath, {
+    reader: filesystemReader,
+    isConfigurationCandidateFileName
+  })).configurationPaths;
 }
 
 async function readCandidateIdentity(
   projectPath: string,
-  path: string
-): Promise<ConfigurationCandidateIdentity> {
+  path: string,
+  filesystemReader: ProjectFilesystemReader,
+  access: ProjectPathAccessCollector
+): Promise<ConfigurationCandidateIdentity | null> {
+  const absolutePath = resolve(projectPath, ...path.split("/"));
   try {
     return {
       path,
       state: "present",
-      contentHash: await hashUtf8File(resolve(projectPath, ...path.split("/")))
+      contentHash: filesystemReader === nativeProjectFilesystemReader
+        ? await hashUtf8File(absolutePath)
+        : hashSource(await readProjectFilesystemText(filesystemReader, absolutePath))
     };
   } catch (error) {
-    if (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      error.code === "ENOENT"
-    ) {
+    if (projectFilesystemMissingCode(error) !== null) {
       return { path, state: "absent", contentHash: null };
     }
+    if (access.add(absolutePath, error)) return null;
     throw error;
   }
 }
@@ -110,18 +104,26 @@ async function readCandidateIdentity(
  */
 export async function discoverConfigurationCandidateInput(
   projectPath: string,
-  trackedInputs: readonly ProjectConfigurationInput[]
+  trackedInputs: readonly ProjectConfigurationInput[],
+  filesystemReader: ProjectFilesystemReader = nativeProjectFilesystemReader,
+  presentCandidatePaths?: readonly string[]
 ): Promise<ProjectConfigurationInput> {
-  return (await discoverConfigurationCandidateSnapshot(projectPath, trackedInputs)).input;
+  return (await discoverConfigurationCandidateSnapshot(
+    projectPath,
+    trackedInputs,
+    presentCandidatePaths,
+    filesystemReader
+  )).input;
 }
 
 export async function discoverConfigurationCandidateSnapshot(
   projectPath: string,
   trackedInputs: readonly ProjectConfigurationInput[],
-  presentCandidatePaths?: readonly string[]
+  presentCandidatePaths?: readonly string[],
+  filesystemReader: ProjectFilesystemReader = nativeProjectFilesystemReader
 ): Promise<ConfigurationCandidateSnapshot> {
   const candidatePaths = new Set(
-    presentCandidatePaths ?? await discoverPresentCandidatePaths(projectPath)
+    presentCandidatePaths ?? await discoverPresentCandidatePaths(projectPath, filesystemReader)
   );
   candidatePaths.add(".gitignore");
   for (const input of trackedInputs) {
@@ -132,16 +134,17 @@ export async function discoverConfigurationCandidateSnapshot(
 
   const sortedPaths = [...candidatePaths].sort(compareProjectPaths);
   const candidates: ConfigurationCandidateIdentity[] = [];
+  const access = new ProjectPathAccessCollector(projectPath);
   const maximumConcurrentReads = 8;
   for (let offset = 0; offset < sortedPaths.length; offset += maximumConcurrentReads) {
-    candidates.push(
-      ...(await Promise.all(
-        sortedPaths
-          .slice(offset, offset + maximumConcurrentReads)
-          .map((path) => readCandidateIdentity(projectPath, path))
-      ))
+    const batch = await Promise.all(
+      sortedPaths
+        .slice(offset, offset + maximumConcurrentReads)
+        .map((path) => readCandidateIdentity(projectPath, path, filesystemReader, access))
     );
+    candidates.push(...batch.filter((candidate): candidate is ConfigurationCandidateIdentity => candidate !== null));
   }
+  access.throwIfAny();
 
   return {
     candidatesChecked: candidates.length,

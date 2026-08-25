@@ -7,3 +7,7 @@ coverage/
 .npm-cache*/
 .tmp/
 *.tgz
+
+# Product build tooling is source, not generated build output.
+!scripts/build/
+!scripts/build/**

@@ -6,7 +6,8 @@ import {
   MAXIMUM_PROJECT_PATH_UNREADABLE_EVIDENCE,
   ProjectPathAccessCollector,
   type ProjectFilesystemReader,
-  readProjectFilesystemText
+  readProjectFilesystemText,
+  toProjectPathUnreadableError
 } from "../../../src/infrastructure/filesystem/project-filesystem.js";
 import { ProjectPathUnreadableError } from "../../../src/domain/project-path-access.js";
 
@@ -60,7 +61,10 @@ describe("project filesystem reader and access contract", () => {
     const reader: ProjectFilesystemReader = {
       async readdir(directoryPath) {
         calls.push(`readdir:${directoryPath}`);
-        return [{ name: "nested", kind: "directory" }, { name: "entry.ts", kind: "file" }];
+        return [
+          { name: "nested", isDirectory: () => true, isFile: () => false },
+          { name: "entry.ts", isDirectory: () => false, isFile: () => true }
+        ];
       },
       async readFile(filePath) {
         calls.push(`readFile:${filePath}`);
@@ -68,18 +72,19 @@ describe("project filesystem reader and access contract", () => {
       },
       async stat(path) {
         calls.push(`stat:${path}`);
-        return { kind: "directory" };
+        return { isDirectory: () => true };
       }
     };
 
     await expect(readProjectFilesystemText(reader, "C:/project/.gitignore")).resolves.toBe(
       "export const entry = true;\n"
     );
-    await expect(reader.readdir("C:/project")).resolves.toEqual([
-      { name: "nested", kind: "directory" },
-      { name: "entry.ts", kind: "file" }
+    const entries = await reader.readdir("C:/project");
+    expect(entries.map((entry) => [entry.name, entry.isDirectory(), entry.isFile()])).toEqual([
+      ["nested", true, false],
+      ["entry.ts", false, true]
     ]);
-    await expect(reader.stat("C:/project")).resolves.toEqual({ kind: "directory" });
+    expect((await reader.stat("C:/project")).isDirectory()).toBe(true);
     expect(calls).toEqual([
       "readFile:C:/project/.gitignore",
       "readdir:C:/project",
@@ -127,5 +132,18 @@ describe("project filesystem reader and access contract", () => {
     ]);
     expect(collector.toError()).toMatchObject({ total: 16, truncated: true });
     expect(collector.toError()?.message).not.toContain("C:/project");
+  });
+
+  it("normalizes a raw Node access error without exposing its absolute host path", () => {
+    const error = toProjectPathUnreadableError(
+      "C:/project",
+      Object.assign(new Error("denied"), { code: "EACCES", path: "C:/project/config/private.json" })
+    );
+
+    expect(error).toMatchObject({
+      code: "PROJECT_PATH_UNREADABLE",
+      evidence: [{ path: "config/private.json", code: "EACCES" }]
+    });
+    expect(error?.message).not.toContain("C:/project");
   });
 });

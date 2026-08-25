@@ -1,12 +1,23 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { open, readdir, readFile, stat } from "node:fs/promises";
+import { open } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, parse, relative, resolve, sep } from "node:path";
 
-import ignore, { type Ignore } from "ignore";
-
 import type { ArtifactLanguage } from "../../domain/index.js";
+import {
+  nativeProjectFilesystemReader,
+  ProjectPathAccessCollector,
+  projectFilesystemMissingCode,
+  type ProjectFilesystemReader
+} from "./project-filesystem.js";
+import {
+  canonicalizeScopedProjectRoots,
+  compareScopedProjectPaths,
+  walkScopedProject
+} from "./scoped-walker.js";
+
+export { HARD_EXCLUDED_DIRECTORY_NAMES } from "./project-filesystem.js";
 
 export type SupportedLanguage = ArtifactLanguage;
 
@@ -130,19 +141,6 @@ export const SHELL_SHEBANG_ALLOWLIST = Object.freeze([
 /** Longest allowlisted line plus two bytes, so a suffix, LF, or CRLF is observable. */
 export const MAXIMUM_SHELL_SHEBANG_READ_BYTES = 21 as const;
 
-/**
- * These directories contain neither user source nor SymbolLattice input. They
- * are deliberately outside `.gitignore` semantics, so a negated rule can
- * never pull one back into an index.
- */
-export const HARD_EXCLUDED_DIRECTORY_NAMES: ReadonlySet<string> = new Set([
-  ".git",
-  ".SymbolLattice",
-  "coverage",
-  "dist",
-  "node_modules"
-]);
-
 /** Languages reachable through extension routing or a path-specific discovery rule. */
 export const DISCOVERABLE_LANGUAGES: readonly SupportedLanguage[] = Object.freeze([
   ...new Set<SupportedLanguage>([...SUPPORTED_EXTENSIONS.values(), "blade"])
@@ -170,9 +168,11 @@ export interface SourceDiscoveryOptions {
   readonly scopeRoots?: readonly string[];
   /** Injectable only to make the bounded, ignore-before-read policy testable. */
   readonly shellShebangReader?: ShellShebangReader;
+  /** Injectable filesystem seam for deterministic access-error tests. */
+  readonly filesystemReader?: ProjectFilesystemReader;
 }
 
-export const FRESHNESS_PATH_DISCOVERY_POLICY = "single-project-walk-v1" as const;
+export const FRESHNESS_PATH_DISCOVERY_POLICY = "single-project-walk-v2" as const;
 export const STREAMING_UTF8_HASH_POLICY = "streaming-utf8-v1" as const;
 export const SOURCE_FINGERPRINT_READ_POLICY =
   "streaming-raw-bytes-for-shell-and-lua-with-objective-c-header-classification-v3" as const;
@@ -202,15 +202,7 @@ export interface FreshnessProjectPathDiscoveryOptions extends SourceDiscoveryOpt
  * strings.
  */
 export function compareProjectPaths(left: string, right: string): number {
-  if (left < right) {
-    return -1;
-  }
-
-  if (left > right) {
-    return 1;
-  }
-
-  return 0;
+  return compareScopedProjectPaths(left, right);
 }
 
 export function toProjectRelativePath(projectPath: string, targetPath: string): string {
@@ -238,37 +230,10 @@ export function toProjectRelativePath(projectPath: string, targetPath: string): 
  */
 export async function canonicalizeScopeRoots(
   projectPath: string,
-  scopeRoots?: readonly string[]
+  scopeRoots?: readonly string[],
+  filesystemReader: ProjectFilesystemReader = nativeProjectFilesystemReader
 ): Promise<readonly string[]> {
-  const normalizedProjectPath = resolve(projectPath);
-  const requestedRoots = scopeRoots === undefined || scopeRoots.length === 0 ? ["."] : scopeRoots;
-  const canonicalRoots = new Set<string>();
-
-  for (const scopeRoot of requestedRoots) {
-    if (isAbsolute(scopeRoot)) {
-      throw new Error(`Scope root must be project-relative: ${scopeRoot}`);
-    }
-
-    const absoluteScopeRoot = resolve(normalizedProjectPath, scopeRoot);
-    const relativeScopeRoot = toProjectRelativeDirectoryPath(
-      normalizedProjectPath,
-      absoluteScopeRoot,
-      scopeRoot
-    );
-    const metadata = await stat(absoluteScopeRoot);
-
-    if (!metadata.isDirectory()) {
-      throw new Error(`Scope root is not a directory: ${scopeRoot}`);
-    }
-
-    canonicalRoots.add(relativeScopeRoot);
-  }
-
-  const sortedRoots = [...canonicalRoots].sort(compareProjectPaths);
-  return sortedRoots.filter(
-    (candidate, index) =>
-      !sortedRoots.slice(0, index).some((ancestor) => isScopeAncestor(ancestor, candidate))
-  );
+  return canonicalizeScopedProjectRoots(projectPath, scopeRoots, filesystemReader);
 }
 
 export function getSourceLanguage(
@@ -311,6 +276,15 @@ async function hashRawFile(filePath: string): Promise<string> {
   return hash.digest("hex");
 }
 
+async function hashRawFileWithReader(
+  filePath: string,
+  filesystemReader: ProjectFilesystemReader
+): Promise<string> {
+  return filesystemReader === nativeProjectFilesystemReader
+    ? hashRawFile(filePath)
+    : hashSourceBytes(await filesystemReader.readFile(filePath));
+}
+
 /** Hash decoded UTF-8 incrementally without retaining the complete file string. */
 export async function hashUtf8File(filePath: string): Promise<string> {
   const hash = createHash("sha256");
@@ -319,6 +293,15 @@ export async function hashUtf8File(filePath: string): Promise<string> {
     hash.update(chunk);
   }
   return hash.digest("hex");
+}
+
+async function hashUtf8FileWithReader(
+  filePath: string,
+  filesystemReader: ProjectFilesystemReader
+): Promise<string> {
+  return filesystemReader === nativeProjectFilesystemReader
+    ? hashUtf8File(filePath)
+    : hashSource(new TextDecoder("utf-8").decode(await filesystemReader.readFile(filePath)));
 }
 
 export function isUnsafeProjectPath(projectPath: string): boolean {
@@ -331,25 +314,13 @@ export async function discoverSourceFiles(
   options?: SourceDiscoveryOptions
 ): Promise<readonly SourceFile[]> {
   const normalizedProjectPath = resolve(projectPath);
-  const scopeRoots = await canonicalizeScopeRoots(normalizedProjectPath, options?.scopeRoots);
-  const ignoreMatcher = await loadRootGitignore(normalizedProjectPath);
-  const paths = (
-    await Promise.all(
-      scopeRoots.map(async (scopeRoot) => {
-        if (containsHardExcludedDirectory(scopeRoot)) {
-          return [];
-        }
-
-        return collectSourcePaths(
-          resolve(normalizedProjectPath, scopeRoot),
-          scopeRoot,
-          ignoreMatcher,
-          options?.shellShebangReader ?? readShellShebangPrefix
-        );
-      })
-    )
-  ).flat();
-  const sourceFiles = await loadSourcePaths(normalizedProjectPath, paths);
+  const paths = await discoverSourcePaths(normalizedProjectPath, options);
+  const sourceFiles = await loadSourcePaths(
+    normalizedProjectPath,
+    paths,
+    undefined,
+    options?.filesystemReader
+  );
 
   return sourceFiles.sort((left, right) => compareProjectPaths(left.relativePath, right.relativePath));
 }
@@ -361,16 +332,25 @@ export async function discoverSourceFiles(
 export async function loadSourcePaths(
   projectPath: string,
   paths: readonly string[],
-  readSourceText?: SourceTextReader
+  readSourceText?: SourceTextReader,
+  filesystemReader: ProjectFilesystemReader = nativeProjectFilesystemReader
 ): Promise<SourceFile[]> {
   const normalizedProjectPath = resolve(projectPath);
   const sourceFiles: SourceFile[] = [];
+  const access = new ProjectPathAccessCollector(normalizedProjectPath);
   for (let offset = 0; offset < paths.length; offset += MAXIMUM_SOURCE_CONCURRENT_READS) {
     const batch = await Promise.all(
       paths.slice(offset, offset + MAXIMUM_SOURCE_CONCURRENT_READS).map(async (absolutePath) => {
-        const sourceInput = readSourceText === undefined
-          ? await readFile(absolutePath)
-          : await readSourceText(absolutePath);
+        let sourceInput: string | Uint8Array;
+        try {
+          sourceInput = readSourceText === undefined
+            ? await filesystemReader.readFile(absolutePath)
+            : await readSourceText(absolutePath);
+        } catch (error) {
+          if (projectFilesystemMissingCode(error) !== null) return null;
+          if (access.add(absolutePath, error)) return null;
+          throw error;
+        }
         const sourceBytes = typeof sourceInput === "string" ? undefined : sourceInput;
         const sourceText = typeof sourceInput === "string"
           ? sourceInput
@@ -400,6 +380,7 @@ export async function loadSourcePaths(
       }
     }
   }
+  access.throwIfAny();
   return sourceFiles;
 }
 
@@ -415,44 +396,52 @@ export async function discoverSourceFileFingerprints(
 ): Promise<readonly SourceFileFingerprint[]> {
   const normalizedProjectPath = resolve(projectPath);
   const paths = await discoverSourcePaths(normalizedProjectPath, options);
-  return fingerprintSourcePaths(normalizedProjectPath, paths);
+  return fingerprintSourcePaths(normalizedProjectPath, paths, options?.filesystemReader);
 }
 
 export async function fingerprintSourcePaths(
   projectPath: string,
-  paths: readonly string[]
+  paths: readonly string[],
+  filesystemReader: ProjectFilesystemReader = nativeProjectFilesystemReader
 ): Promise<readonly SourceFileFingerprint[]> {
   const normalizedProjectPath = resolve(projectPath);
   const fingerprints: SourceFileFingerprint[] = [];
+  const access = new ProjectPathAccessCollector(normalizedProjectPath);
 
   for (let offset = 0; offset < paths.length; offset += MAXIMUM_FRESHNESS_CONCURRENT_READS) {
     const batch = await Promise.all(
       paths.slice(offset, offset + MAXIMUM_FRESHNESS_CONCURRENT_READS).map(async (absolutePath) => {
-        const needsContentClassification = getSourceLanguage(absolutePath) === null;
-        const sourceBytes = needsContentClassification
-          ? await readFile(absolutePath)
-          : undefined;
-        const sourceText = sourceBytes === undefined
-          ? undefined
-          : new TextDecoder("utf-8").decode(sourceBytes);
-        const language = getSourceLanguage(absolutePath, sourceText);
-        if (language === null) {
-          if (needsContentClassification) {
-            return null;
+        try {
+          const needsContentClassification = getSourceLanguage(absolutePath) === null;
+          const sourceBytes = needsContentClassification
+            ? await filesystemReader.readFile(absolutePath)
+            : undefined;
+          const sourceText = sourceBytes === undefined
+            ? undefined
+            : new TextDecoder("utf-8").decode(sourceBytes);
+          const language = getSourceLanguage(absolutePath, sourceText);
+          if (language === null) {
+            if (needsContentClassification) {
+              return null;
+            }
+            throw new Error(`Unsupported source file was discovered: ${absolutePath}`);
           }
-          throw new Error(`Unsupported source file was discovered: ${absolutePath}`);
+          return {
+            relativePath: toProjectRelativePath(normalizedProjectPath, absolutePath),
+            language,
+            contentHash: requiresRawSourceBytes(language)
+              ? sourceBytes === undefined
+                ? await hashRawFileWithReader(absolutePath, filesystemReader)
+                : hashSourceBytes(sourceBytes)
+              : sourceText === undefined
+                ? await hashUtf8FileWithReader(absolutePath, filesystemReader)
+                : hashSource(sourceText)
+          };
+        } catch (error) {
+          if (projectFilesystemMissingCode(error) !== null) return null;
+          if (access.add(absolutePath, error)) return null;
+          throw error;
         }
-        return {
-          relativePath: toProjectRelativePath(normalizedProjectPath, absolutePath),
-          language,
-          contentHash: requiresRawSourceBytes(language)
-            ? sourceBytes === undefined
-              ? await hashRawFile(absolutePath)
-              : hashSourceBytes(sourceBytes)
-            : sourceText === undefined
-              ? await hashUtf8File(absolutePath)
-              : hashSource(sourceText)
-        };
       })
     );
     for (const fingerprint of batch) {
@@ -462,6 +451,7 @@ export async function fingerprintSourcePaths(
     }
   }
 
+  access.throwIfAny();
   return fingerprints.sort((left, right) => compareProjectPaths(left.relativePath, right.relativePath));
 }
 
@@ -478,51 +468,21 @@ export async function discoverFreshnessProjectPaths(
   options: FreshnessProjectPathDiscoveryOptions
 ): Promise<FreshnessProjectPathDiscovery> {
   const normalizedProjectPath = resolve(projectPath);
-  const scopeRoots = (await canonicalizeScopeRoots(normalizedProjectPath, options.scopeRoots))
-    .filter((scopeRoot) => !containsHardExcludedDirectory(scopeRoot));
-  const ignoreMatcher = await loadRootGitignore(normalizedProjectPath);
-  const sourcePaths: string[] = [];
-  const configurationPaths: string[] = [];
-
-  const insideSourceScope = (path: string): boolean =>
-    scopeRoots.some((scopeRoot) => scopeRoot === "." || path.startsWith(`${scopeRoot}/`));
-
-  async function visit(directoryPath: string, directoryRelativePath: string): Promise<void> {
-    const entries = await readdir(directoryPath, { withFileTypes: true });
-    for (const entry of entries.sort((left, right) => compareProjectPaths(left.name, right.name))) {
-      const entryPath = resolve(directoryPath, entry.name);
-      const entryRelativePath = joinProjectRelativePath(directoryRelativePath, entry.name);
-      if (entry.isDirectory()) {
-        if (!HARD_EXCLUDED_DIRECTORY_NAMES.has(entry.name)) {
-          await visit(entryPath, entryRelativePath);
-        }
-        continue;
-      }
-      if (!entry.isFile()) {
-        continue;
-      }
-      if (options.isConfigurationCandidateFileName(entry.name)) {
-        configurationPaths.push(entryRelativePath);
-      }
-      if (
-        insideSourceScope(entryRelativePath) &&
-        !ignoreMatcher.ignores(entryRelativePath) &&
-        await isSourceCandidateFile(
-          entryRelativePath,
-          entryPath,
-          options.shellShebangReader ?? readShellShebangPrefix
-        )
-      ) {
-        sourcePaths.push(entryPath);
-      }
-    }
-  }
-
-  await visit(normalizedProjectPath, ".");
+  const filesystemReader = options.filesystemReader ?? nativeProjectFilesystemReader;
+  const result = await walkScopedProject(normalizedProjectPath, {
+    ...(options.scopeRoots === undefined ? {} : { scopeRoots: options.scopeRoots }),
+    reader: filesystemReader,
+    isConfigurationCandidateFileName: options.isConfigurationCandidateFileName,
+    isSourceCandidate: (relativePath, absolutePath) => isSourceCandidateFile(
+      relativePath,
+      absolutePath,
+      sourceShebangReader(options, filesystemReader)
+    )
+  });
   return {
     policy: FRESHNESS_PATH_DISCOVERY_POLICY,
-    sourcePaths,
-    configurationPaths: configurationPaths.sort(compareProjectPaths)
+    sourcePaths: result.sourcePaths,
+    configurationPaths: result.configurationPaths
   };
 }
 
@@ -530,69 +490,17 @@ async function discoverSourcePaths(
   normalizedProjectPath: string,
   options?: SourceDiscoveryOptions
 ): Promise<readonly string[]> {
-  const scopeRoots = await canonicalizeScopeRoots(normalizedProjectPath, options?.scopeRoots);
-  const ignoreMatcher = await loadRootGitignore(normalizedProjectPath);
-  return (
-    await Promise.all(
-      scopeRoots.map(async (scopeRoot) => {
-        if (containsHardExcludedDirectory(scopeRoot)) {
-          return [];
-        }
-        return collectSourcePaths(
-          resolve(normalizedProjectPath, scopeRoot),
-          scopeRoot,
-          ignoreMatcher,
-          options?.shellShebangReader ?? readShellShebangPrefix
-        );
-      })
+  const filesystemReader = options?.filesystemReader ?? nativeProjectFilesystemReader;
+  const result = await walkScopedProject(normalizedProjectPath, {
+    ...(options?.scopeRoots === undefined ? {} : { scopeRoots: options.scopeRoots }),
+    reader: filesystemReader,
+    isSourceCandidate: (relativePath, absolutePath) => isSourceCandidateFile(
+      relativePath,
+      absolutePath,
+      sourceShebangReader(options, filesystemReader)
     )
-  ).flat();
-}
-
-async function collectSourcePaths(
-  directoryPath: string,
-  directoryRelativePath: string,
-  ignoreMatcher: Ignore,
-  shellShebangReader: ShellShebangReader
-): Promise<string[]> {
-  const entries = await readdir(directoryPath, { withFileTypes: true });
-  const sourcePaths: string[] = [];
-
-  for (const entry of entries.sort((left, right) => compareProjectPaths(left.name, right.name))) {
-    const entryPath = resolve(directoryPath, entry.name);
-    const entryRelativePath = joinProjectRelativePath(directoryRelativePath, entry.name);
-
-    if (entry.isDirectory()) {
-      if (!HARD_EXCLUDED_DIRECTORY_NAMES.has(entry.name)) {
-        // Never prune an ordinary ignored directory here. Gitignore negation
-        // rules can re-include descendants, so every non-hard-excluded branch
-        // must still be inspected.
-        sourcePaths.push(
-          ...(await collectSourcePaths(
-            entryPath,
-            entryRelativePath,
-            ignoreMatcher,
-            shellShebangReader
-          ))
-        );
-      }
-      continue;
-    }
-
-    if (
-      entry.isFile() &&
-      !ignoreMatcher.ignores(entryRelativePath) &&
-      await isSourceCandidateFile(
-        entryRelativePath,
-        entryPath,
-        shellShebangReader
-      )
-    ) {
-      sourcePaths.push(entryPath);
-    }
-  }
-
-  return sourcePaths;
+  });
+  return result.sourcePaths;
 }
 
 function isPlayRoutesFile(filePath: string): boolean {
@@ -629,6 +537,16 @@ async function readShellShebangPrefix(
   } finally {
     await handle.close();
   }
+}
+
+function sourceShebangReader(
+  options: SourceDiscoveryOptions | undefined,
+  filesystemReader: ProjectFilesystemReader
+): ShellShebangReader {
+  if (options?.shellShebangReader !== undefined) return options.shellShebangReader;
+  if (filesystemReader === nativeProjectFilesystemReader) return readShellShebangPrefix;
+  return async (absolutePath, maximumBytes) =>
+    (await filesystemReader.readFile(absolutePath)).slice(0, maximumBytes);
 }
 
 function hasExactShellShebang(sourceText: string): boolean {
@@ -845,58 +763,4 @@ function isPreprocessorContinuation(sourceText: string, lineFeedIndex: number): 
   const previousIndex =
     sourceText[lineFeedIndex - 1] === "\r" ? lineFeedIndex - 2 : lineFeedIndex - 1;
   return sourceText[previousIndex] === "\\";
-}
-
-async function loadRootGitignore(projectPath: string): Promise<Ignore> {
-  const matcher = ignore({ ignoreCase: false });
-  const gitignorePath = resolve(projectPath, ".gitignore");
-
-  try {
-    matcher.add(await readFile(gitignorePath, "utf8"));
-  } catch (error) {
-    if (!isMissingPathError(error)) {
-      throw error;
-    }
-  }
-
-  return matcher;
-}
-
-function toProjectRelativeDirectoryPath(
-  projectPath: string,
-  targetPath: string,
-  originalScopeRoot: string
-): string {
-  const value = relative(projectPath, targetPath);
-
-  if (value === "") {
-    return ".";
-  }
-
-  if (value === ".." || value.startsWith(`..${sep}`) || isAbsolute(value)) {
-    throw new Error(`Scope root is outside the project: ${originalScopeRoot}`);
-  }
-
-  return value.split(sep).join("/");
-}
-
-function isScopeAncestor(ancestor: string, candidate: string): boolean {
-  return ancestor === "." || candidate.startsWith(`${ancestor}/`);
-}
-
-function containsHardExcludedDirectory(relativePath: string): boolean {
-  return relativePath !== "." && relativePath.split("/").some((name) => HARD_EXCLUDED_DIRECTORY_NAMES.has(name));
-}
-
-function joinProjectRelativePath(directoryPath: string, entryName: string): string {
-  return directoryPath === "." ? entryName : `${directoryPath}/${entryName}`;
-}
-
-function isMissingPathError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    error.code === "ENOENT"
-  );
 }

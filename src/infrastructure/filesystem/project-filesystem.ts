@@ -48,15 +48,14 @@ export const DEFAULT_EXCLUDED_DIRECTORY_NAMES: ReadonlySet<string> = new Set([
   "target"
 ]);
 
-export type ProjectFilesystemEntryKind = "file" | "directory" | "other";
-
 export interface ProjectFilesystemEntry {
   readonly name: string;
-  readonly kind: ProjectFilesystemEntryKind;
+  isDirectory(): boolean;
+  isFile(): boolean;
 }
 
 export interface ProjectFilesystemStat {
-  readonly kind: ProjectFilesystemEntryKind;
+  isDirectory(): boolean;
 }
 
 /**
@@ -72,18 +71,13 @@ export interface ProjectFilesystemReader {
 
 export const nativeProjectFilesystemReader: ProjectFilesystemReader = Object.freeze({
   async readdir(directoryPath: string): Promise<readonly ProjectFilesystemEntry[]> {
-    const entries = await readdir(directoryPath, { withFileTypes: true });
-    return entries.map((entry) => ({
-      name: entry.name,
-      kind: entry.isDirectory() ? "directory" : entry.isFile() ? "file" : "other"
-    }));
+    return readdir(directoryPath, { withFileTypes: true });
   },
   async readFile(filePath: string): Promise<Uint8Array> {
     return readFile(filePath);
   },
   async stat(filePath: string): Promise<ProjectFilesystemStat> {
-    const metadata = await stat(filePath);
-    return { kind: metadata.isDirectory() ? "directory" : metadata.isFile() ? "file" : "other" };
+    return stat(filePath);
   }
 });
 
@@ -108,6 +102,22 @@ export function projectFilesystemMissingCode(error: unknown): "ENOENT" | "ENOTDI
   }
   const code = error.code;
   return code === "ENOENT" || code === "ENOTDIR" ? code : null;
+}
+
+export function toProjectPathUnreadableError(
+  projectPath: string,
+  error: unknown,
+  fallbackPath: string = projectPath
+): ProjectPathUnreadableError | null {
+  const path =
+    typeof error === "object" &&
+    error !== null &&
+    "path" in error &&
+    typeof error.path === "string"
+      ? error.path
+      : fallbackPath;
+  const collector = new ProjectPathAccessCollector(projectPath);
+  return collector.add(path, error) ? collector.toError() : null;
 }
 
 /**

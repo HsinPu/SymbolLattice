@@ -10,6 +10,10 @@ import {
   canonicalizeConfigurationInputs,
   readProjectConfigurationInput
 } from "../../../src/infrastructure/filesystem/project-inputs.js";
+import {
+  nativeProjectFilesystemReader,
+  type ProjectFilesystemReader
+} from "../../../src/infrastructure/filesystem/project-filesystem.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -140,5 +144,31 @@ describe("project index inputs", () => {
         }
       ])
     ).toThrow("Conflicting configuration inputs");
+  });
+
+  it("normalizes unreadable configuration files and treats ENOTDIR as a scan race", async () => {
+    const projectPath = await createProject();
+    const unreadable: ProjectFilesystemReader = {
+      ...nativeProjectFilesystemReader,
+      async readFile(filePath) {
+        throw Object.assign(new Error("denied"), { code: "EACCES", path: filePath });
+      }
+    };
+    await expect(
+      readProjectConfigurationInput(projectPath, "tsconfig", "tsconfig.json", unreadable)
+    ).rejects.toMatchObject({
+      code: "PROJECT_PATH_UNREADABLE",
+      evidence: [{ path: "tsconfig.json", code: "EACCES" }]
+    });
+
+    const vanished: ProjectFilesystemReader = {
+      ...nativeProjectFilesystemReader,
+      async readFile(filePath) {
+        throw Object.assign(new Error("not a directory"), { code: "ENOTDIR", path: filePath });
+      }
+    };
+    await expect(
+      readProjectConfigurationInput(projectPath, "tsconfig", "nested/tsconfig.json", vanished)
+    ).resolves.toMatchObject({ state: "absent", contentHash: null });
   });
 });

@@ -69,11 +69,11 @@ describe("filesystem source catalog freshness", () => {
       filesChecked: 1,
       sourceHash: "sha256",
       retainedSourceText: false,
-      configurationPolicy: "configuration-candidates-v1",
+      configurationPolicy: "configuration-candidates-v2",
       configurationCandidatesChecked: expect.any(Number),
       sourceReadPolicy: "streaming-raw-bytes-for-shell-and-lua-with-objective-c-header-classification-v3",
       configurationReadPolicy: "streaming-utf8-v1",
-      discoveryPolicy: "single-project-walk-v1",
+      discoveryPolicy: "single-project-walk-v2",
       maximumConcurrentReads: 8,
       performance: {
         policy: "freshness-performance-v1",
@@ -119,6 +119,37 @@ describe("filesystem source catalog freshness", () => {
     expect(verification).toMatchObject({
       outcome: "project-inputs-changed",
       configurationCandidatesChecked: 0
+    });
+  });
+
+  it("detects a nested gitignore edit even when source membership is unchanged", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-source-catalog-ignore-"));
+    temporaryDirectories.push(projectPath);
+    await mkdir(join(projectPath, "src", "nested"), { recursive: true });
+    await writeFile(join(projectPath, "src", "entry.ts"), "export const entry = true;\n", "utf8");
+    await writeFile(join(projectPath, "src", "nested", ".gitignore"), "ignored.ts\n", "utf8");
+    const catalog = new FileSystemSourceCatalog();
+    const scan = await catalog.scan(projectPath);
+
+    await writeFile(
+      join(projectPath, "src", "nested", ".gitignore"),
+      "ignored.ts\n# policy changed\n",
+      "utf8"
+    );
+    const verification = await catalog.verifyFreshness(projectPath, {
+      files: scan.sourceDocuments.map((document) => ({
+        path: document.relativePath,
+        language: document.language,
+        contentHash: document.contentHash,
+        indexedAt: "2026-08-25T00:00:00.000Z"
+      })),
+      indexInputs: scan.indexInputs
+    });
+
+    expect(verification).toMatchObject({
+      outcome: "project-inputs-changed",
+      configurationPolicy: "configuration-candidates-v2",
+      discoveryPolicy: "single-project-walk-v2"
     });
   });
 });

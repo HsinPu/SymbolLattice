@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import type {
@@ -16,7 +15,6 @@ import type {
 } from "../../ports/source-catalog.js";
 import { createTypeScriptProjectModuleResolver } from "../typescript/index.js";
 import {
-  discoverSourceFiles,
   discoverFreshnessProjectPaths,
   fingerprintSourcePaths,
   FRESHNESS_PATH_DISCOVERY_POLICY,
@@ -24,6 +22,7 @@ import {
   MAXIMUM_FRESHNESS_CONCURRENT_READS,
   SOURCE_FINGERPRINT_READ_POLICY,
   STREAMING_UTF8_HASH_POLICY,
+  loadSourcePaths,
   toProjectRelativePath
 } from "./discovery.js";
 import { createCargoWorkspaceProjectModuleResolver } from "./cargo-workspace.js";
@@ -38,6 +37,12 @@ import {
   discoverConfigurationCandidateSnapshot,
   isConfigurationCandidateFileName
 } from "./configuration-discovery.js";
+import {
+  nativeProjectFilesystemReader,
+  readProjectFilesystemText,
+  toProjectPathUnreadableError,
+  type ProjectFilesystemReader
+} from "./project-filesystem.js";
 
 function mergeConfigurationPaths(
   ...configurationPathGroups: readonly (readonly string[])[]
@@ -111,9 +116,33 @@ function endFreshnessPerformance(
 }
 
 export class FileSystemSourceCatalog implements SourceCatalog {
+  public constructor(
+    private readonly filesystemReader: ProjectFilesystemReader = nativeProjectFilesystemReader
+  ) {}
+
   public async scan(projectPath: string, options?: ProjectScanOptions): Promise<ProjectScan> {
+    try {
+      return await this.scanProject(projectPath, options);
+    } catch (error) {
+      const unreadable = toProjectPathUnreadableError(projectPath, error);
+      if (unreadable !== null) throw unreadable;
+      throw error;
+    }
+  }
+
+  private async scanProject(projectPath: string, options?: ProjectScanOptions): Promise<ProjectScan> {
     const normalizedProjectPath = resolve(projectPath);
-    const sourceDocuments = await discoverSourceFiles(normalizedProjectPath, options);
+    const paths = await discoverFreshnessProjectPaths(normalizedProjectPath, {
+      ...(options?.scopeRoots === undefined ? {} : { scopeRoots: options.scopeRoots }),
+      filesystemReader: this.filesystemReader,
+      isConfigurationCandidateFileName
+    });
+    const sourceDocuments = await loadSourcePaths(
+      normalizedProjectPath,
+      paths.sourcePaths,
+      undefined,
+      this.filesystemReader
+    );
     const astroProject = await detectAstroProject(normalizedProjectPath);
     const astroConfigurationPath = astroProject.enabled
       ? astroProject.configurationInputs.find((input) => input.state === "present")?.path
@@ -140,6 +169,8 @@ export class FileSystemSourceCatalog implements SourceCatalog {
     const inputOptions =
       options?.scopeRoots === undefined
         ? {
+            filesystemReader: this.filesystemReader,
+            presentConfigurationCandidatePaths: paths.configurationPaths,
             additionalConfigurationInputs: [
               ...typeScriptResolver.configurationInputs,
               ...workspaceResolver.configurationInputs,
@@ -152,6 +183,8 @@ export class FileSystemSourceCatalog implements SourceCatalog {
           }
         : {
             scopeRoots: options.scopeRoots,
+            filesystemReader: this.filesystemReader,
+            presentConfigurationCandidatePaths: paths.configurationPaths,
             additionalConfigurationInputs: [
               ...typeScriptResolver.configurationInputs,
               ...workspaceResolver.configurationInputs,
@@ -256,11 +289,16 @@ export class FileSystemSourceCatalog implements SourceCatalog {
     const discoveryStartedAt = startFreshnessPerformance();
     const paths = await discoverFreshnessProjectPaths(normalizedProjectPath, {
       scopeRoots: input.indexInputs.scopeRoots,
+      filesystemReader: this.filesystemReader,
       isConfigurationCandidateFileName
     });
     performancePhases.push(endFreshnessPerformance("freshness-discovery", discoveryStartedAt));
     const sourceHashStartedAt = startFreshnessPerformance();
-    const fingerprints = await fingerprintSourcePaths(normalizedProjectPath, paths.sourcePaths);
+    const fingerprints = await fingerprintSourcePaths(
+      normalizedProjectPath,
+      paths.sourcePaths,
+      this.filesystemReader
+    );
     performancePhases.push(endFreshnessPerformance("freshness-source-hash", sourceHashStartedAt));
     const receiptBase = {
       policy: "streaming-full-content-configuration-candidates-v4" as const,
@@ -299,7 +337,8 @@ export class FileSystemSourceCatalog implements SourceCatalog {
     const configurationSnapshot = await discoverConfigurationCandidateSnapshot(
       normalizedProjectPath,
       input.indexInputs.configurationInputs,
-      paths.configurationPaths
+      paths.configurationPaths,
+      this.filesystemReader
     );
     performancePhases.push(endFreshnessPerformance(
       "freshness-configuration-snapshot",
@@ -318,7 +357,7 @@ export class FileSystemSourceCatalog implements SourceCatalog {
   public async read(projectPath: string, relativePath: string): Promise<string> {
     const absolutePath = resolve(projectPath, relativePath);
     toProjectRelativePath(projectPath, absolutePath);
-    return readFile(absolutePath, "utf8");
+    return readProjectFilesystemText(this.filesystemReader, absolutePath);
   }
 
   public isUnsafeProjectPath(projectPath: string): boolean {

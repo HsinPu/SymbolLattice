@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 import {
@@ -10,6 +9,13 @@ import {
 } from "../../domain/index-inputs.js";
 import { canonicalizeScopeRoots, compareProjectPaths, hashSource } from "./discovery.js";
 import { discoverConfigurationCandidateInput } from "./configuration-discovery.js";
+import {
+  nativeProjectFilesystemReader,
+  ProjectPathAccessCollector,
+  projectFilesystemMissingCode,
+  readProjectFilesystemText,
+  type ProjectFilesystemReader
+} from "./project-filesystem.js";
 
 export interface BuildProjectIndexInputsOptions {
   /** Source directories relative to the project root. Defaults to the project root. */
@@ -19,6 +25,9 @@ export interface BuildProjectIndexInputsOptions {
    * files. The builder sorts and deduplicates them with the root gitignore.
    */
   readonly additionalConfigurationInputs?: readonly ProjectConfigurationInput[];
+  /** Reuse a shared walk instead of recursively discovering candidates again. */
+  readonly presentConfigurationCandidatePaths?: readonly string[];
+  readonly filesystemReader?: ProjectFilesystemReader;
 }
 
 /**
@@ -31,11 +40,17 @@ export async function buildProjectIndexInputs(
   options?: BuildProjectIndexInputsOptions
 ): Promise<ProjectIndexInputs> {
   const normalizedProjectPath = resolve(projectPath);
-  const scopeRoots = await canonicalizeScopeRoots(normalizedProjectPath, options?.scopeRoots);
+  const filesystemReader = options?.filesystemReader ?? nativeProjectFilesystemReader;
+  const scopeRoots = await canonicalizeScopeRoots(
+    normalizedProjectPath,
+    options?.scopeRoots,
+    filesystemReader
+  );
   const rootGitignore = await readProjectConfigurationInput(
     normalizedProjectPath,
     "root-gitignore",
-    ".gitignore"
+    ".gitignore",
+    filesystemReader
   );
   const trackedConfigurationInputs = canonicalizeConfigurationInputs([
     rootGitignore,
@@ -45,7 +60,9 @@ export async function buildProjectIndexInputs(
   ]);
   const configurationDiscoveryInput = await discoverConfigurationCandidateInput(
     normalizedProjectPath,
-    trackedConfigurationInputs
+    trackedConfigurationInputs,
+    filesystemReader,
+    options?.presentConfigurationCandidatePaths
   );
   const configurationInputs = canonicalizeConfigurationInputs([
     ...trackedConfigurationInputs,
@@ -63,14 +80,16 @@ export async function buildProjectIndexInputs(
 export async function readProjectConfigurationInput(
   projectPath: string,
   kind: ProjectConfigurationInputKind,
-  relativePath: string
+  relativePath: string,
+  filesystemReader: ProjectFilesystemReader = nativeProjectFilesystemReader
 ): Promise<ProjectConfigurationInput> {
   const normalizedProjectPath = resolve(projectPath);
   const canonicalPath = canonicalizeConfigurationPath(normalizedProjectPath, relativePath);
   const absolutePath = resolve(normalizedProjectPath, canonicalPath);
+  const access = new ProjectPathAccessCollector(normalizedProjectPath);
 
   try {
-    const contents = await readFile(absolutePath, "utf8");
+    const contents = await readProjectFilesystemText(filesystemReader, absolutePath);
 
     return {
       kind,
@@ -79,8 +98,9 @@ export async function readProjectConfigurationInput(
       contentHash: hashSource(contents)
     };
   } catch (error) {
-    if (!isMissingPathError(error)) {
-      throw error;
+    if (projectFilesystemMissingCode(error) === null) {
+      if (!access.add(absolutePath, error)) throw error;
+      access.throwIfAny();
     }
 
     return {
@@ -271,13 +291,4 @@ function configurationInputKindOrder(kind: ProjectConfigurationInputKind): numbe
 
 function configurationInputKey(input: ProjectConfigurationInput): string {
   return `${input.kind}\u0000${input.path}`;
-}
-
-function isMissingPathError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    error.code === "ENOENT"
-  );
 }

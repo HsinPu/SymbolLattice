@@ -17,6 +17,10 @@ import {
   MAXIMUM_SOURCE_CONCURRENT_READS,
   toProjectRelativePath
 } from "../../../src/infrastructure/filesystem/discovery.js";
+import {
+  nativeProjectFilesystemReader,
+  type ProjectFilesystemReader
+} from "../../../src/infrastructure/filesystem/project-filesystem.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -83,6 +87,35 @@ describe("source discovery", () => {
     expect(observedPeakReads).toBeLessThanOrEqual(MAXIMUM_SOURCE_CONCURRENT_READS);
   });
 
+  it("aggregates unreadable source files before failing the scan", async () => {
+    const projectPath = await createProject();
+    await writeFile(join(projectPath, "a.ts"), "export const a = 1;\n", "utf8");
+    await writeFile(join(projectPath, "b.ts"), "export const b = 2;\n", "utf8");
+    const reader: ProjectFilesystemReader = {
+      ...nativeProjectFilesystemReader,
+      async readFile(filePath) {
+        if (filePath.endsWith("a.ts")) {
+          throw Object.assign(new Error("denied"), { code: "EACCES", path: filePath });
+        }
+        if (filePath.endsWith("b.ts")) {
+          throw Object.assign(new Error("denied"), { code: "EPERM", path: filePath });
+        }
+        return nativeProjectFilesystemReader.readFile(filePath);
+      }
+    };
+
+    await expect(discoverSourceFiles(projectPath, { filesystemReader: reader })).rejects.toMatchObject({
+      code: "PROJECT_PATH_UNREADABLE",
+      evidence: [
+        { path: "a.ts", code: "EACCES" },
+        { path: "b.ts", code: "EPERM" }
+      ],
+      total: 2
+    });
+    await expect(discoverSourceFileFingerprints(projectPath, { filesystemReader: reader }))
+      .rejects.toMatchObject({ code: "PROJECT_PATH_UNREADABLE", total: 2 });
+  });
+
   it("streams the same UTF-8 SHA-256 identity as a complete decoded read", async () => {
     const projectPath = await createProject();
     const sourcePath = join(projectPath, "large.ts");
@@ -124,11 +157,11 @@ describe("source discovery", () => {
       isConfigurationCandidateFileName: (name) => name === "package.json"
     });
 
-    expect(result.policy).toBe("single-project-walk-v1");
+    expect(result.policy).toBe("single-project-walk-v2");
     expect(result.sourcePaths.map((path) => path.replaceAll("\\", "/"))).toEqual([
       expect.stringMatching(/\/src\/entry\.ts$/u)
     ]);
-    expect(result.configurationPaths).toEqual(["outside/package.json"]);
+    expect(result.configurationPaths).toEqual([".gitignore", "outside/package.json"]);
   });
 
   it("verifies full source hashes without retaining source text", async () => {
@@ -495,7 +528,7 @@ describe("source discovery", () => {
     ]);
   });
 
-  it("applies only the root gitignore with case-sensitive anchored, glob, and negation rules", async () => {
+  it("applies root and nested gitignore files with case-sensitive anchored, glob, and negation rules", async () => {
     const projectPath = await createProject();
     await mkdir(join(projectPath, "ignored"), { recursive: true });
     await mkdir(join(projectPath, "src", "generated"), { recursive: true });
@@ -527,7 +560,6 @@ describe("source discovery", () => {
     expect(files.map((file) => file.relativePath)).toEqual([
       "Case.ts",
       "ignored/keep.ts",
-      "nested/nested-hidden.ts",
       "src/generated/keep.js"
     ]);
   });
