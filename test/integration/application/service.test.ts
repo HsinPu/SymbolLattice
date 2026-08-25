@@ -12172,6 +12172,36 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
+  it("uses streaming freshness for status without loading full source documents", async () => {
+    const projectPath = await createFixtureProject();
+    const graphStore = new SqliteGraphStore();
+    const backingCatalog = new FileSystemSourceCatalog();
+    let fullScans = 0;
+    let freshnessChecks = 0;
+    const sourceCatalog: SourceCatalog = {
+      scan: async (...args) => {
+        fullScans += 1;
+        return backingCatalog.scan(...args);
+      },
+      verifyFreshness: async (...args) => {
+        freshnessChecks += 1;
+        return backingCatalog.verifyFreshness(...args);
+      },
+      read: (...args) => backingCatalog.read(...args),
+      isUnsafeProjectPath: (...args) => backingCatalog.isUnsafeProjectPath(...args)
+    };
+    const service = new SymbolLatticeService(graphStore, sourceCatalog);
+    await service.init({ projectPath });
+    fullScans = 0;
+    freshnessChecks = 0;
+
+    const status = await service.getStatus(projectPath);
+
+    expect(status).toMatchObject({ stale: false, staleReasons: [] });
+    expect(freshnessChecks).toBe(1);
+    expect(fullScans).toBe(0);
+  });
+
   it("detects same-size source edits even when the modification time is restored", async () => {
     const projectPath = await createInlineProject({
       "src/value.ts": "export const value = 'before';\n"
@@ -12238,9 +12268,9 @@ describe("SymbolLatticeService", () => {
 
     const status = await service.sync({ projectPath });
 
-    // One scan plans/publishes the changed generation; the existing status
-    // read independently verifies the newly active generation.
-    expect(fullScans).toBe(2);
+    // One scan plans/publishes the changed generation; the status read now
+    // verifies the active generation through streaming fingerprints.
+    expect(fullScans).toBe(1);
     expect(status.generationId).not.toBe(generationId);
     expect(status.operationPerformance?.phases.map((phase) => phase.name)).toEqual([
       "load-status",
@@ -27036,6 +27066,7 @@ describe("SymbolLatticeService", () => {
     const changed = await service.sync({ projectPath });
     expect(changed).toMatchObject({
       stale: false,
+      staleReasons: [],
       lastIndexWork: expect.objectContaining({ reExtractedFiles: ["Pages/Index.cshtml.cs"] })
     });
     expect(changed.generationId).not.toBe(initialGenerationId);

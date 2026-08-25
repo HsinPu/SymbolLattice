@@ -54,6 +54,7 @@ import {
   type IndexPerformancePhaseName,
   type IndexPerformanceSubphase,
   type IndexPerformanceSubphaseName,
+  type IndexStalenessReason,
   type PersistedArtifactFacts,
   type ProjectIndexInputs,
   type RouteMethod,
@@ -1147,6 +1148,22 @@ function filesMatch(
   );
 }
 
+function freshnessStaleReasons(
+  freshness: ProjectFreshnessVerification
+): readonly Extract<IndexStalenessReason, "source-files-changed" | "project-inputs-changed">[] {
+  if (freshness.policy === "streaming-full-content-configuration-candidates-v5") {
+    return [
+      ...(freshness.sourceFilesChanged ? (["source-files-changed"] as const) : []),
+      ...(freshness.projectInputsChanged ? (["project-inputs-changed"] as const) : [])
+    ];
+  }
+  return freshness.outcome === "source-files-changed"
+    ? ["source-files-changed"]
+    : freshness.outcome === "project-inputs-changed"
+      ? ["project-inputs-changed"]
+      : [];
+}
+
 function statusBundleFiles(
   bundle: ActiveGraphBundle | ActiveStatusBundle
 ): ActiveStatusBundle["files"] {
@@ -1697,7 +1714,11 @@ export class SymbolLatticeService {
     performance.end("change-planning", changePlanningStartedAt);
     this.replaceGeneration(projectPath, scan, artifactFacts, work, performance);
     const statusStartedAt = performance.start();
-    const status = await this.getStatus(projectPath);
+    const status = {
+      ...this.graphStore.getStatus(projectPath),
+      stale: false,
+      staleReasons: []
+    };
     performance.end("status-read", statusStartedAt);
     return { ...status, operationPerformance: performance.finish() };
   }
@@ -5038,6 +5059,53 @@ export class SymbolLatticeService {
           ...(versionChanged ? (["indexer-version-changed"] as const) : [])
         ]
       };
+    }
+
+    const verifyFreshness = this.sourceCatalog.verifyFreshness;
+    if (typeof verifyFreshness === "function") {
+      try {
+        const freshness = await verifyFreshness.call(this.sourceCatalog, normalizedProjectPath, {
+          files: statusBundleFiles(bundle),
+          indexInputs: persistedInputs
+        });
+        const canProjectStatus =
+          freshness.policy === "streaming-full-content-configuration-candidates-v5"
+            ? freshness.complete && !freshness.projectInputsChanged
+            : freshness.outcome !== "project-inputs-changed";
+        if (canProjectStatus) {
+          const staleReasons = [
+            ...freshnessStaleReasons(freshness),
+            ...(versionChanged ? (["indexer-version-changed"] as const) : [])
+          ];
+          return {
+            ...persistedStatus,
+            stale: staleReasons.length > 0,
+            staleReasons
+          };
+        }
+      } catch (error) {
+        if (error instanceof ProjectConfigurationError) {
+          return {
+            ...persistedStatus,
+            stale: true,
+            staleReasons: [
+              "configuration-invalid",
+              ...(versionChanged ? (["indexer-version-changed"] as const) : [])
+            ]
+          };
+        }
+        if (error instanceof ProjectPathUnreadableError) {
+          return {
+            ...persistedStatus,
+            stale: true,
+            staleReasons: [
+              "project-path-unreadable",
+              ...(versionChanged ? (["indexer-version-changed"] as const) : [])
+            ]
+          };
+        }
+        throw error;
+      }
     }
 
     let scan;
