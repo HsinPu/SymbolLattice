@@ -367,6 +367,10 @@ public final class JavaOracle {
       Map<String, Endpoint> candidates = new LinkedHashMap<>();
       for (Element member : elements.getAllMembers(owner)) {
         if (!(member instanceof ExecutableElement candidate) || candidate.equals(method)) continue;
+        // A declaration cannot override an overload declared by the same owner. javac can
+        // otherwise report a false positive here after attribution stops on a missing
+        // external classpath, which would corrupt the independent truth set.
+        if (candidate.getEnclosingElement().equals(owner)) continue;
         Endpoint target = endpoints.get(candidate);
         if (target != null && elements.overrides(method, candidate, owner)) {
           candidates.put(target.filePath + "\u0000" + target.line + "\u0000" + target.name, target);

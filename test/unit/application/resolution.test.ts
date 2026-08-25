@@ -1563,22 +1563,29 @@ describe("exact Java object-creation resolution", () => {
         absolutePath: "C:/project/src/api/Widget.java",
         relativePath: "src/api/Widget.java",
         language: "java",
-        sourceText: "package api; public class Widget {}",
+        sourceText: "package api; public class Widget<T> {}",
         contentHash: "api-widget"
       },
       {
         absolutePath: "C:/project/src/other/Widget.java",
         relativePath: "src/other/Widget.java",
         language: "java",
-        sourceText: "package other; public class Widget {}",
+        sourceText: "package other; public class Widget<T> {}",
         contentHash: "other-widget"
       },
       {
         absolutePath: "C:/project/src/app/LocalWidget.java",
         relativePath: "src/app/LocalWidget.java",
         language: "java",
-        sourceText: "package app; class LocalWidget {}",
+        sourceText: "package app; class LocalWidget<T> {}",
         contentHash: "local-widget"
+      },
+      {
+        absolutePath: "C:/project/src/app/Contract.java",
+        relativePath: "src/app/Contract.java",
+        language: "java",
+        sourceText: "package app; interface Contract { void run(); }",
+        contentHash: "contract"
       },
       {
         absolutePath: "C:/project/src/app/Consumer.java",
@@ -1588,9 +1595,12 @@ describe("exact Java object-creation resolution", () => {
           "package app;",
           "import api.Widget;",
           "class Consumer {",
-          "  void imported() { new Widget(); }",
-          "  void qualified() { new api.Widget(); }",
-          "  void local() { new LocalWidget(); }",
+          "  void imported() { new Widget<String>(); }",
+          "  void qualified() { new api.Widget<String>(); }",
+          "  void local() { new LocalWidget<String>(); }",
+          "  void anonymous() { new Widget<String>() {}; }",
+          "  void anonymousInterface() { new Contract() { public void run() {} }; }",
+          "  void nested() { Runnable work = () -> { new Widget<String>(); }; }",
           "}"
         ].join("\n"),
         contentHash: "consumer"
@@ -1614,7 +1624,7 @@ describe("exact Java object-creation resolution", () => {
       ),
       indexedAt: "2026-08-16T00:00:00.000Z",
       jvmProjectModuleEvidence: {
-        memberships: ["src/app/Consumer.java", "src/app/LocalWidget.java"].flatMap((filePath) => [
+        memberships: ["src/app/Consumer.java", "src/app/Contract.java", "src/app/LocalWidget.java"].flatMap((filePath) => [
           {
             filePath,
             moduleId: "gradle:build.gradle",
@@ -1633,9 +1643,11 @@ describe("exact Java object-creation resolution", () => {
     const target = snapshot.symbols.find(
       (symbol) => symbol.qualifiedName === "src/api/Widget.java#Widget"
     );
+    const sourceId = (qualifiedName: string) =>
+      snapshot.symbols.find((symbol) => symbol.qualifiedName === qualifiedName)?.id;
     const edges = snapshot.edges.filter((edge) => edge.kind === "instantiates");
 
-    expect(edges).toHaveLength(3);
+    expect(edges).toHaveLength(4);
     expect(edges).toEqual(expect.arrayContaining([
       expect.objectContaining({
         targetId: target?.id,
@@ -1668,6 +1680,24 @@ describe("exact Java object-creation resolution", () => {
       })
     ]));
     expect(edges.some((edge) => edge.filePath === "src/app/Wildcard.java")).toBe(false);
+    expect(
+      edges.some(
+        (edge) =>
+          edge.sourceId === sourceId("src/app/Consumer.java#Consumer.anonymous") &&
+          edge.targetId === target?.id
+      )
+    ).toBe(true);
+    expect(
+      edges.some(
+        (edge) => edge.sourceId === sourceId("src/app/Consumer.java#Consumer.nested")
+      )
+    ).toBe(false);
+    expect(
+      edges.some(
+        (edge) =>
+          edge.sourceId === sourceId("src/app/Consumer.java#Consumer.anonymousInterface")
+      )
+    ).toBe(false);
   });
 });
 
@@ -1680,7 +1710,7 @@ describe("exact JVM cross-file heritage resolution", () => {
         language: "java",
         sourceText: [
           "package example.java.api;",
-          "public interface JavaContract { void run(); }"
+          "public interface JavaContract<T> { void run(); }"
         ].join("\n"),
         contentHash: "java-contract"
       },
@@ -1691,7 +1721,7 @@ describe("exact JVM cross-file heritage resolution", () => {
         sourceText: [
           "package example.java.impl;",
           "import example.java.api.JavaContract;",
-          "public class JavaImportedChild implements JavaContract { @Override public void run() {} }"
+          "public class JavaImportedChild implements JavaContract<String> { @Override public void run() {} }"
         ].join("\n"),
         contentHash: "java-imported-child"
       },
@@ -1702,7 +1732,7 @@ describe("exact JVM cross-file heritage resolution", () => {
         sourceText: [
           "package example.java.impl;",
           "import example.java.api.JavaContract;",
-          "public interface JavaImportedInterface extends JavaContract {}"
+          "public interface JavaImportedInterface extends JavaContract<String> {}"
         ].join("\n"),
         contentHash: "java-imported-interface"
       },
@@ -1712,7 +1742,7 @@ describe("exact JVM cross-file heritage resolution", () => {
         language: "java",
         sourceText: [
           "package example.java.shared;",
-          "public class JavaBase { void run() {} }"
+          "public class JavaBase<T> { void run() {} }"
         ].join("\n"),
         contentHash: "java-same-package-base"
       },
@@ -1722,7 +1752,7 @@ describe("exact JVM cross-file heritage resolution", () => {
         language: "java",
         sourceText: [
           "package example.java.shared;",
-          "public class JavaSamePackageChild extends JavaBase { @Override void run() {} }"
+          "public class JavaSamePackageChild extends JavaBase<String> { @Override void run() {} }"
         ].join("\n"),
         contentHash: "java-same-package-child"
       },

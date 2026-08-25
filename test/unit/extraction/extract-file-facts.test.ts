@@ -911,6 +911,66 @@ describe("source extraction", () => {
     );
   });
 
+  it("extracts only the outer Java parent from direct generic heritage clauses", () => {
+    const sourceText = [
+      "class GenericBase<T> {}",
+      "interface GenericContract<T> {}",
+      "class GenericChild extends GenericBase<String> implements GenericContract<Integer> {}",
+      "interface GenericSubcontract extends GenericContract<Long> {}"
+    ].join("\n");
+    const facts = extractFileFacts({
+      filePath: "src/java-generic-heritage.java",
+      language: "java",
+      sourceText
+    });
+    const symbol = (name: string) => facts.symbols.find((candidate) => candidate.name === name);
+    const heritageEdges = facts.edges.filter(
+      (edge) => edge.kind === "extends" || edge.kind === "implements"
+    );
+
+    expect(heritageEdges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: symbol("GenericChild")?.id,
+          targetId: symbol("GenericBase")?.id,
+          kind: "extends",
+          referenceName: "GenericBase",
+          range: {
+            start: { line: 3, column: 28 },
+            end: { line: 3, column: 39 }
+          }
+        }),
+        expect.objectContaining({
+          sourceId: symbol("GenericChild")?.id,
+          targetId: symbol("GenericContract")?.id,
+          kind: "implements",
+          referenceName: "GenericContract",
+          range: {
+            start: { line: 3, column: 59 },
+            end: { line: 3, column: 74 }
+          }
+        }),
+        expect.objectContaining({
+          sourceId: symbol("GenericSubcontract")?.id,
+          targetId: symbol("GenericContract")?.id,
+          kind: "extends",
+          referenceName: "GenericContract",
+          range: {
+            start: { line: 4, column: 38 },
+            end: { line: 4, column: 53 }
+          }
+        })
+      ])
+    );
+    expect(
+      facts.pendingReferences.filter(
+        (reference) =>
+          (reference.relationKind === "extends" || reference.relationKind === "implements") &&
+          ["String", "Integer", "Long"].includes(reference.referenceName)
+      )
+    ).toEqual([]);
+  });
+
   it("extracts direct TypeScript heritage identifiers with exact ranges and lexical scopes", () => {
     const facts = extractFileFacts({
       filePath: "src/heritage.ts",

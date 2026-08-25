@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.438.0
+目前版本：v0.439.0
 
 ## 主要能力
 
@@ -43,7 +43,7 @@ SymbolLattice 可在單次 `init` 或 `sync` 中處理多語言 repository。不
 | 資料、設定與 schema | SQL、GraphQL、Protocol Buffers、Terraform/OpenTofu、Nix、YAML、XML、Java Properties、Solidity |
 | Functional 與 BEAM | Elixir、Erlang、Clojure、Haskell、OCaml |
 
-Java 深度包含唯一專案型別的明確 import、宣告與直接參數 annotation 關係；重複 qualified type、wildcard／static import 與外部 classpath 仍保守省略。
+Java 深度包含唯一專案型別的明確 import、annotation、泛型 direct heritage／object creation，以及 `build.gradle(.kts)` 或 module-named Gradle build script 證據；重複 qualified type、wildcard／static import、lambda 內建立、anonymous interface 與外部 classpath 仍保守省略。
 
 ## 安裝 CLI
 

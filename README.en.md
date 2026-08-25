@@ -16,7 +16,7 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.438.0
+Current version: v0.439.0
 
 ## Highlights
 
@@ -43,7 +43,7 @@ One `init` or `sync` can process a multi-language repository. Analysis depth var
 | Data, configuration, and schemas | SQL, GraphQL, Protocol Buffers, Terraform/OpenTofu, Nix, YAML, XML, Java Properties, Solidity |
 | Functional and BEAM | Elixir, Erlang, Clojure, Haskell, OCaml |
 
-Java depth includes explicit imports plus declaration and direct-parameter annotations for unique project types; duplicate qualified types, wildcard or static imports, and external classpaths remain conservatively omitted.
+Java depth includes explicit imports, annotations, generic direct heritage and object creation, plus evidence from `build.gradle(.kts)` or module-named Gradle build scripts; duplicate qualified types, wildcard or static imports, lambda-contained construction, anonymous interfaces, and external classpaths remain conservatively omitted.
 
 ## Install the CLI
 

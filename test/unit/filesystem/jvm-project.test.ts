@@ -214,6 +214,43 @@ describe("JVM project module evidence", () => {
     });
   });
 
+  it("tracks an included Gradle module whose build script matches the module directory name", async () => {
+    const projectPath = await createProject({
+      "settings.gradle": "include 'hibernate-core'\n",
+      "hibernate-core/hibernate-core.gradle": "plugins {}\n",
+      "hibernate-core/src/main/java/org/example/Entity.java":
+        "package org.example; public class Entity {}\n"
+    });
+
+    const scan = await new FileSystemSourceCatalog().scan(projectPath, {
+      scopeRoots: ["hibernate-core/src/main/java"]
+    });
+
+    expect(scan.indexInputs.configurationInputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "gradle-build",
+          path: "hibernate-core/hibernate-core.gradle",
+          state: "present"
+        })
+      ])
+    );
+    expect(scan.jvmProjectModuleEvidence).toEqual({
+      memberships: [
+        {
+          filePath: "hibernate-core/src/main/java/org/example/Entity.java",
+          moduleId: "gradle:hibernate-core/hibernate-core.gradle",
+          sourceSet: "main",
+          configurationPaths: [
+            "hibernate-core/hibernate-core.gradle",
+            "settings.gradle"
+          ]
+        }
+      ],
+      dependencies: []
+    });
+  });
+
   it("ignores Gradle include and dependency text inside multiline strings", async () => {
     const projectPath = await createProject({
       "settings.gradle.kts": [

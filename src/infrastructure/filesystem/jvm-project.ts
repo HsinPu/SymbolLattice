@@ -658,8 +658,16 @@ async function readGradleBuildInputs(
   projectPath: string,
   directory: string
 ): Promise<readonly ProjectConfigurationInput[]> {
+  const moduleName = directory.split("/").at(-1);
+  const fileNames = [
+    "build.gradle",
+    "build.gradle.kts",
+    ...(directory.length === 0 || moduleName === undefined
+      ? []
+      : [`${moduleName}.gradle`, `${moduleName}.gradle.kts`])
+  ];
   return Promise.all(
-    ["build.gradle", "build.gradle.kts"].map((fileName) =>
+    fileNames.map((fileName) =>
       readProjectConfigurationInput(projectPath, "gradle-build", projectPathInDirectory(directory, fileName))
     )
   );

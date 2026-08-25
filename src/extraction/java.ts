@@ -2856,6 +2856,29 @@ function isJavaDirectTypeName(node: JavaSyntaxNode): boolean {
   return node.name === "TypeName" || node.name === "ScopedTypeName";
 }
 
+/**
+ * Returns the outer name of one direct Java nominal type. Generic arguments
+ * are deliberately ignored: they qualify the outer type but are not separate
+ * heritage or construction targets. Other compound or recovered shapes fail closed.
+ */
+function staticJavaDirectOuterTypeName(node: JavaSyntaxNode): JavaSyntaxNode | null {
+  if (isJavaDirectTypeName(node)) {
+    return node;
+  }
+  if (node.name !== "GenericType") {
+    return null;
+  }
+  const children = directChildren(node);
+  if (
+    children.length !== 2 ||
+    !isJavaDirectTypeName(children[0]!) ||
+    children[1]?.name !== "TypeArguments"
+  ) {
+    return null;
+  }
+  return children[0]!;
+}
+
 function staticJavaDirectSuperclass(
   input: JavaExtractFileFactsInput,
   declaration: StaticJavaClass
@@ -2864,17 +2887,20 @@ function staticJavaDirectSuperclass(
   if (superclasses.length !== 1 || superclasses[0] === undefined) {
     return null;
   }
-  const typeNames = directChildren(superclasses[0]).filter(isJavaDirectTypeName);
-  if (typeNames.length !== 1 || typeNames[0] === undefined) {
+  const heritageTypes = directChildren(superclasses[0]).filter(
+    (child) => child.name !== "extends"
+  );
+  if (heritageTypes.length !== 1 || heritageTypes[0] === undefined) {
     return null;
   }
-  return staticJavaDirectTypeReference(input, typeNames[0]);
+  const typeName = staticJavaDirectOuterTypeName(heritageTypes[0]);
+  return typeName === null ? null : staticJavaDirectTypeReference(input, typeName);
 }
 
 /**
- * Retains direct, non-generic Java interface spellings. The relationship kind
- * is passed explicitly because classes use `implements`, while interfaces use
- * `extends` for their direct contracts.
+ * Retains direct Java interface spellings, including the outer name of a
+ * parameterized interface. The relationship kind is passed explicitly because
+ * classes use `implements`, while interfaces use `extends` for their contracts.
  */
 function staticJavaDirectInterfaceReferences(
   input: JavaExtractFileFactsInput,
@@ -2890,7 +2916,11 @@ function staticJavaDirectInterfaceReferences(
     return [];
   }
   const references: StaticJavaSuperclassReference[] = [];
-  for (const typeName of directChildren(typeLists[0]).filter(isJavaDirectTypeName)) {
+  for (const heritageType of directChildren(typeLists[0]).filter((child) => child.name !== ",")) {
+    const typeName = staticJavaDirectOuterTypeName(heritageType);
+    if (typeName === null) {
+      continue;
+    }
     const reference = staticJavaDirectTypeReference(input, typeName);
     if (reference !== null) {
       references.push(reference);
@@ -3030,7 +3060,9 @@ function staticJavaInstantiationReferences(input: {
       return;
     }
     if (node.name === "ObjectCreationExpression") {
-      const typeNodes = directChildren(node).filter(isJavaDirectTypeName);
+      const typeNodes = directChildren(node)
+        .map(staticJavaDirectOuterTypeName)
+        .filter((typeNode): typeNode is JavaSyntaxNode => typeNode !== null);
       const type =
         typeNodes.length === 1 && typeNodes[0] !== undefined
           ? staticJavaCallTypeReference(
