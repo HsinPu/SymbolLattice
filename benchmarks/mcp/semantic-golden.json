@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "benchmark": "mcp-explore-semantic-golden-v1",
+  "cases": [
+    {
+      "id": "exact-flow",
+      "requiredFocuses": ["src/api.ts#handleRequest"],
+      "forbiddenFocuses": ["src/legacy.ts#handleRequest"],
+      "requiredFiles": ["src/api.ts", "src/db.ts"],
+      "forbiddenFiles": ["src/secrets.ts"],
+      "requiredEdges": [
+        { "source": "src/api.ts#handleRequest", "target": "src/db.ts#findUser", "kind": "calls" }
+      ],
+      "forbiddenEdges": [
+        { "source": "src/api.ts#handleRequest", "target": "src/secrets.ts#readSecret", "kind": "calls" }
+      ],
+      "source": {
+        "requiredFilePaths": ["src/api.ts"],
+        "minimumWindows": 1,
+        "requireText": true,
+        "sourceTruncated": false,
+        "windowTruncated": false
+      },
+      "truncation": {
+        "connections": false,
+        "sourceWindows": false
+      }
+    },
+    {
+      "id": "bounded-truncation",
+      "requiredFocuses": ["src/large.ts#largeHandler"],
+      "forbiddenFocuses": ["src/private.ts#privateHelper"],
+      "requiredFiles": ["src/large.ts", "src/shared.ts"],
+      "forbiddenFiles": ["src/private.ts"],
+      "requiredEdges": [
+        { "source": "src/large.ts#largeHandler", "target": "src/shared.ts#sharedHelper", "kind": "calls" }
+      ],
+      "forbiddenEdges": [],
+      "source": {
+        "requiredFilePaths": ["src/large.ts"],
+        "minimumWindows": 1,
+        "requireText": true,
+        "sourceTruncated": true,
+        "windowTruncated": true
+      },
+      "truncation": {
+        "connections": true,
+        "sourceWindows": true
+      }
+    }
+  ]
+}
