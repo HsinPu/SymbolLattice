@@ -50,7 +50,10 @@ interface ProjectFreshnessVerificationBase {
     | "streaming-utf8-with-shell-raw-bytes-and-objective-c-header-classification-v2"
     | "streaming-raw-bytes-for-shell-and-lua-with-objective-c-header-classification-v3";
   readonly configurationReadPolicy: "streaming-utf8-v1";
-  readonly discoveryPolicy: "single-project-walk-v1" | "single-project-walk-v2";
+  readonly discoveryPolicy:
+    | "single-project-walk-v1"
+    | "single-project-walk-v2"
+    | "single-project-walk-v3";
   readonly maximumConcurrentReads: 8;
   readonly performance: {
     readonly policy: "freshness-performance-v1";

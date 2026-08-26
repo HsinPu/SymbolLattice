@@ -386,6 +386,25 @@ describe("Cargo workspace crate module resolution", () => {
     );
   });
 
+  it("does not discover globbed Cargo members inside dot directories", async () => {
+    const projectPath = await createProject({
+      "Cargo.toml": "[workspace]\nmembers = [\".*\"]",
+      ".hidden/Cargo.toml": "[package]\nname = \"hidden\"",
+      ".hidden/src/lib.rs": "pub fn hidden() {}"
+    });
+
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(
+      scan.indexInputs.configurationInputs
+        .filter((input) => input.kind === "cargo-workspace-package-manifest")
+        .map((input) => input.path)
+    ).toEqual([]);
+    expect(scan.sourceDocuments.map((document) => document.relativePath)).not.toContain(
+      ".hidden/src/lib.rs"
+    );
+  });
+
   it("keeps a literal Cargo member when the same path is listed in exclude", async () => {
     const projectPath = await createProject({
       "Cargo.toml": [

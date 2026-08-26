@@ -157,7 +157,7 @@ describe("source discovery", () => {
       isConfigurationCandidateFileName: (name) => name === "package.json"
     });
 
-    expect(result.policy).toBe("single-project-walk-v2");
+    expect(result.policy).toBe("single-project-walk-v3");
     expect(result.sourcePaths.map((path) => path.replaceAll("\\", "/"))).toEqual([
       expect.stringMatching(/\/src\/entry\.ts$/u)
     ]);

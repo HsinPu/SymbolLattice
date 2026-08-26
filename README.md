@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.447.0
+目前版本：v0.448.0
 
 ## 主要能力
 
@@ -45,7 +45,7 @@ SymbolLattice 可在單次 `init` 或 `sync` 中處理多語言 repository。不
 
 Java 深度包含唯一專案型別的明確 import、annotation、泛型 direct heritage／object creation，以及 `build.gradle(.kts)` 或 module-named Gradle build script 證據；重複 qualified type、wildcard／static import、lambda 內建立、anonymous interface 與外部 classpath 仍保守省略。
 
-v0.441.0 預設略過常見 cache 與 generated directories，但不會全面排除 dot directories；`.github`、`.devcontainer`、`.storybook` 等未列入排除集的來源仍可被索引。明確 scope 可選入 default-excluded 路徑，hard exclusions 仍不可覆寫；root 與 nested `.gitignore` 依 Git parent re-inclusion 語意套用。若非排除路徑發生 `EACCES`／`EPERM`，index／sync 不會發布 partial generation，既有查詢會保留舊 generation 並標示 stale。
+v0.448.0 預設略過所有名稱以 `.` 開頭的目錄，以及既有 cache 與 generated directories；因此 `.github`、`.devcontainer`、`.storybook`、`.codex-tmp` 等 hidden directories 不會被自動索引。明確 scope 可選入 default-excluded 路徑，hard exclusions 仍不可覆寫；root 與非隱藏目錄內的 nested `.gitignore` 依 Git parent re-inclusion 語意套用。若非排除路徑發生 `EACCES`／`EPERM`，index／sync 不會發布 partial generation，既有 generation 會保留並標示 stale。
 
 v0.442.0 加速 watcher reconciliation：精確、既有且已索引的 pending source path 會優先驗證；確認 stale 後重用同一份 generation-bound freshness observation，直接執行一次完整掃描與原子 generation publication。新檔、rename、directory、configuration、ignore、未知或截斷事件仍回退完整驗證；generation 已切換時也會丟棄 observation，維持既有正確性。
 
@@ -58,6 +58,8 @@ v0.445.0 新增預設啟用的 project-local operation journal。`init`、`index
 v0.446.0 對所有即時圖查詢加入 strict freshness gate。MCP在查詢前後驗證project source、configuration、ignore與indexer policy；stale且具writer lease時先原子同步，查詢期間再變更則丟棄結果並重跑一次。CLI與`--no-auto-sync`維持唯讀，無法證明fresh時回報`FRESH_INDEX_REQUIRED`，不再回傳stale evidence；持續變動則回報`PROJECT_NOT_STABLE`。Status、diagnostics、history與diff仍可唯讀使用。
 
 v0.447.0 修正 Perl bare match expression 內含 `<<` 時被誤判為 heredoc opener 的 whole-file false negative。Assignment、return、argument與list等明確 expression-start context會先保護完整 regex；一般 division、未閉合regex與真正heredoc仍維持保守 fail-close。
+
+v0.448.0 將所有 hidden directories 納入預設 discovery exclusion，並讓 shared walker、Cargo workspace glob 與 Xcode project discovery 共用同一集中 policy。這可避免 sandbox/test 暫存目錄的限制 ACL 阻斷索引；未來若要改回 allowlist 或精選排除，只需調整集中 policy。
 
 ## 安裝 CLI
 

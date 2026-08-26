@@ -12,6 +12,7 @@ import type {
   SourceDocument
 } from "../../ports/source-catalog.js";
 import { HARD_EXCLUDED_DIRECTORY_NAMES, hashSource } from "./discovery.js";
+import { isDefaultExcludedDirectoryName } from "./project-filesystem.js";
 import { readProjectConfigurationInput } from "./project-inputs.js";
 
 interface LoadedCargoManifest {
@@ -702,7 +703,10 @@ async function discoverGlobbedCargoWorkspaceMemberManifestPaths(
           : `${relativeDirectoryPath}/${entry.name}`;
 
       if (entry.isDirectory()) {
-        if (!HARD_EXCLUDED_DIRECTORY_NAMES.has(entry.name)) {
+        if (
+          !HARD_EXCLUDED_DIRECTORY_NAMES.has(entry.name) &&
+          !isDefaultExcludedDirectoryName(entry.name)
+        ) {
           await visit(childPath, childRelativePath);
         }
         continue;

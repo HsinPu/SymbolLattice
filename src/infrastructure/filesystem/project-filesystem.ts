@@ -48,6 +48,15 @@ export const DEFAULT_EXCLUDED_DIRECTORY_NAMES: ReadonlySet<string> = new Set([
   "target"
 ]);
 
+/**
+ * Central policy for directories skipped by default during project discovery.
+ * Keep the blanket hidden-directory rule here so a future allowlist or narrower
+ * policy can be introduced without duplicating name checks across scanners.
+ */
+export function isDefaultExcludedDirectoryName(directoryName: string): boolean {
+  return directoryName.startsWith(".") || DEFAULT_EXCLUDED_DIRECTORY_NAMES.has(directoryName);
+}
+
 /** True when a normalized project-relative path crosses a hard exclusion. */
 export function containsHardExcludedDirectory(relativePath: string): boolean {
   const normalized = relativePath.replaceAll("\\", "/");

@@ -57,7 +57,7 @@ describe("filesystem source catalog freshness", () => {
       indexInputs: scan.indexInputs
     });
 
-    expect(scan.indexInputs).toMatchObject({ formatVersion: "project-inputs-v9" });
+    expect(scan.indexInputs).toMatchObject({ formatVersion: "project-inputs-v10" });
     expect(scan.indexInputs.configurationInputs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: "configuration-discovery" })
@@ -77,7 +77,7 @@ describe("filesystem source catalog freshness", () => {
       configurationCandidatesChecked: expect.any(Number),
       sourceReadPolicy: "streaming-raw-bytes-for-shell-and-lua-with-objective-c-header-classification-v3",
       configurationReadPolicy: "streaming-utf8-v1",
-      discoveryPolicy: "single-project-walk-v2",
+      discoveryPolicy: "single-project-walk-v3",
       maximumConcurrentReads: 8,
       performance: {
         policy: "freshness-performance-v1",
@@ -356,7 +356,7 @@ describe("filesystem source catalog freshness", () => {
     expect(verification).toMatchObject({
       outcome: "project-inputs-changed",
       configurationPolicy: "configuration-candidates-v2",
-      discoveryPolicy: "single-project-walk-v2",
+      discoveryPolicy: "single-project-walk-v3",
       sourceFilesChanged: false,
       projectInputsChanged: true,
       complete: true,

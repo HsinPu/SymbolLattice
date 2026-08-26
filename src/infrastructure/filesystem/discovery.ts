@@ -172,7 +172,7 @@ export interface SourceDiscoveryOptions {
   readonly filesystemReader?: ProjectFilesystemReader;
 }
 
-export const FRESHNESS_PATH_DISCOVERY_POLICY = "single-project-walk-v2" as const;
+export const FRESHNESS_PATH_DISCOVERY_POLICY = "single-project-walk-v3" as const;
 export const STREAMING_UTF8_HASH_POLICY = "streaming-utf8-v1" as const;
 export const SOURCE_FINGERPRINT_READ_POLICY =
   "streaming-raw-bytes-for-shell-and-lua-with-objective-c-header-classification-v3" as const;

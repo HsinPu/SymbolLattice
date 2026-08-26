@@ -46,13 +46,14 @@ afterEach(async () => {
 });
 
 describe("shared scoped project walker", () => {
-  it("prunes default cache trees without hiding valid dot directories", async () => {
+  it("prunes every dot directory by default without traversing it", async () => {
     const projectPath = await createProject();
     await writeProjectFile(projectPath, ".tmp/pytest-history/blocked.ts");
     await writeProjectFile(projectPath, ".cache/blocked.ts");
     await writeProjectFile(projectPath, ".github/workflows/ci.ts");
     await writeProjectFile(projectPath, ".devcontainer/setup.ts");
     await writeProjectFile(projectPath, ".storybook/story.ts");
+    await writeProjectFile(projectPath, ".codex-tmp/pytest-ai-evidence/blocked.ts");
     await writeProjectFile(projectPath, "src/entry.ts");
     const reads: string[] = [];
     const reader: ProjectFilesystemReader = {
@@ -68,14 +69,8 @@ describe("shared scoped project walker", () => {
       isSourceCandidate: typescriptSource
     });
 
-    expect(relativeSourcePaths(projectPath, result.sourcePaths)).toEqual([
-      ".devcontainer/setup.ts",
-      ".github/workflows/ci.ts",
-      ".storybook/story.ts",
-      "src/entry.ts"
-    ]);
-    expect(reads.some((path) => /\/\.tmp(?:\/|$)/u.test(path))).toBe(false);
-    expect(reads.some((path) => /\/\.cache(?:\/|$)/u.test(path))).toBe(false);
+    expect(relativeSourcePaths(projectPath, result.sourcePaths)).toEqual(["src/entry.ts"]);
+    expect(reads.some((path) => /\/\.[^/]+(?:\/|$)/u.test(path))).toBe(false);
   });
 
   it("allows explicit non-root scopes and valid Git negation to override defaults", async () => {
@@ -89,6 +84,15 @@ describe("shared scoped project walker", () => {
     });
     expect(relativeSourcePaths(projectPath, scoped.sourcePaths)).toEqual([
       ".tmp/pytest-history/kept.ts"
+    ]);
+
+    await writeProjectFile(projectPath, ".github/workflows/kept.ts");
+    const explicitlyScopedHiddenDirectory = await walkScopedProject(projectPath, {
+      scopeRoots: [".github"],
+      isSourceCandidate: typescriptSource
+    });
+    expect(relativeSourcePaths(projectPath, explicitlyScopedHiddenDirectory.sourcePaths)).toEqual([
+      ".github/workflows/kept.ts"
     ]);
 
     await writeFile(

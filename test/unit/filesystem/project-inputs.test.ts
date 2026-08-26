@@ -70,7 +70,7 @@ describe("project index inputs", () => {
     });
 
     expect(first.scopeRoots).toEqual(["src"]);
-    expect(first.formatVersion).toBe("project-inputs-v9");
+    expect(first.formatVersion).toBe("project-inputs-v10");
     expect(first.configurationInputs).toEqual([
       {
         kind: "root-gitignore",

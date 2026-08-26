@@ -5,6 +5,7 @@ import {
   HARD_EXCLUDED_DIRECTORY_NAMES,
   MAXIMUM_PROJECT_PATH_UNREADABLE_EVIDENCE,
   ProjectPathAccessCollector,
+  isDefaultExcludedDirectoryName,
   type ProjectFilesystemReader,
   readProjectFilesystemText,
   toProjectPathUnreadableError
@@ -53,6 +54,9 @@ describe("project filesystem reader and access contract", () => {
       "target"
     ]);
     expect(DEFAULT_EXCLUDED_DIRECTORY_NAMES.has(".github")).toBe(false);
+    expect(isDefaultExcludedDirectoryName(".github")).toBe(true);
+    expect(isDefaultExcludedDirectoryName(".codex-tmp")).toBe(true);
+    expect(isDefaultExcludedDirectoryName("src")).toBe(false);
     expect(MAXIMUM_PROJECT_PATH_UNREADABLE_EVIDENCE).toBe(8);
   });
 

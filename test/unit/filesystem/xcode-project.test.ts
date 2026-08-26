@@ -122,6 +122,20 @@ describe("Xcode project evidence", () => {
     ]);
   });
 
+  it("does not discover Xcode projects inside dot directories", async () => {
+    const projectPath = await createProject({
+      ".hidden/CalendarModule.swift": "final class CalendarModule {}\n",
+      ".hidden/App.xcodeproj/project.pbxproj": nativeTargetProject()
+    });
+
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(
+      scan.indexInputs.configurationInputs.filter((input) => input.kind === "xcode-project")
+    ).toEqual([]);
+    expect(scan.xcodeTargetMemberships).toEqual([]);
+  });
+
   it("fails closed for malformed project syntax and source paths outside the project", async () => {
     const malformedProject = await createProject({
       "ios/CalendarModule.swift": "final class CalendarModule {}\n",

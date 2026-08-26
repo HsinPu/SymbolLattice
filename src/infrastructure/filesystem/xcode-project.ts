@@ -8,6 +8,7 @@ import {
   HARD_EXCLUDED_DIRECTORY_NAMES,
   toProjectRelativePath
 } from "./discovery.js";
+import { isDefaultExcludedDirectoryName } from "./project-filesystem.js";
 import { readProjectConfigurationInput } from "./project-inputs.js";
 
 type OpenStepValue = string | OpenStepDictionary | readonly OpenStepValue[];
@@ -489,7 +490,11 @@ async function discoverXcodeProjectConfigurationPaths(projectPath: string): Prom
   const visitDirectory = async (directoryPath: string): Promise<void> => {
     const entries = await readdir(directoryPath, { withFileTypes: true });
     for (const entry of entries.sort((left, right) => compareProjectPaths(left.name, right.name))) {
-      if (!entry.isDirectory() || HARD_EXCLUDED_DIRECTORY_NAMES.has(entry.name)) {
+      if (
+        !entry.isDirectory() ||
+        HARD_EXCLUDED_DIRECTORY_NAMES.has(entry.name) ||
+        isDefaultExcludedDirectoryName(entry.name)
+      ) {
         continue;
       }
       const entryPath = resolve(directoryPath, entry.name);
