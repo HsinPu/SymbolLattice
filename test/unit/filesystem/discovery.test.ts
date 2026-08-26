@@ -40,6 +40,12 @@ afterEach(async () => {
 });
 
 describe("source discovery", () => {
+  it("routes Markdown documents without treating MDX as plain Markdown", () => {
+    expect(getSourceLanguage("README.md")).toBe("markdown");
+    expect(getSourceLanguage("docs/GUIDE.MARKDOWN")).toBe("markdown");
+    expect(getSourceLanguage("docs/component.mdx")).toBeNull();
+  });
+
   it("routes HTML and HTM files to the HTML extractor", () => {
     expect(getSourceLanguage("web/index.html")).toBe("html");
     expect(getSourceLanguage("web/legacy.HTM")).toBe("html");
@@ -256,6 +262,7 @@ describe("source discovery", () => {
     const files = await discoverSourceFiles(projectPath);
 
     expect(files.map((file) => file.relativePath)).toEqual([
+      "README.md",
       "conf/admin.routes",
       "conf/routes",
       "src/a.js",
@@ -315,6 +322,7 @@ describe("source discovery", () => {
       "src/z.ts"
     ]);
     expect(files.map((file) => file.language)).toEqual([
+      "markdown",
       "scala",
       "scala",
       "javascript",

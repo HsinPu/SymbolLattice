@@ -127,8 +127,8 @@ describe("Python B2 regular-package resolution", () => {
         })
       ])
     );
-    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v351");
-    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v157");
+    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v352");
+    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v158");
     expect(upgradedStore.getActiveGenerationBundle(projectPath)).toMatchObject({
       extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION,
       resolverVersion: `${PROJECT_RESOLVER_VERSION}+${SOURCE_ROLE_CLASSIFIER_VERSION}`

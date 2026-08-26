@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v351";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v352";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v157";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v158";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -2415,6 +2415,20 @@ export interface JspFacts {
   readonly templateReferences: readonly JspTemplateReferenceFact[];
 }
 
+/** One bounded direct inline Markdown link retained for project-local file resolution. */
+export interface MarkdownLinkFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly targetFilePath: string;
+  readonly referenceName: string;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only Markdown facts resolved after the complete indexed file catalog is available. */
+export interface MarkdownFacts {
+  readonly links: readonly MarkdownLinkFact[];
+}
+
 /** Direct literal Laravel Blade view directive kinds retained for project-local resolution. */
 export type BladeTemplateReferenceKind = "extends" | "include" | "component" | "each";
 
@@ -2717,6 +2731,8 @@ export interface ArtifactFacts {
   readonly twigFacts?: TwigFacts;
   /** Omitted only by artifact facts persisted before v0.428.0. */
   readonly jspFacts?: JspFacts;
+  /** Omitted only by artifact facts persisted before v0.449.0. */
+  readonly markdownFacts?: MarkdownFacts;
   /** Omitted only by artifact facts persisted before v0.72. */
   readonly bladeFacts?: BladeFacts;
   /** Omitted only by artifact facts persisted before v0.168. */

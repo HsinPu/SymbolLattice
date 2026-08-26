@@ -1346,6 +1346,57 @@ function jspTemplateReferenceRuleId(
   return `syntax.jsp.${kind}.literal-project-file.${suffix}`;
 }
 
+function markdownLinkRuleId(suffix: "exact-target" | "unresolved-target"): string {
+  return `syntax.markdown.inline-link.literal-project-file.${suffix}`;
+}
+
+/** Resolves only one exact indexed project-relative path retained by the Markdown syntax pass. */
+function projectMarkdownFileReferences(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly fileSymbols: ReadonlyMap<string, SymbolNode>;
+}): readonly GraphEdge[] {
+  const edges: GraphEdge[] = [];
+  for (const [, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
+    compareStableText(left, right)
+  )) {
+    const links = [...(facts.markdownFacts?.links ?? [])].sort((left, right) => {
+      const byLine = left.range.start.line - right.range.start.line;
+      if (byLine !== 0) return byLine;
+      const byColumn = left.range.start.column - right.range.start.column;
+      return byColumn !== 0 ? byColumn : compareStableText(left.sourceId, right.sourceId);
+    });
+    for (const link of links) {
+      const candidate = input.fileSymbols.get(link.targetFilePath);
+      const candidates = candidate === undefined ? [] : [candidate];
+      const targetId = candidate?.id ?? null;
+      edges.push({
+        id: createEdgeId({
+          sourceId: link.sourceId,
+          targetId,
+          kind: "references",
+          line: link.range.start.line,
+          column: link.range.start.column,
+          referenceName: link.referenceName
+        }),
+        sourceId: link.sourceId,
+        targetId,
+        kind: "references",
+        filePath: link.filePath,
+        range: link.range,
+        resolution: candidate === undefined ? "unresolved" : "exact",
+        confidence: candidate === undefined ? 0 : 1,
+        referenceName: link.referenceName,
+        evidence: referenceEvidence(
+          markdownLinkRuleId(candidate === undefined ? "unresolved-target" : "exact-target"),
+          "module",
+          candidateSymbolIds(candidates)
+        )
+      });
+    }
+  }
+  return edges;
+}
+
 /** Resolves only exact indexed paths retained by the bounded JSP syntax pass. */
 function projectJspTemplateReferences(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
@@ -12655,6 +12706,12 @@ export function resolveProjectFacts(input: {
   );
   resolvedEdges.push(
     ...projectJspTemplateReferences({
+      factsByFile,
+      fileSymbols
+    })
+  );
+  resolvedEdges.push(
+    ...projectMarkdownFileReferences({
       factsByFile,
       fileSymbols
     })

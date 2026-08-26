@@ -861,6 +861,7 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
     ...(facts.solidityFacts === undefined ? {} : { solidityFacts: facts.solidityFacts }),
     ...(facts.twigFacts === undefined ? {} : { twigFacts: facts.twigFacts }),
     ...(facts.jspFacts === undefined ? {} : { jspFacts: facts.jspFacts }),
+    ...(facts.markdownFacts === undefined ? {} : { markdownFacts: facts.markdownFacts }),
     ...(facts.bladeFacts === undefined ? {} : { bladeFacts: facts.bladeFacts }),
     ...(facts.reactNativeFacts === undefined ? {} : { reactNativeFacts: facts.reactNativeFacts }),
     ...(facts.swiftObjectiveCFacts === undefined

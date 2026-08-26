@@ -214,7 +214,8 @@ export const ARTIFACT_LANGUAGES = [
   "shell",
   "sql",
   "graphql",
-  "proto"
+  "proto",
+  "markdown"
 ] as const;
 
 export type ArtifactLanguage = (typeof ARTIFACT_LANGUAGES)[number];

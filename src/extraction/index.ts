@@ -48,6 +48,7 @@ import { extractXmlFileFacts } from "./xml.js";
 import { extractHtmlFileFacts } from "./html.js";
 import { extractJspFileFacts } from "./jsp.js";
 import { extractCssFileFacts } from "./css.js";
+import { extractMarkdownFileFacts } from "./markdown.js";
 import { extractPropertiesFileFacts } from "./properties.js";
 import { extractLiquidFileFacts } from "./liquid.js";
 import { extractTwigFileFacts } from "./twig.js";
@@ -7997,6 +7998,9 @@ export function extractFileFacts(
   }
   if (input.language === "css") {
     return extractCssFileFacts({ ...input, language: "css" });
+  }
+  if (input.language === "markdown") {
+    return extractMarkdownFileFacts({ ...input, language: "markdown" });
   }
   if (input.language === "properties") {
     return extractPropertiesFileFacts({ ...input, language: "properties" });
