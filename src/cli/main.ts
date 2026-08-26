@@ -82,6 +82,12 @@ import {
   type SearchOptions,
   type RoutesOptions,
   type ReadQueryFreshnessReceipt,
+  MAX_OPERATION_DIAGNOSTIC_RECORDS,
+  OPERATION_DIAGNOSTIC_OPERATIONS,
+  OPERATION_DIAGNOSTIC_OUTCOMES,
+  type OperationDiagnosticFilters,
+  type OperationDiagnosticJournal,
+  type PersistentOperationDiagnosticsResult,
   type SymbolLatticeServiceExtensions,
   type WatchReceipt
 } from "../application/index.js";
@@ -240,6 +246,8 @@ interface WatchStatusCommandOptions extends ProjectOptions {
   readonly limit?: number;
 }
 
+interface DiagnosticsCommandOptions extends ProjectOptions, OperationDiagnosticFilters {}
+
 interface ServeCommandOptions extends ProjectOptions, PluginCommandOptions {
   readonly autoSync?: boolean;
   readonly diagnosticJournal?: boolean;
@@ -345,6 +353,11 @@ export type McpAutoSyncJournalFactory = (
   projectPath: string,
   writable: boolean
 ) => AutoSyncDiagnosticJournal;
+
+export type OperationDiagnosticJournalFactory = (
+  projectPath: string,
+  writable: boolean
+) => OperationDiagnosticJournal;
 
 /** Injectable project-ownership seam; MCP request handlers never receive this capability. */
 export type AutoSyncOwnerLeaseFactory = (projectPath: string) => AutoSyncOwnerLease;
@@ -766,11 +779,14 @@ function withAutoSyncObservability(
   service: SymbolLatticeService,
   defaultProjectPath: string,
   tracker: AutoSyncStatusTracker,
-  journal: AutoSyncDiagnosticJournal
+  journal: AutoSyncDiagnosticJournal,
+  autoSyncJournalFactory: McpAutoSyncJournalFactory,
+  operationJournalFactory: OperationDiagnosticJournalFactory
 ): SymbolLatticeService &
   AutoSyncStatusService &
   AutoSyncDiagnosticsService &
-  AutoSyncDiagnosticJournalService {
+  AutoSyncDiagnosticJournalService &
+  import("../mcp/index.js").OperationDiagnosticsService {
   const autoSyncStatus = async (): Promise<AutoSyncStatusResult> => ({
     index: await service.getStatus(defaultProjectPath),
     autoSync: tracker.snapshot()
@@ -796,6 +812,15 @@ function withAutoSyncObservability(
   const autoSyncJournal = async (
     options: AutoSyncDiagnosticJournalOptions = {}
   ) => journal.diagnostics(options);
+  const operationDiagnostics = async (
+    projectPath: string,
+    options: OperationDiagnosticFilters = {}
+  ): Promise<PersistentOperationDiagnosticsResult> => ({
+    operationJournal: operationJournalFactory(projectPath, false).diagnostics(options),
+    autoSyncJournal: autoSyncJournalFactory(projectPath, false).diagnostics(
+      options.limit === undefined ? {} : { limit: options.limit }
+    )
+  });
   return new Proxy(service, {
     get(target, property, receiver): unknown {
       if (property === "autoSyncStatus") {
@@ -807,6 +832,7 @@ function withAutoSyncObservability(
       if (property === "autoSyncJournal") {
         return autoSyncJournal;
       }
+      if (property === "operationDiagnostics") return operationDiagnostics;
       const value = Reflect.get(target, property, receiver);
       return typeof value === "function" ? value.bind(target) : value;
     },
@@ -815,13 +841,15 @@ function withAutoSyncObservability(
         property === "autoSyncStatus" ||
         property === "autoSyncDiagnostics" ||
         property === "autoSyncJournal" ||
+        property === "operationDiagnostics" ||
         Reflect.has(target, property)
       );
     }
   }) as SymbolLatticeService &
     AutoSyncStatusService &
     AutoSyncDiagnosticsService &
-    AutoSyncDiagnosticJournalService;
+    AutoSyncDiagnosticJournalService &
+    import("../mcp/index.js").OperationDiagnosticsService;
 }
 
 function toAutoSyncDiagnosticError(
@@ -1056,7 +1084,9 @@ export async function runMcpWithAutoSync(
   hostRegistryFactory: AutoSyncHostRegistryFactory = (projectPath) =>
     new FileSystemAutoSyncHostRegistry(projectPath),
   stopControlFactory: AutoSyncStopControlFactory = (projectPath, registry) =>
-    new FileSystemAutoSyncStopControl(projectPath, registry, { version: SYMBOL_LATTICE_VERSION })
+    new FileSystemAutoSyncStopControl(projectPath, registry, { version: SYMBOL_LATTICE_VERSION }),
+  operationJournalFactory: OperationDiagnosticJournalFactory = (projectPath, writable) =>
+    new SqliteOperationDiagnosticJournal(projectPath, { writable })
 ): Promise<void> {
   const autoSyncRequested = options.autoSync ?? true;
   let defaultProjectMissing = false;
@@ -1076,7 +1106,14 @@ export async function runMcpWithAutoSync(
     nativeEventsRequested: options.poll !== true,
     hostId
   });
-  const mcpService = withAutoSyncObservability(service, options.projectPath, tracker, journal);
+  const mcpService = withAutoSyncObservability(
+    service,
+    options.projectPath,
+    tracker,
+    journal,
+    journalFactory,
+    operationJournalFactory
+  );
   let watchSession: ForegroundWatchSession | null = null;
   let ownerLease: AcquiredAutoSyncOwnerLease | null = null;
   let hostRegistration: AutoSyncHostRegistration | null = null;
@@ -1182,11 +1219,27 @@ export async function runMcpWithAutoSync(
 function renderError(error: unknown, json: boolean): void {
   const code = error instanceof SymbolLatticeError ? error.code : "UNEXPECTED_ERROR";
   const message = error instanceof Error ? error.message : "Unknown SymbolLattice error.";
+  const operationId = diagnosticFailureProperty(error, "operationId");
+  const operationJournal = diagnosticFailureProperty(error, "operationJournal");
   if (json) {
-    process.stderr.write(`${JSON.stringify({ error: { code, message } }, null, 2)}\n`);
+    process.stderr.write(`${JSON.stringify({
+      error: {
+        code,
+        message,
+        ...(typeof operationId === "string" ? { operationId } : {}),
+        ...(operationJournal === undefined ? {} : { operationJournal })
+      }
+    }, null, 2)}\n`);
   } else {
-    process.stderr.write(`SymbolLattice: ${code}: ${message}\n`);
+    const receipt = typeof operationId === "string" ? ` [operation ${operationId}]` : "";
+    process.stderr.write(`SymbolLattice: ${code}: ${message}${receipt}\n`);
   }
+}
+
+function diagnosticFailureProperty(error: unknown, property: string): unknown {
+  return typeof error === "object" && error !== null && property in error
+    ? (error as Record<string, unknown>)[property]
+    : undefined;
 }
 
 function assertSupportedNodeVersion(): void {
@@ -1221,6 +1274,18 @@ function collectScope(value: string, previous: readonly string[] = []): string[]
 
 function collectPlugin(value: string, previous: readonly string[] = []): string[] {
   return [...previous, value];
+}
+
+function parseDiagnosticFilter<const Values extends readonly string[]>(
+  value: string | undefined,
+  allowed: Values,
+  name: string
+): Values[number] | undefined {
+  if (value === undefined) return undefined;
+  if (!allowed.includes(value)) {
+    throw new RangeError(`Diagnostics ${name} must be one of ${allowed.join("|")}.`);
+  }
+  return value as Values[number];
 }
 
 function addPluginOptions(command: Command): Command {
@@ -1282,7 +1347,9 @@ export function createProgram(
       stopControl,
       startControl,
       { version: SYMBOL_LATTICE_VERSION }
-    )
+    ),
+  operationJournalFactory: OperationDiagnosticJournalFactory = (projectPath, writable) =>
+    new SqliteOperationDiagnosticJournal(projectPath, { writable })
 ): Command {
   const coreService = service ?? createService();
   const indexingService = async (
@@ -1498,6 +1565,33 @@ export function createProgram(
       render(await coreService.getStatus(projectPath), options);
     }
   );
+
+  addJsonOption(addProjectOption(program.command("diagnostics [path]")))
+    .description("Inspect persistent indexing and auto-sync diagnostics without changing project state")
+    .option(
+      "--limit <count>",
+      `Maximum latest operations to inspect (1-${MAX_OPERATION_DIAGNOSTIC_RECORDS})`,
+      (value: string) => parseBoundedPositiveInteger(value, MAX_OPERATION_DIAGNOSTIC_RECORDS)
+    )
+    .option("--operation <operation>", `Filter by ${OPERATION_DIAGNOSTIC_OPERATIONS.join("|")}`)
+    .option("--outcome <outcome>", `Filter by ${OPERATION_DIAGNOSTIC_OUTCOMES.join("|")}`)
+    .action(async (path: string | undefined, options: DiagnosticsCommandOptions) => {
+      const projectPath = resolve(path ?? defaultProjectPath(options));
+      const operation = parseDiagnosticFilter(options.operation, OPERATION_DIAGNOSTIC_OPERATIONS, "operation");
+      const outcome = parseDiagnosticFilter(options.outcome, OPERATION_DIAGNOSTIC_OUTCOMES, "outcome");
+      const filters: OperationDiagnosticFilters = {
+        ...(options.limit === undefined ? {} : { limit: options.limit }),
+        ...(operation === undefined ? {} : { operation }),
+        ...(outcome === undefined ? {} : { outcome })
+      };
+      const result: PersistentOperationDiagnosticsResult = {
+        operationJournal: operationJournalFactory(projectPath, false).diagnostics(filters),
+        autoSyncJournal: autoSyncJournalFactory(projectPath, false).diagnostics(
+          options.limit === undefined ? {} : { limit: options.limit }
+        )
+      };
+      render(result, options);
+    });
 
   addJsonOption(addProjectOption(program.command("watch-status [path]")))
     .description("Inspect index freshness and durable auto-sync evidence without changing lifecycle state")

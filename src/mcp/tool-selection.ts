@@ -6,6 +6,7 @@ export const ALL_SYMBOL_LATTICE_MCP_TOOL_NAMES = [
   "auto_sync_status",
   "auto_sync_diagnostics",
   "auto_sync_journal",
+  "diagnostics",
   "node",
   "context",
   "affected",

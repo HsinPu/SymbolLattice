@@ -1637,6 +1637,20 @@ describe("SymbolLattice MCP server", () => {
         async autoSyncJournal(options = {}): Promise<AutoSyncDiagnosticJournalResult> {
           journalCalls.push(options);
           return autoSyncDiagnosticJournalResult();
+        },
+        async operationDiagnostics(projectPath: string, options = {}) {
+          return {
+            operationJournal: {
+              state: "read-only" as const, capacity: 256, retained: 1, returned: 1, dropped: 0,
+              truncated: false, error: null,
+              operations: [{ operationId: "operation:test", version: "0.445.0", operation: options.operation ?? "init",
+                outcome: options.outcome ?? "failed", startedAt: "2026-08-26T00:00:00.000Z", updatedAt: "2026-08-26T00:00:01.000Z",
+                finishedAt: "2026-08-26T00:00:01.000Z", durationMs: 1000, activeStage: "scan" as const,
+                completedStages: ["preflight" as const, "scan" as const], generationBefore: null, generationAfter: null,
+                error: null }]
+            },
+            autoSyncJournal: autoSyncDiagnosticJournalResult()
+          };
         }
       },
       "C:/default-project"
@@ -1652,7 +1666,8 @@ describe("SymbolLattice MCP server", () => {
       "SymbolLattice_explore",
       "SymbolLattice_auto_sync_status",
       "SymbolLattice_auto_sync_diagnostics",
-      "SymbolLattice_auto_sync_journal"
+      "SymbolLattice_auto_sync_journal",
+      "SymbolLattice_diagnostics"
     ]);
 
     const result = await client.callTool({
@@ -1705,6 +1720,16 @@ describe("SymbolLattice MCP server", () => {
       events: [{ event: "started" }, { event: "event-pending" }, { event: "synced" }]
     });
     expect(journalCalls).toEqual([{ limit: 1 }]);
+
+    const operationDiagnostics = await client.callTool({
+      name: "SymbolLattice_diagnostics",
+      arguments: { projectPath: "C:/chosen-project", limit: 20, operation: "init", outcome: "failed" }
+    });
+    expect(operationDiagnostics.isError).not.toBe(true);
+    expect(operationDiagnostics.structuredContent).toMatchObject({
+      operationJournal: { operations: [{ operationId: "operation:test", operation: "init", outcome: "failed" }] },
+      autoSyncJournal: { retained: 3 }
+    });
 
     const invalidJournal = await client.callTool({
       name: "SymbolLattice_auto_sync_journal",

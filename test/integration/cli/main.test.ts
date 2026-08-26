@@ -38,6 +38,7 @@ import {
   type InvestigateOptions,
   type InvestigateResult,
   type NodeResult,
+  type OperationDiagnosticJournal,
   type RoutesOptions,
   type RoutesResult,
   type SearchOptions,
@@ -2994,6 +2995,40 @@ describe("SymbolLattice read-only watch status CLI", () => {
     expect(JSON.parse(String(write.mock.calls.at(-1)?.[0]))).toEqual({
       schemaVersion: 1,
       mode: "preview"
+    });
+  });
+});
+
+describe("SymbolLattice persistent diagnostics CLI", () => {
+  it("combines filtered operation and auto-sync journals without calling a project service", async () => {
+    const operationDiagnostics = vi.fn(() => ({
+      state: "read-only" as const, capacity: 256, retained: 1, returned: 1, dropped: 0,
+      truncated: false, error: null,
+      operations: [{ operationId: "operation:test", version: "0.445.0", operation: "init" as const,
+        outcome: "failed" as const, startedAt: "2026-08-26T00:00:00.000Z", updatedAt: "2026-08-26T00:00:01.000Z",
+        finishedAt: "2026-08-26T00:00:01.000Z", durationMs: 1000, activeStage: "scan" as const,
+        completedStages: ["preflight" as const, "scan" as const], generationBefore: null, generationAfter: null,
+        error: { code: "PROJECT_PATH_UNREADABLE", message: "locked [EPERM]", evidence: [{ path: "locked", code: "EPERM" }], evidenceTotal: 1, evidenceTruncated: false } }]
+    }));
+    const operationFactory = vi.fn((): OperationDiagnosticJournal => ({
+      start: vi.fn(), advance: vi.fn(), complete: vi.fn(), fail: vi.fn(), diagnostics: operationDiagnostics,
+      state: () => ({ state: "read-only", error: null })
+    }));
+    const autoDiagnostics = vi.fn(() => ({ ...autoSyncJournalResult(), state: "read-only" as const }));
+    const autoFactory = vi.fn((): AutoSyncDiagnosticJournal => ({ append: vi.fn(), diagnostics: autoDiagnostics }));
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await createProgram(
+      {} as SymbolLatticeService, undefined, undefined, undefined, undefined, autoFactory,
+      undefined, undefined, undefined, undefined, operationFactory
+    ).parseAsync(["node", "SymbolLattice", "diagnostics", "C:/chosen-project", "--limit", "20", "--operation", "init", "--outcome", "failed", "--json"], { from: "node" });
+
+    expect(operationFactory).toHaveBeenCalledWith(resolve("C:/chosen-project"), false);
+    expect(operationDiagnostics).toHaveBeenCalledWith({ limit: 20, operation: "init", outcome: "failed" });
+    expect(autoDiagnostics).toHaveBeenCalledWith({ limit: 20 });
+    expect(JSON.parse(String(write.mock.calls.at(-1)?.[0]))).toMatchObject({
+      operationJournal: { state: "read-only", operations: [{ operationId: "operation:test" }] },
+      autoSyncJournal: { state: "read-only" }
     });
   });
 });

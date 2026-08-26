@@ -52,6 +52,13 @@ import {
   type AutoSyncDiagnosticJournalResult
 } from "../application/auto-sync-journal.js";
 import {
+  MAX_OPERATION_DIAGNOSTIC_RECORDS,
+  OPERATION_DIAGNOSTIC_OPERATIONS,
+  OPERATION_DIAGNOSTIC_OUTCOMES,
+  type OperationDiagnosticFilters,
+  type PersistentOperationDiagnosticsResult
+} from "../application/operation-diagnostics.js";
+import {
   MAX_AUTO_SYNC_DIAGNOSTIC_EVENTS,
   type AutoSyncDiagnosticsOptions,
   type AutoSyncDiagnosticsResult,
@@ -283,6 +290,14 @@ export interface AutoSyncDiagnosticJournalService {
   ): Promise<AutoSyncDiagnosticJournalResult>;
 }
 
+/** Optional project-local persistent indexing and watcher lifecycle diagnostics. */
+export interface OperationDiagnosticsService {
+  operationDiagnostics(
+    projectPath: string,
+    options?: OperationDiagnosticFilters
+  ): Promise<PersistentOperationDiagnosticsResult>;
+}
+
 /** Optional host-owned operational seam for a bounded MCP read-query pool. */
 export interface QueryPoolStatusService extends McpReadQueryPoolStatusService {}
 
@@ -305,6 +320,7 @@ export type GenerationDiffMcpService = ExploreService & GenerationDiffService;
 export type AutoSyncStatusMcpService = ExploreService & AutoSyncStatusService;
 export type AutoSyncDiagnosticsMcpService = ExploreService & AutoSyncDiagnosticsService;
 export type AutoSyncDiagnosticJournalMcpService = ExploreService & AutoSyncDiagnosticJournalService;
+export type OperationDiagnosticsMcpService = ExploreService & OperationDiagnosticsService;
 
 export interface ExploreToolArguments {
   readonly query: string;
@@ -462,6 +478,13 @@ export interface AutoSyncDiagnosticJournalToolArguments {
   readonly limit?: number | undefined;
 }
 
+export interface OperationDiagnosticsToolArguments {
+  readonly projectPath?: string | undefined;
+  readonly limit?: number | undefined;
+  readonly operation?: OperationDiagnosticFilters["operation"];
+  readonly outcome?: OperationDiagnosticFilters["outcome"];
+}
+
 export interface QueryPoolStatusToolArguments {}
 
 export interface ReadOnlyToolResponse {
@@ -494,6 +517,7 @@ export type GenerationDiffToolResponse = ReadOnlyToolResponse;
 export type AutoSyncStatusToolResponse = ReadOnlyToolResponse;
 export type AutoSyncDiagnosticsToolResponse = ReadOnlyToolResponse;
 export type AutoSyncDiagnosticJournalToolResponse = ReadOnlyToolResponse;
+export type OperationDiagnosticsToolResponse = ReadOnlyToolResponse;
 export type QueryPoolStatusToolResponse = ReadOnlyToolResponse;
 
 /** Optional execution seam for graph reads that must not own an index writer. */
@@ -1855,6 +1879,12 @@ function supportsAutoSyncDiagnosticJournal(
   return "autoSyncJournal" in service && typeof service.autoSyncJournal === "function";
 }
 
+function supportsOperationDiagnostics(
+  service: ExploreService
+): service is OperationDiagnosticsMcpService {
+  return "operationDiagnostics" in service && typeof service.operationDiagnostics === "function";
+}
+
 function supportsGitAffectedTests(service: ExploreService): service is GitAffectedTestsMcpService {
   return (
     "gitAffectedTestsAvailable" in service &&
@@ -1946,6 +1976,30 @@ export async function runAutoSyncDiagnosticJournalTool(
   try {
     const result = await service.autoSyncJournal(
       arguments_.limit === undefined ? {} : { limit: arguments_.limit }
+    );
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      structuredContent: result as unknown as Record<string, unknown>
+    };
+  } catch (error) {
+    return renderToolError(error);
+  }
+}
+
+/** Reads both persistent journals without creating or updating either database. */
+export async function runOperationDiagnosticsTool(
+  service: OperationDiagnosticsService,
+  defaultProjectPath: string,
+  arguments_: OperationDiagnosticsToolArguments = {}
+): Promise<OperationDiagnosticsToolResponse> {
+  try {
+    const result = await service.operationDiagnostics(
+      arguments_.projectPath ?? defaultProjectPath,
+      {
+        ...(arguments_.limit === undefined ? {} : { limit: arguments_.limit }),
+        ...(arguments_.operation === undefined ? {} : { operation: arguments_.operation }),
+        ...(arguments_.outcome === undefined ? {} : { outcome: arguments_.outcome })
+      }
     );
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -2523,6 +2577,31 @@ export function createMcpServer(
       },
       async (arguments_) =>
         runAutoSyncDiagnosticJournalTool(autoSyncDiagnosticJournalService, arguments_)
+    );
+  }
+
+  const operationDiagnosticsService = supportsOperationDiagnostics(service) ? service : null;
+  if (operationDiagnosticsService !== null && isMcpToolEnabled(options.enabledTools, "diagnostics")) {
+    server.registerTool(
+      "SymbolLattice_diagnostics",
+      {
+        title: "Inspect persistent SymbolLattice operation diagnostics",
+        description:
+          "Returns bounded project-local init, index, sync, watcher, and auto-sync journal evidence. It is strictly read-only and never creates, indexes, or synchronizes a project.",
+        inputSchema: {
+          projectPath: z.string().trim().min(1).optional().describe("Optional project path whose existing diagnostic journals should be read."),
+          limit: z.number().int().min(1).max(MAX_OPERATION_DIAGNOSTIC_RECORDS).optional(),
+          operation: z.enum(OPERATION_DIAGNOSTIC_OPERATIONS).optional(),
+          outcome: z.enum(OPERATION_DIAGNOSTIC_OUTCOMES).optional()
+        },
+        outputSchema: z.object({
+          operationJournal: z.object({}).passthrough(),
+          autoSyncJournal: z.object({}).passthrough()
+        }),
+        annotations: { readOnlyHint: true, idempotentHint: true }
+      },
+      async (arguments_) =>
+        runOperationDiagnosticsTool(operationDiagnosticsService, defaultProjectPath, arguments_)
     );
   }
 

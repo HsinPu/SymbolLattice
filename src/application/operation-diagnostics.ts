@@ -89,3 +89,8 @@ export interface OperationDiagnosticJournal {
   diagnostics(options?: OperationDiagnosticFilters): OperationDiagnosticJournalResult;
   state(): Pick<OperationDiagnosticJournalResult, "state" | "error">;
 }
+
+export interface PersistentOperationDiagnosticsResult {
+  readonly operationJournal: OperationDiagnosticJournalResult;
+  readonly autoSyncJournal: import("./auto-sync-journal.js").AutoSyncDiagnosticJournalResult;
+}
