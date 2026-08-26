@@ -41,6 +41,19 @@ describe("Codex instruction ownership", () => {
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("before Read, Grep, or broad file reads");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Treat source returned by explore as already read");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Use optional specialist tools only when the client lists them");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain(
+      "do not conclude that SymbolLattice is uninstalled from that symptom alone"
+    );
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("retry the same command once");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain(
+      "exact command and project scope were already authorized"
+    );
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain(
+      "Do not replace it with `init`, `index`, `sync`, install, upgrade"
+    );
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain(
+      "escalation is unavailable, denied, or the retry still fails"
+    );
     expect(CODEX_INSTRUCTIONS_BLOCK).not.toContain("Prefer narrower SymbolLattice tools");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("fall back to targeted `rg` and direct file reads");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("pending, unresolved, ambiguous, truncated, or low-confidence");

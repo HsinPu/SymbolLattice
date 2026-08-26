@@ -1335,6 +1335,16 @@ describe("SymbolLattice MCP server", () => {
     expect(client.getInstructions()).toContain("call `SymbolLattice_explore` before Read or Grep");
     expect(client.getInstructions()).toContain("Treat source returned by explore as already read");
     expect(client.getInstructions()).toContain("Do not delegate indexed-code discovery");
+    expect(client.getInstructions()).toContain(
+      "do not conclude that SymbolLattice is uninstalled from that symptom alone"
+    );
+    expect(client.getInstructions()).toContain("retry the same command once");
+    expect(client.getInstructions()).toContain(
+      "exact command and project scope were already authorized"
+    );
+    expect(client.getInstructions()).toContain(
+      "escalation is unavailable, denied, or the retry still fails"
+    );
     expect(client.getInstructions()).not.toContain("Prefer narrower SymbolLattice tools");
     expect(client.getInstructions()).toContain("Never initialize a filesystem root, home directory, Desktop root");
   });
