@@ -12,6 +12,7 @@ export * from "./plugin-modules.js";
 export * from "./reference-resolver-plugins.js";
 export * from "./source-delivery.js";
 export * from "./auto-sync-journal.js";
+export * from "./operation-diagnostics.js";
 export * from "./auto-sync-host-registry.js";
 export * from "./auto-sync-owner.js";
 export * from "./auto-sync-restart.js";
