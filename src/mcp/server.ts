@@ -38,6 +38,11 @@ import {
   type McpSourceSessionMode
 } from "./source-session.js";
 import {
+  FailClosedLiveMcpReadExecutor,
+  StrictFreshMcpReadExecutor,
+  type StrictFreshReadExecutionCoordinator
+} from "./strict-fresh-read-executor.js";
+import {
   MCP_SOURCE_POINTER_MAXIMUM_SYMBOLS,
   MCP_SOURCE_POINTER_POLICY
 } from "./source-pointer.js";
@@ -150,7 +155,10 @@ import {
   type McpReadQueryPoolStatusService
 } from "./read-query-pool.js";
 import type { ReadQueryFreshnessReceipt } from "../application/read-query-freshness.js";
-import type { McpReadToolName } from "./read-query-protocol.js";
+import {
+  isMcpLiveReadToolName,
+  type McpReadToolName
+} from "./read-query-protocol.js";
 import {
   SYMBOL_LATTICE_MCP_TOOLS_ENVIRONMENT_VARIABLE,
   resolveMcpToolSelection,
@@ -541,7 +549,17 @@ function executeReadTool<TResponse extends ReadOnlyToolResponse>(
   arguments_: unknown,
   fallback: () => Promise<TResponse>
 ): Promise<TResponse> {
-  return executor === undefined ? fallback() : executor.execute(toolName, arguments_, fallback);
+  if (executor !== undefined) return executor.execute(toolName, arguments_, fallback);
+  if (isMcpLiveReadToolName(toolName)) {
+    return Promise.resolve({
+      content: [{
+        type: "text",
+        text: "FRESH_INDEX_REQUIRED: This MCP server has no strict freshness coordinator; no live query result was returned."
+      }],
+      isError: true
+    } as TResponse);
+  }
+  return fallback();
 }
 
 const sourcePositionOutputSchema = z.object({
@@ -3433,15 +3451,23 @@ export async function startMcpServerWithReadQueryPool(
   defaultProjectPath: string,
   options: Omit<McpServerOptions, "readQueryExecutor" | "queryPoolStatusService"> & {
     readonly readFreshnessReceipt?: (() => ReadQueryFreshnessReceipt | null) | undefined;
+    readonly strictFreshReadCoordinator?: StrictFreshReadExecutionCoordinator | undefined;
   } = {}
 ): Promise<McpServerSession> {
-  const { readFreshnessReceipt, ...serverOptions } = options;
+  const { readFreshnessReceipt, strictFreshReadCoordinator, ...serverOptions } = options;
   const readQueryPool = new McpReadQueryPool({ defaultProjectPath, readFreshnessReceipt });
+  const readQueryExecutor = strictFreshReadCoordinator === undefined
+    ? new FailClosedLiveMcpReadExecutor(readQueryPool)
+    : new StrictFreshMcpReadExecutor(
+        readQueryPool,
+        strictFreshReadCoordinator,
+        defaultProjectPath
+      );
   let session: McpServerSession;
   try {
     session = await startMcpServer(service, defaultProjectPath, {
       ...serverOptions,
-      readQueryExecutor: readQueryPool,
+      readQueryExecutor,
       queryPoolStatusService: readQueryPool
     });
   } catch (error) {

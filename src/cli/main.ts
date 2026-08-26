@@ -82,6 +82,7 @@ import {
   type SearchOptions,
   type RoutesOptions,
   type ReadQueryFreshnessReceipt,
+  StrictFreshReadCoordinator,
   MAX_OPERATION_DIAGNOSTIC_RECORDS,
   OPERATION_DIAGNOSTIC_OPERATIONS,
   OPERATION_DIAGNOSTIC_OUTCOMES,
@@ -340,6 +341,7 @@ export type McpServerRunner = (
   defaultProjectPath: string,
   options?: {
     readonly readFreshnessReceipt?: (() => ReadQueryFreshnessReceipt | null) | undefined;
+    readonly strictFreshReadCoordinator?: StrictFreshReadCoordinator | undefined;
   }
 ) => Promise<McpServerSession>;
 
@@ -441,7 +443,7 @@ function createService(extensions?: SymbolLatticeServiceExtensions): SymbolLatti
     ...extensions,
     operationDiagnosticJournalFactory: (projectPath) =>
       new QueuedOperationDiagnosticJournal(
-        new SqliteOperationDiagnosticJournal(projectPath, { keepOpen: true })
+        new SqliteOperationDiagnosticJournal(projectPath)
       )
   };
   return new SymbolLatticeService(
@@ -1187,6 +1189,20 @@ export async function runMcpWithAutoSync(
       }
     }
     mcpSession = await serverRunner(mcpService, options.projectPath, {
+      strictFreshReadCoordinator: new StrictFreshReadCoordinator({
+        service,
+        writerEnabled: autoSyncRequested,
+        force: options.force ?? false,
+        acquireWriterLease: (projectPath) => {
+          if (
+            ownerLease !== null &&
+            resolve(projectPath) === resolve(options.projectPath)
+          ) {
+            return { state: "owned", release: () => undefined };
+          }
+          return ownerLeaseFactory(projectPath).acquire();
+        }
+      }),
       readFreshnessReceipt: () => latestFreshGenerationId === null
         ? null
         : {
@@ -1228,13 +1244,19 @@ function renderError(error: unknown, json: boolean): void {
   const message = error instanceof Error ? error.message : "Unknown SymbolLattice error.";
   const operationId = diagnosticFailureProperty(error, "operationId");
   const operationJournal = diagnosticFailureProperty(error, "operationJournal");
+  const generationId = diagnosticFailureProperty(error, "generationId");
+  const staleReasons = diagnosticFailureProperty(error, "staleReasons");
+  const writerState = diagnosticFailureProperty(error, "writerState");
   if (json) {
     process.stderr.write(`${JSON.stringify({
       error: {
         code,
         message,
         ...(typeof operationId === "string" ? { operationId } : {}),
-        ...(operationJournal === undefined ? {} : { operationJournal })
+        ...(operationJournal === undefined ? {} : { operationJournal }),
+        ...(generationId === undefined ? {} : { generationId }),
+        ...(staleReasons === undefined ? {} : { staleReasons }),
+        ...(writerState === undefined ? {} : { writerState })
       }
     }, null, 2)}\n`);
   } else {
@@ -1359,6 +1381,15 @@ export function createProgram(
     new SqliteOperationDiagnosticJournal(projectPath, { writable })
 ): Command {
   const coreService = service ?? createService();
+  const strictCliFreshness = service === undefined
+    ? new StrictFreshReadCoordinator({ service: coreService, writerEnabled: false })
+    : null;
+  const runCliLiveRead = <Result>(
+    projectPath: string,
+    query: () => Promise<Result>
+  ): Promise<Result> => strictCliFreshness === null
+    ? query()
+    : strictCliFreshness.execute(projectPath, async () => query());
   const indexingService = async (
     projectPath: string,
     options: PluginCommandOptions
@@ -1697,7 +1728,8 @@ export function createProgram(
       if (options.limit !== undefined) {
         findOptions.limit = options.limit;
       }
-      render(await coreService.find(defaultProjectPath(options), query, findOptions), options);
+      const projectPath = defaultProjectPath(options);
+      render(await runCliLiveRead(projectPath, () => coreService.find(projectPath, query, findOptions)), options);
     });
 
   addJsonOption(addProjectOption(program.command("query <query>")))
@@ -1711,12 +1743,14 @@ export function createProgram(
       if (options.limit !== undefined) {
         findOptions.limit = options.limit;
       }
-      render(await coreService.find(defaultProjectPath(options), query, findOptions), options);
+      const projectPath = defaultProjectPath(options);
+      render(await runCliLiveRead(projectPath, () => coreService.find(projectPath, query, findOptions)), options);
     });
 
   addJsonOption(addProjectOption(program.command("node <reference>"))).action(
     async (reference: string, options: ProjectOptions) => {
-      render(await coreService.node(defaultProjectPath(options), reference), options);
+      const projectPath = defaultProjectPath(options);
+      render(await runCliLiveRead(projectPath, () => coreService.node(projectPath, reference)), options);
     }
   );
 
@@ -1737,8 +1771,9 @@ export function createProgram(
         ...(options.limit === undefined ? {} : { limit: options.limit }),
         ...(options.symbolsOnly === undefined ? {} : { symbolsOnly: options.symbolsOnly })
       };
+      const projectPath = defaultProjectPath(options);
       renderFileView(
-        await coreService.fileView(defaultProjectPath(options), filePath, fileViewOptions),
+        await runCliLiveRead(projectPath, () => coreService.fileView(projectPath, filePath, fileViewOptions)),
         options
       );
     });
@@ -1761,8 +1796,9 @@ export function createProgram(
         ...(options.path === undefined ? {} : { pathPrefix: options.path }),
         ...(options.language === undefined ? {} : { language: options.language })
       };
+      const projectPath = defaultProjectPath(options);
       render(
-        await coreService.search(defaultProjectPath(options), normalizeSearchQuery(query), searchOptions),
+        await runCliLiveRead(projectPath, () => coreService.search(projectPath, normalizeSearchQuery(query), searchOptions)),
         options
       );
     });
@@ -1841,12 +1877,13 @@ export function createProgram(
         ...(options.impactDepth === undefined ? {} : { impactDepth: options.impactDepth }),
         ...(options.impactLimit === undefined ? {} : { impactLimit: options.impactLimit })
       };
+      const projectPath = defaultProjectPath(options);
       render(
-        await coreService.investigate(
-          defaultProjectPath(options),
+        await runCliLiveRead(projectPath, () => coreService.investigate(
+          projectPath,
           normalizeSearchQuery(query),
           investigateOptions
-        ),
+        )),
         options
       );
     });
@@ -1897,8 +1934,9 @@ export function createProgram(
         ...(options.limit === undefined ? {} : { limit: options.limit }),
         ...(options.cursor === undefined ? {} : { cursor: options.cursor })
       };
+      const resolvedProjectPath = resolve(projectPath ?? defaultProjectPath(options));
       render(
-        await coreService.files(resolve(projectPath ?? defaultProjectPath(options)), fileOptions),
+        await runCliLiveRead(resolvedProjectPath, () => coreService.files(resolvedProjectPath, fileOptions)),
         options
       );
     });
@@ -1931,8 +1969,9 @@ export function createProgram(
         ...(options.domain === undefined ? {} : { domain: options.domain }),
         ...(options.limit === undefined ? {} : { limit: options.limit })
       };
+      const projectPath = resolve(path ?? defaultProjectPath(options));
       render(
-        await coreService.routes(resolve(path ?? defaultProjectPath(options)), routeOptions),
+        await runCliLiveRead(projectPath, () => coreService.routes(projectPath, routeOptions)),
         options
       );
     });
@@ -1965,8 +2004,9 @@ export function createProgram(
         ...(options.name === undefined ? {} : { namePrefix: options.name }),
         ...(options.limit === undefined ? {} : { limit: options.limit })
       };
+      const projectPath = resolve(path ?? defaultProjectPath(options));
       render(
-        await coreService.entrypoints(resolve(path ?? defaultProjectPath(options)), entrypointOptions),
+        await runCliLiveRead(projectPath, () => coreService.entrypoints(projectPath, entrypointOptions)),
         options
       );
     });
@@ -1981,17 +2021,19 @@ export function createProgram(
       const hierarchyOptions: HierarchyOptions = {
         ...(options.limit === undefined ? {} : { limit: options.limit })
       };
-      render(await coreService.hierarchy(defaultProjectPath(options), reference, hierarchyOptions), options);
+      const projectPath = defaultProjectPath(options);
+      render(await runCliLiveRead(projectPath, () => coreService.hierarchy(projectPath, reference, hierarchyOptions)), options);
     });
 
   for (const commandName of ["callers", "callees"] as const) {
     addJsonOption(addProjectOption(program.command(`${commandName} <symbol>`))).action(
       async (reference: string, options: ProjectOptions) => {
         const projectPath = defaultProjectPath(options);
-        const result =
+        const result = await runCliLiveRead(projectPath, () =>
           commandName === "callers"
-            ? await coreService.callers(projectPath, reference)
-            : await coreService.callees(projectPath, reference);
+            ? coreService.callers(projectPath, reference)
+            : coreService.callees(projectPath, reference)
+        );
         render(result, options);
       }
     );
@@ -2009,8 +2051,9 @@ export function createProgram(
         maxDepth: options.depth ?? 1,
         ...(options.limit === undefined ? {} : { limit: options.limit })
       };
+      const projectPath = defaultProjectPath(options);
       render(
-        await coreService.impact(defaultProjectPath(options), reference, impactOptions),
+        await runCliLiveRead(projectPath, () => coreService.impact(projectPath, reference, impactOptions)),
         options
       );
     });
@@ -2068,15 +2111,17 @@ export function createProgram(
           ...(options.base === undefined ? {} : { baseRef: options.base }),
           ...(options.pathPrefix === undefined ? {} : { pathPrefix: options.pathPrefix })
         };
+        const projectPath = defaultProjectPath(options);
         render(
-          await coreService.affectedTestsFromGit(defaultProjectPath(options), gitOptions),
+          await runCliLiveRead(projectPath, () => coreService.affectedTestsFromGit(projectPath, gitOptions)),
           options
         );
         return;
       }
       const stdinPaths = options.stdin ? parseAffectedStdin(readFileSync(0, "utf8")) : [];
+      const projectPath = defaultProjectPath(options);
       render(
-        await coreService.affectedTests(defaultProjectPath(options), [...filePaths, ...stdinPaths], affectedOptions),
+        await runCliLiveRead(projectPath, () => coreService.affectedTests(projectPath, [...filePaths, ...stdinPaths], affectedOptions)),
         options
       );
     });
@@ -2100,12 +2145,13 @@ export function createProgram(
         ...(options.limit === undefined ? {} : { limit: options.limit }),
         ...(options.pathPrefix === undefined ? {} : { pathPrefix: options.pathPrefix })
       };
+      const projectPath = resolve(path ?? defaultProjectPath(options));
       render(
-        await coreService.gitHunks(
-          resolve(path ?? defaultProjectPath(options)),
+        await runCliLiveRead(projectPath, () => coreService.gitHunks(
+          projectPath,
           options.base ?? "",
           gitHunksOptions
-        ),
+        )),
         options
       );
     });
@@ -2150,18 +2196,21 @@ export function createProgram(
           ? {}
           : { sourceCharacterBudget: options.sourceCharacterBudget })
       };
-      render(await coreService.context(defaultProjectPath(options), references, contextOptions), options);
+      const projectPath = defaultProjectPath(options);
+      render(await runCliLiveRead(projectPath, () => coreService.context(projectPath, references, contextOptions)), options);
     });
 
   addJsonOption(addProjectOption(program.command("explore <query>"))).action(
     async (query: string, options: ProjectOptions) => {
-      render(await coreService.explore(defaultProjectPath(options), query), options);
+      const projectPath = defaultProjectPath(options);
+      render(await runCliLiveRead(projectPath, () => coreService.explore(projectPath, query)), options);
     }
   );
 
   addJsonOption(addProjectOption(program.command("explain-edge <edge-id>"))).action(
     async (edgeId: string, options: ProjectOptions) => {
-      render(await coreService.explainEdge(defaultProjectPath(options), edgeId), options);
+      const projectPath = defaultProjectPath(options);
+      render(await runCliLiveRead(projectPath, () => coreService.explainEdge(projectPath, edgeId)), options);
     }
   );
 

@@ -40,7 +40,7 @@ import {
   sourceDeliveryIdentityFromText
 } from "../../../src/application/index.js";
 import {
-  createMcpServer,
+  createMcpServer as createRawMcpServer,
   runAffectedTestsTool,
   runAutoSyncDiagnosticJournalTool,
   runAutoSyncDiagnosticsTool,
@@ -67,6 +67,20 @@ import {
 } from "../../../src/mcp/index.js";
 
 const closeCallbacks: Array<() => Promise<void>> = [];
+
+const passthroughReadExecutor: McpReadQueryExecutor = {
+  execute: (_toolName, _arguments, fallback) => fallback()
+};
+
+function createMcpServer(
+  ...parameters: Parameters<typeof createRawMcpServer>
+): ReturnType<typeof createRawMcpServer> {
+  const [service, defaultProjectPath, options = {}] = parameters;
+  return createRawMcpServer(service, defaultProjectPath, {
+    ...options,
+    readQueryExecutor: options.readQueryExecutor ?? passthroughReadExecutor
+  });
+}
 
 afterEach(async () => {
   await Promise.all(closeCallbacks.splice(0).map((close) => close()));
@@ -1312,6 +1326,27 @@ function explainEdgeResult(): ExplainEdgeResult {
 }
 
 describe("SymbolLattice MCP server", () => {
+  it("fails closed for live programmatic reads without a freshness coordinator while allowing history", async () => {
+    const server = createRawMcpServer({
+      async explore(): Promise<ExploreResult> { return exploreResult(); },
+      async history(): Promise<GenerationHistoryResult> { return generationHistoryResult(); }
+    }, "C:/default-project");
+    const client = new Client({ name: "SymbolLattice-strict-missing-coordinator", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    closeCallbacks.push(() => client.close(), () => server.close());
+
+    const live = await client.callTool({ name: "SymbolLattice_explore", arguments: { query: "App" } });
+    expect(live).toMatchObject({ isError: true });
+    expect(live.content[0]?.text).toContain("FRESH_INDEX_REQUIRED");
+    const history = await client.callTool({ name: "SymbolLattice_history", arguments: {} });
+    expect(history.isError).not.toBe(true);
+    expect(history.structuredContent).toMatchObject({
+      activeStatus: { generationId: "generation:test" }
+    });
+  });
+
   it("delivers automatic project-index activation guidance during MCP initialization", async () => {
     const server = createMcpServer(
       {

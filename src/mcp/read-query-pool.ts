@@ -3,6 +3,7 @@ import { Worker } from "node:worker_threads";
 
 import type { ReadOnlyToolResponse } from "./server.js";
 import type { ReadQueryFreshnessReceipt } from "../application/read-query-freshness.js";
+import { ReadQueryGenerationMismatchError } from "../application/read-query-freshness.js";
 import { isMcpReadToolName } from "./read-query-protocol.js";
 import type {
   McpReadToolName,
@@ -75,7 +76,8 @@ export interface McpReadQueryExecutor {
   execute<TResponse extends ReadOnlyToolResponse>(
     toolName: McpReadToolName,
     arguments_: unknown,
-    fallback: () => Promise<TResponse>
+    fallback: () => Promise<TResponse>,
+    freshnessReceipt?: ReadQueryFreshnessReceipt
   ): Promise<TResponse>;
 }
 
@@ -97,7 +99,9 @@ interface QueryJob {
   readonly toolName: McpReadToolName;
   readonly arguments_: unknown;
   readonly fallback: () => Promise<ReadOnlyToolResponse>;
+  readonly freshnessReceipt: ReadQueryFreshnessReceipt | null;
   readonly resolve: (response: ReadOnlyToolResponse) => void;
+  readonly reject: (error: unknown) => void;
   retries: number;
   settled: boolean;
   fallbackStarted: boolean;
@@ -250,7 +254,8 @@ export class McpReadQueryPool implements McpReadQueryExecutor, McpReadQueryPoolS
   public execute<TResponse extends ReadOnlyToolResponse>(
     toolName: McpReadToolName,
     arguments_: unknown,
-    fallback: () => Promise<TResponse>
+    fallback: () => Promise<TResponse>,
+    freshnessReceipt?: ReadQueryFreshnessReceipt
   ): Promise<TResponse> {
     if (!isMcpReadToolName(toolName)) {
       return this.fallbackImmediately("unsupportedTool", fallback);
@@ -263,13 +268,15 @@ export class McpReadQueryPool implements McpReadQueryExecutor, McpReadQueryPoolS
       return this.fallbackImmediately("coldStart", fallback);
     }
 
-    return new Promise<TResponse>((resolve) => {
+    return new Promise<TResponse>((resolve, reject) => {
       const job: QueryJob = {
         id: this.nextId++,
         toolName,
         arguments_,
         fallback: async () => fallback(),
+        freshnessReceipt: freshnessReceipt ?? null,
         resolve: (response) => resolve(response as TResponse),
+        reject,
         retries: 0,
         settled: false,
         fallbackStarted: false
@@ -373,12 +380,7 @@ export class McpReadQueryPool implements McpReadQueryExecutor, McpReadQueryPoolS
       return;
     }
     if (typed.retryReason === "generation-mismatch") {
-      if (job.retries < MAX_MCP_READ_QUERY_RETRIES && this.healthy) {
-        job.retries += 1;
-        this.queue.unshift(job);
-      } else {
-        this.settleWithFallback(job, "workerFailure");
-      }
+      this.reject(job, new ReadQueryGenerationMismatchError());
       this.drain();
       return;
     }
@@ -446,7 +448,7 @@ export class McpReadQueryPool implements McpReadQueryExecutor, McpReadQueryPoolS
 
       this.inflight.set(worker, job);
       try {
-        const freshnessReceipt = this.readFreshnessReceipt?.() ?? null;
+        const freshnessReceipt = job.freshnessReceipt ?? this.readFreshnessReceipt?.() ?? null;
         worker.postMessage({
           type: "execute",
           id: job.id,
@@ -496,6 +498,13 @@ export class McpReadQueryPool implements McpReadQueryExecutor, McpReadQueryPoolS
       clearTimeout(job.timer);
     }
     job.resolve(response);
+  }
+
+  private reject(job: QueryJob, error: unknown): void {
+    if (job.settled) return;
+    job.settled = true;
+    if (job.timer !== undefined) clearTimeout(job.timer);
+    job.reject(error);
   }
 
   private statusState(): McpReadQueryPoolState {

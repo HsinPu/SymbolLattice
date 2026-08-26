@@ -3,10 +3,10 @@
  * generation immediately before a read-only worker request was dispatched.
  */
 export interface ReadQueryFreshnessReceipt {
-  readonly policy: "strict-fresh-read-v1";
-  readonly verificationId: string;
-  readonly verifiedAt: string;
-  readonly projectPath: string;
+  readonly policy?: "strict-fresh-read-v1";
+  readonly verificationId?: string;
+  readonly verifiedAt?: string;
+  readonly projectPath?: string;
   readonly expectedGenerationId: string;
   readonly freshnessVerified: true;
 }

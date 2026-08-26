@@ -301,7 +301,7 @@ describe("McpReadQueryPool", () => {
     await pool.close();
   });
 
-  it("refreshes the host receipt and retries one generation mismatch without fallback", async () => {
+  it("returns generation mismatch to the strict coordinator without fallback", async () => {
     const worker = new FakeQueryWorker();
     let generationId = "generation:A";
     const pool = new McpReadQueryPool({
@@ -325,17 +325,9 @@ describe("McpReadQueryPool", () => {
     });
     if (first === undefined) throw new Error("Expected the first worker request.");
 
-    generationId = "generation:B";
     worker.requestGenerationRetry(first);
-    const second = worker.requests[1];
-    expect(second?.freshnessReceipt).toEqual({
-      expectedGenerationId: "generation:B",
-      freshnessVerified: true
-    });
-    if (second === undefined) throw new Error("Expected the retried worker request.");
-    worker.respond(second, response("generation B"));
-
-    await expect(pending).resolves.toEqual(response("generation B"));
+    await expect(pending).rejects.toMatchObject({ name: "ReadQueryGenerationMismatchError" });
+    expect(worker.requests).toHaveLength(1);
     expect(fallbackCalls).toBe(0);
     expect(pool.queryPoolStatus().fallbacks.total).toBe(0);
     await pool.close();

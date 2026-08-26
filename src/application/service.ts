@@ -5317,7 +5317,7 @@ export class SymbolLatticeService {
       return persistedStatus;
     }
 
-    const freshnessReceipt = this.readQueryFreshnessReceipt?.();
+    const freshnessReceipt = this.freshnessReceiptForProject(normalizedProjectPath);
     if (
       freshnessReceipt?.freshnessVerified === true &&
       freshnessReceipt.expectedGenerationId === persistedStatus.generationId
@@ -5849,7 +5849,7 @@ export class SymbolLatticeService {
         );
       }
     }
-    const freshnessReceipt = this.readQueryFreshnessReceipt?.() ?? null;
+    const freshnessReceipt = this.freshnessReceiptForProject(normalizedProjectPath);
     const page = readFileSummaryPage.call(this.graphStore, normalizedProjectPath, {
       limit: request.limit,
       ...(request.pathPrefix === undefined ? {} : { pathPrefix: request.pathPrefix }),
@@ -5925,6 +5925,14 @@ export class SymbolLatticeService {
     };
   }
 
+  private freshnessReceiptForProject(projectPath: string): ReadQueryFreshnessReceipt | null {
+    const receipt = this.readQueryFreshnessReceipt?.() ?? null;
+    if (receipt === null) return null;
+    return receipt.projectPath === undefined || resolve(receipt.projectPath) === resolve(projectPath)
+      ? receipt
+      : null;
+  }
+
   private getExploreGraphBundle(
     projectPath: string,
     query: string,
@@ -5932,7 +5940,7 @@ export class SymbolLatticeService {
   ): ActiveGraphBundle {
     const readBoundedGraphBundle = this.graphStore.getActiveBoundedGraphBundle;
     if (typeof readBoundedGraphBundle === "function") {
-      const freshnessReceipt = this.readQueryFreshnessReceipt?.() ?? null;
+      const freshnessReceipt = this.freshnessReceiptForProject(projectPath);
       const boundedBundle = measureQueryTiming(
         this.queryTimingSink,
         "seed-retrieval",

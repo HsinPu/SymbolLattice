@@ -45,6 +45,7 @@ import {
   type SearchResult,
   type WatchReceipt,
   SymbolLatticeError,
+  StrictFreshReadCoordinator,
   type SymbolLatticeService
 } from "../../../src/application/index.js";
 import {
@@ -3313,6 +3314,7 @@ describe("SymbolLattice v0.10 foreground watch CLI", () => {
     };
     let capturedWatchOptions: ForegroundWatchOptions | null = null;
     let readFreshnessReceipt: (() => unknown) | undefined;
+    let strictFreshReadCoordinator: unknown;
     let resolveServerStarted: (() => void) | null = null;
     const serverStarted = new Promise<void>((resolve) => {
       resolveServerStarted = resolve;
@@ -3341,6 +3343,7 @@ describe("SymbolLattice v0.10 foreground watch CLI", () => {
       async (_receivedService, projectPath, serverOptions): Promise<McpServerSession> => {
         expect(projectPath).toBe("C:/chosen-project");
         readFreshnessReceipt = serverOptions?.readFreshnessReceipt;
+        strictFreshReadCoordinator = serverOptions?.strictFreshReadCoordinator;
         calls.push("mcp-start");
         resolveServerStarted?.();
         return mcpSession;
@@ -3366,10 +3369,15 @@ describe("SymbolLattice v0.10 foreground watch CLI", () => {
       intervalMs: 750
     });
     expect(capturedWatchOptions?.eventSource).toBeDefined();
-    expect(readFreshnessReceipt?.()).toEqual({
+    expect(readFreshnessReceipt?.()).toMatchObject({
+      policy: "strict-fresh-read-v1",
+      projectPath: resolve("C:/chosen-project"),
       expectedGenerationId: "generation:test",
-      freshnessVerified: true
+      freshnessVerified: true,
+      verificationId: expect.any(String),
+      verifiedAt: expect.any(String)
     });
+    expect(strictFreshReadCoordinator).toBeInstanceOf(StrictFreshReadCoordinator);
 
     requestCooperativeStop?.();
     await running;

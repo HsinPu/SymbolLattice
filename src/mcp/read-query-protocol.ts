@@ -19,6 +19,10 @@ export const MCP_READ_TOOL_NAMES = [
   "explain-edge"
 ] as const;
 
+export const MCP_LIVE_READ_TOOL_NAMES = MCP_READ_TOOL_NAMES.filter(
+  (name) => name !== "generation-history" && name !== "generation-diff"
+);
+
 export type McpReadToolName = (typeof MCP_READ_TOOL_NAMES)[number];
 
 export interface McpReadWorkerRequest {
@@ -47,5 +51,9 @@ export type McpReadWorkerMessage = McpReadWorkerReadyMessage | McpReadWorkerResu
 
 export function isMcpReadToolName(value: unknown): value is McpReadToolName {
   return typeof value === "string" && MCP_READ_TOOL_NAMES.includes(value as McpReadToolName);
+}
+
+export function isMcpLiveReadToolName(value: McpReadToolName): boolean {
+  return MCP_LIVE_READ_TOOL_NAMES.includes(value as (typeof MCP_LIVE_READ_TOOL_NAMES)[number]);
 }
 import type { ReadQueryFreshnessReceipt } from "../application/read-query-freshness.js";
