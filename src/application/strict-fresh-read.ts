@@ -89,6 +89,15 @@ export interface StrictFreshReadCoordinatorOptions {
   readonly leasePollMs?: number;
 }
 
+export interface StrictFreshReadDiagnostics {
+  readonly queryExecutions: number;
+  readonly verificationRuns: number;
+  readonly coalescedVerifications: number;
+  readonly syncs: number;
+  readonly retries: number;
+  readonly blocked: number;
+}
+
 interface FreshAdmission {
   readonly receipt: ReadQueryFreshnessReceipt;
   readonly lease: StrictFreshWriterLease | null;
@@ -107,6 +116,13 @@ export class StrictFreshReadCoordinator {
   private readonly leaseWaitMs: number;
   private readonly leasePollMs: number;
   private readonly observations = new Map<string, Promise<WatchFreshnessObservation>>();
+  private readonly synchronizations = new Map<string, Promise<WatchFreshnessObservation>>();
+  private queryExecutions = 0;
+  private verificationRuns = 0;
+  private coalescedVerifications = 0;
+  private syncs = 0;
+  private retries = 0;
+  private blocked = 0;
 
   public constructor(options: StrictFreshReadCoordinatorOptions) {
     this.service = options.service;
@@ -133,6 +149,7 @@ export class StrictFreshReadCoordinator {
       let result: Result | undefined;
       let queryError: unknown;
       try {
+        this.queryExecutions += 1;
         result = await query(admission.receipt);
       } catch (error) {
         queryError = error;
@@ -149,24 +166,41 @@ export class StrictFreshReadCoordinator {
         return result as Result;
       }
       if (attempt + 1 === STRICT_FRESH_READ_MAXIMUM_QUERY_ATTEMPTS) {
+        this.blocked += 1;
         throw new ProjectNotStableError(after.status);
       }
+      this.retries += 1;
     }
 
     throw new ProjectNotStableError(lastStatus ?? missingStatus(normalizedProjectPath));
+  }
+
+  public diagnostics(): StrictFreshReadDiagnostics {
+    return {
+      queryExecutions: this.queryExecutions,
+      verificationRuns: this.verificationRuns,
+      coalescedVerifications: this.coalescedVerifications,
+      syncs: this.syncs,
+      retries: this.retries,
+      blocked: this.blocked
+    };
   }
 
   private async ensureFresh(projectPath: string, budget: SyncBudget): Promise<FreshAdmission> {
     let observation = await this.observe(projectPath);
     this.assertInitialized(observation.status);
     if (this.isFresh(observation)) return { receipt: this.receipt(projectPath, observation), lease: null };
-    if (!this.writerEnabled) throw new FreshIndexRequiredError(observation.status, "disabled");
+    if (!this.writerEnabled) {
+      this.blocked += 1;
+      throw new FreshIndexRequiredError(observation.status, "disabled");
+    }
 
     const authority = await this.acquireAuthority(projectPath, observation);
     if (authority.lease === null) {
       if (this.isFresh(authority.observation)) {
         return { receipt: this.receipt(projectPath, authority.observation), lease: null };
       }
+      this.blocked += 1;
       throw new FreshIndexRequiredError(authority.observation.status, "lease-unavailable");
     }
 
@@ -174,13 +208,12 @@ export class StrictFreshReadCoordinator {
     try {
       while (!this.isFresh(observation) && budget.remaining > 0) {
         budget.remaining -= 1;
-        await this.service.syncObserved(
-          { projectPath, force: this.force },
-          observation
-        );
-        observation = await this.observe(projectPath);
+        observation = await this.synchronize(projectPath, observation);
       }
-      if (!this.isFresh(observation)) throw new ProjectNotStableError(observation.status);
+      if (!this.isFresh(observation)) {
+        this.blocked += 1;
+        throw new ProjectNotStableError(observation.status);
+      }
       return { receipt: this.receipt(projectPath, observation), lease: authority.lease };
     } catch (error) {
       authority.lease.release();
@@ -212,13 +245,36 @@ export class StrictFreshReadCoordinator {
 
   private observe(projectPath: string): Promise<WatchFreshnessObservation> {
     const existing = this.observations.get(projectPath);
-    if (existing !== undefined) return existing;
+    if (existing !== undefined) {
+      this.coalescedVerifications += 1;
+      return existing;
+    }
+    this.verificationRuns += 1;
     const pending = this.service
       .observeFreshness(projectPath, { paths: [], complete: false })
       .finally(() => {
         if (this.observations.get(projectPath) === pending) this.observations.delete(projectPath);
       });
     this.observations.set(projectPath, pending);
+    return pending;
+  }
+
+  private synchronize(
+    projectPath: string,
+    observation: WatchFreshnessObservation
+  ): Promise<WatchFreshnessObservation> {
+    const existing = this.synchronizations.get(projectPath);
+    if (existing !== undefined) return existing;
+    this.syncs += 1;
+    const pending = this.service
+      .syncObserved({ projectPath, force: this.force }, observation)
+      .then(() => this.observe(projectPath))
+      .finally(() => {
+        if (this.synchronizations.get(projectPath) === pending) {
+          this.synchronizations.delete(projectPath);
+        }
+      });
+    this.synchronizations.set(projectPath, pending);
     return pending;
   }
 

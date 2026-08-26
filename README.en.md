@@ -16,7 +16,7 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.445.0
+Current version: v0.446.0
 
 ## Highlights
 
@@ -54,6 +54,8 @@ v0.443.0 makes Agent guidance aware of restricted environments. A global npm CLI
 v0.444.0 fixes cache traversal in workspace projects. The workspace resolver no longer performs a separate recursive filesystem walk; it consumes only `package.json` candidates already filtered by the shared scoped walker, including default exclusions, explicit scopes, and nested `.gitignore` rules. Excluded caches such as nested `backend/.pytest_cache` are therefore never read and cannot block initial indexing with `EPERM`, while valid workspace manifests and explicit override semantics remain intact.
 
 v0.445.0 adds a default project-local operation journal. `init`, `index`, `sync`, and actual watcher reconciliations retain the latest 256 bounded, sanitized stage and generation receipts in `.SymbolLattice/operation-diagnostics.sqlite`, so an initial scan failure remains inspectable with `SymbolLattice diagnostics . --json`. Standalone `status`, explore, and other read tools never create or update diagnostics, and journal failures never replace the original operation result.
+
+v0.446.0 adds a strict freshness gate to every live graph read. MCP verifies project source, configuration, ignore rules, and indexer policy before and after each query; a stale project is atomically synchronized under a writer lease, and a result invalidated during execution is discarded and retried once. CLI and `--no-auto-sync` remain read-only and return `FRESH_INDEX_REQUIRED` instead of stale evidence; continuous changes return `PROJECT_NOT_STABLE`. Status, diagnostics, history, and diff remain available as read-only operations.
 
 ## Install the CLI
 

@@ -3,7 +3,11 @@ import { resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 
 import { McpReadQueryPool } from "../../dist/mcp/read-query-pool.js";
+import { StrictFreshMcpReadExecutor } from "../../dist/mcp/strict-fresh-read-executor.js";
+import { StrictFreshReadCoordinator, SymbolLatticeService } from "../../dist/application/index.js";
+import { FileSystemSourceCatalog } from "../../dist/infrastructure/filesystem/index.js";
 import { SqliteGraphStore } from "../../dist/infrastructure/sqlite/graph-store.js";
+import { SqliteAutoSyncOwnerLease } from "../../dist/infrastructure/sqlite/auto-sync-owner-lease.js";
 import { SYMBOL_LATTICE_VERSION } from "../../dist/version.js";
 
 function argument(name) {
@@ -30,11 +34,17 @@ export async function runConcurrency({ projectPath, poolSize, concurrency, reque
   });
   const generationId = statusStore.getStatus(normalizedProjectPath).generationId;
   if (generationId === null) throw new Error("MCP concurrency benchmark requires an active generation.");
+  const writerService = new SymbolLatticeService(new SqliteGraphStore(), new FileSystemSourceCatalog());
+  const coordinator = new StrictFreshReadCoordinator({
+    service: writerService,
+    writerEnabled: true,
+    acquireWriterLease: (path) => new SqliteAutoSyncOwnerLease(path).acquire()
+  });
   const pool = new McpReadQueryPool({
     defaultProjectPath: normalizedProjectPath,
-    size: poolSize,
-    readFreshnessReceipt: () => ({ expectedGenerationId: generationId, freshnessVerified: true })
+    size: poolSize
   });
+  const executor = new StrictFreshMcpReadExecutor(pool, coordinator, normalizedProjectPath);
   const effectivePoolSize = pool.queryPoolStatus().capacity;
   const latencies = [];
   let peakRssBytes = process.memoryUsage().rss;
@@ -44,7 +54,7 @@ export async function runConcurrency({ projectPath, poolSize, concurrency, reque
   const fallback = async () => { throw new Error("Ready MCP worker unexpectedly used fallback."); };
   const one = async () => {
     const start = performance.now();
-    const response = await pool.execute("files", { limit: 1 }, fallback);
+    const response = await executor.execute("files", { limit: 1 }, fallback);
     latencies.push(performance.now() - start);
     if (response.isError === true || response.content.length === 0) throw new Error("MCP read query returned no successful content.");
   };
@@ -65,6 +75,7 @@ export async function runConcurrency({ projectPath, poolSize, concurrency, reque
     }
     const wallMs = performance.now() - wallStart;
     const diagnostics = pool.queryPoolStatus();
+    const freshness = coordinator.diagnostics();
     const report = {
       schemaVersion: 1,
       benchmark: "SymbolLattice-mcp-read-query-concurrency",
@@ -84,11 +95,17 @@ export async function runConcurrency({ projectPath, poolSize, concurrency, reque
         maxMs: Number(Math.max(...latencies).toFixed(3))
       },
       fallbacks: diagnostics.fallbacks.total,
+      freshness,
       errors: 0,
       workerCrashes: diagnostics.workers.crashes,
       peakRssBytes,
       peakRssMiB: Number((peakRssBytes / (1024 * 1024)).toFixed(3)),
-      allAssertionsPassed: diagnostics.fallbacks.total === 0 && diagnostics.workers.crashes === 0
+      allAssertionsPassed:
+        diagnostics.fallbacks.total === 0 &&
+        diagnostics.workers.crashes === 0 &&
+        freshness.syncs === 0 &&
+        freshness.blocked === 0 &&
+        (concurrency === 1 || freshness.coalescedVerifications > 0)
     };
     if (!report.allAssertionsPassed) throw new Error(`MCP concurrency assertions failed: ${JSON.stringify(report)}`);
     return report;

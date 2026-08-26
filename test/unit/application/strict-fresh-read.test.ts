@@ -162,6 +162,14 @@ describe("StrictFreshReadCoordinator", () => {
 
     await expect(Promise.all([first, second])).resolves.toEqual(["first", "second"]);
     expect(service.observeCalls).toBe(2);
+    expect(coordinator.diagnostics()).toMatchObject({
+      queryExecutions: 2,
+      verificationRuns: 2,
+      coalescedVerifications: 2,
+      syncs: 0,
+      retries: 0,
+      blocked: 0
+    });
     await coordinator.execute(projectPath, async () => "third");
     expect(service.observeCalls).toBe(4);
   });
@@ -188,6 +196,23 @@ describe("StrictFreshReadCoordinator", () => {
       coordinator.execute(projectPath, async (receipt) => receipt.expectedGenerationId)
     ).resolves.toBe("generation:other-owner");
     expect(service.syncCalls).toBe(0);
+  });
+
+  it("coalesces concurrent stale synchronization under one already-owned project lease", async () => {
+    const service = new MutableFreshnessService();
+    service.current = status("generation:stale", true);
+    const coordinator = new StrictFreshReadCoordinator({
+      service,
+      writerEnabled: true,
+      acquireWriterLease: async () => ownedLease()
+    });
+
+    await expect(Promise.all([
+      coordinator.execute(projectPath, async (receipt) => receipt.expectedGenerationId),
+      coordinator.execute(projectPath, async (receipt) => receipt.expectedGenerationId)
+    ])).resolves.toEqual(["generation:synced-1", "generation:synced-1"]);
+    expect(service.syncCalls).toBe(1);
+    expect(coordinator.diagnostics()).toMatchObject({ syncs: 1, blocked: 0 });
   });
 
   it("fails closed after the bounded lease wait when the owner leaves the index stale", async () => {

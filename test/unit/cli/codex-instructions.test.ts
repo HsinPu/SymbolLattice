@@ -37,6 +37,8 @@ describe("Codex instruction ownership", () => {
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("without claiming cross-repository edges");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Desktop root");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Never run `index` or rebuild an existing index");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Live MCP graph reads enforce strict freshness internally");
+    expect(CODEX_INSTRUCTIONS_BLOCK).toContain("`FRESH_INDEX_REQUIRED`/`PROJECT_NOT_STABLE`");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("`SymbolLattice_explore`");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("before Read, Grep, or broad file reads");
     expect(CODEX_INSTRUCTIONS_BLOCK).toContain("Treat source returned by explore as already read");

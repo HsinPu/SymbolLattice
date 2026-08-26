@@ -21,6 +21,7 @@ These tools generate or validate large-project evidence outside the published np
 | `r/` | `correctness-oracle.mjs`, `negative-matrix.mjs` | automatic |
 | `r/` | `lifecycle.mjs` | manual |
 | `mcp/` | `read-query-concurrency.mjs` | manual |
+| `mcp/` | `strict-fresh-read-lifecycle.mjs` | manual |
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
