@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.448.0
+目前版本：v0.449.0
 
 ## 主要能力
 
@@ -36,7 +36,7 @@ SymbolLattice 可在單次 `init` 或 `sync` 中處理多語言 repository。不
 
 | 類別 | 語言與格式 |
 | --- | --- |
-| 已完成大型專案深度驗證 | TypeScript、Java、HTML、CSS、JavaScript、JSP、Python、Ruby、Shell、Lua、Luau、Julia、Perl、R |
+| 已完成大型專案深度驗證 | TypeScript、Java、HTML、Markdown、CSS、JavaScript、JSP、Python、Ruby、Shell、Lua、Luau、Julia、Perl、R |
 | Web 與模板 | ArkTS、Vue、Svelte、Astro、Razor、PHP、Blade、Liquid、Twig、CFML |
 | JVM、.NET 與應用程式 | Groovy、Kotlin、Scala、C#、F#、VB.NET、Dart |
 | 系統與原生語言 | C、C++、Objective-C、Rust、Go、Swift、Zig、Nim、Fortran、Ada、Pascal、COBOL |
@@ -60,6 +60,8 @@ v0.446.0 對所有即時圖查詢加入 strict freshness gate。MCP在查詢前�
 v0.447.0 修正 Perl bare match expression 內含 `<<` 時被誤判為 heredoc opener 的 whole-file false negative。Assignment、return、argument與list等明確 expression-start context會先保護完整 regex；一般 division、未閉合regex與真正heredoc仍維持保守 fail-close。
 
 v0.448.0 將所有 hidden directories 納入預設 discovery exclusion，並讓 shared walker、Cargo workspace glob 與 Xcode project discovery 共用同一集中 policy。這可避免 sandbox/test 暫存目錄的限制 ACL 阻斷索引；未來若要改回 allowlist 或精選排除，只需調整集中 policy。
+
+v0.449.0 新增 `.md`／`.markdown` 基礎圖譜：ATX／Setext heading 會形成可搜尋的 resource 與階層 `contains`，完整的 project-local 相對檔案連結會在唯一命中 indexed file 時形成 exact `references`。Fenced／indented／inline code、HTML block、external／root-relative／reference-style／image／dynamic links、heading anchor 與 `.mdx` 維持 opaque、unresolved 或 nonclaim，不推測執行期文件行為。
 
 ## 安裝 CLI
 

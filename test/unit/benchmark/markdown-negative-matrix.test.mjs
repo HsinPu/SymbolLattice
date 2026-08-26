@@ -16,10 +16,13 @@ describe("Markdown negative matrix", () => {
     });
   });
 
-  it("does not emit an incorrect exact relation for any negative case", () => {
+  it("does not emit an incorrect exact relation for any negative case in an indexed decoy workspace", () => {
     const report = runMarkdownNegativeMatrix();
     expect(report.caseCount).toBe(150);
     expect(report.status).toBe("pass");
     expect(report.failed).toBe(0);
+    expect(report.proof.indexedFiles).toBeGreaterThan(150);
+    expect(report.proof.decoyTargetFiles).toBeGreaterThan(0);
+    expect(report.proof.totalExactReferenceEdges).toBe(0);
   });
 });

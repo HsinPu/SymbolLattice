@@ -65,10 +65,10 @@ function positionFor(lines: readonly MarkdownLine[], offset: number): SourcePosi
     if (line === undefined) break;
     if (offset < line.start) high = middle - 1;
     else if (middle + 1 < lines.length && offset >= (lines[middle + 1]?.start ?? Infinity)) low = middle + 1;
-    else return { line: line.number, column: Math.max(0, offset - line.start) };
+    else return { line: line.number + 1, column: Math.max(0, offset - line.start) + 1 };
   }
   const last = lines.at(-1);
-  return { line: last?.number ?? 0, column: Math.max(0, offset - (last?.start ?? 0)) };
+  return { line: (last?.number ?? 0) + 1, column: Math.max(0, offset - (last?.start ?? 0)) + 1 };
 }
 
 function rangeFor(lines: readonly MarkdownLine[], start: number, end: number): SourceRange {
@@ -161,7 +161,7 @@ function opaqueMarkdownLines(lines: readonly MarkdownLine[]): readonly boolean[]
       }
       continue;
     }
-    if (/^ {0,3}<(?:[A-Za-z][A-Za-z0-9-]*(?:\s|>|\/)|\/[A-Za-z]|!DOCTYPE|\?)/u.test(text)) {
+    if (/^ {0,3}<(?:[A-Za-z][A-Za-z0-9-]*(?:\s|>|\/)|\/[A-Za-z]|!DOCTYPE|\?)/iu.test(text)) {
       opaque[line.number] = true;
       if (text.trim().length > 0) htmlBlock = "block";
     }
@@ -233,7 +233,7 @@ function exceedsHeadingLengthLimit(
   );
 }
 
-function maskInlineCode(text: string): string {
+function maskInlineCode(text: string): string | null {
   const characters = text.split("");
   for (let index = 0; index < characters.length; index += 1) {
     if (characters[index] !== "`") continue;
@@ -243,14 +243,23 @@ function maskInlineCode(text: string): string {
     const remainder = characters.slice(index + length).join("");
     const closeOffset = remainder.indexOf(marker);
     if (closeOffset === -1) {
-      index += length - 1;
-      continue;
+      return null;
     }
     const close = index + length + closeOffset;
     for (let mask = index; mask < close + length; mask += 1) characters[mask] = " ";
     index = close + length - 1;
   }
   return characters.join("");
+}
+
+function hasUnclosedLabelBefore(text: string, end: number): boolean {
+  let depth = 0;
+  for (let index = 0; index < end; index += 1) {
+    if (isEscaped(text, index)) continue;
+    if (text[index] === "[") depth += 1;
+    else if (text[index] === "]" && depth > 0) depth -= 1;
+  }
+  return depth > 0;
 }
 
 function isEscaped(text: string, index: number): boolean {
@@ -359,10 +368,15 @@ export function extractMarkdownFileFacts(input: MarkdownExtractFileFactsInput): 
     }
     if (opaque[line.number] === true) continue;
     const masked = maskInlineCode(line.text);
+    if (masked === null) break;
     const pattern = /(?<!!)\[([^\[\]\r\n]+)\]\(([^()\s\\%]+)\)/gu;
     for (const match of masked.matchAll(pattern)) {
       const startColumn = match.index;
-      if (startColumn === undefined || isEscaped(masked, startColumn)) continue;
+      if (
+        startColumn === undefined ||
+        isEscaped(masked, startColumn) ||
+        hasUnclosedLabelBefore(masked, startColumn)
+      ) continue;
       const destination = match[2] ?? "";
       if (destination.length > MAXIMUM_MARKDOWN_DESTINATION_LENGTH) return fileOnlyFacts(file);
       const targetFilePath = localTargetPath(input.filePath, destination);

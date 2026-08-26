@@ -40,6 +40,8 @@ describe("Markdown project indexing", () => {
       .find((facts) => facts.filePath === "README.md");
     const graph = store.getSnapshot(projectPath);
     const search = await service.search(projectPath, "checklist needle", { language: "markdown" });
+    const heading = graph.symbols.find((symbol) => symbol.name === "Project Guide");
+    const node = await service.node(projectPath, heading?.id ?? "missing");
 
     expect(status).toMatchObject({ initialized: true, stale: false });
     expect(markdownFacts).toMatchObject({
@@ -68,5 +70,10 @@ describe("Markdown project indexing", () => {
         matchingTerms: ["checklist", "needle"]
       })
     ]);
+    expect(node).toMatchObject({
+      match: { status: "exact", symbol: { name: "Project Guide" } },
+      sourceAvailability: "active-generation",
+      source: { filePath: "README.md", text: "# Project Guide", truncated: false }
+    });
   });
 });

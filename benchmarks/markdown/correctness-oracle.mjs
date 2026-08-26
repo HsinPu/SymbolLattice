@@ -114,7 +114,7 @@ function isIndentedCode(text) {
 }
 
 function isHtmlBlockStart(text) {
-  return /^ {0,3}<(?:address|article|aside|base|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|ol|p|pre|script|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:\s|>|\/)/iu.test(text);
+  return /^ {0,3}<(?:[A-Za-z][A-Za-z0-9-]*(?:\s|>|\/)|\/[A-Za-z]|!DOCTYPE|\?)/iu.test(text);
 }
 
 function maskInlineCode(text) {
@@ -126,14 +126,25 @@ function maskInlineCode(text) {
     const marker = "`".repeat(length);
     const closeOffset = characters.slice(index + length).join("").indexOf(marker);
     if (closeOffset < 0) {
-      index += length - 1;
-      continue;
+      return null;
     }
     const close = index + length + closeOffset;
     for (let cursor = index; cursor < close + length; cursor += 1) characters[cursor] = " ";
     index = close + length - 1;
   }
   return characters.join("");
+}
+
+function hasUnclosedLabelBefore(text, end) {
+  let depth = 0;
+  for (let index = 0; index < end; index += 1) {
+    let backslashes = 0;
+    for (let cursor = index - 1; cursor >= 0 && text[cursor] === "\\"; cursor -= 1) backslashes += 1;
+    if (backslashes % 2 === 1) continue;
+    if (text[index] === "[") depth += 1;
+    else if (text[index] === "]" && depth > 0) depth -= 1;
+  }
+  return depth > 0;
 }
 
 function headingText(raw) {
@@ -183,6 +194,8 @@ export function strictMarkdownTruth(filePath, sourceText, options = {}) {
       } else if (htmlTag !== null && new RegExp(`</${htmlTag}\\s*>`, "iu").test(text)) {
         htmlBlock = false;
         htmlTag = null;
+      } else if (!htmlComment && htmlTag === null && text.trim().length === 0) {
+        htmlBlock = false;
       }
       continue;
     }
@@ -196,11 +209,14 @@ export function strictMarkdownTruth(filePath, sourceText, options = {}) {
     }
     if (isHtmlBlockStart(text)) {
       opaqueLines.add(index);
-      const match = /^ {0,3}<([A-Za-z][A-Za-z0-9-]*)\b/iu.exec(text);
+      const match = /^ {0,3}<(script|pre|style)(?:\s|>|$)/iu.exec(text);
       const tag = match?.[1]?.toLowerCase();
       if (tag !== undefined && !new RegExp(`</${tag}\\s*>`, "iu").test(text)) {
         htmlBlock = true;
         htmlTag = tag;
+      } else if (tag === undefined && text.trim().length > 0) {
+        htmlBlock = true;
+        htmlTag = null;
       }
       continue;
     }
@@ -281,17 +297,28 @@ export function strictMarkdownTruth(filePath, sourceText, options = {}) {
     stack.push(heading);
   }
 
+  let inlineFailClosed = false;
   const masked = sourceText.split(/(?<=\n)|(?<=\r)(?!\n)/gu).map((line, index) => {
-    if (opaqueLines.has(index)) return " ".repeat(line.length);
-    return maskInlineCode(line);
+    if (opaqueLines.has(index) || inlineFailClosed) return " ".repeat(line.length);
+    const maskedLine = maskInlineCode(line);
+    if (maskedLine === null) {
+      inlineFailClosed = true;
+      return " ".repeat(line.length);
+    }
+    return maskedLine;
   }).join("");
   const links = [];
-  const linkPattern = /(?<![!\\])\[([^\]\r\n]{1,2048})\]\(([^\s<>()[\]]{1,4096})\)/gu;
+  const linkPattern = /(?<![!\\])\[([^\[\]\r\n]{1,2048})\]\(([^\s<>()[\]]{1,4096})\)/gu;
   for (const match of masked.matchAll(linkPattern)) {
     const label = match[1] ?? "";
     const destination = match[2] ?? "";
     const start = match.index ?? 0;
-    if (label.length === 0 || destination.length === 0 || destination.length > MAX_LINK_DESTINATION_LENGTH) continue;
+    if (
+      label.length === 0 ||
+      destination.length === 0 ||
+      destination.length > MAX_LINK_DESTINATION_LENGTH ||
+      hasUnclosedLabelBefore(masked, start)
+    ) continue;
     if (
       destination.startsWith("#") ||
       destination.startsWith("/") ||
@@ -440,8 +467,8 @@ function endpointCandidates(snapshot, endpoint_) {
     return symbol.name === endpoint_.name;
   });
   if (endpoint_.kind === "file") return candidates.length === 1 ? candidates : [];
-  const containing = candidates.filter((symbol) => symbol.range.start.line + 1 === endpoint_.line);
-  return containing.length > 0 ? containing : candidates.length === 1 ? candidates : [];
+  const containing = candidates.filter((symbol) => symbol.range.start.line === endpoint_.line);
+  return containing;
 }
 
 function exactSingleton(edge, targetId) {
@@ -464,8 +491,8 @@ function scorePositive(snapshot, fact) {
     if (fact.kind === "contains") return true;
     return (
       edge.filePath === fact.occurrence.filePath &&
-      edge.range.start.line === fact.occurrence.line - 1 &&
-      edge.range.start.column === fact.occurrence.column - 1
+      edge.range.start.line === fact.occurrence.line &&
+      edge.range.start.column === fact.occurrence.column
     );
   });
   const exact = edges.filter((edge) => exactSingleton(edge, targets[0].id));
@@ -491,7 +518,7 @@ export function scoreMarkdownSelection(selection, snapshots) {
 }
 
 function identityKey(project, symbol) {
-  return [project, symbol.filePath, symbol.kind, symbol.name, symbol.range.start.line + 1].join("\u0000");
+  return [project, symbol.filePath, symbol.kind, symbol.name, symbol.range.start.line].join("\u0000");
 }
 
 function truthIdentityKey(project, fact) {
@@ -513,7 +540,7 @@ function candidateScan(allFacts, snapshots) {
         project,
         filePath: symbol.filePath,
         kind: symbol.kind,
-        name: symbol.name,
+        name: symbol.kind === "file" ? symbol.filePath : symbol.name,
         line: symbol.range.start.line,
         outcome: truthKeys.has(key) ? "tp" : "fp"
       });
@@ -528,6 +555,10 @@ function candidateScan(allFacts, snapshots) {
   const tp = candidates.filter((candidate) => candidate.outcome === "tp").length;
   const candidateKeys = new Set(candidates.map(candidateIdentityKey));
   const fn = expected.filter((fact) => !candidateKeys.has(truthIdentityKey(fact.project, fact))).length;
+  const identityFalseNegativeSamples = expected
+    .filter((fact) => !candidateKeys.has(truthIdentityKey(fact.project, fact)))
+    .slice(0, 100)
+    .map((fact) => ({ project: fact.project, target: fact.target }));
   return {
     positiveCount: allFacts.length,
     tp: scoredFacts.filter((score) => score.outcome === "tp").length,
@@ -535,6 +566,7 @@ function candidateScan(allFacts, snapshots) {
     identityCandidateExtras: candidates.length - tp,
     fn: scoredFacts.filter((score) => score.outcome === "fn").length,
     identityFalseNegatives: fn,
+    identityFalseNegativeSamples,
     evidenceInvalid: scoredFacts.filter((score) => score.outcome === "invalid").length,
     unsupportedBreadthRecall: allFacts.length === 0
       ? null

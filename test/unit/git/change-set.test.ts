@@ -74,7 +74,13 @@ describe("Git change-set NUL parsers", () => {
       "R90\u0000src/old.ts\u0000src/new.ts\u0000M\u0000README.md\u0000D\u0000src/legacy.jsx\u0000A\u0000src/api.py\u0000A\u0000node_modules/example.ts\u0000"
     );
 
-    expect(gitSourcePaths(changes)).toEqual(["src/api.py", "src/legacy.jsx", "src/new.ts", "src/old.ts"]);
+    expect(gitSourcePaths(changes)).toEqual([
+      "README.md",
+      "src/api.py",
+      "src/legacy.jsx",
+      "src/new.ts",
+      "src/old.ts"
+    ]);
   });
 });
 
@@ -132,7 +138,7 @@ describe("FileSystemGitChangeSetProvider", () => {
           score: 100
         }
       ],
-      sourcePaths: ["src/math.ts", "src/new.test.ts", "src/new.ts", "src/old.ts"]
+      sourcePaths: ["README.md", "src/math.ts", "src/new.test.ts", "src/new.ts", "src/old.ts"]
     });
     expect(calls).toEqual(
       expect.arrayContaining([
@@ -284,6 +290,9 @@ describe("FileSystemGitChangeSetProvider immutable revision hunks", () => {
         }
         if (arguments_[0] === "diff" && arguments_.includes("--unified=0")) {
           const pathspecs = arguments_.slice(arguments_.indexOf("--") + 1);
+          if (pathspecs.includes(":(literal)README.md")) {
+            return "@@ -1 +1 @@\n-# Before\n+# After\n";
+          }
           if (pathspecs.includes(":(literal)src/added.ts")) {
             return "@@ -0,0 +1,2 @@\n+export const added = true;\n";
           }
@@ -299,6 +308,10 @@ describe("FileSystemGitChangeSetProvider immutable revision hunks", () => {
         }
         if (arguments_[0] === "show") {
           switch (arguments_.at(-1)) {
+            case `${MERGE_BASE}:README.md`:
+              return "# Before\n";
+            case `${HEAD}:README.md`:
+              return "# After\n";
             case `${HEAD}:src/added.ts`:
               return "export const added = true;\n";
             case `${MERGE_BASE}:src/deleted.ts`:
@@ -321,7 +334,7 @@ describe("FileSystemGitChangeSetProvider immutable revision hunks", () => {
 
     const result = await new FileSystemGitChangeSetProvider(runner).getRevisionHunks("C:/project", {
       baseRef: "origin/main",
-      maxSourceFiles: 5
+      maxSourceFiles: 6
     });
 
     expect(result.changeSet).toEqual({
@@ -347,6 +360,7 @@ describe("FileSystemGitChangeSetProvider immutable revision hunks", () => {
         }
       ],
       sourcePaths: [
+        "README.md",
         "src/added.ts",
         "src/deleted.ts",
         "src/modified.ts",
@@ -355,6 +369,24 @@ describe("FileSystemGitChangeSetProvider immutable revision hunks", () => {
       ]
     });
     expect(result.files).toEqual([
+      {
+        change: { kind: "modified", previousPath: "README.md", currentPath: "README.md", score: null },
+        hunks: [{ oldRange: { start: 1, count: 1 }, newRange: { start: 1, count: 1 } }],
+        previous: {
+          revision: MERGE_BASE,
+          filePath: "README.md",
+          language: "markdown",
+          availability: "available",
+          sourceText: "# Before\n"
+        },
+        current: {
+          revision: HEAD,
+          filePath: "README.md",
+          language: "markdown",
+          availability: "available",
+          sourceText: "# After\n"
+        }
+      },
       {
         change: { kind: "added", previousPath: null, currentPath: "src/added.ts", score: null },
         hunks: [{ oldRange: { start: 0, count: 0 }, newRange: { start: 1, count: 2 } }],
@@ -440,7 +472,7 @@ describe("FileSystemGitChangeSetProvider immutable revision hunks", () => {
     const hunkCalls = calls.filter(
       (call) => call.arguments_[0] === "diff" && call.arguments_.includes("--unified=0")
     );
-    expect(hunkCalls).toHaveLength(4);
+    expect(hunkCalls).toHaveLength(5);
     for (const call of hunkCalls) {
       expect(call.projectPath).toBe("C:/project");
       expect(call.arguments_).toEqual(
@@ -460,7 +492,7 @@ describe("FileSystemGitChangeSetProvider immutable revision hunks", () => {
       expect(call.arguments_.some((argument) => argument.startsWith(":(literal)"))).toBe(true);
     }
     const showCalls = calls.filter((call) => call.arguments_[0] === "show");
-    expect(showCalls).toHaveLength(6);
+    expect(showCalls).toHaveLength(8);
     for (const call of showCalls) {
       expect(call.arguments_).toEqual(
         expect.arrayContaining(["--no-ext-diff", "--no-textconv", "--no-color", "--end-of-options"])
@@ -527,7 +559,7 @@ describe("FileSystemGitChangeSetProvider immutable revision hunks", () => {
     );
   });
 
-  it("keeps a supported old side but marks a renamed non-source destination unsupported", async () => {
+  it("keeps both supported sides when TypeScript is renamed to Markdown", async () => {
     const runner = {
       run: vi.fn(async (_projectPath: string, arguments_: readonly string[]) => {
         if (arguments_[0] === "rev-parse" && arguments_.includes("--show-prefix")) {
@@ -551,16 +583,19 @@ describe("FileSystemGitChangeSetProvider immutable revision hunks", () => {
         if (arguments_[0] === "show" && arguments_.at(-1) === `${MERGE_BASE}:src/old.ts`) {
           return "export const oldValue = 1;\n";
         }
+        if (arguments_[0] === "show" && arguments_.at(-1) === `${HEAD}:docs/renamed.md`) {
+          return "new documentation\n";
+        }
         throw new Error(`Unexpected Git command: ${arguments_.join(" ")}`);
       })
     } satisfies GitCommandRunner;
 
     const result = await new FileSystemGitChangeSetProvider(runner).getRevisionHunks("C:/project", {
       baseRef: "origin/main",
-      maxSourceFiles: 1
+      maxSourceFiles: 2
     });
 
-    expect(result.changeSet.sourcePaths).toEqual(["src/old.ts"]);
+    expect(result.changeSet.sourcePaths).toEqual(["docs/renamed.md", "src/old.ts"]);
     expect(result.files).toMatchObject([
       {
         previous: {
@@ -571,12 +606,13 @@ describe("FileSystemGitChangeSetProvider immutable revision hunks", () => {
         current: {
           revision: HEAD,
           filePath: "docs/renamed.md",
-          language: null,
-          availability: "unsupported"
+          language: "markdown",
+          availability: "available",
+          sourceText: "new documentation\n"
         }
       }
     ]);
-    expect(runner.run).not.toHaveBeenCalledWith(
+    expect(runner.run).toHaveBeenCalledWith(
       "C:/project",
       expect.arrayContaining([`${HEAD}:docs/renamed.md`])
     );

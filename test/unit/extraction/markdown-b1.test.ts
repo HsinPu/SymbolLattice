@@ -51,6 +51,10 @@ describe("Markdown B1 extraction", () => {
         }
       });
     }
+    expect(file?.range.start).toEqual({ line: 1, column: 1 });
+    expect(headings[0]?.range.start).toEqual({ line: 1, column: 1 });
+    expect(headings[1]?.range.start).toEqual({ line: 3, column: 1 });
+    expect(facts.edges[0]?.range.start).toEqual({ line: 1, column: 1 });
   });
 
   it("keeps fenced indented inline-code and HTML content opaque", () => {
@@ -121,6 +125,28 @@ describe("Markdown B1 extraction", () => {
       "Visible"
     ]);
     expect(facts.markdownFacts?.links).toEqual([]);
+  });
+
+  it("fails closed for unclosed inline code, nested malformed links, and lowercase doctype blocks", () => {
+    const unclosed = extractFileFacts({
+      filePath: "docs/unclosed-inline.md",
+      language: "markdown" as never,
+      sourceText: ["`[hidden](target.md)", "[still-hidden](target.md)"].join("\n")
+    });
+    const nested = extractFileFacts({
+      filePath: "docs/nested.md",
+      language: "markdown" as never,
+      sourceText: "[outer [inner](target.md)](outer.md)"
+    });
+    const doctype = extractFileFacts({
+      filePath: "docs/html.md",
+      language: "markdown" as never,
+      sourceText: ["<!doctype html>", "[hidden](target.md)", "", "[visible](target.md)"].join("\n")
+    });
+
+    expect(unclosed.markdownFacts?.links).toEqual([]);
+    expect(nested.markdownFacts?.links).toEqual([]);
+    expect(doctype.markdownFacts?.links.map((link) => link.referenceName)).toEqual(["target.md"]);
   });
 
   it("fails closed to the file when a heading exceeds the bounded contract", () => {
