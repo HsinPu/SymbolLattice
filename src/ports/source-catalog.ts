@@ -48,7 +48,8 @@ interface ProjectFreshnessVerificationBase {
   readonly sourceReadPolicy:
     | "streaming-utf8-with-objective-c-header-classification-v1"
     | "streaming-utf8-with-shell-raw-bytes-and-objective-c-header-classification-v2"
-    | "streaming-raw-bytes-for-shell-and-lua-with-objective-c-header-classification-v3";
+    | "streaming-raw-bytes-for-shell-and-lua-with-objective-c-header-classification-v3"
+    | "streaming-raw-bytes-for-shell-and-lua-with-objective-c-header-classification-v4";
   readonly configurationReadPolicy: "streaming-utf8-v1";
   readonly discoveryPolicy:
     | "single-project-walk-v1"

@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.449.0
+目前版本：v0.450.0
 
 ## 主要能力
 
@@ -60,6 +60,8 @@ v0.446.0 對所有即時圖查詢加入 strict freshness gate。MCP在查詢前�
 v0.447.0 修正 Perl bare match expression 內含 `<<` 時被誤判為 heredoc opener 的 whole-file false negative。Assignment、return、argument與list等明確 expression-start context會先保護完整 regex；一般 division、未閉合regex與真正heredoc仍維持保守 fail-close。
 
 v0.448.0 將所有 hidden directories 納入預設 discovery exclusion，並讓 shared walker、Cargo workspace glob 與 Xcode project discovery 共用同一集中 policy。這可避免 sandbox/test 暫存目錄的限制 ACL 阻斷索引；未來若要改回 allowlist 或精選排除，只需調整集中 policy。
+
+v0.450.0 修正大型混合專案可靠性：重複 CSS selector occurrence 現在保留各自唯一、穩定的 semantic symbol identity；streaming freshness 與初次掃描採用相同 UTF-8 BOM 解碼／hash 契約，避免合法 scoped index 被誤判 stale。
 
 v0.449.0 新增 `.md`／`.markdown` 基礎圖譜：ATX／Setext heading 會形成可搜尋的 resource 與階層 `contains`，完整的 project-local 相對檔案連結會在唯一命中 indexed file 時形成 exact `references`。Fenced／indented／inline code、HTML block、external／root-relative／reference-style／image／dynamic links、heading anchor 與 `.mdx` 維持 opaque、unresolved 或 nonclaim，不推測執行期文件行為。
 

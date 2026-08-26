@@ -49,6 +49,32 @@ describe("CSS B1 extraction", () => {
     }
   });
 
+  it("keeps repeated selector occurrences identity-unique with per-occurrence semantics", () => {
+    const facts = extractFileFacts({
+      filePath: "web/kubernetes-generated.css",
+      language: "css",
+      sourceText: [
+        ".body-content > ul > li,",
+        ".body-content > ul > li { color: red; }"
+      ].join("\n")
+    });
+    const selectors = facts.symbols.filter((symbol) => symbol.name === ".body-content > ul > li");
+    const semantics = facts.symbols.filter((symbol) =>
+      symbol.name === "selector-kind:class" || symbol.name === "selector-kind:type"
+    );
+
+    expect(selectors).toHaveLength(2);
+    expect(new Set(selectors.map((symbol) => symbol.id)).size).toBe(2);
+    expect(semantics).toHaveLength(4);
+    expect(new Set(semantics.map((symbol) => symbol.id)).size).toBe(4);
+    expect(new Set(semantics.map((symbol) => `${symbol.range.start.line}:${symbol.range.start.column}`)).size)
+      .toBe(2);
+    expect(facts.symbols.map((symbol) => symbol.id)).toHaveLength(
+      new Set(facts.symbols.map((symbol) => symbol.id)).size
+    );
+    expect(facts.edges.every((edge) => edge.evidence?.candidateSymbolIds.length === 1)).toBe(true);
+  });
+
   it("fails closed to the file symbol for malformed CSS", () => {
     for (const sourceText of [
       ".card { color: red;",

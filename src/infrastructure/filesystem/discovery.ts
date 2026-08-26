@@ -177,7 +177,7 @@ export interface SourceDiscoveryOptions {
 export const FRESHNESS_PATH_DISCOVERY_POLICY = "single-project-walk-v3" as const;
 export const STREAMING_UTF8_HASH_POLICY = "streaming-utf8-v1" as const;
 export const SOURCE_FINGERPRINT_READ_POLICY =
-  "streaming-raw-bytes-for-shell-and-lua-with-objective-c-header-classification-v3" as const;
+  "streaming-raw-bytes-for-shell-and-lua-with-objective-c-header-classification-v4" as const;
 export const MAXIMUM_FRESHNESS_CONCURRENT_READS = 8 as const;
 /** Full source reads retain text, so keep descriptor pressure bounded on large repositories. */
 export const MAXIMUM_SOURCE_CONCURRENT_READS = 8 as const;
@@ -287,13 +287,26 @@ async function hashRawFileWithReader(
     : hashSourceBytes(await filesystemReader.readFile(filePath));
 }
 
-/** Hash decoded UTF-8 incrementally without retaining the complete file string. */
+/**
+ * Hash decoded UTF-8 incrementally without retaining the complete file string.
+ *
+ * Keep this decoder aligned with `new TextDecoder("utf-8").decode(bytes)`,
+ * which is the identity used by the initial source scan. An encoded Node stream
+ * can preserve a leading UTF-8 BOM as U+FEFF, while TextDecoder's default policy
+ * removes it. Use the same decoder here and let it distinguish the byte-order
+ * mark from a subsequent, legitimate U+FEFF content code point.
+ */
 export async function hashUtf8File(filePath: string): Promise<string> {
   const hash = createHash("sha256");
-  const stream = createReadStream(filePath, { encoding: "utf8" });
+  const decoder = new TextDecoder("utf-8");
+  const stream = createReadStream(filePath);
+
   for await (const chunk of stream) {
-    hash.update(chunk);
+    const decoded = decoder.decode(chunk, { stream: true });
+    if (decoded.length > 0) hash.update(decoded);
   }
+  const remainder = decoder.decode();
+  if (remainder.length > 0) hash.update(remainder);
   return hash.digest("hex");
 }
 

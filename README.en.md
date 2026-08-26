@@ -16,7 +16,7 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.449.0
+Current version: v0.450.0
 
 ## Highlights
 
@@ -60,6 +60,8 @@ v0.446.0 adds a strict freshness gate to every live graph read. MCP verifies pro
 v0.447.0 fixes a whole-file Perl false negative where `<<` inside a bare match expression was mistaken for a heredoc opener. Proven expression-start contexts such as assignment, return, arguments, and lists now preserve the complete regex, while ordinary division, unterminated regexes, and real heredocs continue to fail closed.
 
 v0.448.0 adds all hidden directories to the default discovery exclusions and shares one centralized policy across the scoped walker, Cargo workspace glob discovery, and Xcode project discovery. This prevents restricted sandbox or test temporary directories from blocking indexing; a future allowlist or narrower policy can be implemented at that single policy boundary.
+
+v0.450.0 fixes large mixed-project reliability. Repeated CSS selector occurrences now retain unique, stable semantic symbol identities, while streaming freshness and initial scans share the same UTF-8 BOM decoding and hash contract so valid scoped indexes are not falsely marked stale.
 
 v0.449.0 adds basic `.md` and `.markdown` graphs. ATX and Setext headings become searchable resources with hierarchical `contains` edges, while complete project-local relative file links become exact `references` only when they uniquely match an indexed file. Fenced, indented, and inline code, HTML blocks, external, root-relative, reference-style, image, dynamic, and heading-anchor links, plus `.mdx`, remain opaque, unresolved, or nonclaims rather than guessed runtime documentation behavior.
 

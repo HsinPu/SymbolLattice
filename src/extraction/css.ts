@@ -273,10 +273,10 @@ export function extractCssFileFacts(input: CssExtractFileFactsInput): ArtifactFa
       resourceBoundsExceeded = true;
       return null;
     }
-    const identity = `${parent.id}\u0000${category}\u0000${name}`;
+    const qualifiedName = `${parent.qualifiedName}#css-${category}:${name}`;
+    const identity = qualifiedName;
     const declarationOrdinal = resourceOrdinals.get(identity) ?? 0;
     resourceOrdinals.set(identity, declarationOrdinal + 1);
-    const qualifiedName = `${parent.qualifiedName}#css-${category}:${name}`;
     const symbol: SymbolNode = {
       id: createSymbolId({
         filePath: input.filePath,
