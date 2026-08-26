@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.446.0
+目前版本：v0.447.0
 
 ## 主要能力
 
@@ -56,6 +56,8 @@ v0.444.0 修正 workspace 專案的 cache traversal：workspace resolver 不再�
 v0.445.0 新增預設啟用的 project-local operation journal。`init`、`index`、`sync` 與實際 watcher reconciliation 會在 `.SymbolLattice/operation-diagnostics.sqlite` 保存最新 256 筆有界、去敏的 stage 與 generation 證據；initial scan 失敗時仍可用 `SymbolLattice diagnostics . --json` 查詢。Standalone `status`、explore 與其他 read tools 不會建立或更新診斷檔；journal 寫入失敗也不會遮蔽原本操作結果。
 
 v0.446.0 對所有即時圖查詢加入 strict freshness gate。MCP在查詢前後驗證project source、configuration、ignore與indexer policy；stale且具writer lease時先原子同步，查詢期間再變更則丟棄結果並重跑一次。CLI與`--no-auto-sync`維持唯讀，無法證明fresh時回報`FRESH_INDEX_REQUIRED`，不再回傳stale evidence；持續變動則回報`PROJECT_NOT_STABLE`。Status、diagnostics、history與diff仍可唯讀使用。
+
+v0.447.0 修正 Perl bare match expression 內含 `<<` 時被誤判為 heredoc opener 的 whole-file false negative。Assignment、return、argument與list等明確 expression-start context會先保護完整 regex；一般 division、未閉合regex與真正heredoc仍維持保守 fail-close。
 
 ## 安裝 CLI
 

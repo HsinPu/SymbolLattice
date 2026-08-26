@@ -194,4 +194,54 @@ sub real { return 1 }
     });
     expect(declarations(facts).map((symbol) => symbol.name)).toEqual(["QuoteDelimiter", "real"]);
   });
+
+  it("keeps heredoc-looking text opaque inside bare regex expression contexts", () => {
+    const facts = extractPerlFileFacts({
+      filePath: "lib/BareRegex.pm",
+      language: "perl",
+      sourceText: `package BareRegex;
+sub assigned { my $matched = /<<ASSIGN_FAKE/; return $matched }
+sub returned { return /<<RETURN_FAKE/ }
+sub argument { consume(/<<ARGUMENT_FAKE/) }
+sub listed { my @matches = (1, /<<LIST_FAKE/); return @matches }
+sub after { return 1 }
+`
+    });
+    expect(declarations(facts).map((symbol) => symbol.name)).toEqual([
+      "BareRegex",
+      "assigned",
+      "returned",
+      "argument",
+      "listed",
+      "after"
+    ]);
+  });
+
+  it("does not reinterpret ordinary division as a bare regex", () => {
+    const facts = extractPerlFileFacts({
+      filePath: "lib/Division.pm",
+      language: "perl",
+      sourceText: `package Division;
+sub ratio { return $left / $right }
+sub after { return 1 }
+`
+    });
+    expect(declarations(facts).map((symbol) => symbol.name)).toEqual([
+      "Division",
+      "ratio",
+      "after"
+    ]);
+  });
+
+  it("still fails closed for an unterminated bare regex", () => {
+    const facts = extractPerlFileFacts({
+      filePath: "lib/BrokenBareRegex.pm",
+      language: "perl",
+      sourceText: `package BrokenBareRegex;
+my $matched = /unterminated <<FAKE;
+sub fake { return 1 }
+`
+    });
+    expect(declarations(facts)).toEqual([]);
+  });
 });

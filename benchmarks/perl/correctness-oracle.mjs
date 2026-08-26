@@ -173,6 +173,15 @@ function perlDelimitedEnd(sourceText, openIndex) {
   return false;
 }
 
+function isPerlBareRegexContext(sourceText, start) {
+  const prefix = sourceText.slice(Math.max(0, start - 96), start);
+  return (
+    /(?:=~|!~|\bsplit\s*\(?|\b(?:if|elsif|unless|while)\s*\()\s*$/u.test(prefix) ||
+    /\b(?:return|do|eval|grep|map|print|say)\s*$/u.test(prefix) ||
+    /(?:^|[\n;{[(,=!:?&|])\s*$/u.test(prefix)
+  );
+}
+
 function perlRegexLikeAt(sourceText, start) {
   let operator = "";
   let sections = 1;
@@ -200,7 +209,7 @@ function perlRegexLikeAt(sourceText, start) {
     if (/[\sA-Za-z0-9_]/u.test(sourceText[openIndex] ?? "")) return null;
     if (openIndex !== adjacent && !"/([{<".includes(sourceText[openIndex] ?? "")) return null;
   } else {
-    if (sourceText[start] !== "/" || !/(?:=~|!~|\bsplit\s*\(?|\b(?:if|elsif|unless|while)\s*\()\s*$/u.test(sourceText.slice(Math.max(0, start - 48), start))) return null;
+    if (sourceText[start] !== "/" || !isPerlBareRegexContext(sourceText, start)) return null;
     openIndex = start;
   }
   const firstEnd = perlDelimitedEnd(sourceText, openIndex);
