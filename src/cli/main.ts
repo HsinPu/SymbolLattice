@@ -1190,6 +1190,10 @@ export async function runMcpWithAutoSync(
       readFreshnessReceipt: () => latestFreshGenerationId === null
         ? null
         : {
+            policy: "strict-fresh-read-v1",
+            verificationId: randomUUID(),
+            verifiedAt: new Date().toISOString(),
+            projectPath: resolve(options.projectPath),
             expectedGenerationId: latestFreshGenerationId,
             freshnessVerified: true
           }
