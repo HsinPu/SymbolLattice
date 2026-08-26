@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.444.0
+目前版本：v0.445.0
 
 ## 主要能力
 
@@ -52,6 +52,8 @@ v0.442.0 加速 watcher reconciliation：精確、既有且已索引的 pending 
 v0.443.0 補強受限 Agent 環境：當全域 npm CLI 因 sandbox 存取邊界而顯示找不到時，不會只憑該症狀判定 SymbolLattice 未安裝。MCP 不可用時，Agent 只可對原本已授權的同一命令與 project scope 做一次 sandbox escalation retry；不可藉此換成未授權的寫入命令。重試不可用、被拒絕或仍失敗後才明確回報存取邊界並使用限定範圍 fallback。
 
 v0.444.0 修正 workspace 專案的 cache traversal：workspace resolver 不再另外遞迴 filesystem，而是直接使用共用 scoped walker 已套用 default exclusions、scope 與 nested `.gitignore` 後的 `package.json` candidates。因此 nested `backend/.pytest_cache` 等 excluded cache 不會被讀取，也不會因 EPERM 阻止 initial index；合法 workspace manifests 與明確 override 語意維持不變。
+
+v0.445.0 新增預設啟用的 project-local operation journal。`init`、`index`、`sync` 與實際 watcher reconciliation 會在 `.SymbolLattice/operation-diagnostics.sqlite` 保存最新 256 筆有界、去敏的 stage 與 generation 證據；initial scan 失敗時仍可用 `SymbolLattice diagnostics . --json` 查詢。Standalone `status`、explore 與其他 read tools 不會建立或更新診斷檔；journal 寫入失敗也不會遮蔽原本操作結果。
 
 ## 安裝 CLI
 
@@ -128,6 +130,7 @@ SymbolLattice uninstall codex --apply --yes
 | 指令 | 用途 |
 | --- | --- |
 | `init` / `sync` | 建立或明確更新程式碼圖。 |
+| `diagnostics` | 唯讀查看 operation 與 auto-sync journals，可依 operation／outcome 篩選。 |
 | `status` / `history` / `diff` | 檢查 freshness 與 generation 變化。 |
 | `files` / `file` | 列出或讀取已保存的來源。 |
 | `find` / `node` / `search` | 搜尋並檢視 symbol 或來源。 |

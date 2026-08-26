@@ -85,6 +85,7 @@ import {
   MAX_OPERATION_DIAGNOSTIC_RECORDS,
   OPERATION_DIAGNOSTIC_OPERATIONS,
   OPERATION_DIAGNOSTIC_OUTCOMES,
+  QueuedOperationDiagnosticJournal,
   type OperationDiagnosticFilters,
   type OperationDiagnosticJournal,
   type PersistentOperationDiagnosticsResult,
@@ -439,7 +440,9 @@ function createService(extensions?: SymbolLatticeServiceExtensions): SymbolLatti
   const serviceExtensions: SymbolLatticeServiceExtensions = {
     ...extensions,
     operationDiagnosticJournalFactory: (projectPath) =>
-      new SqliteOperationDiagnosticJournal(projectPath)
+      new QueuedOperationDiagnosticJournal(
+        new SqliteOperationDiagnosticJournal(projectPath, { keepOpen: true })
+      )
   };
   return new SymbolLatticeService(
     new SqliteGraphStore(),

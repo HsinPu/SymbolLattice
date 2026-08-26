@@ -88,6 +88,44 @@ export interface OperationDiagnosticJournal {
   fail(operationId: string, input: FinishOperationDiagnostic): void;
   diagnostics(options?: OperationDiagnosticFilters): OperationDiagnosticJournalResult;
   state(): Pick<OperationDiagnosticJournalResult, "state" | "error">;
+  /** Optional completion barrier used by lifecycle callers before returning or rethrowing. */
+  flush?(): Promise<void>;
+}
+
+/**
+ * Serializes best-effort SQLite work onto event-loop turns so filesystem scan
+ * I/O can overlap journal persistence while completion still has a barrier.
+ */
+export class QueuedOperationDiagnosticJournal implements OperationDiagnosticJournal {
+  private queue: Promise<void> = Promise.resolve();
+
+  public constructor(private readonly delegate: OperationDiagnosticJournal) {}
+
+  public start(input: StartOperationDiagnostic): void { this.enqueue(() => this.delegate.start(input)); }
+  public advance(operationId: string, stage: OperationDiagnosticStage, updatedAt: string): void {
+    this.enqueue(() => this.delegate.advance(operationId, stage, updatedAt));
+  }
+  public complete(operationId: string, input: FinishOperationDiagnostic): void {
+    this.enqueue(() => this.delegate.complete(operationId, input));
+  }
+  public fail(operationId: string, input: FinishOperationDiagnostic): void {
+    this.enqueue(() => this.delegate.fail(operationId, input));
+  }
+  public diagnostics(options?: OperationDiagnosticFilters): OperationDiagnosticJournalResult {
+    return this.delegate.diagnostics(options);
+  }
+  public state(): Pick<OperationDiagnosticJournalResult, "state" | "error"> {
+    return this.delegate.state();
+  }
+  public async flush(): Promise<void> { await this.queue; }
+
+  private enqueue(action: () => void): void {
+    this.queue = this.queue.then(
+      () => new Promise<void>((resolve) => setImmediate(() => {
+        try { action(); } catch { /* journal failures never replace the primary operation */ } finally { resolve(); }
+      }))
+    );
+  }
 }
 
 export interface PersistentOperationDiagnosticsResult {

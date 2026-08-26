@@ -54,16 +54,24 @@ interface Row {
   generation_before: string | null; generation_after: string | null; error_json: string | null;
 }
 
-export interface SqliteOperationDiagnosticJournalOptions { readonly writable?: boolean; }
+export interface SqliteOperationDiagnosticJournalOptions {
+  readonly writable?: boolean;
+  /** Long-lived CLI/MCP hosts may reuse one project connection across operations. */
+  readonly keepOpen?: boolean;
+}
 
 export class SqliteOperationDiagnosticJournal implements OperationDiagnosticJournal {
   private readonly projectPath: string;
   private readonly writable: boolean;
+  private readonly keepOpen: boolean;
   private lastError: OperationDiagnosticJournalResult["error"] = null;
+  private activeDatabase: DatabaseSync | null = null;
+  private schemaReady = false;
 
   public constructor(projectPath: string, options: SqliteOperationDiagnosticJournalOptions = {}) {
     this.projectPath = resolve(projectPath);
     this.writable = options.writable ?? true;
+    this.keepOpen = options.keepOpen ?? false;
   }
 
   public start(input: StartOperationDiagnostic): void {
@@ -73,7 +81,7 @@ export class SqliteOperationDiagnosticJournal implements OperationDiagnosticJour
         completed_stages_json, generation_before
       ) VALUES (?, ?, ?, 'running', ?, ?, 'preflight', '[]', ?)`)
         .run(input.operationId, input.version, input.operation, input.startedAt, input.startedAt, input.generationBefore);
-    });
+    }, { prune: true });
   }
 
   public advance(operationId: string, stage: OperationDiagnosticStage, updatedAt: string): void {
@@ -99,6 +107,9 @@ export class SqliteOperationDiagnosticJournal implements OperationDiagnosticJour
   public state(): Pick<OperationDiagnosticJournalResult, "state" | "error"> {
     return { state: this.lastError === null ? (this.writable ? "active" : "read-only") : "failed", error: this.lastError };
   }
+
+  /** Explicit disposal seam for benchmarks and bounded host shutdown. */
+  public close(): void { this.closeActiveDatabase(); }
 
   public diagnostics(options: OperationDiagnosticFilters = {}): OperationDiagnosticJournalResult {
     const limit = normalizeLimit(options.limit);
@@ -141,30 +152,48 @@ export class SqliteOperationDiagnosticJournal implements OperationDiagnosticJour
         completed_stages_json = ?, generation_after = ?, error_json = ? WHERE operation_id = ? AND outcome = 'running'`)
         .run(outcome, input.finishedAt, input.finishedAt, duration, JSON.stringify(completed), input.generationAfter ?? null,
           input.error == null ? null : JSON.stringify(input.error), operationId);
-    });
+    }, { close: !this.keepOpen });
   }
 
-  private write(action: (database: DatabaseSync) => void): void {
+  private write(
+    action: (database: DatabaseSync) => void,
+    options: { readonly prune?: boolean; readonly close?: boolean } = {}
+  ): void {
     if (!this.writable) return;
-    let database: DatabaseSync | null = null;
     try {
-      mkdirSync(join(this.projectPath, INDEX_DIRECTORY_NAME), { recursive: true });
-      database = this.open(false);
-      database.exec(SCHEMA);
+      const database = this.writableDatabase();
       database.exec("BEGIN IMMEDIATE");
+      if (!this.schemaReady) database.exec(SCHEMA);
       action(database);
-      this.prune(database);
+      if (options.prune === true) this.prune(database);
       database.exec("COMMIT");
+      this.schemaReady = true;
       this.lastError = null;
     } catch (error) {
-      try { database?.exec("ROLLBACK"); } catch { /* retain primary journal error */ }
+      try { this.activeDatabase?.exec("ROLLBACK"); } catch { /* retain primary journal error */ }
       this.lastError = journalError(error);
-    } finally { database?.close(); }
+      this.closeActiveDatabase();
+    } finally {
+      if (options.close === true) this.closeActiveDatabase();
+    }
+  }
+
+  private writableDatabase(): DatabaseSync {
+    if (this.activeDatabase !== null) return this.activeDatabase;
+    mkdirSync(join(this.projectPath, INDEX_DIRECTORY_NAME), { recursive: true });
+    const database = new DatabaseSync(this.path());
+    database.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=${BUSY_TIMEOUT_MS};`);
+    this.activeDatabase = database;
+    return database;
+  }
+
+  private closeActiveDatabase(): void {
+    try { this.activeDatabase?.close(); } finally { this.activeDatabase = null; }
   }
 
   private open(readOnly: boolean): DatabaseSync {
     const database = new DatabaseSync(this.path(), { readOnly });
-    if (!readOnly) database.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=${BUSY_TIMEOUT_MS};`);
+    if (!readOnly) database.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=${BUSY_TIMEOUT_MS};`);
     else database.exec(`PRAGMA busy_timeout=${BUSY_TIMEOUT_MS};`);
     return database;
   }

@@ -1448,18 +1448,20 @@ class LifecycleDiagnosticOperation {
     this.journal?.advance(this.operationId, stage, new Date().toISOString());
   }
 
-  public complete(generationAfter: string | null): void {
+  public async complete(generationAfter: string | null): Promise<void> {
     this.journal?.complete(this.operationId, {
       finishedAt: new Date().toISOString(),
       generationAfter
     });
+    await this.journal?.flush?.();
   }
 
-  public fail(error: unknown): void {
+  public async fail(error: unknown): Promise<void> {
     this.journal?.fail(this.operationId, {
       finishedAt: new Date().toISOString(),
       error: sanitizeOperationError(error, this.projectPath)
     });
+    await this.journal?.flush?.();
   }
 
   public metadata(): OperationDiagnosticFailureMetadata {
@@ -1542,6 +1544,7 @@ export class SymbolLatticeService {
   private readonly operationDiagnosticJournalFactory:
     | ((projectPath: string) => OperationDiagnosticJournal)
     | undefined;
+  private readonly operationDiagnosticJournals = new Map<string, OperationDiagnosticJournal>();
 
   public constructor(
     graphStore: GraphStore,
@@ -5269,17 +5272,17 @@ export class SymbolLatticeService {
   ): Promise<GraphContext["status"]> {
     const projectPath = resolve(options.projectPath);
     const diagnostic = new LifecycleDiagnosticOperation(
-      this.operationDiagnosticJournalFactory?.(projectPath),
+      this.operationJournal(projectPath),
       operation,
       this.generationBefore(projectPath),
       projectPath
     );
     try {
       const status = await run(diagnostic);
-      diagnostic.complete(status.generationId);
+      await diagnostic.complete(status.generationId);
       return status;
     } catch (error) {
-      diagnostic.fail(error);
+      await diagnostic.fail(error);
       throw attachOperationDiagnostic(error, diagnostic);
     }
   }
@@ -5292,6 +5295,15 @@ export class SymbolLatticeService {
     } catch {
       return null;
     }
+  }
+
+  private operationJournal(projectPath: string): OperationDiagnosticJournal | undefined {
+    if (this.operationDiagnosticJournalFactory === undefined) return undefined;
+    const existing = this.operationDiagnosticJournals.get(projectPath);
+    if (existing !== undefined) return existing;
+    const created = this.operationDiagnosticJournalFactory(projectPath);
+    this.operationDiagnosticJournals.set(projectPath, created);
+    return created;
   }
 
   private async getStatusForBundle(
