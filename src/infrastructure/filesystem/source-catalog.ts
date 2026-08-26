@@ -177,7 +177,8 @@ export class FileSystemSourceCatalog implements SourceCatalog {
     });
     const workspaceResolver = await createWorkspaceProjectModuleResolver({
       projectPath: normalizedProjectPath,
-      sourceDocuments
+      sourceDocuments,
+      configurationCandidatePaths: paths.configurationPaths
     });
     const cargoWorkspaceResolver = await createCargoWorkspaceProjectModuleResolver({
       projectPath: normalizedProjectPath,

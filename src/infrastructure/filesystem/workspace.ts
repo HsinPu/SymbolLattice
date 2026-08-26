@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 import {
@@ -290,43 +290,19 @@ function matchesWorkspacePatterns(
   );
 }
 
-async function discoverWorkspaceManifestPaths(
-  projectPath: string,
+function discoverWorkspaceManifestPaths(
+  configurationCandidatePaths: readonly string[],
   patterns: readonly WorkspacePattern[]
-): Promise<readonly string[]> {
-  const manifestPaths: string[] = [];
-
-  async function visit(directoryPath: string, relativeDirectoryPath: string): Promise<void> {
-    const entries = await readdir(directoryPath, { withFileTypes: true });
-    for (const entry of entries.sort((left, right) => compareStableText(left.name, right.name))) {
-      const childPath = resolve(directoryPath, entry.name);
-      const childRelativePath = relativeDirectoryPath === "."
-        ? entry.name
-        : `${relativeDirectoryPath}/${entry.name}`;
-
-      if (entry.isDirectory()) {
-        if (!HARD_EXCLUDED_DIRECTORY_NAMES.has(entry.name)) {
-          await visit(childPath, childRelativePath);
-        }
-        continue;
-      }
-
-      if (
-        entry.isFile() &&
-        entry.name === "package.json" &&
-        relativeDirectoryPath !== "." &&
-        matchesWorkspacePatterns(relativeDirectoryPath, patterns)
-      ) {
-        manifestPaths.push(childRelativePath);
-      }
-    }
-  }
-
-  if (patterns.some((pattern) => !pattern.excludes)) {
-    await visit(projectPath, ".");
-  }
-
-  return manifestPaths.sort(compareStableText);
+): readonly string[] {
+  if (!patterns.some((pattern) => !pattern.excludes)) return [];
+  const manifestSuffix = "/package.json";
+  return configurationCandidatePaths
+    .filter((path) => path.endsWith(manifestSuffix))
+    .filter((path) => matchesWorkspacePatterns(
+      path.slice(0, -manifestSuffix.length),
+      patterns
+    ))
+    .sort(compareStableText);
 }
 
 function validatePackageName(value: unknown, manifestPath: string): string {
@@ -731,6 +707,7 @@ function resolveWorkspaceTarget(input: {
 export async function createWorkspaceProjectModuleResolver(input: {
   readonly projectPath: string;
   readonly sourceDocuments: readonly SourceDocument[];
+  readonly configurationCandidatePaths: readonly string[];
 }): Promise<WorkspaceProjectModuleResolver> {
   const projectPath = resolve(input.projectPath);
   const rootInput = await readProjectConfigurationInput(
@@ -753,7 +730,10 @@ export async function createWorkspaceProjectModuleResolver(input: {
     "workspace-root-manifest"
   );
   const patterns = parseWorkspacePatterns(rootManifest);
-  const manifestPaths = await discoverWorkspaceManifestPaths(projectPath, patterns);
+  const manifestPaths = discoverWorkspaceManifestPaths(
+    input.configurationCandidatePaths,
+    patterns
+  );
   const workspacePackages = (await Promise.all(
     manifestPaths.map(async (manifestPath) =>
       parseWorkspacePackage(

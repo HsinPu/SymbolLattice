@@ -6,6 +6,10 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { ProjectConfigurationError } from "../../../src/domain/configuration.js";
 import { FileSystemSourceCatalog } from "../../../src/infrastructure/filesystem/index.js";
+import {
+  nativeProjectFilesystemReader,
+  type ProjectFilesystemReader
+} from "../../../src/infrastructure/filesystem/project-filesystem.js";
 
 const temporaryProjectPaths: string[] = [];
 
@@ -111,6 +115,57 @@ describe("workspace package module resolution", () => {
         .map((input) => input.path)
         .sort(compareText)
     ).toEqual(["packages/nested/core/package.json"]);
+  });
+
+  it("does not rediscover workspace manifests inside nested default-excluded caches", async () => {
+    const projectPath = await createProject({
+      "package.json": JSON.stringify({ private: true, workspaces: ["backend/**"] }),
+      "backend/package.json": JSON.stringify({ name: "@fixture/backend", source: "./src/index.ts" }),
+      "backend/src/index.ts": "export const backend = true;",
+      "backend/.pytest_cache/package.json": JSON.stringify({
+        name: "@fixture/cache",
+        source: "./src/index.ts"
+      }),
+      "backend/.pytest_cache/src/index.ts": "export const cache = true;",
+      "apps/web/src/consumer.ts": "export const consumer = true;"
+    });
+
+    const cacheAccesses: string[] = [];
+    const guardCachePath = (path: string): void => {
+      if (path.replaceAll("\\", "/").includes("/backend/.pytest_cache")) {
+        cacheAccesses.push(path);
+        throw Object.assign(new Error("EPERM"), { code: "EPERM", path });
+      }
+    };
+    const reader: ProjectFilesystemReader = {
+      async readdir(path) {
+        guardCachePath(path);
+        return nativeProjectFilesystemReader.readdir(path);
+      },
+      async readFile(path) {
+        guardCachePath(path);
+        return nativeProjectFilesystemReader.readFile(path);
+      },
+      async stat(path) {
+        guardCachePath(path);
+        return nativeProjectFilesystemReader.stat(path);
+      }
+    };
+
+    const scan = await new FileSystemSourceCatalog(reader).scan(projectPath);
+
+    expect(cacheAccesses).toEqual([]);
+    expect(
+      scan.indexInputs.configurationInputs
+        .filter((input) => input.kind === "workspace-package-manifest")
+        .map((input) => input.path)
+        .sort(compareText)
+    ).toEqual(["backend/package.json"]);
+    expect(scan.moduleResolver.resolve("apps/web/src/consumer.ts", "@fixture/cache")).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["package.json"]
+    });
   });
 
   it("does not expand a narrowed source scope to satisfy a workspace import", async () => {
