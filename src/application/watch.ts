@@ -376,6 +376,11 @@ export interface IndexWatchService {
     options: IndexOptions,
     observation: WatchFreshnessObservation
   ): Promise<IndexStatus>;
+  /** Optional lifecycle-aware sync used only after watch has proven the project stale. */
+  syncWatch?(
+    options: IndexOptions,
+    observation: WatchFreshnessObservation | null
+  ): Promise<IndexStatus>;
 }
 
 /** Exact watcher paths are only a priority hint; incomplete batches require a full verification. */
@@ -880,8 +885,9 @@ class ForegroundWatch implements ForegroundWatchSession {
         projectPath: this.options.projectPath,
         force: this.options.force ?? false
       };
-      const synced =
-        observation !== null &&
+      const synced = this.service.syncWatch !== undefined
+        ? await this.service.syncWatch(syncOptions, observation)
+        : observation !== null &&
         observation.knownStale &&
         observation.status.stale &&
         this.service.syncObserved !== undefined

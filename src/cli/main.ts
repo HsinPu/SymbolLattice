@@ -99,7 +99,8 @@ import { FileSystemGitChangeSetProvider } from "../infrastructure/git/index.js";
 import {
   SqliteAutoSyncDiagnosticJournal,
   SqliteAutoSyncOwnerLease,
-  SqliteGraphStore
+  SqliteGraphStore,
+  SqliteOperationDiagnosticJournal
 } from "../infrastructure/sqlite/index.js";
 import {
   startMcpServerWithReadQueryPool,
@@ -422,10 +423,15 @@ export interface WatchSignalSource {
 
 function createService(extensions?: SymbolLatticeServiceExtensions): SymbolLatticeService {
   const gitChangeSetProvider = new FileSystemGitChangeSetProvider();
+  const serviceExtensions: SymbolLatticeServiceExtensions = {
+    ...extensions,
+    operationDiagnosticJournalFactory: (projectPath) =>
+      new SqliteOperationDiagnosticJournal(projectPath)
+  };
   return new SymbolLatticeService(
     new SqliteGraphStore(),
     new FileSystemSourceCatalog(),
-    extensions ?? {},
+    serviceExtensions,
     gitChangeSetProvider,
     gitChangeSetProvider
   );

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { isMainThread } from "node:worker_threads";
 
@@ -108,6 +109,13 @@ import type {
 import { ProjectConfigurationError } from "../domain/configuration.js";
 import { ProjectPathUnreadableError } from "../domain/project-path-access.js";
 import { SymbolLatticeError } from "./errors.js";
+import type {
+  OperationDiagnosticError,
+  OperationDiagnosticJournal,
+  OperationDiagnosticOperation,
+  OperationDiagnosticStage
+} from "./operation-diagnostics.js";
+import { SYMBOL_LATTICE_VERSION } from "../version.js";
 import {
   canonicalSourceDeliverySlice,
   sourceDeliveryIdentity
@@ -363,6 +371,8 @@ export interface SymbolLatticeServiceExtensions {
   readonly queryTimingSink?: QueryTimingSink;
   /** Internal MCP worker seam; absent for CLI and no-auto-sync reads. */
   readonly readQueryFreshnessReceipt?: () => ReadQueryFreshnessReceipt | null;
+  /** Optional project-scoped best-effort lifecycle journal factory. Read services omit it. */
+  readonly operationDiagnosticJournalFactory?: (projectPath: string) => OperationDiagnosticJournal;
 }
 
 function artifactFactsExtractorVersion(extractor: ArtifactFactsExtractor): string {
@@ -1406,6 +1416,116 @@ function roundPerformanceMilliseconds(value: number): number {
   return Math.round(value * 1_000) / 1_000;
 }
 
+export interface OperationDiagnosticFailureMetadata {
+  readonly operationId: string;
+  readonly operationJournal: ReturnType<OperationDiagnosticJournal["state"]>;
+}
+
+class LifecycleDiagnosticOperation {
+  public readonly operationId = randomUUID();
+  private readonly journal: OperationDiagnosticJournal | undefined;
+  private readonly projectPath: string;
+
+  public constructor(
+    journal: OperationDiagnosticJournal | undefined,
+    operation: OperationDiagnosticOperation,
+    generationBefore: string | null,
+    projectPath: string
+  ) {
+    this.journal = journal;
+    this.projectPath = projectPath;
+    const startedAt = new Date().toISOString();
+    this.journal?.start({
+      operationId: this.operationId,
+      version: SYMBOL_LATTICE_VERSION,
+      operation,
+      startedAt,
+      generationBefore
+    });
+  }
+
+  public advance(stage: OperationDiagnosticStage): void {
+    this.journal?.advance(this.operationId, stage, new Date().toISOString());
+  }
+
+  public complete(generationAfter: string | null): void {
+    this.journal?.complete(this.operationId, {
+      finishedAt: new Date().toISOString(),
+      generationAfter
+    });
+  }
+
+  public fail(error: unknown): void {
+    this.journal?.fail(this.operationId, {
+      finishedAt: new Date().toISOString(),
+      error: sanitizeOperationError(error, this.projectPath)
+    });
+  }
+
+  public metadata(): OperationDiagnosticFailureMetadata {
+    return {
+      operationId: this.operationId,
+      operationJournal: this.journal?.state() ?? { state: "unavailable", error: null }
+    };
+  }
+}
+
+function attachOperationDiagnostic(
+  error: unknown,
+  diagnostic: LifecycleDiagnosticOperation
+): unknown {
+  if ((typeof error === "object" && error !== null) || typeof error === "function") {
+    Object.assign(error, diagnostic.metadata());
+  }
+  return error;
+}
+
+function sanitizeOperationError(error: unknown, projectPath: string): OperationDiagnosticError {
+  const code =
+    typeof error === "object" && error !== null && "code" in error && typeof error.code === "string"
+      ? error.code
+      : "OPERATION_FAILED";
+  const rawMessage = error instanceof Error ? error.message : "Unknown operation failure.";
+  const evidenceText = rawMessage.includes(": ")
+    ? rawMessage.slice(rawMessage.indexOf(": ") + 2)
+    : rawMessage;
+  const evidence = [...evidenceText.matchAll(/(?:^|, )([^,;]+?) \[(EACCES|EPERM)\]/gu)]
+    .map((match) => ({ path: safeDiagnosticPath(match[1] ?? "."), code: match[2] ?? "EACCES" }))
+    .slice(0, 8);
+  const more = /; (\d+) more not shown\./u.exec(rawMessage);
+  const evidenceTotal = evidence.length + Number(more?.[1] ?? 0);
+  return {
+    code,
+    message: sanitizeDiagnosticMessage(rawMessage, projectPath),
+    evidence,
+    evidenceTotal,
+    evidenceTruncated: evidenceTotal > evidence.length
+  };
+}
+
+function sanitizeDiagnosticMessage(message: string, projectPath: string): string {
+  const normalizedProjectPath = projectPath.replaceAll("\\", "/");
+  return message
+    .replaceAll(projectPath, ".")
+    .replaceAll(normalizedProjectPath, ".")
+    .replace(/[A-Za-z]:[\\/][^\s,;]+/gu, "<host-path>")
+    .replace(/\/(?:Users|home|var|tmp)\/[^\s,;]+/gu, "<host-path>");
+}
+
+function safeDiagnosticPath(value: string): string {
+  const path = value.trim().replaceAll("\\", "/").replace(/^\.\//u, "");
+  if (
+    path === "." ||
+    (path.length > 0 &&
+      !path.startsWith("/") &&
+      !/^[A-Za-z]:/u.test(path) &&
+      !path.split("/").some((segment) => segment === "" || segment === ".."))
+  ) {
+    return path;
+  }
+  return ".";
+}
+
 export class SymbolLatticeService {
   private readonly graphStore: GraphStore;
   private readonly sourceCatalog: SourceCatalog;
@@ -1419,6 +1539,9 @@ export class SymbolLatticeService {
   private readonly luaWorkerRuntime: LuaWorkerRuntime;
   private readonly queryTimingSink: QueryTimingSink;
   private readonly readQueryFreshnessReceipt: (() => ReadQueryFreshnessReceipt | null) | undefined;
+  private readonly operationDiagnosticJournalFactory:
+    | ((projectPath: string) => OperationDiagnosticJournal)
+    | undefined;
 
   public constructor(
     graphStore: GraphStore,
@@ -1451,6 +1574,7 @@ export class SymbolLatticeService {
     this.frameworkProjectPlugins = extensions?.frameworkProjectPlugins;
     this.queryTimingSink = extensions?.queryTimingSink ?? NOOP_QUERY_TIMING_SINK;
     this.readQueryFreshnessReceipt = extensions?.readQueryFreshnessReceipt;
+    this.operationDiagnosticJournalFactory = extensions?.operationDiagnosticJournalFactory;
     this.luaWorkerRuntime = createLuaWorkerRuntime(
       extensions?.luaWorkerFactory === undefined
         ? {}
@@ -1477,34 +1601,51 @@ export class SymbolLatticeService {
 
   public async init(options: IndexOptions): Promise<GraphContext["status"]> {
     this.assertSafeProjectPath(options);
-    return this.index(options);
+    return this.runDiagnosticOperation("init", options, (diagnostic) =>
+      this.indexProject(options, diagnostic)
+    );
   }
 
   public async index(options: IndexOptions): Promise<GraphContext["status"]> {
     this.assertSafeProjectPath(options);
+    return this.runDiagnosticOperation("index", options, (diagnostic) =>
+      this.indexProject(options, diagnostic)
+    );
+  }
+
+  private async indexProject(
+    options: IndexOptions,
+    diagnostic: LifecycleDiagnosticOperation
+  ): Promise<GraphContext["status"]> {
     const performance = new IndexPerformanceRecorder("index");
     const projectPath = resolve(options.projectPath);
+    diagnostic.advance("load-status");
     const loadPriorInputsStartedAt = performance.start();
     const bundle = this.graphStore.isInitialized(projectPath)
       ? this.getActiveGraphBundle(projectPath)
       : null;
     performance.end("load-prior-inputs", loadPriorInputsStartedAt);
+    diagnostic.advance("scan");
     const scanStartedAt = performance.start();
     const scan = await this.scanForIndex(projectPath, options, bundle?.indexInputs ?? null);
     performance.end("scan", scanStartedAt);
+    diagnostic.advance("extraction");
     const extractionStartedAt = performance.start();
     const artifactFacts: PersistedArtifactFacts[] = [];
     for (const document of scan.sourceDocuments) {
       artifactFacts.push(await this.extractPersistedFacts(document, scan.frameworkEvidence));
     }
     performance.end("extraction", extractionStartedAt);
+    diagnostic.advance("store-initialize");
     this.replaceGeneration(
       projectPath,
       scan,
       artifactFacts,
       fullIndexWork(scan.sourceDocuments),
-      performance
+      performance,
+      diagnostic
     );
+    diagnostic.advance("status-read");
     const statusStartedAt = performance.start();
     const status = await this.getStatus(projectPath);
     performance.end("status-read", statusStartedAt);
@@ -1512,21 +1653,39 @@ export class SymbolLatticeService {
   }
 
   public async sync(options: IndexOptions): Promise<GraphContext["status"]> {
-    return this.syncProject(options, null);
+    this.assertSafeProjectPath(options);
+    return this.runDiagnosticOperation("sync", options, (diagnostic) =>
+      this.syncProject(options, null, diagnostic)
+    );
   }
 
   public async syncObserved(
     options: IndexOptions,
     observation: WatchFreshnessObservation
   ): Promise<GraphContext["status"]> {
-    return this.syncProject(options, observation);
+    this.assertSafeProjectPath(options);
+    return this.runDiagnosticOperation("sync", options, (diagnostic) =>
+      this.syncProject(options, observation, diagnostic)
+    );
   }
 
-  private async syncProject(
+  public async syncWatch(
     options: IndexOptions,
     observation: WatchFreshnessObservation | null
   ): Promise<GraphContext["status"]> {
     this.assertSafeProjectPath(options);
+    return this.runDiagnosticOperation("watch", options, async (diagnostic) => {
+      diagnostic.advance("watch-observe");
+      diagnostic.advance("watch-sync");
+      return this.syncProject(options, observation, diagnostic);
+    });
+  }
+
+  private async syncProject(
+    options: IndexOptions,
+    observation: WatchFreshnessObservation | null,
+    diagnostic: LifecycleDiagnosticOperation
+  ): Promise<GraphContext["status"]> {
     const performance = new IndexPerformanceRecorder("sync");
     const projectPath = resolve(options.projectPath);
     if (!this.graphStore.isInitialized(projectPath)) {
@@ -1539,7 +1698,9 @@ export class SymbolLatticeService {
     // `sync` is the explicit repair/upgrade operation. Let a store complete
     // additive migrations even when the source scan later proves this is a
     // graph no-op (including the short-lived v0.4 prerelease metadata marker).
+    diagnostic.advance("load-status");
     const loadStatusStartedAt = performance.start();
+    diagnostic.advance("store-initialize");
     const storeInitializeStartedAt = performance.start();
     this.graphStore.initialize(projectPath);
     const loadStatusSubphases: IndexPerformanceSubphase[] = [
@@ -1594,6 +1755,7 @@ export class SymbolLatticeService {
       !extractorChanged &&
       !sourceSearchChanged
     ) {
+      diagnostic.advance("freshness-preflight");
       const freshnessStartedAt = performance.start();
       let freshness: ProjectFreshnessVerification;
       try {
@@ -1620,6 +1782,7 @@ export class SymbolLatticeService {
       if (freshness.outcome === "proven-unchanged") {
         const fastPathStartedAt = performance.start();
         performance.end("fast-path-check", fastPathStartedAt);
+        diagnostic.advance("status-read");
         const statusStartedAt = performance.start();
         const status = {
           ...statusBundle.status,
@@ -1631,10 +1794,12 @@ export class SymbolLatticeService {
       }
     }
 
+    diagnostic.advance("scan");
     const scanStartedAt = performance.start();
     const scan = await this.scanForIndex(projectPath, options, statusBundle.indexInputs);
     performance.end("scan", scanStartedAt);
     const fastPathStartedAt = performance.start();
+    diagnostic.advance("change-planning");
     const changes = sourceChangeSet(scan.sourceDocuments, statusBundle.files);
     const noSourceChange =
       changes.addedFiles.length === 0 &&
@@ -1654,6 +1819,7 @@ export class SymbolLatticeService {
       !sourceSearchChanged;
     performance.end("fast-path-check", fastPathStartedAt);
     if (isProvenNoOp) {
+      diagnostic.advance("status-read");
       const statusStartedAt = performance.start();
       const status = {
         ...statusBundle.status,
@@ -1701,6 +1867,7 @@ export class SymbolLatticeService {
           reuseInvalidationReasons.add("framework-evidence-changed");
         }
       }
+      diagnostic.advance("extraction");
       artifactFacts.push(await this.extractPersistedFacts(document, scan.frameworkEvidence));
       reExtractedFiles.push(document.relativePath);
     }
@@ -1713,6 +1880,7 @@ export class SymbolLatticeService {
       !sourceSearchChanged
     ) {
       performance.end("change-planning", changePlanningStartedAt);
+      diagnostic.advance("status-read");
       const statusStartedAt = performance.start();
       const status = await this.getStatus(projectPath);
       performance.end("status-read", statusStartedAt);
@@ -1742,7 +1910,8 @@ export class SymbolLatticeService {
       reuseInvalidationReasons: [...reuseInvalidationReasons].sort(compareText)
     };
     performance.end("change-planning", changePlanningStartedAt);
-    this.replaceGeneration(projectPath, scan, artifactFacts, work, performance);
+    this.replaceGeneration(projectPath, scan, artifactFacts, work, performance, diagnostic);
+    diagnostic.advance("status-read");
     const statusStartedAt = performance.start();
     const status = {
       ...this.graphStore.getStatus(projectPath),
@@ -5048,9 +5217,11 @@ export class SymbolLatticeService {
     scan: ProjectScan,
     artifactFacts: readonly PersistedArtifactFacts[],
     indexWork: IndexWork,
-    performance: IndexPerformanceRecorder
+    performance: IndexPerformanceRecorder,
+    diagnostic: LifecycleDiagnosticOperation
   ): void {
     const indexedAt = new Date().toISOString();
+    diagnostic.advance("resolution");
     const resolutionStartedAt = performance.start();
     const snapshot = resolveProjectFacts({
       sourceDocuments: scan.sourceDocuments,
@@ -5071,6 +5242,7 @@ export class SymbolLatticeService {
         : { frameworkProjectPlugins: this.frameworkProjectPlugins })
     });
     performance.end("resolution", resolutionStartedAt);
+    diagnostic.advance("persistence");
     const persistenceStartedAt = performance.start();
     this.graphStore.replaceProjectFacts({
       projectPath,
@@ -5088,6 +5260,38 @@ export class SymbolLatticeService {
       indexWork
     });
     performance.end("persistence", persistenceStartedAt);
+  }
+
+  private async runDiagnosticOperation(
+    operation: OperationDiagnosticOperation,
+    options: IndexOptions,
+    run: (diagnostic: LifecycleDiagnosticOperation) => Promise<GraphContext["status"]>
+  ): Promise<GraphContext["status"]> {
+    const projectPath = resolve(options.projectPath);
+    const diagnostic = new LifecycleDiagnosticOperation(
+      this.operationDiagnosticJournalFactory?.(projectPath),
+      operation,
+      this.generationBefore(projectPath),
+      projectPath
+    );
+    try {
+      const status = await run(diagnostic);
+      diagnostic.complete(status.generationId);
+      return status;
+    } catch (error) {
+      diagnostic.fail(error);
+      throw attachOperationDiagnostic(error, diagnostic);
+    }
+  }
+
+  private generationBefore(projectPath: string): string | null {
+    try {
+      return this.graphStore.isInitialized(projectPath)
+        ? this.graphStore.getStatus(projectPath).generationId
+        : null;
+    } catch {
+      return null;
+    }
   }
 
   private async getStatusForBundle(
