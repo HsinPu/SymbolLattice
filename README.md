@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.443.0
+目前版本：v0.444.0
 
 ## 主要能力
 
@@ -50,6 +50,8 @@ v0.441.0 預設略過常見 cache 與 generated directories，但不會全面排
 v0.442.0 加速 watcher reconciliation：精確、既有且已索引的 pending source path 會優先驗證；確認 stale 後重用同一份 generation-bound freshness observation，直接執行一次完整掃描與原子 generation publication。新檔、rename、directory、configuration、ignore、未知或截斷事件仍回退完整驗證；generation 已切換時也會丟棄 observation，維持既有正確性。
 
 v0.443.0 補強受限 Agent 環境：當全域 npm CLI 因 sandbox 存取邊界而顯示找不到時，不會只憑該症狀判定 SymbolLattice 未安裝。MCP 不可用時，Agent 只可對原本已授權的同一命令與 project scope 做一次 sandbox escalation retry；不可藉此換成未授權的寫入命令。重試不可用、被拒絕或仍失敗後才明確回報存取邊界並使用限定範圍 fallback。
+
+v0.444.0 修正 workspace 專案的 cache traversal：workspace resolver 不再另外遞迴 filesystem，而是直接使用共用 scoped walker 已套用 default exclusions、scope 與 nested `.gitignore` 後的 `package.json` candidates。因此 nested `backend/.pytest_cache` 等 excluded cache 不會被讀取，也不會因 EPERM 阻止 initial index；合法 workspace manifests 與明確 override 語意維持不變。
 
 ## 安裝 CLI
 
