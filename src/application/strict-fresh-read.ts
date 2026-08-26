@@ -5,7 +5,10 @@ import type { IndexStatus } from "../domain/types.js";
 import type { WatchFreshnessObservation, WatchPendingBatch } from "./watch.js";
 import { SymbolLatticeError } from "./errors.js";
 import type { IndexOptions } from "./service.js";
-import type { ReadQueryFreshnessReceipt } from "./read-query-freshness.js";
+import {
+  ReadQueryGenerationMismatchError,
+  type ReadQueryFreshnessReceipt
+} from "./read-query-freshness.js";
 
 export const STRICT_FRESH_READ_POLICY = "strict-fresh-read-v1" as const;
 export const STRICT_FRESH_READ_MAXIMUM_QUERY_ATTEMPTS = 2;
@@ -137,7 +140,9 @@ export class StrictFreshReadCoordinator {
 
       const after = await this.observe(normalizedProjectPath);
       lastStatus = after.status;
-      const stable = this.isFresh(after) && after.expectedGenerationId === admission.receipt.expectedGenerationId;
+      const stable = !(queryError instanceof ReadQueryGenerationMismatchError) &&
+        this.isFresh(after) &&
+        after.expectedGenerationId === admission.receipt.expectedGenerationId;
       admission.lease?.release();
       if (stable) {
         if (queryError !== undefined) throw queryError;

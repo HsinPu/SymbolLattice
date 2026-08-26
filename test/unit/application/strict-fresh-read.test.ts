@@ -166,6 +166,52 @@ describe("StrictFreshReadCoordinator", () => {
     expect(service.observeCalls).toBe(4);
   });
 
+  it("waits for another owner to publish fresh evidence without writing concurrently", async () => {
+    const service = new MutableFreshnessService();
+    service.current = status("generation:stale", true);
+    let clock = 0;
+    const coordinator = new StrictFreshReadCoordinator({
+      service,
+      writerEnabled: true,
+      acquireWriterLease: async () => ({
+        state: "unavailable",
+        error: { code: "AUTO_SYNC_OWNER_UNAVAILABLE", message: "owned elsewhere" }
+      }),
+      now: () => new Date(clock),
+      sleep: async (milliseconds) => {
+        clock += milliseconds;
+        service.current = status("generation:other-owner");
+      }
+    });
+
+    await expect(
+      coordinator.execute(projectPath, async (receipt) => receipt.expectedGenerationId)
+    ).resolves.toBe("generation:other-owner");
+    expect(service.syncCalls).toBe(0);
+  });
+
+  it("fails closed after the bounded lease wait when the owner leaves the index stale", async () => {
+    const service = new MutableFreshnessService();
+    service.current = status("generation:stale", true);
+    let clock = 0;
+    const coordinator = new StrictFreshReadCoordinator({
+      service,
+      writerEnabled: true,
+      acquireWriterLease: async () => ({
+        state: "unavailable",
+        error: { code: "AUTO_SYNC_OWNER_UNAVAILABLE", message: "owned elsewhere" }
+      }),
+      now: () => new Date(clock),
+      sleep: async (milliseconds) => { clock += milliseconds; }
+    });
+
+    await expect(coordinator.execute(projectPath, async () => "forbidden")).rejects.toMatchObject({
+      code: "FRESH_INDEX_REQUIRED",
+      writerState: "lease-unavailable"
+    });
+    expect(clock).toBe(2_000);
+  });
+
   it("exports distinct fail-closed error classes", () => {
     expect(FreshIndexRequiredError).toBeTypeOf("function");
     expect(ProjectNotStableError).toBeTypeOf("function");
