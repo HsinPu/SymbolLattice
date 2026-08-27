@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.450.0
+目前版本：v0.451.0
 
 ## 主要能力
 
@@ -62,6 +62,8 @@ v0.447.0 修正 Perl bare match expression 內含 `<<` 時被誤判為 heredoc o
 v0.448.0 將所有 hidden directories 納入預設 discovery exclusion，並讓 shared walker、Cargo workspace glob 與 Xcode project discovery 共用同一集中 policy。這可避免 sandbox/test 暫存目錄的限制 ACL 阻斷索引；未來若要改回 allowlist 或精選排除，只需調整集中 policy。
 
 v0.450.0 修正大型混合專案可靠性：重複 CSS selector occurrence 現在保留各自唯一、穩定的 semantic symbol identity；streaming freshness 與初次掃描採用相同 UTF-8 BOM 解碼／hash 契約，避免合法 scoped index 被誤判 stale。
+
+v0.451.0 完成六個固定大型 TypeScript 專案的跨檔 relation 驗證。保守 Tier-A 契約涵蓋唯一 direct relative import／re-export、同檔 direct／未污染 member call、instantiation、heritage、signature 與 explicit override；102,537 個核准候選全部 exact，另有 150 個動態、歧義、mutation、type-space、shadow、external 與 malformed 負向案例全數 fail-close。型別參數遮蔽的 heritage 會保守省略，不錯連到同名頂層宣告。這不代表 package exports、project references、overload 或執行期 dispatch 的完整支援。
 
 v0.449.0 新增 `.md`／`.markdown` 基礎圖譜：ATX／Setext heading 會形成可搜尋的 resource 與階層 `contains`，完整的 project-local 相對檔案連結會在唯一命中 indexed file 時形成 exact `references`。Fenced／indented／inline code、HTML block、external／root-relative／reference-style／image／dynamic links、heading anchor 與 `.mdx` 維持 opaque、unresolved 或 nonclaim，不推測執行期文件行為。
 

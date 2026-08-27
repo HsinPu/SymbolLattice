@@ -1030,8 +1030,7 @@ describe("direct TypeScript heritage resolution", () => {
     for (const [sourceName, referenceName, relationKind] of [
       ["TypeOnlyImportDerived", "ImportedBase", "extends"],
       ["TypeOnlyReexportDerived", "TypeOnlyBase", "extends"],
-      ["GlobalDerived", "LocalBase", "extends"],
-      ["Shadowed", "ImportedContract", "extends"]
+      ["GlobalDerived", "LocalBase", "extends"]
     ] as const) {
       expect(heritageEdge(`src/unproven.ts#${sourceName}`, referenceName)).toMatchObject({
         kind: relationKind,
@@ -1041,12 +1040,13 @@ describe("direct TypeScript heritage resolution", () => {
         evidence: { ruleId: `heritage.${relationKind}.unresolved-target`, stage: "unresolved" }
       });
     }
+    expect(heritageEdge("src/unproven.ts#Shadowed", "ImportedContract")).toBeUndefined();
     expect(
       snapshot.pendingReferences
         .filter((reference) => reference.relationKind === "extends" || reference.relationKind === "implements")
         .map((reference) => reference.referenceName)
         .sort()
-    ).toEqual(["ImportedBase", "ImportedContract", "LocalBase", "TypeOnlyBase"]);
+    ).toEqual(["ImportedBase", "LocalBase", "TypeOnlyBase"]);
   });
 
   it("resolves a direct JavaScript class extends clause through a value import", () => {

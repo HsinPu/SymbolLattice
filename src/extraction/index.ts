@@ -1169,6 +1169,7 @@ function staticHeritageReferences(
   declaration: HeritageDeclaration
 ): readonly StaticHeritageReference[] {
   const references: StaticHeritageReference[] = [];
+  const typeParameterNames = enclosingTypeParameterNames(declaration);
 
   for (const clause of declaration.heritageClauses ?? []) {
     const relationKind =
@@ -1185,6 +1186,7 @@ function staticHeritageReferences(
       if (
         !ts.isExpressionWithTypeArguments(type) ||
         !ts.isIdentifier(type.expression) ||
+        typeParameterNames.has(type.expression.text) ||
         !hasSupportedHeritageDelimiter(sourceFile, declaration, clause, type)
       ) {
         continue;

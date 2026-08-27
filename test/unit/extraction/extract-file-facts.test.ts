@@ -1084,6 +1084,25 @@ describe("source extraction", () => {
     }
   });
 
+  it("rejects heritage identifiers shadowed by enclosing type parameters", () => {
+    const facts = extractFileFacts({
+      filePath: "src/type-parameter-shadowed-heritage.ts",
+      language: "typescript",
+      sourceText: [
+        "class Base {}",
+        "interface Contract {}",
+        "class Child<Base, Contract> extends Base implements Contract {}",
+        "interface ChildContract<Contract> extends Contract {}"
+      ].join("\n")
+    });
+
+    expect(
+      facts.pendingReferences.filter(
+        (reference) => reference.relationKind === "extends" || reference.relationKind === "implements"
+      )
+    ).toEqual([]);
+  });
+
   it("records type/value namespaces and type-only module facts for heritage resolution", () => {
     const facts = extractFileFacts({
       filePath: "src/namespaces.ts",
