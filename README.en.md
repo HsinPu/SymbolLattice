@@ -16,7 +16,7 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.451.0
+Current version: v0.452.0
 
 ## Highlights
 
@@ -64,6 +64,8 @@ v0.448.0 adds all hidden directories to the default discovery exclusions and sha
 v0.450.0 fixes large mixed-project reliability. Repeated CSS selector occurrences now retain unique, stable semantic symbol identities, while streaming freshness and initial scans share the same UTF-8 BOM decoding and hash contract so valid scoped indexes are not falsely marked stale.
 
 v0.451.0 validates cross-file relations across six fixed large TypeScript projects. The conservative Tier-A contract covers unique direct relative imports and re-exports, same-file direct and untainted member calls, instantiation, heritage, signatures, and explicit overrides; all 102,537 admitted candidates resolve exactly, and 150 dynamic, ambiguous, mutated, type-space, shadowing, external, and malformed negatives fail closed. Heritage identifiers shadowed by type parameters are conservatively omitted instead of being linked to same-named top-level declarations. This does not claim complete support for package exports, project references, overloads, or runtime dispatch.
+
+v0.452.0 adds large-repository TypeScript capacity telemetry and conservative extraction guards. A full-root Next.js index published a generation within the 30-minute budget; large `src/compiled` JavaScript bundles and the VS Code colorizer performance fixture retain file identity only so vendored or benchmark data is not treated as trustworthy cross-file semantics. VS Code full-root still exceeded the provisional 30-minute/4 GiB ceiling, so this release publishes the capacity boundary and unsupported breadth instead of claiming that every large repository completes within the same budget.
 
 v0.449.0 adds basic `.md` and `.markdown` graphs. ATX and Setext headings become searchable resources with hierarchical `contains` edges, while complete project-local relative file links become exact `references` only when they uniquely match an indexed file. Fenced, indented, and inline code, HTML blocks, external, root-relative, reference-style, image, dynamic, and heading-anchor links, plus `.mdx`, remain opaque, unresolved, or nonclaims rather than guessed runtime documentation behavior.
 

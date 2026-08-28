@@ -204,6 +204,14 @@ function parseTomlSections(sourceText: string, relativePath: string): ReadonlyMa
     if (line === "") {
       continue;
     }
+    // Array-of-tables such as Cargo's [[bin]] start a distinct table. The
+    // bounded workspace parser does not consume those fields, but it must
+    // stop attributing their keys to the preceding [package] section.
+    const arraySectionMatch = /^\[\[([^\[\]]+)\]\]$/u.exec(line);
+    if (arraySectionMatch !== null) {
+      currentSection = undefined;
+      continue;
+    }
     const sectionMatch = /^\[([^\[\]]+)\]$/u.exec(line);
     if (sectionMatch?.[1] !== undefined) {
       const sectionName = sectionMatch[1].trim();

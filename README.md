@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.451.0
+目前版本：v0.452.0
 
 ## 主要能力
 
@@ -64,6 +64,8 @@ v0.448.0 將所有 hidden directories 納入預設 discovery exclusion，並讓 
 v0.450.0 修正大型混合專案可靠性：重複 CSS selector occurrence 現在保留各自唯一、穩定的 semantic symbol identity；streaming freshness 與初次掃描採用相同 UTF-8 BOM 解碼／hash 契約，避免合法 scoped index 被誤判 stale。
 
 v0.451.0 完成六個固定大型 TypeScript 專案的跨檔 relation 驗證。保守 Tier-A 契約涵蓋唯一 direct relative import／re-export、同檔 direct／未污染 member call、instantiation、heritage、signature 與 explicit override；102,537 個核准候選全部 exact，另有 150 個動態、歧義、mutation、type-space、shadow、external 與 malformed 負向案例全數 fail-close。型別參數遮蔽的 heritage 會保守省略，不錯連到同名頂層宣告。這不代表 package exports、project references、overload 或執行期 dispatch 的完整支援。
+
+v0.452.0 強化大型 TypeScript repository 的容量觀測與保守 extraction。Next.js full-root 在 30 分鐘內成功發布 generation；大型 `src/compiled` JavaScript bundle 與 VS Code colorizer performance fixture 只保留 file identity，避免把 vendored／benchmark data 誤當成可靠跨檔語意。VS Code full-root 的 30 分鐘／4 GiB provisional ceiling 仍未完成，因此這版公開 capacity ceiling 與 unsupported breadth，不宣稱所有大型 repository 都能在相同預算內完成。
 
 v0.449.0 新增 `.md`／`.markdown` 基礎圖譜：ATX／Setext heading 會形成可搜尋的 resource 與階層 `contains`，完整的 project-local 相對檔案連結會在唯一命中 indexed file 時形成 exact `references`。Fenced／indented／inline code、HTML block、external／root-relative／reference-style／image／dynamic links、heading anchor 與 `.mdx` 維持 opaque、unresolved 或 nonclaim，不推測執行期文件行為。
 

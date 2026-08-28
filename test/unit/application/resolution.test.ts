@@ -6,9 +6,11 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { resolveProjectFacts } from "../../../src/application/resolution.js";
 import { ProjectConfigurationError } from "../../../src/domain/configuration.js";
+import type { ArtifactFacts } from "../../../src/domain/facts.js";
 import { extractFileFacts } from "../../../src/extraction/index.js";
 import { createTypeScriptProjectModuleResolver } from "../../../src/infrastructure/typescript/index.js";
 import type { SourceDocument } from "../../../src/ports/source-catalog.js";
+import type { SymbolNode } from "../../../src/domain/types.js";
 
 const temporaryProjectPaths: string[] = [];
 
@@ -302,6 +304,74 @@ describe("project reference resolution", () => {
       candidateSymbolIds: []
     });
     expect(snapshot.pendingReferences.map((reference) => reference.referenceName)).toEqual(["unknown"]);
+  });
+
+  it("retains pending references while bounding unresolved edge materialization for large roots", () => {
+    const range = { start: { line: 1, column: 1 }, end: { line: 1, column: 2 } };
+    const fileSymbol: SymbolNode = {
+      id: "file:src/large-root.ts",
+      name: "large-root.ts",
+      qualifiedName: "src/large-root.ts",
+      kind: "file",
+      filePath: "src/large-root.ts",
+      range,
+      isExported: true,
+      declarationOrdinal: 0
+    };
+    const pendingReferences = Array.from({ length: 250_001 }, (_, index) => ({
+      id: `pending:large-root:${index}`,
+      sourceId: fileSymbol.id,
+      filePath: fileSymbol.filePath,
+      referenceName: `unknown${index}`,
+      relationKind: "calls" as const,
+      range
+    }));
+    const facts: ArtifactFacts = {
+      symbols: [fileSymbol],
+      edges: [],
+      pendingReferences,
+      localBindings: [],
+      referenceScopes: [],
+      importBindings: [],
+      exportBindings: [],
+      reExportBindings: [],
+      reactNativeFacts: {
+        nativeModuleCalls: [{
+          sourceId: fileSymbol.id,
+          filePath: fileSymbol.filePath,
+          moduleName: "MissingModule",
+          methodName: "missing",
+          range
+        }],
+        turboModuleCalls: [],
+        turboModuleDefaultImportCalls: [],
+        turboModuleDefaultExports: [],
+        turboModuleSpecMethods: [],
+        nativeMethods: []
+      }
+    };
+    const sourceDocuments: readonly SourceDocument[] = [{
+      absolutePath: "C:/project/src/large-root.ts",
+      relativePath: fileSymbol.filePath,
+      language: "typescript",
+      sourceText: "",
+      contentHash: "large-root"
+    }];
+    const snapshot = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles: [facts],
+      indexedAt: "2026-07-29T00:00:00.000Z"
+    });
+
+    expect(snapshot.pendingReferences).toHaveLength(pendingReferences.length);
+    expect(snapshot.edges.filter((edge) => edge.resolution === "unresolved")).toEqual([
+      expect.objectContaining({
+        referenceName: "MissingModule.missing",
+        evidence: expect.objectContaining({
+          ruleId: "framework.react-native.native-modules.direct-module-and-method.any.unresolved-target"
+        })
+      })
+    ]);
   });
 
   it("records deterministic evidence for a unique imported-export heuristic", () => {

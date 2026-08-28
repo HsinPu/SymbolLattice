@@ -4,6 +4,38 @@ import { extractFileFacts } from "../../../src/extraction/index.js";
 import { extractPythonFileFacts } from "../../../src/extraction/python.js";
 
 describe("source extraction", () => {
+  it("keeps large vendored compiled JavaScript at file identity without walking the bundle", () => {
+    const facts = extractFileFacts({
+      filePath: "packages/next/src/compiled/example.js",
+      language: "javascript",
+      sourceText: "const value = 1;\n".repeat(5_000)
+    });
+
+    expect(facts.symbols).toHaveLength(1);
+    expect(facts.symbols[0]).toMatchObject({
+      kind: "file",
+      filePath: "packages/next/src/compiled/example.js"
+    });
+    expect(facts.edges).toEqual([]);
+    expect(facts.pendingReferences).toEqual([]);
+  });
+
+  it("keeps multi-megabyte TypeScript performance fixtures at file identity", () => {
+    const facts = extractFileFacts({
+      filePath: "extensions/vscode-colorize-perf-tests/test/colorize-fixtures/test-checker.ts",
+      language: "typescript",
+      sourceText: "const value = 1;\n".repeat(300_000)
+    });
+
+    expect(facts.symbols).toHaveLength(1);
+    expect(facts.symbols[0]).toMatchObject({
+      kind: "file",
+      filePath: "extensions/vscode-colorize-perf-tests/test/colorize-fixtures/test-checker.ts"
+    });
+    expect(facts.edges).toEqual([]);
+    expect(facts.pendingReferences).toEqual([]);
+  });
+
   it("collects declarations, containment, module references, and direct calls", () => {
     const facts = extractFileFacts({
       filePath: "src/consumer.ts",

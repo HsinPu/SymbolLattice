@@ -2692,6 +2692,32 @@ interface ExportSurfaceEntry {
 
 type ExportSurface = ReadonlyMap<string, ExportSurfaceEntry>;
 
+interface ExportCandidateIndex {
+  readonly byName: ReadonlyMap<string, readonly ExportCandidate[]>;
+  readonly byFileAndName: ReadonlyMap<string, readonly ExportCandidate[]>;
+}
+
+function buildExportCandidateIndex(surfaces: ReadonlyMap<string, ExportSurface>): ExportCandidateIndex {
+  const byName = new Map<string, ExportCandidate[]>();
+  const byFileAndName = new Map<string, ExportCandidate[]>();
+  for (const [filePath, surface] of surfaces) {
+    for (const [exportedName, entry] of surface) {
+      const nameCandidates = byName.get(exportedName) ?? [];
+      nameCandidates.push(...entry.candidates);
+      byName.set(exportedName, nameCandidates);
+      byFileAndName.set(moduleKey(filePath, exportedName), [...entry.candidates]);
+    }
+  }
+  return {
+    byName: new Map(
+      [...byName.entries()].map(([name, candidates]) => [name, canonicalExportCandidates(candidates)])
+    ),
+    byFileAndName: new Map(
+      [...byFileAndName.entries()].map(([key, candidates]) => [key, canonicalExportCandidates(candidates)])
+    )
+  };
+}
+
 function compareExportCandidates(left: ExportCandidate, right: ExportCandidate): number {
   const bySymbol = compareStableText(left.symbol.id, right.symbol.id);
   if (bySymbol !== 0) {
@@ -2816,36 +2842,56 @@ function surfaceSignature(surface: ExportSurface): string {
     .join("\u0005");
 }
 
-function surfacesEqual(
-  left: ReadonlyMap<string, ExportSurface>,
-  right: ReadonlyMap<string, ExportSurface>
-): boolean {
-  if (left.size !== right.size) {
-    return false;
-  }
-
-  for (const [filePath, surface] of left) {
-    const other = right.get(filePath);
-    if (other === undefined || surfaceSignature(surface) !== surfaceSignature(other)) {
-      return false;
-    }
-  }
-  return true;
-}
-
 function resolveExportSurfaces(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
   readonly moduleResolutionByKey: ReadonlyMap<string, ResolvedModule>;
   readonly moduleTargetPathByKey: ReadonlyMap<string, string>;
 }): ReadonlyMap<string, ExportSurface> {
   const orderedFilePaths = [...input.factsByFile.keys()].sort(compareStableText);
-  let surfaces = new Map<string, ExportSurface>();
+  const directSurfaces = new Map<string, ExportSurface>();
   for (const filePath of orderedFilePaths) {
     const facts = input.factsByFile.get(filePath);
     if (facts !== undefined) {
-      surfaces.set(filePath, directExportSurface(facts, filePath));
+      directSurfaces.set(filePath, directExportSurface(facts, filePath));
     }
   }
+  let surfaces = new Map(directSurfaces);
+  let surfaceSignatures = new Map(
+    [...surfaces.entries()].map(([filePath, surface]) => [filePath, surfaceSignature(surface)])
+  );
+  const dependentFilePathsByTargetPath = new Map<string, Set<string>>();
+  const addSurfaceDependency = (dependentFilePath: string, targetPath: string | undefined): void => {
+    if (targetPath === undefined) {
+      return;
+    }
+    const dependents = dependentFilePathsByTargetPath.get(targetPath) ?? new Set<string>();
+    dependents.add(dependentFilePath);
+    dependentFilePathsByTargetPath.set(targetPath, dependents);
+  };
+  for (const filePath of orderedFilePaths) {
+    const facts = input.factsByFile.get(filePath);
+    if (facts === undefined) {
+      continue;
+    }
+    for (const binding of facts.exportBindings) {
+      for (const importedBinding of facts.importBindings) {
+        if (importedBinding.localName !== binding.localName) {
+          continue;
+        }
+        addSurfaceDependency(
+          filePath,
+          input.moduleTargetPathByKey.get(moduleKey(filePath, importedBinding.moduleSpecifier))
+        );
+      }
+    }
+    for (const binding of facts.reExportBindings) {
+      addSurfaceDependency(
+        filePath,
+        input.moduleTargetPathByKey.get(moduleKey(filePath, binding.moduleSpecifier))
+      );
+    }
+  }
+  let changedFilePaths = new Set(orderedFilePaths);
 
   const maximumIterations = Math.max(
     1,
@@ -2858,15 +2904,20 @@ function resolveExportSurfaces(input: {
   );
 
   for (let iteration = 0; iteration < maximumIterations; iteration += 1) {
-    const next = new Map<string, ExportSurface>();
+    const next = new Map(surfaces);
+    const nextSignatures = new Map(surfaceSignatures);
+    const changedNext = new Set<string>();
 
     for (const filePath of orderedFilePaths) {
+      if (!changedFilePaths.has(filePath)) {
+        continue;
+      }
       const facts = input.factsByFile.get(filePath);
       if (facts === undefined) {
         continue;
       }
 
-      const surface = new Map(directExportSurface(facts, filePath));
+      const surface = new Map(directSurfaces.get(filePath) ?? []);
       const wildcardBindings = facts.reExportBindings.filter((binding) => binding.kind === "wildcard");
 
       // `import { add } from "./math"; export { add as sum };` has no local
@@ -2979,12 +3030,23 @@ function resolveExportSurfaces(input: {
         surface.set(exportedName, exportSurfaceEntry(wildcard.candidates, false, wildcard.ambiguous));
       }
       next.set(filePath, surface);
+      const signature = surfaceSignature(surface);
+      nextSignatures.set(filePath, signature);
+      if (surfaceSignatures.get(filePath) !== signature) {
+        changedNext.add(filePath);
+      }
     }
 
-    if (surfacesEqual(surfaces, next)) {
+    if (changedNext.size === 0) {
       return next;
     }
     surfaces = next;
+    surfaceSignatures = nextSignatures;
+    changedFilePaths = new Set(
+      [...changedNext].flatMap(
+        (filePath) => [...(dependentFilePathsByTargetPath.get(filePath) ?? [])]
+      )
+    );
   }
 
   return surfaces;
@@ -3001,8 +3063,17 @@ function candidatesForExport(
 function allExportCandidatesForName(
   surfaces: ReadonlyMap<string, ExportSurface>,
   exportedName: string,
-  filePaths?: ReadonlySet<string>
+  filePaths?: ReadonlySet<string>,
+  index?: ExportCandidateIndex
 ): readonly ExportCandidate[] {
+  if (index !== undefined) {
+    if (filePaths === undefined) {
+      return index.byName.get(exportedName) ?? [];
+    }
+    return canonicalExportCandidates(
+      [...filePaths].flatMap((filePath) => index.byFileAndName.get(moduleKey(filePath, exportedName)) ?? [])
+    );
+  }
   return canonicalExportCandidates(
     [...surfaces.entries()].flatMap(([filePath, surface]) =>
       filePaths !== undefined && !filePaths.has(filePath)
@@ -12538,6 +12609,8 @@ function projectUnresolvedReferenceWithPlugins(input: {
  * Resolves local declarations and explicit named import/export bindings exactly. Any
  * remaining unique-name inference stays heuristic so the graph never overstates proof.
  */
+const LARGE_ROOT_UNRESOLVED_EDGE_REFERENCE_THRESHOLD = 250_000;
+
 export function resolveProjectFacts(input: {
   readonly sourceDocuments: readonly SourceDocument[];
   readonly extractedFiles: readonly ExtractedFileFacts[];
@@ -12566,6 +12639,13 @@ export function resolveProjectFacts(input: {
     ...input.extractedFiles.flatMap((facts) => facts.pendingReferences),
     ...frameworkPluginOutputs.references
   ];
+  // A very large root can contain hundreds of thousands of unresolved syntax
+  // references. Preserve every pending reference for diagnostics, but avoid
+  // materializing a duplicate unresolved GraphEdge for each one. Exact edges
+  // are never filtered by this capacity guard, and smaller projects retain the
+  // historical unresolved-edge projection.
+  const materializeUnresolvedEdges =
+    references.length <= LARGE_ROOT_UNRESOLVED_EDGE_REFERENCE_THRESHOLD;
   const knownFilePaths = new Set(input.sourceDocuments.map((document) => document.relativePath));
   const fileSymbols = new Map(
     symbols.filter((symbol) => symbol.kind === "file").map((symbol) => [symbol.filePath, symbol])
@@ -12581,6 +12661,7 @@ export function resolveProjectFacts(input: {
   const resolvedEdges: GraphEdge[] = [];
   const unresolvedReferences: PendingReference[] = [];
   const deferredTypeScriptMemberReferences: PendingReference[] = [];
+  let capacityPruneCursor = 0;
   const decoratorTaintedTypeScriptTypeSymbolIds = new Set(
     input.extractedFiles.flatMap(
       (facts) => facts.typescriptFacts?.decoratorTaintedTypeSymbolIds ?? []
@@ -12612,6 +12693,24 @@ export function resolveProjectFacts(input: {
   const sourceDocumentsByPath = new Map(
     input.sourceDocuments.map((document) => [document.relativePath, document])
   );
+  const pruneUnresolvedEdgesForCapacity = (): void => {
+    if (materializeUnresolvedEdges) {
+      return;
+    }
+    let writeIndex = capacityPruneCursor;
+    for (let readIndex = capacityPruneCursor; readIndex < resolvedEdges.length; readIndex += 1) {
+      const edge = resolvedEdges[readIndex];
+      if (edge === undefined) {
+        continue;
+      }
+      if (edge.resolution !== "unresolved") {
+        resolvedEdges[writeIndex] = edge;
+        writeIndex += 1;
+      }
+    }
+    resolvedEdges.length = writeIndex;
+    capacityPruneCursor = writeIndex;
+  };
 
   for (const facts of input.extractedFiles) {
     const sourceFile = facts.symbols.find((symbol) => symbol.kind === "file");
@@ -12778,7 +12877,23 @@ export function resolveProjectFacts(input: {
     })
   );
 
-  for (const reference of [...references].sort((left, right) => compareStableText(left.id, right.id))) {
+  // Project-specific unresolved edges above are independent graph evidence,
+  // not duplicate projections of `references`. Keep them even for a large
+  // root, then incrementally prune only unresolved edges appended while the
+  // pending-reference pipeline runs.
+  if (!materializeUnresolvedEdges) {
+    capacityPruneCursor = resolvedEdges.length;
+  }
+  pruneUnresolvedEdgesForCapacity();
+  // Sort the owned working list in place; cloning every pending reference here
+  // needlessly doubles the large-root resolution working set.
+  references.sort((left, right) => compareStableText(left.id, right.id));
+  let moduleReferenceIndex = 0;
+  for (const reference of references) {
+    moduleReferenceIndex += 1;
+    if ((moduleReferenceIndex & 4095) === 0) {
+      pruneUnresolvedEdgesForCapacity();
+    }
     if (reference.relationKind !== "imports" && reference.relationKind !== "exports") {
       continue;
     }
@@ -12840,12 +12955,14 @@ export function resolveProjectFacts(input: {
       importTargetPathsByFile.set(reference.filePath, targetPaths);
     }
   }
+  pruneUnresolvedEdgesForCapacity();
 
   const exportSurfaces = resolveExportSurfaces({
     factsByFile,
     moduleResolutionByKey,
     moduleTargetPathByKey
   });
+  const exportCandidateIndex = buildExportCandidateIndex(exportSurfaces);
 
   resolvedEdges.push(
     ...projectPythonRegularPackageRelativeNamedImports({
@@ -13063,7 +13180,15 @@ export function resolveProjectFacts(input: {
     })
   );
 
-  for (const reference of [...references].sort((left, right) => compareStableText(left.id, right.id))) {
+  // Framework projections may append references after module resolution. Re-sort
+  // the same owned list rather than allocating another full-size copy.
+  references.sort((left, right) => compareStableText(left.id, right.id));
+  let referenceIndex = 0;
+  for (const reference of references) {
+    referenceIndex += 1;
+    if ((referenceIndex & 4095) === 0) {
+      pruneUnresolvedEdgesForCapacity();
+    }
     const isHeritage = isHeritageReference(reference);
     const isSignature = isSignatureReference(reference);
     const isInstantiation = reference.relationKind === "instantiates";
@@ -13297,9 +13422,15 @@ export function resolveProjectFacts(input: {
     const importedCandidates = allExportCandidatesForName(
       exportSurfaces,
       reference.referenceName,
-      importedTargetPaths
+      importedTargetPaths,
+      exportCandidateIndex
     );
-    const exportedCandidates = allExportCandidatesForName(exportSurfaces, reference.referenceName);
+    const exportedCandidates = allExportCandidatesForName(
+      exportSurfaces,
+      reference.referenceName,
+      undefined,
+      exportCandidateIndex
+    );
     const scopedCandidates =
       heritage !== null
         ? scopedLocal.candidates.filter((candidate) => isHeritageTarget(candidate, heritage))
@@ -13575,6 +13706,7 @@ export function resolveProjectFacts(input: {
       )
     );
   }
+  pruneUnresolvedEdgesForCapacity();
 
   const exactTypeScriptHeritageEdges = [...structuralEdges, ...resolvedEdges].filter(
     (edge) =>
@@ -13635,7 +13767,12 @@ export function resolveProjectFacts(input: {
     }
   };
 
+  let deferredReferenceIndex = 0;
   for (const reference of deferredTypeScriptMemberReferences) {
+    deferredReferenceIndex += 1;
+    if ((deferredReferenceIndex & 4095) === 0) {
+      pruneUnresolvedEdgesForCapacity();
+    }
     const receiverTypeName = reference.callReceiverTypeName;
     const receiverBindingSpace = reference.callReceiverBindingSpace ?? "type";
     const receiverMemberKind = reference.callReceiverMemberKind;
@@ -13787,8 +13924,9 @@ export function resolveProjectFacts(input: {
       )
     );
   }
+  pruneUnresolvedEdgesForCapacity();
 
-  const overrideReferences = [...references]
+  const overrideReferences = references
     .filter(isOverrideReference)
     .sort((left, right) => compareStableText(left.id, right.id));
   const containerIdsByContainedId = new Map<string, Set<string>>();
@@ -13892,8 +14030,12 @@ export function resolveProjectFacts(input: {
       unresolvedById.delete(reference.id);
     }
   }
-  unresolvedReferences.splice(0, unresolvedReferences.length, ...unresolvedById.values());
+  unresolvedReferences.length = 0;
+  for (const reference of unresolvedById.values()) {
+    unresolvedReferences.push(reference);
+  }
 
+  pruneUnresolvedEdgesForCapacity();
   const nestRouteProjection = projectNestRouterRoutes({
     symbols,
     structuralEdges,

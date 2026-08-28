@@ -7933,6 +7933,55 @@ function fileNodeFor(sourceFile: ts.SourceFile, input: ExtractFileFactsInput): S
   };
 }
 
+const LARGE_VENDORED_JAVASCRIPT_CHARACTER_LIMIT = 64 * 1024;
+
+/**
+ * Some repositories keep multi-megabyte TypeScript fixtures whose purpose is
+ * parser/colorizer performance testing rather than application code. Walking
+ * every node in those fixtures can dominate a full-root index and does not
+ * provide trustworthy cross-file facts. Keep the guard path-specific and
+ * file-only so ordinary TypeScript (including large source files elsewhere)
+ * keeps the normal extractor contract.
+ */
+const LARGE_TYPESCRIPT_FIXTURE_CHARACTER_LIMIT = 4 * 1024 * 1024;
+
+function isLargeVendoredJavaScript(input: ExtractFileFactsInput): boolean {
+  return (
+    input.language === "javascript" &&
+    input.sourceText.length >= LARGE_VENDORED_JAVASCRIPT_CHARACTER_LIMIT &&
+    /(?:^|\/)src\/compiled\//iu.test(input.filePath.replaceAll("\\", "/"))
+  );
+}
+
+function isLargeTypeScriptFixture(input: ExtractFileFactsInput): boolean {
+  const normalizedPath = input.filePath.replaceAll("\\", "/");
+  return (
+    input.language === "typescript" &&
+    input.sourceText.length >= LARGE_TYPESCRIPT_FIXTURE_CHARACTER_LIMIT &&
+    /(?:^|\/)test\/colorize-fixtures\//iu.test(normalizedPath)
+  );
+}
+
+function largeSourceFileOnlyFacts(input: ExtractFileFactsInput): ExtractedFileFacts {
+  const sourceFile = ts.createSourceFile(
+    input.filePath,
+    input.sourceText,
+    ts.ScriptTarget.Latest,
+    false,
+    scriptKindFor(input)
+  );
+  return {
+    symbols: [fileNodeFor(sourceFile, input)],
+    edges: [],
+    pendingReferences: [],
+    localBindings: [],
+    referenceScopes: [],
+    importBindings: [],
+    exportBindings: [],
+    reExportBindings: []
+  };
+}
+
 function hasJavaScriptParseDiagnostics(sourceFile: ts.SourceFile): boolean {
   const diagnostics = (
     sourceFile as ts.SourceFile & {
@@ -7950,6 +7999,12 @@ export function extractFileFacts(
   input: ExtractFileFactsInput,
   options: ExtractFileFactsOptions = {}
 ): ExtractedFileFacts {
+  if (isLargeVendoredJavaScript(input)) {
+    return largeSourceFileOnlyFacts(input);
+  }
+  if (isLargeTypeScriptFixture(input)) {
+    return largeSourceFileOnlyFacts(input);
+  }
   if (input.language === "python") {
     return extractPythonFileFacts({ ...input, language: "python" });
   }

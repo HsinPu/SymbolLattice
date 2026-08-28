@@ -460,4 +460,32 @@ describe("Cargo workspace crate module resolution", () => {
       ])
     );
   });
+
+  it("accepts valid array-of-table targets after a Cargo package section", async () => {
+    const projectPath = await createProject({
+      "Cargo.toml": [
+        "[workspace]",
+        'members = ["crates/app"]'
+      ].join("\n"),
+      "crates/app/Cargo.toml": [
+        "[package]",
+        'name = "app"',
+        'version = "0.0.0"',
+        "",
+        "[[bin]]",
+        'name = "app-cli"',
+        'path = "src/main.rs"'
+      ].join("\n"),
+      "crates/app/src/lib.rs": "pub fn run() {}",
+      "crates/app/src/main.rs": "fn main() {}"
+    });
+
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(scan.indexInputs.configurationInputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "cargo-workspace-package-manifest", path: "crates/app/Cargo.toml", state: "present" })
+      ])
+    );
+  });
 });
