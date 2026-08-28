@@ -61,6 +61,10 @@ interface LoadedConfigurationChain {
   readonly hasUnavailableExtends: boolean;
 }
 
+interface LoadedProjectReferences {
+  readonly configurations: readonly LoadedConfiguration[];
+}
+
 interface LocalExtendsResolution {
   readonly targetPath: string | null;
   readonly missingRelativePath: string | null;
@@ -101,8 +105,48 @@ function diagnosticMessage(diagnostic: ts.Diagnostic): string {
   return `TS${diagnostic.code}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, " ")}`;
 }
 
+const FORWARD_COMPATIBLE_COMPILER_OPTIONS = new Map<
+  string,
+  { readonly type: "boolean"; readonly oracleVersion: string }
+>([
+  ["stableTypeOrdering", { type: "boolean", oracleVersion: "6.0.3" }]
+]);
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function sanitizedCompilerConfigurationText(configuration: LoadedConfiguration): string {
+  const parsed = ts.parseConfigFileTextToJson(
+    typeScriptPath(configuration.absolutePath),
+    configuration.sourceText
+  );
+  if (parsed.error !== undefined || !isRecord(parsed.config)) {
+    return configuration.sourceText;
+  }
+  const compilerOptions = parsed.config.compilerOptions;
+  if (!isRecord(compilerOptions)) {
+    return configuration.sourceText;
+  }
+  const sanitizedCompilerOptions = { ...compilerOptions };
+  let changed = false;
+  for (const [name, contract] of FORWARD_COMPATIBLE_COMPILER_OPTIONS) {
+    if (!Object.hasOwn(sanitizedCompilerOptions, name)) {
+      continue;
+    }
+    const value = sanitizedCompilerOptions[name];
+    if (contract.type === "boolean" && typeof value !== "boolean") {
+      throw configurationError(
+        configuration.relativePath,
+        `compiler option "${name}" must be a boolean for the TypeScript ${contract.oracleVersion} forward-compatibility contract`
+      );
+    }
+    delete sanitizedCompilerOptions[name];
+    changed = true;
+  }
+  return changed
+    ? JSON.stringify({ ...parsed.config, compilerOptions: sanitizedCompilerOptions })
+    : configuration.sourceText;
 }
 
 function modulePathCandidates(fromFilePath: string, moduleSpecifier: string): readonly string[] {
@@ -316,17 +360,118 @@ function loadConfigurationChain(
   return { configurations: chain, missingConfigurationInputs, hasUnavailableExtends };
 }
 
+function loadProjectReferences(
+  projectPath: string,
+  selectedConfiguration: LoadedConfiguration,
+  configurationCandidatePaths: readonly string[]
+): LoadedProjectReferences {
+  const trackedPaths = new Set(
+    configurationCandidatePaths.map((path) => path.replaceAll("\\", "/").replace(/^\.\//u, ""))
+  );
+  const configurations: LoadedConfiguration[] = [];
+  const visited = new Set<string>();
+  const active = new Set<string>([fileSystemKey(selectedConfiguration.absolutePath)]);
+
+  function referencedConfigurationPaths(configuration: LoadedConfiguration): readonly string[] {
+    const parsed = ts.parseConfigFileTextToJson(
+      typeScriptPath(configuration.absolutePath),
+      configuration.sourceText
+    );
+    if (parsed.error !== undefined) {
+      throw configurationError(configuration.relativePath, diagnosticMessage(parsed.error));
+    }
+    if (!isRecord(parsed.config)) {
+      throw configurationError(configuration.relativePath, "the config root must be an object");
+    }
+    const references = parsed.config.references;
+    if (references === undefined) {
+      return [];
+    }
+    if (!Array.isArray(references)) {
+      throw configurationError(configuration.relativePath, 'the "references" property must be an array');
+    }
+
+    return references.map((reference, index) => {
+      if (!isRecord(reference) || typeof reference.path !== "string" || reference.path === "") {
+        throw configurationError(
+          configuration.relativePath,
+          `references[${index}].path must be a non-empty string`
+        );
+      }
+      if (!reference.path.startsWith(".") || isAbsolute(reference.path)) {
+        throw configurationError(
+          configuration.relativePath,
+          `project reference must be project-local: ${reference.path}`
+        );
+      }
+      const rawTarget = resolve(dirname(configuration.absolutePath), reference.path);
+      const absoluteTarget = reference.path.endsWith(".json")
+        ? rawTarget
+        : resolve(rawTarget, "tsconfig.json");
+      const relativeTarget = projectRelativePath(projectPath, absoluteTarget);
+      if (relativeTarget === null || !trackedPaths.has(relativeTarget)) {
+        throw configurationError(
+          configuration.relativePath,
+          `project reference is missing or untracked: ${reference.path}`
+        );
+      }
+      return relativeTarget;
+    }).sort(compareStableText);
+  }
+
+  function visit(configuration: LoadedConfiguration): void {
+    for (const relativeTarget of referencedConfigurationPaths(configuration)) {
+      const absoluteTarget = resolve(projectPath, ...relativeTarget.split("/"));
+      const key = fileSystemKey(absoluteTarget);
+      if (active.has(key)) {
+        throw configurationError(configuration.relativePath, "project reference cycle detected");
+      }
+      if (visited.has(key)) {
+        continue;
+      }
+      const chain = loadConfigurationChain(projectPath, absoluteTarget, "tsconfig");
+      if (chain.hasUnavailableExtends || chain.missingConfigurationInputs.length > 0) {
+        throw configurationError(relativeTarget, "project reference has unavailable extends evidence");
+      }
+      configurations.push(...chain.configurations);
+      active.add(key);
+      visit(chain.configurations[0]!);
+      active.delete(key);
+      visited.add(key);
+    }
+  }
+
+  visit(selectedConfiguration);
+  return {
+    configurations: configurations.filter(
+      (configuration, index, values) =>
+        values.findIndex(
+          (candidate) => fileSystemKey(candidate.absolutePath) === fileSystemKey(configuration.absolutePath)
+        ) === index
+    )
+  };
+}
+
 function parseCompilerOptions(
   projectPath: string,
   selectedPath: string,
-  selectedRelativePath: string
+  selectedRelativePath: string,
+  chain: readonly LoadedConfiguration[]
 ): ts.CompilerOptions {
   const unrecoverableDiagnostics: ts.Diagnostic[] = [];
+  const sanitizedSourceByPath = new Map(
+    chain.map((configuration) => [
+      fileSystemKey(configuration.absolutePath),
+      sanitizedCompilerConfigurationText(configuration)
+    ])
+  );
   const host: ts.ParseConfigFileHost = {
     useCaseSensitiveFileNames: ts.sys.useCaseSensitiveFileNames,
     readDirectory: ts.sys.readDirectory,
     fileExists: ts.sys.fileExists,
-    readFile: ts.sys.readFile,
+    readFile(path) {
+      return sanitizedSourceByPath.get(fileSystemKey(path)) ?? ts.sys.readFile(path);
+    },
     directoryExists: ts.sys.directoryExists,
     getCurrentDirectory: () => typeScriptPath(projectPath),
     getDirectories: ts.sys.getDirectories,
@@ -610,6 +755,7 @@ function nonRelativeStrategy(
 function createSingleTypeScriptProjectModuleResolver(input: {
   readonly projectPath: string;
   readonly sourceDocuments: readonly SourceDocument[];
+  readonly configurationCandidatePaths: readonly string[];
   /** A unique root Astro config observed by the source catalog. */
   readonly astroConfigurationPath?: string;
   /** Explicit project-relative tsconfig/jsconfig selected by the composite resolver. */
@@ -656,9 +802,26 @@ function createSingleTypeScriptProjectModuleResolver(input: {
   const selectedPath = resolve(projectPath, selectedInput.path);
   const loadedChain = loadConfigurationChain(projectPath, selectedPath, selectedInput.kind);
   const chain = loadedChain.configurations;
+  const projectReferences = loadProjectReferences(
+    projectPath,
+    chain[0]!,
+    input.configurationCandidatePaths
+  );
+  const chainConfigurationKeys = new Set(
+    chain.map((configuration) => fileSystemKey(configuration.absolutePath))
+  );
+  const referenceConfigurations = projectReferences.configurations.filter(
+    (configuration) => !chainConfigurationKeys.has(fileSystemKey(configuration.absolutePath))
+  );
   const configurationPaths = [
     ...chain.map((configuration) => configuration.relativePath),
     ...loadedChain.missingConfigurationInputs.map((configuration) => configuration.path)
+  ];
+  const fallbackConfigurationPaths = [
+    ...new Set([
+      ...configurationPaths,
+      ...referenceConfigurations.map((configuration) => configuration.relativePath)
+    ])
   ];
   const chainInputs = chain.map<ProjectConfigurationInput>((configuration) => ({
     kind: configuration.kind,
@@ -668,6 +831,12 @@ function createSingleTypeScriptProjectModuleResolver(input: {
   }));
   const configurationInputs = [
     ...chainInputs,
+    ...referenceConfigurations.map<ProjectConfigurationInput>((configuration) => ({
+      kind: configuration.kind,
+      path: configuration.relativePath,
+      state: "present",
+      contentHash: sourceHash(configuration.sourceText)
+    })),
     ...loadedChain.missingConfigurationInputs,
     ...(explicitSelectedInput === undefined && selectedInput.kind === "jsconfig" ? [tsconfigInput] : [])
   ]
@@ -704,7 +873,7 @@ function createSingleTypeScriptProjectModuleResolver(input: {
           }
           const targetFilePath = astroFallbackTarget(fromFilePath, moduleSpecifier);
           return targetFilePath === null
-            ? unresolved(configurationPaths)
+            ? unresolved(fallbackConfigurationPaths)
             : {
                 targetFilePath,
                 strategy: "tsconfig-paths",
@@ -719,7 +888,12 @@ function createSingleTypeScriptProjectModuleResolver(input: {
     };
   }
 
-  const compilerOptions = parseCompilerOptions(projectPath, selectedPath, selectedInput.path);
+  const compilerOptions = parseCompilerOptions(
+    projectPath,
+    selectedPath,
+    selectedInput.path,
+    chain
+  );
   const requiresPathsBasePath =
     compilerOptions.baseUrl === undefined &&
     !configurationDeclaresPaths(chain[0]!) &&
@@ -782,7 +956,7 @@ function createSingleTypeScriptProjectModuleResolver(input: {
             requiresPathsBasePath
           });
           return fallbackTargetFilePath === null
-            ? unresolved(configurationPaths)
+            ? unresolved(fallbackConfigurationPaths)
             : { targetFilePath: fallbackTargetFilePath, strategy: "tsconfig-paths", configurationPaths };
         }
 
@@ -794,7 +968,7 @@ function createSingleTypeScriptProjectModuleResolver(input: {
           compilerOptions
         );
         if (targetFilePath === undefined || strategy === null) {
-          return unresolved(configurationPaths);
+          return unresolved(fallbackConfigurationPaths);
         }
 
         return { targetFilePath, strategy, configurationPaths };
@@ -902,6 +1076,7 @@ function createNestedTypeScriptProjectModuleResolver(input: {
   readonly projectPath: string;
   readonly sourceDocuments: readonly SourceDocument[];
   readonly configurationPath: string;
+  readonly configurationCandidatePaths: readonly string[];
 }): TypeScriptProjectModuleResolver {
   const kind = input.configurationPath.endsWith("/jsconfig.json") ? "jsconfig" : "tsconfig";
   if (configurationInput(input.projectPath, input.configurationPath, kind).state !== "present") {
@@ -911,6 +1086,7 @@ function createNestedTypeScriptProjectModuleResolver(input: {
     return createSingleTypeScriptProjectModuleResolver({
       projectPath: input.projectPath,
       sourceDocuments: input.sourceDocuments,
+      configurationCandidatePaths: input.configurationCandidatePaths,
       selectedConfigurationPath: input.configurationPath
     });
   } catch (error) {
@@ -938,6 +1114,7 @@ export function createTypeScriptProjectModuleResolver(input: {
   const rootResolver = createSingleTypeScriptProjectModuleResolver({
     projectPath: input.projectPath,
     sourceDocuments: input.sourceDocuments,
+    configurationCandidatePaths: input.configurationCandidatePaths ?? [],
     ...(input.astroConfigurationPath === undefined
       ? {}
       : { astroConfigurationPath: input.astroConfigurationPath })
@@ -956,7 +1133,8 @@ export function createTypeScriptProjectModuleResolver(input: {
       resolver: createNestedTypeScriptProjectModuleResolver({
         projectPath: input.projectPath,
         sourceDocuments: input.sourceDocuments,
-        configurationPath
+        configurationPath,
+        configurationCandidatePaths: input.configurationCandidatePaths ?? []
       })
     }))
     .sort((left, right) => {

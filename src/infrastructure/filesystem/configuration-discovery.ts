@@ -17,7 +17,7 @@ import { walkScopedProject } from "./scoped-walker.js";
 
 export const CONFIGURATION_DISCOVERY_INPUT_PATH =
   ".SymbolLattice/configuration-candidates.json";
-export const CONFIGURATION_DISCOVERY_POLICY = "configuration-candidates-v2" as const;
+export const CONFIGURATION_DISCOVERY_POLICY = "configuration-candidates-v3" as const;
 
 const CONFIGURATION_CANDIDATE_NAMES: ReadonlySet<string> = new Set([
   ".gitignore",
@@ -40,8 +40,13 @@ const CONFIGURATION_CANDIDATE_NAMES: ReadonlySet<string> = new Set([
   "tsconfig.json"
 ]);
 
+const TYPESCRIPT_PROJECT_CONFIGURATION_NAME = /^(?:ts|js)config(?:\.[A-Za-z0-9_-]+)+\.json$/u;
+
 export function isConfigurationCandidateFileName(fileName: string): boolean {
-  return CONFIGURATION_CANDIDATE_NAMES.has(fileName);
+  return (
+    CONFIGURATION_CANDIDATE_NAMES.has(fileName) ||
+    TYPESCRIPT_PROJECT_CONFIGURATION_NAME.test(fileName)
+  );
 }
 
 interface ConfigurationCandidateIdentity {

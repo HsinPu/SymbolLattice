@@ -6,7 +6,10 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import type { ProjectConfigurationInput } from "../../../src/domain/index-inputs.js";
 import { hashSource } from "../../../src/infrastructure/filesystem/discovery.js";
-import { discoverConfigurationCandidateInput } from "../../../src/infrastructure/filesystem/configuration-discovery.js";
+import {
+  discoverConfigurationCandidateInput,
+  isConfigurationCandidateFileName
+} from "../../../src/infrastructure/filesystem/configuration-discovery.js";
 import {
   nativeProjectFilesystemReader,
   type ProjectFilesystemReader
@@ -29,6 +32,15 @@ afterEach(async () => {
 });
 
 describe("configuration discovery identity", () => {
+  it("admits bounded TypeScript project config names without collecting arbitrary JSON", () => {
+    expect(isConfigurationCandidateFileName("tsconfig.repo-config-files.json")).toBe(true);
+    expect(isConfigurationCandidateFileName("jsconfig.web.json")).toBe(true);
+    expect(isConfigurationCandidateFileName("tsconfig.json")).toBe(true);
+    expect(isConfigurationCandidateFileName("tsconfig.json.bak")).toBe(false);
+    expect(isConfigurationCandidateFileName("config.repo.json")).toBe(false);
+    expect(isConfigurationCandidateFileName("tsconfig..json")).toBe(false);
+  });
+
   it("hashes known candidates and tracked resolver paths without retaining their contents", async () => {
     const projectPath = await createProject();
     await mkdir(join(projectPath, "packages", "app"), { recursive: true });
@@ -138,8 +150,10 @@ describe("configuration discovery identity", () => {
     ["services/api/go.mod", "module example.test/api\n\ngo 1.24\n"],
     ["modules/api/pom.xml", "<project />\n"],
     ["modules/api/build.gradle.kts", "plugins { java }\n"],
-    ["Apple/App.xcodeproj/project.pbxproj", "// !$*UTF8*$!\n{}\n"]
-  ])("detects a newly added Cargo, Go, JVM, or Xcode candidate at %s", async (path, contents) => {
+    ["Apple/App.xcodeproj/project.pbxproj", "// !$*UTF8*$!\n{}\n"],
+    ["configs/tsconfig.repo-config-files.json", "{\"compilerOptions\":{}}\n"],
+    ["configs/jsconfig.web.json", "{\"compilerOptions\":{}}\n"]
+  ])("detects a newly added bounded configuration candidate at %s", async (path, contents) => {
     const projectPath = await createProject();
     const before = await discoverConfigurationCandidateInput(projectPath, []);
     const segments = path.split("/");

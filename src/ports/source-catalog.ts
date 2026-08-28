@@ -43,7 +43,10 @@ interface ProjectFreshnessVerificationBase {
   readonly filesChecked: number;
   readonly sourceHash: "sha256";
   readonly retainedSourceText: false;
-  readonly configurationPolicy: "configuration-candidates-v1" | "configuration-candidates-v2";
+  readonly configurationPolicy:
+    | "configuration-candidates-v1"
+    | "configuration-candidates-v2"
+    | "configuration-candidates-v3";
   readonly configurationCandidatesChecked: number;
   readonly sourceReadPolicy:
     | "streaming-utf8-with-objective-c-header-classification-v1"

@@ -85,6 +85,66 @@ describe("workspace package module resolution", () => {
     );
   });
 
+  it("keeps conditional array and wildcard package exports unresolved", async () => {
+    const projectPath = await createProject({
+      "package.json": JSON.stringify({ private: true, workspaces: ["packages/*"] }),
+      "packages/conditional/package.json": JSON.stringify({
+        name: "@fixture/conditional",
+        exports: { import: "./src/import.ts", require: "./src/require.ts" }
+      }),
+      "packages/conditional/src/import.ts": "export const value = 'import';",
+      "packages/conditional/src/require.ts": "export const value = 'require';",
+      "packages/array/package.json": JSON.stringify({
+        name: "@fixture/array",
+        exports: ["./src/one.ts", "./src/two.ts"]
+      }),
+      "packages/array/src/one.ts": "export const value = 1;",
+      "packages/array/src/two.ts": "export const value = 2;",
+      "packages/wildcard/package.json": JSON.stringify({
+        name: "@fixture/wildcard",
+        exports: { "./*": "./src/*.ts" }
+      }),
+      "packages/wildcard/src/value.ts": "export const value = true;",
+      "packages/mixed/package.json": JSON.stringify({
+        name: "@fixture/mixed",
+        exports: { "./exact": "./src/exact.ts", "./*": "./src/*.ts" }
+      }),
+      "packages/mixed/src/exact.ts": "export const exact = true;",
+      "packages/mixed/src/value.ts": "export const value = true;",
+      "apps/web/src/consumer.ts": "export const consumer = true;"
+    });
+
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+    const resolveFromConsumer = (specifier: string) =>
+      scan.moduleResolver.resolve("apps/web/src/consumer.ts", specifier);
+
+    expect(resolveFromConsumer("@fixture/conditional")).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["package.json", "packages/conditional/package.json"]
+    });
+    expect(resolveFromConsumer("@fixture/array")).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["package.json", "packages/array/package.json"]
+    });
+    expect(resolveFromConsumer("@fixture/wildcard/value")).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["package.json", "packages/wildcard/package.json"]
+    });
+    expect(resolveFromConsumer("@fixture/mixed/exact")).toEqual({
+      targetFilePath: "packages/mixed/src/exact.ts",
+      strategy: "workspace-package",
+      configurationPaths: ["package.json", "packages/mixed/package.json"]
+    });
+    expect(resolveFromConsumer("@fixture/mixed/value")).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["package.json", "packages/mixed/package.json"]
+    });
+  });
+
   it("supports object workspaces, recursive patterns, exclusions, and root entry fallbacks", async () => {
     const projectPath = await createProject({
       "package.json": JSON.stringify({
@@ -293,6 +353,143 @@ describe("workspace package module resolution", () => {
         "packages/core/package.json"
       ]
     });
+  });
+
+  it("retains tracked project-reference configuration evidence on workspace fallback", async () => {
+    const projectPath = await createProject({
+      "package.json": JSON.stringify({ private: true, workspaces: ["packages/*"] }),
+      "packages/app/tsconfig.json": JSON.stringify({
+        compilerOptions: { moduleResolution: "Bundler" },
+        references: [{ path: "../core" }]
+      }),
+      "packages/app/src/consumer.ts": "export const consumer = true;",
+      "packages/core/tsconfig.json": JSON.stringify({ compilerOptions: { composite: true } }),
+      "packages/core/package.json": JSON.stringify({
+        name: "@fixture/core",
+        exports: { ".": "./src/index.ts" }
+      }),
+      "packages/core/src/index.ts": "export const core = true;"
+    });
+
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(scan.moduleResolver.resolve("packages/app/src/consumer.ts", "@fixture/core")).toEqual({
+      targetFilePath: "packages/core/src/index.ts",
+      strategy: "workspace-package",
+      configurationPaths: [
+        "packages/app/tsconfig.json",
+        "packages/core/tsconfig.json",
+        "package.json",
+        "packages/core/package.json"
+      ]
+    });
+    expect(scan.indexInputs.configurationInputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "tsconfig",
+          path: "packages/core/tsconfig.json",
+          state: "present"
+        })
+      ])
+    );
+  });
+
+  it("retains transitive project-reference configuration evidence", async () => {
+    const projectPath = await createProject({
+      "package.json": JSON.stringify({ private: true, workspaces: ["packages/*"] }),
+      "tsconfig.base.json": JSON.stringify({ compilerOptions: { strict: true } }),
+      "packages/app/tsconfig.json": JSON.stringify({
+        extends: "../../tsconfig.base.json",
+        references: [{ path: "../core" }]
+      }),
+      "packages/app/src/consumer.ts": "export const consumer = true;",
+      "packages/core/tsconfig.json": JSON.stringify({
+        extends: "../../tsconfig.base.json",
+        references: [{ path: "../shared" }]
+      }),
+      "packages/core/package.json": JSON.stringify({
+        name: "@fixture/core",
+        exports: { ".": "./src/index.ts" }
+      }),
+      "packages/core/src/index.ts": "export const core = true;",
+      "packages/shared/tsconfig.json": JSON.stringify({ compilerOptions: { composite: true } }),
+      "packages/shared/src/index.ts": "export const shared = true;"
+    });
+
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(scan.moduleResolver.resolve("packages/app/src/consumer.ts", "@fixture/core")).toEqual({
+      targetFilePath: "packages/core/src/index.ts",
+      strategy: "workspace-package",
+      configurationPaths: [
+        "packages/app/tsconfig.json",
+        "tsconfig.base.json",
+        "packages/core/tsconfig.json",
+        "packages/shared/tsconfig.json",
+        "package.json",
+        "packages/core/package.json"
+      ]
+    });
+    const configurationInputPaths = scan.indexInputs.configurationInputs.map((input) => input.path);
+    expect(new Set(configurationInputPaths).size).toBe(configurationInputPaths.length);
+  });
+
+  it("isolates invalid nested project references without workspace fallback", async () => {
+    const cases = [
+      {
+        name: "cycle",
+        appReferences: [{ path: "../core" }],
+        coreReferences: [{ path: "../app" }]
+      },
+      {
+        name: "missing",
+        appReferences: [{ path: "../missing" }],
+        coreReferences: []
+      },
+      {
+        name: "external",
+        appReferences: [{ path: "../../../outside" }],
+        coreReferences: []
+      }
+    ] as const;
+
+    for (const testCase of cases) {
+      const projectPath = await createProject({
+        "package.json": JSON.stringify({ private: true, workspaces: ["packages/*"] }),
+        "packages/app/tsconfig.json": JSON.stringify({ references: testCase.appReferences }),
+        "packages/app/src/consumer.ts": "export const consumer = true;",
+        "packages/core/tsconfig.json": JSON.stringify({ references: testCase.coreReferences }),
+        "packages/core/package.json": JSON.stringify({
+          name: "@fixture/core",
+          exports: { ".": "./src/index.ts" }
+        }),
+        "packages/core/src/index.ts": "export const core = true;"
+      });
+
+      const scan = await new FileSystemSourceCatalog().scan(projectPath);
+      expect(
+        scan.moduleResolver.resolve("packages/app/src/consumer.ts", "@fixture/core"),
+        testCase.name
+      ).toEqual({
+        targetFilePath: null,
+        strategy: "unresolved",
+        configurationPaths: ["packages/app/tsconfig.json"]
+      });
+    }
+  });
+
+  it("keeps invalid root project references strict", async () => {
+    const projectPath = await createProject({
+      "tsconfig.json": JSON.stringify({ references: [{ path: "./missing" }] }),
+      "src/entry.ts": "export const entry = true;"
+    });
+
+    await expect(new FileSystemSourceCatalog().scan(projectPath)).rejects.toBeInstanceOf(
+      ProjectConfigurationError
+    );
+    await expect(new FileSystemSourceCatalog().scan(projectPath)).rejects.toThrow(
+      "project reference is missing or untracked"
+    );
   });
 
   it("uses a package tsconfig that extends a project-local root base config", async () => {

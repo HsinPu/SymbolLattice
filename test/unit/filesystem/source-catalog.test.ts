@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { ProjectConfigurationError } from "../../../src/domain/configuration.js";
 import { FileSystemSourceCatalog } from "../../../src/infrastructure/filesystem/source-catalog.js";
 
 const temporaryDirectories: string[] = [];
@@ -18,6 +19,90 @@ afterEach(async () => {
 });
 
 describe("filesystem source catalog freshness", () => {
+  it("admits an oracle-approved TypeScript 6 non-resolution option through a local extends chain", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-source-catalog-ts6-option-"));
+    temporaryDirectories.push(projectPath);
+    await mkdir(join(projectPath, "src", "lib"), { recursive: true });
+    await writeFile(
+      join(projectPath, "tsconfig.base.json"),
+      JSON.stringify({
+        compilerOptions: {
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          baseUrl: ".",
+          paths: { "@fixture/*": ["src/lib/*"] },
+          stableTypeOrdering: true
+        }
+      }),
+      "utf8"
+    );
+    await writeFile(
+      join(projectPath, "tsconfig.json"),
+      JSON.stringify({ extends: "./tsconfig.base.json" }),
+      "utf8"
+    );
+    await writeFile(
+      join(projectPath, "src", "lib", "value.ts"),
+      "export const value = 42;\n",
+      "utf8"
+    );
+    await writeFile(
+      join(projectPath, "src", "consumer.ts"),
+      'import { value } from "@fixture/value"; export { value };\n',
+      "utf8"
+    );
+
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(scan.moduleResolver.resolve("src/consumer.ts", "@fixture/value")).toEqual({
+      targetFilePath: "src/lib/value.ts",
+      strategy: "tsconfig-paths",
+      configurationPaths: ["tsconfig.json", "tsconfig.base.json"]
+    });
+    expect(scan.indexInputs.configurationInputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "tsconfig", path: "tsconfig.json", state: "present" }),
+        expect.objectContaining({ kind: "extends", path: "tsconfig.base.json", state: "present" })
+      ])
+    );
+  });
+
+  it("rejects invalid or unapproved forward-compatible compiler options", async () => {
+    const cases = [
+      {
+        name: "invalid-approved-type",
+        compilerOptions: { stableTypeOrdering: "true" },
+        message: 'compiler option "stableTypeOrdering" must be a boolean'
+      },
+      {
+        name: "unapproved-option",
+        compilerOptions: { futureResolutionMagic: true },
+        message: "TS5023: Unknown compiler option 'futureResolutionMagic'."
+      }
+    ] as const;
+
+    for (const testCase of cases) {
+      const projectPath = await mkdtemp(
+        join(tmpdir(), `SymbolLattice-source-catalog-${testCase.name}-`)
+      );
+      temporaryDirectories.push(projectPath);
+      await mkdir(join(projectPath, "src"), { recursive: true });
+      await writeFile(
+        join(projectPath, "tsconfig.json"),
+        JSON.stringify({ compilerOptions: testCase.compilerOptions }),
+        "utf8"
+      );
+      await writeFile(join(projectPath, "src", "entry.ts"), "export const value = 1;\n", "utf8");
+
+      await expect(new FileSystemSourceCatalog().scan(projectPath)).rejects.toThrow(
+        testCase.message
+      );
+      await expect(new FileSystemSourceCatalog().scan(projectPath)).rejects.toBeInstanceOf(
+        ProjectConfigurationError
+      );
+    }
+  });
+
   it("resolves a package-local tsconfig paths alias inside its configuration boundary", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-source-catalog-package-tsconfig-"));
     temporaryDirectories.push(projectPath);
@@ -154,7 +239,7 @@ describe("filesystem source catalog freshness", () => {
       filesChecked: 1,
       sourceHash: "sha256",
       retainedSourceText: false,
-      configurationPolicy: "configuration-candidates-v2",
+      configurationPolicy: "configuration-candidates-v3",
       configurationCandidatesChecked: expect.any(Number),
       sourceReadPolicy: "streaming-raw-bytes-for-shell-and-lua-with-objective-c-header-classification-v4",
       configurationReadPolicy: "streaming-utf8-v1",
@@ -436,7 +521,7 @@ describe("filesystem source catalog freshness", () => {
 
     expect(verification).toMatchObject({
       outcome: "project-inputs-changed",
-      configurationPolicy: "configuration-candidates-v2",
+      configurationPolicy: "configuration-candidates-v3",
       discoveryPolicy: "single-project-walk-v3",
       sourceFilesChanged: false,
       projectInputsChanged: true,

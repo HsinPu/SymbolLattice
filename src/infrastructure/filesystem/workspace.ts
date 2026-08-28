@@ -333,18 +333,6 @@ function validatePackageName(value: unknown, manifestPath: string): string {
   return value;
 }
 
-function orderedConditionKeys(value: Record<string, unknown>): readonly string[] {
-  const preferred = ["types", "source", "import", "module", "default", "require"];
-  const remaining = Object.keys(value)
-    .filter((key) => !preferred.includes(key))
-    .sort(compareStableText);
-
-  return [
-    ...preferred.filter((key) => Object.hasOwn(value, key)),
-    ...remaining
-  ];
-}
-
 function parseEntryTargetPatterns(
   value: unknown,
   manifestPath: string,
@@ -359,18 +347,14 @@ function parseEntryTargetPatterns(
   }
 
   if (Array.isArray(value)) {
-    return value.flatMap((entry, index) =>
-      parseEntryTargetPatterns(entry, manifestPath, `${fieldPath}[${index}]`)
-    );
+    return [];
   }
 
-  if (!isRecord(value)) {
-    throw configurationError(manifestPath, `${fieldPath} must be a string, array, object, or null`);
+  if (isRecord(value)) {
+    return [];
   }
 
-  return orderedConditionKeys(value).flatMap((key) =>
-    parseEntryTargetPatterns(value[key], manifestPath, `${fieldPath}.${key}`)
-  );
+  throw configurationError(manifestPath, `${fieldPath} must be a string, array, object, or null`);
 }
 
 function validateExportSubpath(value: string, manifestPath: string): string {
@@ -405,7 +389,9 @@ function validateExportSubpath(value: string, manifestPath: string): string {
 function parsePackageExports(value: unknown, manifestPath: string): PackageExports {
   if (!isRecord(value)) {
     return {
-      rootTargetPatterns: parseEntryTargetPatterns(value, manifestPath, "exports"),
+      rootTargetPatterns: parseEntryTargetPatterns(value, manifestPath, "exports").filter(
+        (targetPattern) => !targetPattern.includes("*")
+      ),
       mappings: []
     };
   }
@@ -418,7 +404,9 @@ function parsePackageExports(value: unknown, manifestPath: string): PackageExpor
 
   if (!hasSubpathKeys) {
     return {
-      rootTargetPatterns: parseEntryTargetPatterns(value, manifestPath, "exports"),
+      rootTargetPatterns: parseEntryTargetPatterns(value, manifestPath, "exports").filter(
+        (targetPattern) => !targetPattern.includes("*")
+      ),
       mappings: []
     };
   }
@@ -427,7 +415,11 @@ function parsePackageExports(value: unknown, manifestPath: string): PackageExpor
   let rootTargetPatterns: readonly string[] = [];
   for (const key of keys) {
     const subpathPattern = validateExportSubpath(key, manifestPath);
-    const targetPatterns = parseEntryTargetPatterns(value[key], manifestPath, `exports.${key}`);
+    const targetPatterns = subpathPattern.includes("*")
+      ? []
+      : parseEntryTargetPatterns(value[key], manifestPath, `exports.${key}`).filter(
+          (targetPattern) => !targetPattern.includes("*")
+        );
     if (subpathPattern === ".") {
       rootTargetPatterns = targetPatterns;
     } else {

@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.454.0
+目前版本：v0.455.0
 
 ## 主要能力
 
@@ -70,6 +70,8 @@ v0.452.0 強化大型 TypeScript repository 的容量觀測與保守 extraction�
 v0.453.0 開始加深 TypeScript monorepo 關係：source file 會使用最近且唯一的 package-local `tsconfig.json`／`jsconfig.json` boundary解析 `paths`與`baseUrl`，並保存完整config／extends evidence。Nested config不會污染sibling package；未被TypeScript config宣告的specifier仍可交由既有workspace package resolver處理。Project references、conditional package exports、overload與runtime dispatch仍維持後續工作或nonclaim。
 
 v0.454.0 加深Java project relation。合法modern Java來源即使legacy parser因檔內switch expression等語法fail-close，仍可從clean modern parse保守恢復method／constructor的visibility、static／final與arity metadata，但不恢復body relations或猜測parameter type。明確import的type-name static call、source-proven field／parameter receiver，以及instance body內compile-time-bound的static／final／private bare call可建立唯一exact edge；同名local／field／inherited field、overload、一般virtual inherited dispatch、外部classpath與無法唯一證明的target維持fail-close。固定Netty、Quarkus core、Hibernate ORM truth由200 TP／100 FN改善為210 TP／90 FN，FP與evidenceInvalid皆0，150／150負向通過。
+
+v0.455.0 加深 TypeScript project configuration evidence。經 TypeScript 6.0.3 oracle 證明不影響 module resolution 或 program structure 的 boolean `stableTypeOrdering`，可在保留原始 config hash 的前提下交由產品內 TypeScript 5.9.3 安全解析；其他未知或型別錯誤選項仍會失敗。Project references 只接受 project-local、tracked、唯一且無循環的 config chain，並將完整 evidence 帶入 unresolved workspace fallback。Workspace package exports 只對 literal root／exact subpath 建立 exact target；conditional object、array 與 wildcard 維持 nonclaim。六個固定大型 TypeScript corpus 的 102,537 個核准 relation candidates、300 個固定正向與 150 個負向案例全部通過，FP、FN 與 evidenceInvalid 皆為 0；parse-rejected files、package conditions、wildcards、overloads 與 runtime dispatch 不在完整支援宣稱內。
 
 v0.449.0 新增 `.md`／`.markdown` 基礎圖譜：ATX／Setext heading 會形成可搜尋的 resource 與階層 `contains`，完整的 project-local 相對檔案連結會在唯一命中 indexed file 時形成 exact `references`。Fenced／indented／inline code、HTML block、external／root-relative／reference-style／image／dynamic links、heading anchor 與 `.mdx` 維持 opaque、unresolved 或 nonclaim，不推測執行期文件行為。
 
