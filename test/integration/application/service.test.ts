@@ -3337,6 +3337,9 @@ describe("SymbolLatticeService", () => {
     const javaEntry = symbol(
       "src/ComparisonJavaFixture.java#ComparisonJavaFixture.comparisonJavaEntry"
     );
+    const javaNonStaticEntry = symbol(
+      "src/ComparisonJavaFixture.java#ComparisonJavaFixture.nonStaticEntry"
+    );
     const javaPrivateInstanceHelper = symbol(
       "src/ComparisonJavaFixture.java#ComparisonJavaFixture.privateInstanceHelper"
     );
@@ -3347,13 +3350,14 @@ describe("SymbolLatticeService", () => {
     const pythonEntry = symbol("comparison_fixture.py#comparison_python_entry");
     expect(javaHelper).toBeDefined();
     expect(javaEntry).toBeDefined();
+    expect(javaNonStaticEntry).toBeDefined();
     expect(javaPrivateInstanceHelper).toBeDefined();
     expect(javaPrivateInstanceEntry).toBeDefined();
     expect(pythonHelper).toBeDefined();
     expect(pythonEntry).toBeDefined();
 
     const javaCallers = await service.callers(projectPath, javaHelper?.qualifiedName ?? "missing");
-    expect(javaCallers.relations).toEqual([
+    expect(javaCallers.relations).toEqual(expect.arrayContaining([
       expect.objectContaining({
         symbol: expect.objectContaining({ id: javaEntry?.id }),
         edge: expect.objectContaining({
@@ -3369,7 +3373,20 @@ describe("SymbolLatticeService", () => {
           })
         })
       })
-    ]);
+    ]));
+    expect(javaCallers.relations).toHaveLength(2);
+    expect(
+      javaCallers.relations.find((relation) => relation.symbol.id === javaNonStaticEntry?.id)
+    ).toEqual(
+      expect.objectContaining({
+        edge: expect.objectContaining({
+          evidence: expect.objectContaining({
+            ruleId: expect.stringContaining("implicit-instance.static-binding"),
+            callDispatch: expect.objectContaining({ invocationKind: "implicit-instance" })
+          })
+        })
+      })
+    );
     const javaCallees = await service.callees(projectPath, javaEntry?.qualifiedName ?? "missing");
     expect(javaCallees.relations.map((relation) => relation.symbol.id)).toEqual([javaHelper?.id]);
     const javaPrivateInstanceCallees = await service.callees(
@@ -3455,6 +3472,10 @@ describe("SymbolLatticeService", () => {
         }),
         expect.objectContaining({
           receiverKind: "implicit-instance",
+          methodName: "comparisonJavaHelper"
+        }),
+        expect.objectContaining({
+          receiverKind: "implicit-instance",
           methodName: "privateInstanceHelper"
         })
       ])
@@ -3479,7 +3500,8 @@ describe("SymbolLatticeService", () => {
       pythonHelper?.qualifiedName ?? "missing"
     );
     expect(reopenedJavaCallers.relations.map((relation) => relation.symbol.id)).toEqual([
-      javaEntry?.id
+      javaEntry?.id,
+      javaNonStaticEntry?.id
     ]);
     expect(reopenedPythonCallers.relations.map((relation) => relation.symbol.id)).toEqual([
       pythonEntry?.id
@@ -3971,6 +3993,251 @@ describe("SymbolLatticeService", () => {
         (reference) => reference.receiverKind === "parameter" || reference.receiverKind === "local"
       )
     ).toHaveLength(4);
+  });
+
+  it("recovers callable declarations from a clean modern Java parse without widening dispatch", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Service.java": [
+        "package api;",
+        "public class Service {",
+        "  public void execute() {}",
+        "  public void overloaded(String value) {}",
+        "  public void overloaded(Integer value) {}",
+        "  private void hidden() {}",
+        "  public int modern(int value) {",
+        "    return switch (value) { case 1 -> 2; default -> 3; };",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/api/Contract.java": [
+        "package api;",
+        "public interface Contract {",
+        "  default void ping() {}",
+        "  default int modern(int value) {",
+        "    return switch (value) { case 1 -> 2; default -> 3; };",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/Runner.java": [
+        "package app;",
+        "import api.Contract;",
+        "import api.Service;",
+        "public class Runner {",
+        "  public void run(Service service, Contract contract, Object value) {",
+        "    service.execute();",
+        "    contract.ping();",
+        "    service.overloaded(value);",
+        "    service.hidden();",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const callAt = (line: number) =>
+      snapshot.edges.find(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.filePath === "src/app/Runner.java" &&
+          edge.range.start.line === line
+      );
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+
+    expect(callAt(6)).toEqual(
+      expect.objectContaining({
+        targetId: symbol("src/api/Service.java#Service.execute")?.id,
+        evidence: expect.objectContaining({
+          callDispatch: expect.objectContaining({
+            invocationKind: "parameter",
+            selectionReason: "declared-owner"
+          })
+        })
+      })
+    );
+    expect(callAt(7)).toEqual(
+      expect.objectContaining({
+        targetId: symbol("src/api/Contract.java#Contract.ping")?.id,
+        evidence: expect.objectContaining({
+          callAccess: expect.objectContaining({
+            visibility: "public",
+            decision: "public"
+          })
+        })
+      })
+    );
+    expect(callAt(8)).toBeUndefined();
+    expect(callAt(9)).toBeUndefined();
+  });
+
+  it("resolves compile-time-bound Java implicit static and final calls only", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/Base.java": [
+        "package api;",
+        "public class Base {",
+        "  protected static void inheritedStatic() {}",
+        "  protected final void inheritedFinal() {}",
+        "  protected void inheritedVirtual() {}",
+        "}"
+      ].join("\n"),
+      "src/api/Child.java": [
+        "package api;",
+        "public class Child extends Base {",
+        "  private static void directStatic() {}",
+        "  private void directPrivate() {}",
+        "  public void run() {",
+        "    directStatic();",
+        "    directPrivate();",
+        "    inheritedStatic();",
+        "    inheritedFinal();",
+        "    inheritedVirtual();",
+        "  }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const callAt = (line: number) =>
+      snapshot.edges.find(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.filePath === "src/api/Child.java" &&
+          edge.range.start.line === line
+      );
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+
+    expect(callAt(6)?.targetId).toBe(symbol("src/api/Child.java#Child.directStatic")?.id);
+    expect(callAt(7)?.targetId).toBe(symbol("src/api/Child.java#Child.directPrivate")?.id);
+    expect(callAt(8)?.targetId).toBe(symbol("src/api/Base.java#Base.inheritedStatic")?.id);
+    expect(callAt(9)?.targetId).toBe(symbol("src/api/Base.java#Base.inheritedFinal")?.id);
+    expect(callAt(6)?.evidence?.ruleId).toContain("static-binding");
+    expect(callAt(7)?.evidence?.ruleId).toContain("private-binding");
+    expect(callAt(8)?.evidence?.ruleId).toContain("static-binding");
+    expect(callAt(9)?.evidence?.ruleId).toContain("final-binding");
+    expect(callAt(8)?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        invocationKind: "implicit-instance",
+        selectionReason: "unique-inherited-owner"
+      })
+    );
+    expect(callAt(9)?.evidence?.callDispatch).toEqual(
+      expect.objectContaining({
+        invocationKind: "implicit-instance",
+        selectionReason: "unique-inherited-owner"
+      })
+    );
+    expect(callAt(10)).toBeUndefined();
+  });
+
+  it("resolves explicitly imported Java static type receivers without overriding value bindings", async () => {
+    const projectPath = await createInlineProject({
+      "src/api/StaticTools.java": [
+        "package api;",
+        "public class StaticTools { public static void execute() {} }"
+      ].join("\n"),
+      "src/api/Worker.java": [
+        "package api;",
+        "public class Worker { public void execute() {} }"
+      ].join("\n"),
+      "src/app/Base.java": [
+        "package app;",
+        "import api.Worker;",
+        "public class Base { protected final Worker StaticTools = new Worker(); }"
+      ].join("\n"),
+      "src/app/InheritedValueCaller.java": [
+        "package app;",
+        "import api.StaticTools;",
+        "public class InheritedValueCaller extends Base {",
+        "  public void run() { StaticTools.execute(); }",
+        "}"
+      ].join("\n"),
+      "src/app/Runner.java": [
+        "package app;",
+        "import api.StaticTools;",
+        "import api.Worker;",
+        "public class Runner {",
+        "  private final Worker StaticTools = new Worker();",
+        "  public void run(Worker value) {",
+        "    api.StaticTools.execute();",
+        "    StaticTools.execute();",
+        "    Worker StaticTools = value;",
+        "    StaticTools.execute();",
+        "  }",
+        "}"
+      ].join("\n"),
+      "src/app/ImportedTypeCaller.java": [
+        "package app;",
+        "import api.StaticTools;",
+        "public class ImportedTypeCaller {",
+        "  public void run() { StaticTools.execute(); }",
+        "}"
+      ].join("\n"),
+      "src/app/NestedTypeCaller.java": [
+        "package app;",
+        "import api.StaticTools;",
+        "public class NestedTypeCaller {",
+        "  static class StaticTools { static void execute() {} }",
+        "  public void run() { StaticTools.execute(); }",
+        "}"
+      ].join("\n")
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = graphStore.getSnapshot(projectPath);
+    const symbol = (qualifiedName: string) =>
+      snapshot.symbols.find((candidate) => candidate.qualifiedName === qualifiedName);
+    const callsAt = (filePath: string, line: number) =>
+      snapshot.edges.filter(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.filePath === filePath &&
+          edge.range.start.line === line
+      );
+
+    expect(callsAt("src/app/ImportedTypeCaller.java", 4)).toEqual([
+      expect.objectContaining({
+        targetId: symbol("src/api/StaticTools.java#StaticTools.execute")?.id,
+        evidence: expect.objectContaining({
+          ruleId: expect.stringContaining("type-name-static")
+        })
+      })
+    ]);
+    expect(callsAt("src/app/Runner.java", 8)).toEqual([
+      expect.objectContaining({
+        targetId: symbol("src/api/Worker.java#Worker.execute")?.id
+      })
+    ]);
+    expect(callsAt("src/app/Runner.java", 10)).toEqual([
+      expect.objectContaining({
+        targetId: symbol("src/api/Worker.java#Worker.execute")?.id
+      })
+    ]);
+    expect(callsAt("src/app/InheritedValueCaller.java", 4)).toEqual([
+      expect.objectContaining({
+        targetId: symbol("src/api/Worker.java#Worker.execute")?.id,
+        evidence: expect.objectContaining({
+          ruleId: expect.stringContaining("member.field")
+        })
+      })
+    ]);
+    expect(
+      callsAt("src/app/NestedTypeCaller.java", 5).some(
+        (edge) => edge.targetId === symbol("src/api/StaticTools.java#StaticTools.execute")?.id
+      )
+    ).toBe(false);
+    expect(callsAt("src/app/Runner.java", 7)).toEqual([]);
   });
 
   it("activates uninitialized Java locals only after a proven same-block assignment", async () => {

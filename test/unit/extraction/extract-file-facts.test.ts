@@ -731,7 +731,7 @@ describe("source extraction", () => {
     expect(malformed.symbols.map((symbol) => symbol.kind)).toEqual(["file"]);
   });
 
-  it("uses the clean modern Java parse for declaration identity without enabling recovered relations", () => {
+  it("uses the clean modern Java parse for callable identity and arity without recovering bodies", () => {
     const facts = extractFileFacts({
       filePath: "src/ModernDeclarations.java",
       language: "java",
@@ -744,6 +744,7 @@ describe("source extraction", () => {
         "class ModernDeclarations {",
         "  Class<?> type() { return String.class; }",
         "  void compare(Object to) { accept(to, Object.class); }",
+        "  void collect(String first, Object... rest) {}",
         "}"
       ].join("\r\n")
     });
@@ -759,7 +760,46 @@ describe("source extraction", () => {
       ["method", "code"],
       ["class", "ModernDeclarations"],
       ["method", "type"],
-      ["method", "compare"]
+      ["method", "compare"],
+      ["method", "collect"]
+    ]);
+    expect(
+      facts.jvmFacts?.javaCallableDeclarations.map((declaration) => ({
+        name: declaration.name,
+        visibility: declaration.visibility,
+        minimumArgumentCount: declaration.minimumArgumentCount,
+        maximumArgumentCount: declaration.maximumArgumentCount,
+        parameterTypes: declaration.parameterTypes
+      }))
+    ).toEqual([
+      {
+        name: "code",
+        visibility: "package",
+        minimumArgumentCount: 0,
+        maximumArgumentCount: 0,
+        parameterTypes: []
+      },
+      {
+        name: "type",
+        visibility: "package",
+        minimumArgumentCount: 0,
+        maximumArgumentCount: 0,
+        parameterTypes: []
+      },
+      {
+        name: "compare",
+        visibility: "package",
+        minimumArgumentCount: 1,
+        maximumArgumentCount: 1,
+        parameterTypes: [null]
+      },
+      {
+        name: "collect",
+        visibility: "package",
+        minimumArgumentCount: 1,
+        maximumArgumentCount: null,
+        parameterTypes: [null, null]
+      }
     ]);
     expect(facts.edges.filter((edge) => edge.kind === "calls")).toEqual([]);
   });

@@ -9542,10 +9542,10 @@ function javaMethodSetPlan(input: {
       if (
         input.invocationKind === "implicit-instance" &&
         (owner.kind !== "class" ||
-          ownerTypeSymbolId !== input.receiverTypeSymbolId ||
           input.callerType.symbol.id !== input.receiverTypeSymbolId ||
-          declaration.visibility !== "private" ||
-          declaration.isStatic)
+          (!declaration.isStatic &&
+            declaration.visibility !== "private" &&
+            declaration.isFinal !== true))
       ) {
         continue;
       }
@@ -10804,6 +10804,20 @@ function projectJavaCallReferences(input: {
     ) {
       continue;
     }
+    if (
+      reference.receiverKind === "type-name-static" &&
+      javaHierarchyFieldNameState({
+        callerType: declaringType,
+        fieldName: reference.receiverName,
+        fieldsByOwnerId,
+        heritageEdgesBySourceId,
+        heritageReferenceCountsBySourceId,
+        typesBySymbolId,
+        symbolsById: input.symbolsById
+      }) !== "absent"
+    ) {
+      continue;
+    }
     const resolvedOwnerType =
       reference.receiverKind === "type-field"
         ? resolveJavaCallType({
@@ -10853,6 +10867,7 @@ function projectJavaCallReferences(input: {
       reference.receiverKind === "type-field"
         ? fieldSelection?.field.type ?? null
         : reference.receiverKind === "parameter" ||
+            reference.receiverKind === "type-name-static" ||
             reference.receiverKind === "local" ||
             reference.receiverKind === "enhanced-for" ||
             reference.receiverKind === "catch" ||
@@ -11921,7 +11936,15 @@ function projectJavaCallReferences(input: {
       referenceName: reference.methodName,
       evidence: {
         ...referenceEvidence(
-          `call.java.member.${reference.receiverKind}.${methodPlan.selection}.${
+          `call.java.member.${reference.receiverKind}.${
+            reference.receiverKind === "implicit-instance"
+              ? methodPlan.selected.isStatic
+                ? "static-binding."
+                : methodPlan.selected.isFinal === true
+                  ? "final-binding."
+                  : "private-binding."
+              : ""
+          }${methodPlan.selection}.${
             methodSetEntry.inherited ? "inherited-dispatch" : "direct-dispatch"
           }`,
           "module",

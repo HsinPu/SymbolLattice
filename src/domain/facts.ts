@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v357";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v360";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v163";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v164";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -1866,6 +1866,8 @@ export interface JavaCallableDeclarationFact {
   readonly name: string;
   readonly callableKind: "method" | "constructor";
   readonly isStatic: boolean;
+  /** Missing before v0.358; only a declared final method is true. */
+  readonly isFinal?: boolean;
   /** Omitted by pre-v0.304 facts; unresolved visibility is never treated as public. */
   readonly visibility?: "public" | "protected" | "package" | "private";
   /** Omitted by pre-v0.299 facts, which are never eligible for arity resolution. */
@@ -1977,6 +1979,11 @@ export type JavaMemberCallReferenceFact =
     })
   | (JavaMemberCallReferenceBaseFact & {
       readonly receiverKind: "this" | "super";
+    })
+  | (JavaMemberCallReferenceBaseFact & {
+      readonly receiverKind: "type-name-static";
+      readonly receiverName: string;
+      readonly receiverType: JavaCallTypeReferenceFact;
     })
   | (JavaMemberCallReferenceBaseFact & {
       readonly receiverKind: "parameter";

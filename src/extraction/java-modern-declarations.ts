@@ -5,6 +5,16 @@ export interface ModernJavaDeclarationRange {
   readonly end: number;
 }
 
+export interface ModernJavaCallableDeclaration {
+  readonly callableKind: "method" | "constructor";
+  readonly isStatic: boolean;
+  readonly isFinal: boolean;
+  readonly visibility: "public" | "protected" | "package" | "private";
+  readonly minimumArgumentCount: number;
+  readonly maximumArgumentCount: number | null;
+  readonly parameterCount: number;
+}
+
 export interface ModernJavaDeclaration {
   readonly name: string;
   readonly kind: "class" | "interface" | "method";
@@ -12,6 +22,7 @@ export interface ModernJavaDeclaration {
   readonly range: ModernJavaDeclarationRange;
   readonly isExported: boolean;
   readonly parentIndex: number | null;
+  readonly callable?: ModernJavaCallableDeclaration;
 }
 
 export interface ModernJavaDeclarationInspection {
@@ -103,6 +114,58 @@ function hasModifier(node: SgNode, expected: string): boolean {
   );
 }
 
+function callableVisibility(
+  node: SgNode,
+  ownerTypeKind: "class" | "interface"
+): "public" | "protected" | "package" | "private" {
+  if (hasModifier(node, "private")) {
+    return "private";
+  }
+  if (hasModifier(node, "protected")) {
+    return "protected";
+  }
+  if (hasModifier(node, "public") || ownerTypeKind === "interface") {
+    return "public";
+  }
+  return "package";
+}
+
+function callableShape(
+  node: SgNode,
+  ownerTypeKind: "class" | "interface"
+): ModernJavaCallableDeclaration | null {
+  const kind = node.kind();
+  if (kind !== "method_declaration" && kind !== "constructor_declaration") {
+    return null;
+  }
+  const parameterLists = directChildren(node).filter(
+    (child) => child.kind() === "formal_parameters"
+  );
+  if (parameterLists.length !== 1 || parameterLists[0] === undefined) {
+    return null;
+  }
+  const parameters = directChildren(parameterLists[0]).filter(
+    (child) => child.kind() === "formal_parameter" || child.kind() === "spread_parameter"
+  );
+  const spreadParameters = parameters.filter((parameter) => parameter.kind() === "spread_parameter");
+  if (
+    spreadParameters.length > 1 ||
+    (spreadParameters.length === 1 && parameters.at(-1)?.kind() !== "spread_parameter")
+  ) {
+    return null;
+  }
+  const isVarargs = spreadParameters.length === 1;
+  return {
+    callableKind: kind === "method_declaration" ? "method" : "constructor",
+    isStatic: kind === "method_declaration" && hasModifier(node, "static"),
+    isFinal: kind === "method_declaration" && hasModifier(node, "final"),
+    visibility: callableVisibility(node, ownerTypeKind),
+    minimumArgumentCount: isVarargs ? parameters.length - 1 : parameters.length,
+    maximumArgumentCount: isVarargs ? null : parameters.length,
+    parameterCount: parameters.length
+  };
+}
+
 function typeKind(node: SgNode): "class" | "interface" | null {
   const kind = node.kind();
   return kind === "class_declaration" || kind === "enum_declaration" || kind === "record_declaration"
@@ -190,7 +253,7 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
       return;
     }
 
-    if (ownerTypeName !== null && parentIndex !== null) {
+    if (ownerTypeName !== null && ownerTypeKind !== null && parentIndex !== null) {
       const name = callableName(node, ownerTypeName);
       if (name !== null) {
         if (ownerTypeKind === "class" && hasModifier(node, "default")) {
@@ -198,13 +261,17 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
           return;
         }
         const range = node.range();
+        const callable = callableShape(node, ownerTypeKind);
         const index = declarations.length;
         declarations.push({
           name,
           kind: "method",
           range: { start: range.start.index, end: range.end.index },
-          isExported: isPublic(node),
-          parentIndex
+          isExported:
+            isPublic(node) ||
+            (ownerTypeKind === "interface" && !hasModifier(node, "private")),
+          parentIndex,
+          ...(callable === null ? {} : { callable })
         });
         for (const child of directChildren(node)) {
           visit(child, index, null, null);

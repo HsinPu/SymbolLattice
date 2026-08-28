@@ -16,7 +16,7 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.453.0
+Current version: v0.454.0
 
 ## Highlights
 
@@ -68,6 +68,8 @@ v0.451.0 validates cross-file relations across six fixed large TypeScript projec
 v0.452.0 adds large-repository TypeScript capacity telemetry and conservative extraction guards. A full-root Next.js index published a generation within the 30-minute budget; large `src/compiled` JavaScript bundles and the VS Code colorizer performance fixture retain file identity only so vendored or benchmark data is not treated as trustworthy cross-file semantics. VS Code full-root still exceeded the provisional 30-minute/4 GiB ceiling, so this release publishes the capacity boundary and unsupported breadth instead of claiming that every large repository completes within the same budget.
 
 v0.453.0 begins deeper TypeScript monorepo resolution. A source file now uses its nearest unique package-local `tsconfig.json` or `jsconfig.json` boundary for `paths` and `baseUrl`, with the full config and local `extends` chain retained as evidence. Nested aliases do not leak into sibling packages, while specifiers not claimed by TypeScript configuration can still fall through to the existing workspace package resolver. Project references, conditional package exports, overloads, and runtime dispatch remain future work or nonclaims.
+
+v0.454.0 deepens Java project relations. When valid modern Java is rejected by the legacy parser because another part of the file uses syntax such as a switch expression, a clean modern parse may now recover only method and constructor visibility, static/final modifiers, and arity metadata; it does not recover body relations or guess parameter types. Explicitly imported type-name static calls, source-proven field and parameter receivers, and compile-time-bound static, final, or private bare calls from instance bodies can produce a unique exact edge. Same-named locals or fields, inherited fields, overloads, ordinary virtual inherited dispatch, external classpaths, and targets that cannot be proven unique remain fail-closed. The fixed Netty, Quarkus core, and Hibernate ORM truth improved from 200 TP / 100 FN to 210 TP / 90 FN with 0 FP, 0 evidence-invalid cases, and all 150 negatives passing.
 
 v0.449.0 adds basic `.md` and `.markdown` graphs. ATX and Setext headings become searchable resources with hierarchical `contains` edges, while complete project-local relative file links become exact `references` only when they uniquely match an indexed file. Fenced, indented, and inline code, HTML blocks, external, root-relative, reference-style, image, dynamic, and heading-anchor links, plus `.mdx`, remain opaque, unresolved, or nonclaims rather than guessed runtime documentation behavior.
 

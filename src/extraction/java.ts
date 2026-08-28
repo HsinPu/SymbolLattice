@@ -245,6 +245,7 @@ interface StaticJavaMethod {
   readonly body: JavaSyntaxNode | null;
   readonly annotations: readonly StaticJavaAnnotation[];
   readonly isStatic: boolean;
+  readonly isFinal: boolean;
   readonly visibility: "public" | "protected" | "package" | "private";
   readonly isExported: boolean;
 }
@@ -2976,6 +2977,7 @@ function staticJavaMethod(
     body,
     annotations: staticAnnotations(input, node),
     isStatic: modifiers !== undefined && directChildren(modifiers).some((child) => child.name === "static"),
+    isFinal: modifiers !== undefined && directChildren(modifiers).some((child) => child.name === "final"),
     visibility,
     isExported: visibility === "public"
   };
@@ -3030,6 +3032,15 @@ const JAVA_VALUE_DECLARATION_CONTAINERS = new Set([
   "FormalParameter",
   "CatchFormalParameter",
   "LambdaParameter"
+]);
+
+const JAVA_TYPE_DECLARATION_CONTAINERS = new Set([
+  "ClassDeclaration",
+  "InterfaceDeclaration",
+  "EnumDeclaration",
+  "RecordDeclaration",
+  "AnnotationTypeDeclaration",
+  "TypeParameter"
 ]);
 
 const NESTED_JAVA_CALLABLE_SCOPES = new Set([
@@ -3116,6 +3127,29 @@ function staticJavaValueDeclarationNames(
     if (JAVA_VALUE_DECLARATION_CONTAINERS.has(candidate.name)) {
       collectDefinitions(candidate);
       return;
+    }
+    for (const child of directChildren(candidate)) {
+      visit(child);
+    }
+  }
+
+  visit(node);
+  return names;
+}
+
+function staticJavaTypeDeclarationNames(
+  input: JavaExtractFileFactsInput,
+  node: JavaSyntaxNode
+): ReadonlySet<string> {
+  const names = new Set<string>();
+
+  function visit(candidate: JavaSyntaxNode): void {
+    if (JAVA_TYPE_DECLARATION_CONTAINERS.has(candidate.name)) {
+      const definition = directChildren(candidate).find((child) => child.name === "Definition");
+      const name = definition === undefined ? null : identifierText(input, definition);
+      if (name !== null) {
+        names.add(name);
+      }
     }
     for (const child of directChildren(candidate)) {
       visit(child);
@@ -3408,6 +3442,8 @@ function staticJavaMemberCallReferences(input: {
   readonly callableSymbol: SymbolNode;
   readonly declaringType: SymbolNode;
   readonly imports: ReadonlyMap<string, string>;
+  readonly declaredFieldNames: ReadonlySet<string>;
+  readonly shadowedTypeNames: ReadonlySet<string>;
   readonly instanceofAndPatternSyntaxes: readonly StaticJavaInstanceofAndPatternSyntax[];
 }): readonly JavaMemberCallReferenceFact[] {
   const body = input.callable.body;
@@ -5356,6 +5392,50 @@ function staticJavaMemberCallReferences(input: {
                 range: rangeFor(lineStarts, methodNode.from, methodNode.to)
               });
             }
+          } else if (
+            binding === undefined &&
+            !input.declaredFieldNames.has(receiverName) &&
+            !input.shadowedTypeNames.has(receiverName) &&
+            input.imports.has(receiverName)
+          ) {
+            const receiverStart = node.from + receiverPrefix.indexOf(receiverName);
+            references.push({
+              sourceId: input.callableSymbol.id,
+              declaringTypeId: input.declaringType.id,
+              filePath: input.extraction.filePath,
+              receiverKind: "type-name-static",
+              receiverName,
+              receiverType: {
+                kind: "reference",
+                referenceName: receiverName,
+                syntax: "type-qualifier",
+                range: rangeFor(
+                  lineStarts,
+                  receiverStart,
+                  receiverStart + receiverName.length
+                ),
+                importedTypePath: input.imports.get(receiverName)!
+              },
+              methodName,
+              argumentCount: arguments_.length,
+              argumentTypes: arguments_.map((argument) =>
+                staticJavaArgumentType(input.extraction, argument, input.imports)
+              ),
+              range: rangeFor(lineStarts, methodNode.from, methodNode.to)
+            });
+            references.push({
+              sourceId: input.callableSymbol.id,
+              declaringTypeId: input.declaringType.id,
+              filePath: input.extraction.filePath,
+              receiverKind: "field",
+              receiverName,
+              methodName,
+              argumentCount: arguments_.length,
+              argumentTypes: arguments_.map((argument) =>
+                staticJavaArgumentType(input.extraction, argument, input.imports)
+              ),
+              range: rangeFor(lineStarts, methodNode.from, methodNode.to)
+            });
           } else if (binding === undefined) {
             references.push({
               sourceId: input.callableSymbol.id,
@@ -6577,6 +6657,7 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         name: declaration.name,
         callableKind: "isStatic" in declaration ? "method" : "constructor",
         isStatic: "isStatic" in declaration && declaration.isStatic,
+        isFinal: "isFinal" in declaration && declaration.isFinal,
         visibility: declaration.visibility,
         ...arity,
         parameterTypes
@@ -6884,14 +6965,17 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       if (typeDeclaration.kind === "interface") {
         declaredInterfaces.push({ declaration: typeDeclaration, symbol: typeSymbol });
         addJvmAnnotationReferences(typeSymbol, typeSymbol, typeDeclaration.annotations, imports);
-        javaFieldDeclarations.push(
-          ...staticJavaFieldDeclarations({
-            extraction: input,
-            declaration: typeDeclaration,
-            declaringType: typeSymbol,
-            imports
-          })
+        const interfaceFieldDeclarations = staticJavaFieldDeclarations({
+          extraction: input,
+          declaration: typeDeclaration,
+          declaringType: typeSymbol,
+          imports
+        });
+        const declaredFieldNames = new Set(
+          interfaceFieldDeclarations.map((field) => field.name)
         );
+        const shadowedTypeNames = staticJavaTypeDeclarationNames(input, typeDeclaration.body);
+        javaFieldDeclarations.push(...interfaceFieldDeclarations);
         const methods = directChildren(typeDeclaration.body)
           .map((node) => staticJavaMethod(input, node))
           .filter((candidate): candidate is StaticJavaMethod => candidate !== null)
@@ -6938,6 +7022,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
               callableSymbol: methodSymbol,
               declaringType: typeSymbol,
               imports,
+              declaredFieldNames,
+              shadowedTypeNames,
               instanceofAndPatternSyntaxes: instanceofAndPatternInspection.syntaxes
             })
           );
@@ -7058,6 +7144,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         declaringType: classSymbol,
         imports
       });
+      const declaredFieldNames = new Set(classFieldDeclarations.map((field) => field.name));
+      const shadowedTypeNames = staticJavaTypeDeclarationNames(input, classDeclaration.body);
       javaFieldDeclarations.push(...classFieldDeclarations);
       for (const constructorDeclaration of constructors) {
         const constructorSymbol = addMethod(classSymbol, constructorDeclaration, imports);
@@ -7094,6 +7182,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
             callableSymbol: constructorSymbol,
             declaringType: classSymbol,
             imports,
+            declaredFieldNames,
+            shadowedTypeNames,
             instanceofAndPatternSyntaxes: instanceofAndPatternInspection.syntaxes
           })
         );
@@ -7144,6 +7234,8 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
             callableSymbol: methodSymbol,
             declaringType: classSymbol,
             imports,
+            declaredFieldNames,
+            shadowedTypeNames,
             instanceofAndPatternSyntaxes: instanceofAndPatternInspection.syntaxes
           })
         );
@@ -7377,6 +7469,28 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
             ...(declaration.isAnnotation === true ? { isAnnotation: true } : {})
           });
         }
+      }
+      if (
+        declaration.kind === "method" &&
+        declaration.callable !== undefined &&
+        parent.kind !== "file" &&
+        !javaCallableDeclarations.some((candidate) => candidate.symbolId === symbol.id)
+      ) {
+        javaCallableDeclarations.push({
+          symbolId: symbol.id,
+          declaringTypeId: parent.id,
+          name: declaration.name,
+          callableKind: declaration.callable.callableKind,
+          isStatic: declaration.callable.isStatic,
+          isFinal: declaration.callable.isFinal,
+          visibility: declaration.callable.visibility,
+          minimumArgumentCount: declaration.callable.minimumArgumentCount,
+          maximumArgumentCount: declaration.callable.maximumArgumentCount,
+          parameterTypes: Array.from(
+            { length: declaration.callable.parameterCount },
+            () => null
+          )
+        });
       }
       projectedSymbols.set(index, symbol);
     }
