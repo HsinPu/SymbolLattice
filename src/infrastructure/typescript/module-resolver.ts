@@ -166,14 +166,14 @@ function exactRelativeTarget(
   };
 }
 
-function rootConfigurationInput<TKind extends "tsconfig" | "jsconfig">(
+function configurationInput<TKind extends "tsconfig" | "jsconfig">(
   projectPath: string,
-  fileName: "tsconfig.json" | "jsconfig.json",
+  relativePath: string,
   kind: TKind
 ): ProjectConfigurationInput & { readonly kind: TKind } {
-  const absolutePath = resolve(projectPath, fileName);
+  const absolutePath = resolve(projectPath, ...relativePath.split("/"));
   if (!existsSync(absolutePath)) {
-    return { kind, path: fileName, state: "absent", contentHash: null };
+    return { kind, path: relativePath, state: "absent", contentHash: null };
   }
 
   let sourceText: string;
@@ -181,10 +181,18 @@ function rootConfigurationInput<TKind extends "tsconfig" | "jsconfig">(
     sourceText = readFileSync(absolutePath, "utf8");
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    throw configurationError(fileName, reason);
+    throw configurationError(relativePath, reason);
   }
 
-  return { kind, path: fileName, state: "present", contentHash: sourceHash(sourceText) };
+  return { kind, path: relativePath, state: "present", contentHash: sourceHash(sourceText) };
+}
+
+function rootConfigurationInput<TKind extends "tsconfig" | "jsconfig">(
+  projectPath: string,
+  fileName: "tsconfig.json" | "jsconfig.json",
+  kind: TKind
+): ProjectConfigurationInput & { readonly kind: TKind } {
+  return configurationInput(projectPath, fileName, kind);
 }
 
 function resolveLocalExtendsPath(
@@ -599,20 +607,31 @@ function nonRelativeStrategy(
  * project configuration. Source discovery remains independent: TypeScript
  * `files`, `include`, and `exclude` never expand the graph input set here.
  */
-export function createTypeScriptProjectModuleResolver(input: {
+function createSingleTypeScriptProjectModuleResolver(input: {
   readonly projectPath: string;
   readonly sourceDocuments: readonly SourceDocument[];
   /** A unique root Astro config observed by the source catalog. */
   readonly astroConfigurationPath?: string;
+  /** Explicit project-relative tsconfig/jsconfig selected by the composite resolver. */
+  readonly selectedConfigurationPath?: string;
 }): TypeScriptProjectModuleResolver {
   const projectPath = resolve(input.projectPath);
   const tsconfigInput = rootConfigurationInput(projectPath, "tsconfig.json", "tsconfig");
   const jsconfigInput = rootConfigurationInput(projectPath, "jsconfig.json", "jsconfig");
-  const selectedInput = tsconfigInput.state === "present"
-    ? tsconfigInput
-    : jsconfigInput.state === "present"
-      ? jsconfigInput
-      : undefined;
+  const explicitSelectedInput = input.selectedConfigurationPath === undefined
+    ? undefined
+    : configurationInput(
+        projectPath,
+        input.selectedConfigurationPath,
+        input.selectedConfigurationPath.endsWith("/jsconfig.json") ? "jsconfig" : "tsconfig"
+      );
+  const selectedInput = explicitSelectedInput?.state === "present"
+    ? explicitSelectedInput
+    : tsconfigInput.state === "present"
+      ? tsconfigInput
+      : jsconfigInput.state === "present"
+        ? jsconfigInput
+        : undefined;
   const knownFilePaths = new Set(input.sourceDocuments.map((document) => document.relativePath));
   const knownRelativePathByAbsolutePath = new Map(
     input.sourceDocuments.map((document) => [fileSystemKey(document.absolutePath), document.relativePath])
@@ -650,7 +669,7 @@ export function createTypeScriptProjectModuleResolver(input: {
   const configurationInputs = [
     ...chainInputs,
     ...loadedChain.missingConfigurationInputs,
-    ...(selectedInput.kind === "jsconfig" ? [tsconfigInput] : [])
+    ...(explicitSelectedInput === undefined && selectedInput.kind === "jsconfig" ? [tsconfigInput] : [])
   ]
     .filter(
       (inputValue, index, values) =>
@@ -783,5 +802,191 @@ export function createTypeScriptProjectModuleResolver(input: {
     },
     configurationInputs,
     hasProjectConfigurationResolution
+  };
+}
+
+interface TypeScriptConfigurationBoundary {
+  readonly directoryPath: string;
+  readonly resolver: TypeScriptProjectModuleResolver;
+}
+
+function selectedNestedConfigurationPaths(
+  configurationCandidatePaths: readonly string[],
+  sourceDocuments: readonly SourceDocument[]
+): readonly string[] {
+  const candidatesByDirectory = new Map<
+    string,
+    { tsconfigPath?: string; jsconfigPath?: string }
+  >();
+  for (const rawPath of configurationCandidatePaths) {
+    const path = rawPath.replaceAll("\\", "/").replace(/^\.\//u, "");
+    const isTsconfig = path.endsWith("/tsconfig.json");
+    const isJsconfig = path.endsWith("/jsconfig.json");
+    if (!isTsconfig && !isJsconfig) {
+      continue;
+    }
+    const directoryPath = path.slice(0, path.lastIndexOf("/"));
+    const sourcePrefix = `${directoryPath}/`;
+    if (!sourceDocuments.some((document) => document.relativePath.startsWith(sourcePrefix))) {
+      continue;
+    }
+    const candidates = candidatesByDirectory.get(directoryPath) ?? {};
+    if (isTsconfig) {
+      candidates.tsconfigPath = path;
+    } else {
+      candidates.jsconfigPath = path;
+    }
+    candidatesByDirectory.set(directoryPath, candidates);
+  }
+  return [...candidatesByDirectory.values()]
+    .map((candidates) => candidates.tsconfigPath ?? candidates.jsconfigPath)
+    .filter((path): path is string => path !== undefined)
+    .sort(compareStableText);
+}
+
+function configurationDirectoryPath(configurationPath: string): string {
+  return configurationPath.slice(0, configurationPath.lastIndexOf("/"));
+}
+
+function configurationBoundaryFor(
+  boundaries: readonly TypeScriptConfigurationBoundary[],
+  fromFilePath: string
+): TypeScriptConfigurationBoundary | undefined {
+  const normalizedFilePath = fromFilePath.replaceAll("\\", "/");
+  return boundaries.find(
+    (boundary) => normalizedFilePath.startsWith(`${boundary.directoryPath}/`)
+  );
+}
+
+function mergeConfigurationInputs(
+  resolvers: readonly TypeScriptProjectModuleResolver[]
+): readonly ProjectConfigurationInput[] {
+  return resolvers
+    .flatMap((resolver) => resolver.configurationInputs)
+    .filter(
+      (input, index, inputs) =>
+        inputs.findIndex(
+          (candidate) => candidate.kind === input.kind && candidate.path === input.path
+        ) === index
+    )
+    .sort((left, right) => {
+      const byPath = compareStableText(left.path, right.path);
+      return byPath === 0 ? compareStableText(left.kind, right.kind) : byPath;
+    });
+}
+
+function failClosedNestedConfigurationResolver(input: {
+  readonly projectPath: string;
+  readonly sourceDocuments: readonly SourceDocument[];
+  readonly configurationPath: string;
+}): TypeScriptProjectModuleResolver {
+  const knownFilePaths = new Set(input.sourceDocuments.map((document) => document.relativePath));
+  const kind = input.configurationPath.endsWith("/jsconfig.json") ? "jsconfig" : "tsconfig";
+  const configuration = configurationInput(input.projectPath, input.configurationPath, kind);
+  return {
+    moduleResolver: {
+      resolve(fromFilePath, moduleSpecifier) {
+        return moduleSpecifier.startsWith(".")
+          ? exactRelativeTarget(knownFilePaths, fromFilePath, moduleSpecifier)
+          : unresolved([input.configurationPath]);
+      }
+    },
+    configurationInputs: [configuration],
+    hasProjectConfigurationResolution(_fromFilePath, moduleSpecifier) {
+      return !moduleSpecifier.startsWith(".");
+    }
+  };
+}
+
+function createNestedTypeScriptProjectModuleResolver(input: {
+  readonly projectPath: string;
+  readonly sourceDocuments: readonly SourceDocument[];
+  readonly configurationPath: string;
+}): TypeScriptProjectModuleResolver {
+  const kind = input.configurationPath.endsWith("/jsconfig.json") ? "jsconfig" : "tsconfig";
+  if (configurationInput(input.projectPath, input.configurationPath, kind).state !== "present") {
+    return failClosedNestedConfigurationResolver(input);
+  }
+  try {
+    return createSingleTypeScriptProjectModuleResolver({
+      projectPath: input.projectPath,
+      sourceDocuments: input.sourceDocuments,
+      selectedConfigurationPath: input.configurationPath
+    });
+  } catch (error) {
+    if (!(error instanceof ProjectConfigurationError)) {
+      throw error;
+    }
+    return failClosedNestedConfigurationResolver(input);
+  }
+}
+
+/**
+ * Resolves TypeScript modules through the nearest explicit tsconfig/jsconfig
+ * boundary. Root configuration remains the fallback only for files outside a
+ * nested boundary; workspace package resolution still runs later when the
+ * selected TypeScript config does not claim a non-relative specifier.
+ */
+export function createTypeScriptProjectModuleResolver(input: {
+  readonly projectPath: string;
+  readonly sourceDocuments: readonly SourceDocument[];
+  /** A unique root Astro config observed by the source catalog. */
+  readonly astroConfigurationPath?: string;
+  /** Fresh project-relative configuration candidates discovered by the catalog. */
+  readonly configurationCandidatePaths?: readonly string[];
+}): TypeScriptProjectModuleResolver {
+  const rootResolver = createSingleTypeScriptProjectModuleResolver({
+    projectPath: input.projectPath,
+    sourceDocuments: input.sourceDocuments,
+    ...(input.astroConfigurationPath === undefined
+      ? {}
+      : { astroConfigurationPath: input.astroConfigurationPath })
+  });
+  const nestedConfigurationPaths = selectedNestedConfigurationPaths(
+    input.configurationCandidatePaths ?? [],
+    input.sourceDocuments
+  );
+  if (nestedConfigurationPaths.length === 0) {
+    return rootResolver;
+  }
+
+  const boundaries = nestedConfigurationPaths
+    .map<TypeScriptConfigurationBoundary>((configurationPath) => ({
+      directoryPath: configurationDirectoryPath(configurationPath),
+      resolver: createNestedTypeScriptProjectModuleResolver({
+        projectPath: input.projectPath,
+        sourceDocuments: input.sourceDocuments,
+        configurationPath
+      })
+    }))
+    .sort((left, right) => {
+      const byDepth = right.directoryPath.split("/").length - left.directoryPath.split("/").length;
+      return byDepth === 0
+        ? compareStableText(left.directoryPath, right.directoryPath)
+        : byDepth;
+    });
+  const configurationInputs = mergeConfigurationInputs([
+    rootResolver,
+    ...boundaries.map((boundary) => boundary.resolver)
+  ]);
+
+  return {
+    moduleResolver: {
+      resolve(fromFilePath, moduleSpecifier) {
+        const boundary = configurationBoundaryFor(boundaries, fromFilePath);
+        return (boundary?.resolver ?? rootResolver).moduleResolver.resolve(
+          fromFilePath,
+          moduleSpecifier
+        );
+      }
+    },
+    configurationInputs,
+    hasProjectConfigurationResolution(fromFilePath, moduleSpecifier) {
+      const boundary = configurationBoundaryFor(boundaries, fromFilePath);
+      return (boundary?.resolver ?? rootResolver).hasProjectConfigurationResolution(
+        fromFilePath,
+        moduleSpecifier
+      );
+    }
   };
 }

@@ -18,6 +18,87 @@ afterEach(async () => {
 });
 
 describe("filesystem source catalog freshness", () => {
+  it("resolves a package-local tsconfig paths alias inside its configuration boundary", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-source-catalog-package-tsconfig-"));
+    temporaryDirectories.push(projectPath);
+    await mkdir(join(projectPath, "packages", "app", "src"), { recursive: true });
+    await writeFile(join(projectPath, "tsconfig.json"), JSON.stringify({ compilerOptions: {} }), "utf8");
+    await writeFile(
+      join(projectPath, "packages", "app", "tsconfig.json"),
+      JSON.stringify({
+        compilerOptions: {
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          baseUrl: ".",
+          paths: { "@app/*": ["src/*"] }
+        }
+      }),
+      "utf8"
+    );
+    await writeFile(
+      join(projectPath, "packages", "app", "src", "util.ts"),
+      "export const value = 42;\n",
+      "utf8"
+    );
+    await writeFile(
+      join(projectPath, "packages", "app", "src", "consumer.ts"),
+      'import { value } from "@app/util"; export const result = value;\n',
+      "utf8"
+    );
+
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(
+      scan.moduleResolver.resolve("packages/app/src/consumer.ts", "@app/util")
+    ).toEqual({
+      targetFilePath: "packages/app/src/util.ts",
+      strategy: "tsconfig-paths",
+      configurationPaths: ["packages/app/tsconfig.json"]
+    });
+    expect(scan.indexInputs.configurationInputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "tsconfig",
+          path: "packages/app/tsconfig.json",
+          state: "present"
+        })
+      ])
+    );
+  });
+
+  it("isolates a malformed nested tsconfig as one fail-closed boundary", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-source-catalog-invalid-package-tsconfig-"));
+    temporaryDirectories.push(projectPath);
+    await mkdir(join(projectPath, "packages", "app", "src"), { recursive: true });
+    await writeFile(join(projectPath, "packages", "app", "tsconfig.json"), "{ invalid", "utf8");
+    await writeFile(
+      join(projectPath, "packages", "app", "src", "util.ts"),
+      "export const value = 42;\n",
+      "utf8"
+    );
+    await writeFile(
+      join(projectPath, "packages", "app", "src", "consumer.ts"),
+      'import { value } from "./util";\nimport { missing } from "@app/missing";\nexport const result = value + missing;\n',
+      "utf8"
+    );
+
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(scan.moduleResolver.resolve("packages/app/src/consumer.ts", "./util")).toEqual({
+      targetFilePath: "packages/app/src/util.ts",
+      strategy: "relative",
+      configurationPaths: []
+    });
+    expect(scan.moduleResolver.resolve("packages/app/src/consumer.ts", "@app/missing")).toEqual({
+      targetFilePath: null,
+      strategy: "unresolved",
+      configurationPaths: ["packages/app/tsconfig.json"]
+    });
+    expect(
+      scan.moduleResolver.resolve("packages/app/src/consumer.ts", "@app/missing").strategy
+    ).not.toBe("workspace-package");
+  });
+
   it("retains exact Lua bytes and binds the content hash to those bytes", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-source-catalog-lua-"));
     temporaryDirectories.push(projectPath);

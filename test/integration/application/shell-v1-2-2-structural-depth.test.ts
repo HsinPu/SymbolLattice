@@ -156,7 +156,7 @@ describe("Shell structural v1.2.2 persistence", () => {
 
     const synced = await upgradedService.sync({ projectPath });
     expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v357");
-    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v162");
+    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v163");
     expect(synced.lastIndexWork).toMatchObject({
       mode: "incremental",
       reExtractedFiles: ["scripts/deploy.sh"],

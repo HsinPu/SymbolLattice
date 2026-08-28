@@ -173,6 +173,7 @@ export class FileSystemSourceCatalog implements SourceCatalog {
     const typeScriptResolver = createTypeScriptProjectModuleResolver({
       projectPath: normalizedProjectPath,
       sourceDocuments,
+      configurationCandidatePaths: paths.configurationPaths,
       ...(astroConfigurationPath === undefined ? {} : { astroConfigurationPath })
     });
     const workspaceResolver = await createWorkspaceProjectModuleResolver({
