@@ -80,6 +80,7 @@ const MAX_BOUNDED_NODES = 4096;
 const MAX_BOUNDED_RELATIONSHIPS = 16384;
 const MAX_BOUNDED_HOPS = 4;
 const BOUNDED_QUERY_PARAMETER_BATCH_SIZE = 500;
+const READ_BUSY_TIMEOUT_MS = 1_000;
 
 /**
  * The v0.1 snapshot tables remain deliberately unpartitioned. They are a fast
@@ -542,6 +543,11 @@ function readConsistently<T>(database: DatabaseSync, read: () => T): T {
     }
     throw error;
   }
+}
+
+function configureReadDatabase(database: DatabaseSync): DatabaseSync {
+  database.exec(`PRAGMA busy_timeout = ${READ_BUSY_TIMEOUT_MS}`);
+  return database;
 }
 
 function getMeta(database: DatabaseSync, key: string): string | null {
@@ -2891,7 +2897,9 @@ export class SqliteGraphStore implements GraphStore {
     const isPersistent = normalizedProjectPath === this.persistentReadProjectPath;
     const database = isPersistent
       ? this.openPersistentReadDatabase(normalizedProjectPath)
-      : new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true });
+      : configureReadDatabase(
+          new DatabaseSync(databasePathFor(normalizedProjectPath), { readOnly: true })
+        );
     try {
       return readConsistently(database, () => read(database));
     } finally {
@@ -2903,9 +2911,11 @@ export class SqliteGraphStore implements GraphStore {
 
   private openPersistentReadDatabase(normalizedProjectPath: string): DatabaseSync {
     if (this.persistentReadDatabase === null) {
-      this.persistentReadDatabase = new DatabaseSync(databasePathFor(normalizedProjectPath), {
-        readOnly: true
-      });
+      this.persistentReadDatabase = configureReadDatabase(
+        new DatabaseSync(databasePathFor(normalizedProjectPath), {
+          readOnly: true
+        })
+      );
     }
     return this.persistentReadDatabase;
   }

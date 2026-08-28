@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { Worker } from "node:worker_threads";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -35,6 +36,41 @@ async function temporaryProject(): Promise<string> {
 
 function databasePathFor(projectPath: string): string {
   return join(projectPath, INDEX_DIRECTORY_NAME, DATABASE_FILE_NAME);
+}
+
+async function holdExclusiveDatabaseLock(
+  databasePath: string,
+  durationMs: number
+): Promise<Worker> {
+  const worker = new Worker(
+    `
+      const { parentPort, workerData } = require("node:worker_threads");
+      const { DatabaseSync } = require("node:sqlite");
+      const database = new DatabaseSync(workerData.databasePath);
+      database.exec("BEGIN EXCLUSIVE");
+      parentPort.postMessage("locked");
+      setTimeout(() => {
+        database.exec("COMMIT");
+        database.close();
+        parentPort.postMessage("released");
+      }, workerData.durationMs);
+    `,
+    {
+      eval: true,
+      workerData: { databasePath, durationMs }
+    }
+  );
+  await new Promise<void>((resolveLocked, rejectLocked) => {
+    worker.once("message", (message: unknown) => {
+      if (message === "locked") {
+        resolveLocked();
+      } else {
+        rejectLocked(new Error(`Expected lock acquisition, received ${String(message)}.`));
+      }
+    });
+    worker.once("error", rejectLocked);
+  });
+  return worker;
 }
 
 function symbol(id: string, name: string): SymbolNode {
@@ -1091,6 +1127,38 @@ describe("SqliteGraphStore", () => {
         }
       }
       reader.close();
+    }
+  });
+
+  it("waits through a transient exclusive lock before reading status", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const graphSnapshot = snapshot([symbol("transient-lock", "transientLock")]);
+    store.replaceProjectFacts({
+      projectPath,
+      snapshot: graphSnapshot,
+      indexedAt: "2026-08-28T00:00:00.000Z",
+      artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("transient-lock"),
+      resolverVersion: "test-resolver-transient-lock"
+    });
+
+    const journalConnection = new DatabaseSync(databasePathFor(projectPath));
+    try {
+      journalConnection.prepare("PRAGMA journal_mode = DELETE").get();
+    } finally {
+      journalConnection.close();
+    }
+
+    const lockWorker = await holdExclusiveDatabaseLock(databasePathFor(projectPath), 100);
+    try {
+      expect(store.getStatus(projectPath)).toMatchObject({
+        initialized: true,
+        generationId: expect.stringMatching(/^generation:/),
+        counts: { files: 1 }
+      });
+    } finally {
+      await lockWorker.terminate();
     }
   });
 
