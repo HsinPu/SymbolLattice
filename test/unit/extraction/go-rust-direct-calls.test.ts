@@ -672,8 +672,20 @@ mod value;`);
       ["duplicate declaration", `pub enum Value { Unit }\npub enum Value { Other }`]
     ] as const) {
       const facts = extractRustFileFacts({ filePath: "src/value.rs", language: "rust", sourceText });
-      expect(facts.rustProjectFacts?.declarations, description).toEqual([]);
-      expect(facts.symbols.filter((symbol) => symbol.kind === "type"), description).toEqual([]);
+      if (description === "trait declaration") {
+        expect(facts.rustProjectFacts?.declarations, description).toEqual([
+          expect.objectContaining({ name: "Value", kind: "type", typeKind: "trait" })
+        ]);
+        expect(facts.symbols.filter((symbol) => symbol.kind === "type"), description).toHaveLength(1);
+      } else if (description === "impl declaration") {
+        expect(facts.rustProjectFacts?.declarations, description).toEqual([
+          expect.objectContaining({ name: "Value", kind: "type", typeKind: "struct" })
+        ]);
+        expect(facts.symbols.filter((symbol) => symbol.kind === "type"), description).toHaveLength(1);
+      } else {
+        expect(facts.rustProjectFacts?.declarations, description).toEqual([]);
+        expect(facts.symbols.filter((symbol) => symbol.kind === "type"), description).toEqual([]);
+      }
     }
   });
 

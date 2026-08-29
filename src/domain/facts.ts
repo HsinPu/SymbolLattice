@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v362";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v363";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v167";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v168";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -1676,8 +1676,62 @@ export interface RustProjectDeclarationFact {
   readonly symbolId: string;
   readonly filePath: string;
   readonly kind: "function" | "type";
+  /** Present for type declarations so struct/enum/trait namespace proof is explicit. */
+  readonly typeKind?: "struct" | "enum" | "trait";
   readonly range: SourceRange;
   readonly unconditionallyAvailable: boolean;
+}
+
+/** A syntax-clean local Rust struct, enum, or trait identity. */
+export interface RustProjectTypeFact {
+  readonly name: string;
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly typeKind: "struct" | "enum" | "trait";
+  readonly variantNames?: readonly string[];
+  readonly range: SourceRange;
+  readonly unconditionallyAvailable: boolean;
+}
+
+/** One inherent or trait implementation block with its direct method names. */
+export interface RustProjectImplFact {
+  readonly selfTypeName: string;
+  readonly traitName?: string;
+  readonly methodNames: readonly string[];
+  readonly filePath: string;
+  readonly range: SourceRange;
+  readonly unconditionallyAvailable: boolean;
+}
+
+/** One method or associated function declared in an implementation block. */
+export interface RustProjectMethodFact {
+  readonly receiverTypeName: string;
+  readonly traitName?: string;
+  readonly name: string;
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly range: SourceRange;
+  readonly callKind: "method" | "associated-function";
+  readonly unconditionallyAvailable: boolean;
+}
+
+/** One source-proven call through a concrete local receiver or type path. */
+export interface RustProjectMethodCallFact {
+  readonly callerId: string;
+  readonly receiverTypeName: string;
+  readonly receiverName?: string;
+  readonly methodName: string;
+  readonly range: SourceRange;
+  readonly callKind: "method" | "associated-function";
+}
+
+/** One source-proven struct expression or enum variant construction. */
+export interface RustProjectInstantiationFact {
+  readonly callerId: string;
+  readonly typeName: string;
+  readonly variantName?: string;
+  readonly range: SourceRange;
+  readonly instantiationKind: "struct" | "enum";
 }
 
 /**
@@ -1688,6 +1742,16 @@ export interface RustProjectFacts {
   readonly modules: readonly RustProjectModuleFact[];
   readonly imports: readonly RustProjectImportFact[];
   readonly declarations: readonly RustProjectDeclarationFact[];
+  /** Omitted only by facts persisted before the v0.458 relation slice. */
+  readonly types?: readonly RustProjectTypeFact[];
+  /** Omitted only by facts persisted before the v0.458 relation slice. */
+  readonly impls?: readonly RustProjectImplFact[];
+  /** Omitted only by facts persisted before the v0.458 relation slice. */
+  readonly methods?: readonly RustProjectMethodFact[];
+  /** Omitted only by facts persisted before the v0.458 relation slice. */
+  readonly methodCalls?: readonly RustProjectMethodCallFact[];
+  /** Omitted only by facts persisted before the v0.458 relation slice. */
+  readonly instantiations?: readonly RustProjectInstantiationFact[];
 }
 
 /** A Scala class or object declaration with its direct package-clause proof. */

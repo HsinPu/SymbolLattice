@@ -6,6 +6,11 @@ import {
   type ArtifactFacts,
   type GraphEdge,
   type RouteMethod,
+  type RustProjectImplFact,
+  type RustProjectInstantiationFact,
+  type RustProjectMethodCallFact,
+  type RustProjectMethodFact,
+  type RustProjectTypeFact,
   type RustActixServiceConfigFacts,
   type SourcePosition,
   type SourceRange,
@@ -29,7 +34,42 @@ interface StaticRustFunction {
   readonly body: RustSyntaxNode;
   readonly parameters: readonly RustSyntaxNode[];
   readonly parameterNames: readonly string[];
+  readonly parameterTypes: ReadonlyMap<string, string>;
   readonly attributes: readonly RustSyntaxNode[];
+  readonly implTypeName?: string;
+  readonly implTraitName?: string;
+}
+
+interface StaticRustType {
+  readonly name: string;
+  readonly typeKind: "struct" | "enum" | "trait";
+  readonly variantNames: readonly string[];
+  readonly node: RustSyntaxNode;
+  readonly attributes: readonly RustSyntaxNode[];
+  readonly isPublic: boolean;
+}
+
+interface StaticRustImpl {
+  readonly selfTypeName: string;
+  readonly traitName?: string;
+  readonly node: RustSyntaxNode;
+  readonly attributes: readonly RustSyntaxNode[];
+  readonly methods: readonly StaticRustFunction[];
+}
+
+interface StaticRustMethodCall {
+  readonly receiverTypeName: string;
+  readonly receiverName?: string;
+  readonly methodName: string;
+  readonly callKind: "method" | "associated-function";
+  readonly node: RustSyntaxNode;
+}
+
+interface StaticRustInstantiation {
+  readonly typeName: string;
+  readonly variantName?: string;
+  readonly instantiationKind: "struct" | "enum";
+  readonly node: RustSyntaxNode;
 }
 
 interface StaticRustUseImport {
@@ -201,6 +241,20 @@ function directChildren(node: RustSyntaxNode): readonly RustSyntaxNode[] {
   return children;
 }
 
+function descendantsNamed(node: RustSyntaxNode, name: string): readonly RustSyntaxNode[] {
+  const matches: RustSyntaxNode[] = [];
+  const visit = (candidate: RustSyntaxNode): void => {
+    if (candidate.name === name) {
+      matches.push(candidate);
+    }
+    for (const child of directChildren(candidate)) {
+      visit(child);
+    }
+  };
+  visit(node);
+  return matches;
+}
+
 function nodeText(input: RustExtractFileFactsInput, node: RustSyntaxNode): string {
   return input.sourceText.slice(node.from, node.to);
 }
@@ -251,6 +305,10 @@ function hasSyntaxError(node: RustSyntaxNode): boolean {
 function identifierText(input: RustExtractFileFactsInput, node: RustSyntaxNode): string | null {
   const value = nodeText(input, node);
   return /^[A-Za-z_][A-Za-z0-9_]*$/u.test(value) ? value : null;
+}
+
+function escapeRegularExpression(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function staticPathSegments(
@@ -832,6 +890,28 @@ function boundIdentifierNames(
   return [...names];
 }
 
+function staticRustParameterTypesFromList(
+  input: RustExtractFileFactsInput,
+  parameterList: RustSyntaxNode | undefined
+): ReadonlyMap<string, string> {
+  const types = new Map<string, string>();
+  if (parameterList === undefined) {
+    return types;
+  }
+  for (const parameter of directChildren(parameterList).filter((child) => child.name === "Parameter")) {
+    const names = boundIdentifierNames(input, parameter);
+    const text = nodeText(input, parameter).replace(/\s+/gu, " ").trim();
+    const match = /^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(?:&(?:'[A-Za-z_][A-Za-z0-9_]*\s*)?(?:mut\s+)?\s*)?([A-Za-z_][A-Za-z0-9_]*)$/u.exec(text);
+    const parameterName = match?.[1];
+    const typeName = match?.[2];
+    const name = names[0];
+    if (name !== undefined && names.length === 1 && parameterName === name && typeName !== undefined && typeName !== "dyn") {
+      types.set(name, typeName);
+    }
+  }
+  return types;
+}
+
 function staticRustFunction(
   input: RustExtractFileFactsInput,
   node: RustSyntaxNode
@@ -866,7 +946,110 @@ function staticRustFunction(
     attributes: node.name === "AttributeItem"
       ? directChildren(node).filter((child) => child.name === "Attribute")
       : [],
-    parameterNames: parameters.flatMap((parameter) => boundIdentifierNames(input, parameter))
+    parameterNames: parameters.flatMap((parameter) => boundIdentifierNames(input, parameter)),
+    parameterTypes: staticRustParameterTypesFromList(input, parameterList)
+  };
+}
+
+function staticRustType(
+  input: RustExtractFileFactsInput,
+  node: RustSyntaxNode
+): StaticRustType | null {
+  const candidates = ["StructItem", "EnumItem", "TraitItem"] as const;
+  const attributed = candidates
+    .map((itemName) => ({ itemName, attributed: directRustAttributedItem(node, itemName) }))
+    .find(({ attributed: candidate }) => candidate !== null);
+  if (
+    attributed === undefined ||
+    attributed.attributed === null ||
+    hasSyntaxError(node) ||
+    hasRustProjectFactAttributeAmbiguity(input, attributed.attributed.attributes)
+  ) {
+    return null;
+  }
+  const item = attributed.attributed.node;
+  const children = directChildren(item);
+  const keyword = attributed.itemName === "StructItem"
+    ? "struct"
+    : attributed.itemName === "EnumItem"
+      ? "enum"
+      : "trait";
+  const keywordIndex = children.findIndex((child) => child.name === keyword);
+  const nameNode = keywordIndex < 0
+    ? undefined
+    : children.slice(keywordIndex + 1).find((child) => child.name === "TypeIdentifier");
+  const name = nameNode === undefined ? null : identifierText(input, nameNode);
+  if (name === null) {
+    return null;
+  }
+  const variantList = children.find((child) => child.name === "EnumVariantList");
+  const variantNames = variantList === undefined
+    ? []
+    : directChildren(variantList)
+        .filter((child) => child.name === "EnumVariant")
+        .map((variant) => directChildren(variant).find((child) => child.name === "Identifier"))
+        .map((variantName) => variantName === undefined ? null : identifierText(input, variantName))
+        .filter((variantName): variantName is string => variantName !== null);
+  const isPublic = children.some(
+    (child) => child.name === "Vis" && /^pub(?:\s|$)/u.test(nodeText(input, child))
+  );
+  return {
+    name,
+    typeKind: attributed.itemName === "StructItem"
+      ? "struct"
+      : attributed.itemName === "EnumItem"
+        ? "enum"
+        : "trait",
+    variantNames,
+    node,
+    attributes: attributed.attributed.attributes,
+    isPublic
+  };
+}
+
+function staticRustImpl(
+  input: RustExtractFileFactsInput,
+  node: RustSyntaxNode
+): StaticRustImpl | null {
+  const attributed = directRustAttributedItem(node, "ImplItem");
+  if (
+    attributed === null ||
+    hasSyntaxError(node) ||
+    hasRustProjectFactAttributeAmbiguity(input, attributed.attributes)
+  ) {
+    return null;
+  }
+  const text = nodeText(input, attributed.node).replace(/\s+/gu, " ").trim();
+  const header = /^impl\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+for\s+([A-Za-z_][A-Za-z0-9_]*))?\s*\{/u.exec(text);
+  const children = directChildren(attributed.node);
+  if (header === null) {
+    return null;
+  }
+  const typeIdentifiers = children.filter((child) => child.name === "TypeIdentifier");
+  const declarationList = children.find((child) => child.name === "DeclarationList");
+  const selfTypeName = header[2] ?? header[1];
+  const traitName = header[2] === undefined ? undefined : header[1];
+  if (
+    selfTypeName === undefined ||
+    typeIdentifiers.length !== (traitName === undefined ? 1 : 2) ||
+    declarationList === undefined
+  ) {
+    return null;
+  }
+  const methods = directChildren(declarationList)
+    .map((methodNode) => staticRustFunction(input, methodNode))
+    .filter((method): method is StaticRustFunction => method !== null)
+    .filter((method) => method.attributes.every((attribute) => !hasRustProjectFactAttributeAmbiguity(input, [attribute])));
+  return {
+    selfTypeName,
+    ...(traitName === undefined ? {} : { traitName }),
+    node,
+    attributes: attributed.attributes,
+    methods: methods.map((method) => ({
+      ...method,
+      implTypeName: selfTypeName,
+      ...(traitName === undefined ? {} : { implTraitName: traitName })
+    }))
   };
 }
 
@@ -922,6 +1105,205 @@ function staticRustDirectCalls(
 
   visit(functionDeclaration.body);
   return { callsByName, unsafeBindingNames, hasGlobImport };
+}
+
+function staticRustParameterTypes(
+  input: RustExtractFileFactsInput,
+  parameters: readonly RustSyntaxNode[]
+): ReadonlyMap<string, string> {
+  const types = new Map<string, string>();
+  for (const parameter of parameters) {
+    const names = boundIdentifierNames(input, parameter);
+    const text = nodeText(input, parameter).replace(/\s+/gu, " ").trim();
+    const match = /^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(?:&(?:'[A-Za-z_][A-Za-z0-9_]*\s*)?(?:mut\s+)?\s*)?([A-Za-z_][A-Za-z0-9_]*)$/u.exec(text);
+    const parameterName = match?.[1];
+    const typeName = match?.[2];
+    const name = names[0];
+    if (name !== undefined && names.length === 1 && parameterName === name && typeName !== undefined && typeName !== "dyn") {
+      types.set(name, typeName);
+    }
+  }
+  return types;
+}
+
+function simpleRustTypeName(
+  input: RustExtractFileFactsInput,
+  node: RustSyntaxNode | undefined
+): string | null {
+  return node?.name === "TypeIdentifier" ? identifierText(input, node) : null;
+}
+
+function staticRustLocalTypes(
+  input: RustExtractFileFactsInput,
+  functionDeclaration: StaticRustFunction
+): { readonly types: ReadonlyMap<string, string>; readonly unsafeNames: ReadonlySet<string> } {
+  const types = new Map(staticRustParameterTypes(input, functionDeclaration.parameters));
+  if (functionDeclaration.implTypeName !== undefined && functionDeclaration.implTraitName === undefined) {
+    types.set("self", functionDeclaration.implTypeName);
+  }
+  const unsafeNames = new Set<string>();
+  for (const statement of directChildren(functionDeclaration.body)) {
+    if (statement.name === "LetDeclaration") {
+      const nameNode = directChildren(statement).find((child) => child.name === "BoundIdentifier");
+      const name = nameNode === undefined ? null : identifierText(input, nameNode);
+      const explicitType = directChildren(statement)
+        .find((child) => child.name === "TypeIdentifier");
+      const structInitializer = directChildren(statement)
+        .find((child) => child.name === "StructExpression");
+      const structType = structInitializer === undefined
+        ? null
+        : simpleRustTypeName(
+            input,
+            directChildren(structInitializer).find((child) => child.name === "TypeIdentifier")
+          );
+      const inferredType = explicitType === undefined
+        ? structType
+        : simpleRustTypeName(input, explicitType);
+      if (name !== null && inferredType !== null) {
+        types.set(name, inferredType);
+      }
+    }
+    if (statement.name === "Assignment") {
+      const target = directChildren(statement)[0];
+      const name = target?.name === "Identifier" ? identifierText(input, target) : null;
+      if (name !== null && types.has(name)) {
+        unsafeNames.add(name);
+      }
+    }
+  }
+  const bodyText = nodeText(input, functionDeclaration.body);
+  for (const name of types.keys()) {
+    const escapedName = escapeRegularExpression(name);
+    const transferred =
+      new RegExp(`\\blet\\s+(?:mut\\s+)?[A-Za-z_][A-Za-z0-9_]*(?:\\s*:\\s*[^=]+)?\\s*=\\s*&?\\b${escapedName}\\b`).test(bodyText) ||
+      new RegExp(`\\breturn\\s+&?\\b${escapedName}\\b(?!\\s*\\.)`).test(bodyText) ||
+      new RegExp(`\\([^)]*\\b${escapedName}\\b[^)]*\\)`).test(bodyText) ||
+      new RegExp(`\\|[^|]*\\b${escapedName}\\b`).test(bodyText);
+    if (transferred) {
+      unsafeNames.add(name);
+    }
+  }
+  return { types, unsafeNames };
+}
+
+function hasRustNestedCallableAncestor(
+  node: RustSyntaxNode,
+  boundary: RustSyntaxNode
+): boolean {
+  let ancestor = node.parent;
+  while (ancestor !== null && ancestor !== boundary) {
+    if (ancestor.name === "ClosureExpression" || ancestor.name === "FunctionItem") {
+      return true;
+    }
+    ancestor = ancestor.parent;
+  }
+  return false;
+}
+
+function staticRustMethodCalls(
+  input: RustExtractFileFactsInput,
+  functionDeclaration: StaticRustFunction
+): readonly StaticRustMethodCall[] {
+  const local = staticRustLocalTypes(input, functionDeclaration);
+  const calls: StaticRustMethodCall[] = [];
+  for (const call of descendantsNamed(functionDeclaration.body, "CallExpression")) {
+    if (hasRustNestedCallableAncestor(call, functionDeclaration.body)) {
+      continue;
+    }
+    const callee = directChildren(call)[0];
+    if (callee?.name === "FieldExpression") {
+      const children = directChildren(callee);
+      const receiver = children[0];
+      const field = children[1];
+      const receiverName = receiver?.name === "Identifier" ? identifierText(input, receiver) : null;
+      const methodName = field?.name === "FieldIdentifier" ? identifierText(input, field) : null;
+      const receiverTypeName = receiverName === null ? undefined : local.types.get(receiverName);
+      if (
+        receiverName !== null &&
+        receiverTypeName !== undefined &&
+        methodName !== null &&
+        !local.unsafeNames.has(receiverName) &&
+        children.length === 2
+      ) {
+        calls.push({
+          receiverTypeName,
+          receiverName,
+          methodName,
+          callKind: "method",
+          node: field!
+        });
+      }
+      continue;
+    }
+    if (callee?.name !== "ScopedIdentifier") {
+      continue;
+    }
+    const segments = staticPathSegments(input, callee);
+    if (segments?.length !== 2) {
+      continue;
+    }
+    const receiverTypeName = segments[0] === "Self"
+      ? functionDeclaration.implTypeName
+      : segments[0];
+    const methodName = segments[1];
+    const methodNode = directChildren(callee).find((child) => child.name === "Identifier");
+    if (
+      receiverTypeName === undefined ||
+      receiverTypeName === null ||
+      methodName === undefined ||
+      methodNode === undefined
+    ) {
+      continue;
+    }
+    calls.push({
+      receiverTypeName,
+      methodName,
+      callKind: "associated-function",
+      node: methodNode
+    });
+  }
+  return calls;
+}
+
+function staticRustInstantiations(
+  input: RustExtractFileFactsInput,
+  functionDeclaration: StaticRustFunction
+): readonly StaticRustInstantiation[] {
+  const instantiations: StaticRustInstantiation[] = [];
+  for (const expression of descendantsNamed(functionDeclaration.body, "StructExpression")) {
+    if (hasRustNestedCallableAncestor(expression, functionDeclaration.body)) {
+      continue;
+    }
+    const typeNode = directChildren(expression).find((child) => child.name === "TypeIdentifier");
+    const typeName = simpleRustTypeName(input, typeNode);
+    if (typeName !== null && typeNode !== undefined) {
+      instantiations.push({ typeName, instantiationKind: "struct", node: typeNode });
+    }
+  }
+  for (const scoped of descendantsNamed(functionDeclaration.body, "ScopedIdentifier")) {
+    if (hasRustNestedCallableAncestor(scoped, functionDeclaration.body)) {
+      continue;
+    }
+    if (scoped.parent?.name === "CallExpression") {
+      continue;
+    }
+    const segments = staticPathSegments(input, scoped);
+    const typeName = segments?.length === 2
+      ? segments[0]
+      : segments?.length === 3 && segments[0] === "crate"
+        ? segments[1]
+        : undefined;
+    const variantName = segments?.length === 2
+      ? segments[1]
+      : segments?.length === 3 && segments[0] === "crate"
+        ? segments[2]
+        : undefined;
+    const variantNode = directChildren(scoped).find((child) => child.name === "Identifier");
+    if (typeName !== undefined && variantName !== undefined && variantNode !== undefined) {
+      instantiations.push({ typeName, variantName, instantiationKind: "enum", node: variantNode });
+    }
+  }
+  return instantiations;
 }
 
 function staticActixWebServiceConfig(
@@ -2274,6 +2656,65 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
     return symbol;
   }
 
+  function addProjectType(typeDeclaration: StaticRustType): SymbolNode {
+    const qualifiedName = `${input.filePath}#${typeDeclaration.name}`;
+    const identity = `${qualifiedName}\u0000type`;
+    const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
+    declarationOrdinals.set(identity, declarationOrdinal + 1);
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "type",
+        declarationOrdinal
+      }),
+      name: typeDeclaration.name,
+      qualifiedName,
+      kind: "type",
+      filePath: input.filePath,
+      range: rangeFor(lineStarts, typeDeclaration.node.from, typeDeclaration.node.to),
+      isExported: typeDeclaration.isPublic,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(symbol, typeDeclaration.node);
+    return symbol;
+  }
+
+  function addProjectMethod(
+    methodDeclaration: StaticRustFunction,
+    symbolKind: "method" = "method"
+  ): SymbolNode {
+    const qualifier = methodDeclaration.implTraitName === undefined
+      ? methodDeclaration.implTypeName
+      : `${methodDeclaration.implTypeName}::${methodDeclaration.implTraitName}`;
+    const qualifiedName = `${input.filePath}#${qualifier ?? "impl"}::${methodDeclaration.name}`;
+    const identity = `${qualifiedName}\u0000${symbolKind}`;
+    const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
+    declarationOrdinals.set(identity, declarationOrdinal + 1);
+    const isPublic = directChildren(methodDeclaration.node).some(
+      (child) => child.name === "Vis" && /^pub(?:\s|$)/u.test(nodeText(input, child))
+    );
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: symbolKind,
+        declarationOrdinal
+      }),
+      name: methodDeclaration.name,
+      qualifiedName,
+      kind: symbolKind,
+      filePath: input.filePath,
+      range: rangeFor(lineStarts, methodDeclaration.node.from, methodDeclaration.node.to),
+      isExported: isPublic,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(symbol, methodDeclaration.node);
+    return symbol;
+  }
+
   function addDirectCall(caller: SymbolNode, target: SymbolNode, call: RustSyntaxNode): void {
     const range = rangeFor(lineStarts, call.from, call.to);
     edges.push({
@@ -2351,6 +2792,41 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
   }
 
   const rootHasSyntaxError = hasSyntaxError(root);
+  const parsedTypes = !isRustProjectSourceFile(input.filePath)
+    ? []
+    : directChildren(root)
+        .map((node) => staticRustType(input, node))
+        .filter((candidate): candidate is StaticRustType => candidate !== null);
+  const declaredTypeNames = directChildren(root).flatMap((node) => {
+    const item = ["StructItem", "EnumItem", "TraitItem"]
+      .map((itemName) => directRustAttributedItem(node, itemName))
+      .find((candidate) => candidate !== null);
+    if (item === undefined || item === null) {
+      return [];
+    }
+    const children = directChildren(item.node);
+    const keyword = item.node.name === "StructItem"
+      ? "struct"
+      : item.node.name === "EnumItem"
+        ? "enum"
+        : "trait";
+    const keywordIndex = children.findIndex((child) => child.name === keyword);
+    const nameNode = keywordIndex < 0
+      ? undefined
+      : children.slice(keywordIndex + 1).find((child) => child.name === "TypeIdentifier");
+    const name = nameNode === undefined ? null : identifierText(input, nameNode);
+    return name === null ? [] : [name];
+  });
+  const typeNameCounts = new Map<string, number>();
+  for (const name of declaredTypeNames) {
+    typeNameCounts.set(name, (typeNameCounts.get(name) ?? 0) + 1);
+  }
+  const types = parsedTypes.filter((typeDeclaration) => typeNameCounts.get(typeDeclaration.name) === 1);
+  const impls = !isRustProjectSourceFile(input.filePath)
+    ? []
+    : directChildren(root)
+        .map((node) => staticRustImpl(input, node))
+        .filter((candidate): candidate is StaticRustImpl => candidate !== null);
   const functions = directChildren(root)
     .map((node) => staticRustFunction(input, node))
     .filter((candidate): candidate is StaticRustFunction => candidate !== null)
@@ -2361,12 +2837,22 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
     );
   const functionsByName = new Map<string, SymbolNode[]>();
   const functionSymbols = new Map<StaticRustFunction, SymbolNode>();
+  const typeSymbols = new Map<StaticRustType, SymbolNode>();
+  const methodSymbols = new Map<StaticRustFunction, SymbolNode>();
+  for (const typeDeclaration of types) {
+    typeSymbols.set(typeDeclaration, addProjectType(typeDeclaration));
+  }
   for (const functionDeclaration of functions) {
     const symbol = addFunction(functionDeclaration);
     functionSymbols.set(functionDeclaration, symbol);
     const sameName = functionsByName.get(functionDeclaration.name) ?? [];
     sameName.push(symbol);
     functionsByName.set(functionDeclaration.name, sameName);
+  }
+  for (const implementation of impls) {
+    for (const methodDeclaration of implementation.methods) {
+      methodSymbols.set(methodDeclaration, addProjectMethod(methodDeclaration));
+    }
   }
 
   if (
@@ -2383,13 +2869,7 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
         return key === null ? [] : [key];
       });
       const declarationCollisionNames = projectNodes.flatMap((node) => {
-        const enumName = directRustProjectItemName(
-          input,
-          node,
-          "EnumItem",
-          "enum",
-          "TypeIdentifier"
-        );
+        const typeName = staticRustType(input, node)?.name ?? null;
         const functionName = directRustProjectItemName(
           input,
           node,
@@ -2397,7 +2877,7 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
           "fn",
           "BoundIdentifier"
         );
-        return [enumName, functionName].filter((name): name is string => name !== null);
+        return [typeName, functionName].filter((name): name is string => name !== null);
       });
       const projectModuleNodes = projectNodes.filter(
         (node) => directRustAttributedItem(node, "ModItem") !== null
@@ -2428,13 +2908,11 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
           isSafeRustProjectImportCandidate(input, node, acceptedImportNames)
         );
       const declarationCategoryIsSafe = projectNodes.every((node) => {
-        const enumItem = directRustAttributedItem(node, "EnumItem");
-        if (enumItem !== null) {
-          return (
-            staticRustAttributedItem(node, "EnumItem") !== null &&
-            !hasRustPathAttribute(input, enumItem.attributes) &&
-            directRustProjectItemName(input, node, "EnumItem", "enum", "TypeIdentifier") !== null
-          );
+        const typeItem = ["StructItem", "EnumItem", "TraitItem"]
+          .map((itemName) => directRustAttributedItem(node, itemName))
+          .find((item) => item !== null);
+        if (typeItem !== undefined && typeItem !== null) {
+          return staticRustType(input, node) !== null;
         }
         const functionItem = directRustAttributedItem(node, "FunctionItem");
         if (functionItem === null) {
@@ -2476,16 +2954,85 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
           range: rangeFor(lineStarts, imported.node.from, imported.node.to),
           unconditionallyAvailable: true
         }));
-      const projectEnums = projectNodes
-        .map((node) => staticRustProjectEnum(input, node))
-        .filter((candidate): candidate is StaticRustProjectEnum => candidate !== null);
-      const uniqueProjectEnums = projectEnums.filter(
+      const uniqueProjectTypes = types.filter(
         (candidate) => occurrenceCount(declarationCollisionNames, candidate.name) === 1
       );
-      const enumSymbols = new Map<StaticRustProjectEnum, SymbolNode>();
-      for (const enumDeclaration of uniqueProjectEnums) {
-        enumSymbols.set(enumDeclaration, addProjectEnum(enumDeclaration));
-      }
+      const projectTypeFacts: RustProjectTypeFact[] = uniqueProjectTypes.flatMap((typeDeclaration) => {
+        const symbol = typeSymbols.get(typeDeclaration);
+        return symbol === undefined
+          ? []
+          : [{
+              name: typeDeclaration.name,
+              symbolId: symbol.id,
+              filePath: input.filePath,
+              typeKind: typeDeclaration.typeKind,
+              ...(typeDeclaration.typeKind === "enum"
+                ? { variantNames: typeDeclaration.variantNames }
+                : {}),
+              range: rangeFor(lineStarts, typeDeclaration.node.from, typeDeclaration.node.to),
+              unconditionallyAvailable: true
+            } satisfies RustProjectTypeFact];
+      });
+      const projectImplFacts: RustProjectImplFact[] = impls.map((implementation) => ({
+        selfTypeName: implementation.selfTypeName,
+        ...(implementation.traitName === undefined ? {} : { traitName: implementation.traitName }),
+        methodNames: implementation.methods.map((method) => method.name),
+        filePath: input.filePath,
+        range: rangeFor(lineStarts, implementation.node.from, implementation.node.to),
+        unconditionallyAvailable: true
+      }));
+      const projectMethodFacts: RustProjectMethodFact[] = impls.flatMap((implementation) =>
+        implementation.methods.flatMap((method) => {
+          const symbol = methodSymbols.get(method);
+          if (symbol === undefined || method.implTypeName === undefined) {
+            return [];
+          }
+          const hasSelfParameter = /(?:^|[,(\s])(?:&(?:mut\s+)?)?self(?:\s*[,)]|$)/u.test(
+            nodeText(input, method.node)
+          );
+          return [{
+            receiverTypeName: method.implTypeName,
+            ...(method.implTraitName === undefined ? {} : { traitName: method.implTraitName }),
+            name: method.name,
+            symbolId: symbol.id,
+            filePath: input.filePath,
+            range: rangeFor(lineStarts, method.node.from, method.node.to),
+            callKind: hasSelfParameter ? "method" : "associated-function",
+            unconditionallyAvailable: true
+          } satisfies RustProjectMethodFact];
+        })
+      );
+      const projectMethodCalls: RustProjectMethodCallFact[] = rootHasSyntaxError
+        ? []
+        : [...functions, ...impls.flatMap((implementation) => implementation.methods)].flatMap((caller) => {
+            const callerSymbol = functionSymbols.get(caller) ?? methodSymbols.get(caller);
+            return callerSymbol === undefined
+              ? []
+              : staticRustMethodCalls(input, caller).map((call) => ({
+                  callerId: callerSymbol.id,
+                  receiverTypeName: call.receiverTypeName,
+                  ...(call.receiverName === undefined ? {} : { receiverName: call.receiverName }),
+                  methodName: call.methodName,
+                  range: rangeFor(lineStarts, call.node.from, call.node.to),
+                  callKind: call.callKind
+                } satisfies RustProjectMethodCallFact));
+          });
+      const projectInstantiations: RustProjectInstantiationFact[] = rootHasSyntaxError
+        ? []
+        : [...functions, ...impls.flatMap((implementation) => implementation.methods)].flatMap((caller) => {
+            const callerSymbol = functionSymbols.get(caller) ?? methodSymbols.get(caller);
+            return callerSymbol === undefined
+              ? []
+              : staticRustInstantiations(input, caller).map((instantiation) => ({
+                  callerId: callerSymbol.id,
+                  typeName: instantiation.typeName,
+                  ...(instantiation.variantName === undefined
+                    ? {}
+                    : { variantName: instantiation.variantName }),
+                  range: rangeFor(lineStarts, instantiation.node.from, instantiation.node.to),
+                  instantiationKind: instantiation.instantiationKind
+                } satisfies RustProjectInstantiationFact));
+          });
       const declarationCandidates = [
         ...functions.flatMap((functionDeclaration) => {
           const symbol = functionSymbols.get(functionDeclaration);
@@ -2506,16 +3053,17 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
                 }
               ];
         }),
-        ...uniqueProjectEnums.flatMap((enumDeclaration) => {
-          const symbol = enumSymbols.get(enumDeclaration);
+        ...uniqueProjectTypes.filter((typeDeclaration) => typeDeclaration.isPublic).flatMap((typeDeclaration) => {
+          const symbol = typeSymbols.get(typeDeclaration);
           return symbol === undefined
             ? []
             : [
                 {
-                  name: enumDeclaration.name,
+                  name: typeDeclaration.name,
                   symbol,
                   kind: "type" as const,
-                  node: enumDeclaration.node
+                  typeKind: typeDeclaration.typeKind,
+                  node: typeDeclaration.node
                 }
               ];
         })
@@ -2530,6 +3078,7 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
             symbolId: declaration.symbol.id,
             filePath: input.filePath,
             kind: declaration.kind,
+            ...(declaration.kind === "type" ? { typeKind: declaration.typeKind } : {}),
             range: rangeFor(lineStarts, declaration.node.from, declaration.node.to),
             unconditionallyAvailable: true
           }))
@@ -2537,12 +3086,24 @@ export function extractRustFileFacts(input: RustExtractFileFactsInput): Artifact
       const hasProjectFacts =
         modules.length > 0 ||
         imports.length > 0 ||
-        extractedRustProjectFacts.declarations.length > 0;
+        extractedRustProjectFacts.declarations.length > 0 ||
+        projectTypeFacts.length > 0 ||
+        projectImplFacts.length > 0 ||
+        projectMethodFacts.length > 0 ||
+        projectMethodCalls.length > 0 ||
+        projectInstantiations.length > 0;
       if (
         hasProjectFacts ||
         (!rootHasSyntaxError && !hasAmbiguousRustProjectItem(input, root))
       ) {
-        rustProjectFacts = extractedRustProjectFacts;
+        rustProjectFacts = {
+          ...extractedRustProjectFacts,
+          types: projectTypeFacts,
+          impls: projectImplFacts,
+          methods: projectMethodFacts,
+          methodCalls: projectMethodCalls,
+          instantiations: projectInstantiations
+        };
       }
   }
 

@@ -16,7 +16,7 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.457.0
+Current version: v0.458.0
 
 ## Highlights
 
@@ -76,6 +76,8 @@ v0.455.0 deepens TypeScript project-configuration evidence. The boolean `stableT
 v0.456.0 deepens TypeScript namespace member calls. A static property call through `import * as ns` produces the existing `calls` exact edge only when the module target is unique, the exported member is a unique callable value-space symbol, and shadowing, mutation, computed, optional, or ambiguity evidence is absent. The same proof can cross one deterministic explicit re-export path. Type-only namespaces, dynamic or ambiguous namespace calls remain unresolved; no GraphEdge kind or runtime-dispatch guess was added.
 
 v0.457.0 deepens bounded Go project relations. Four fixed large, clean checkouts (Kubernetes, Prometheus, etcd, and Hugo) verify 300 positive candidates with exact evidence, while 150 disposable negatives protect fail-closed behavior for dynamic or computed calls, receiver mutation or escape, shadowing, interface dispatch, build constraints, nested modules, replaced modules, and malformed source. Existing exact edges are now available for unique package-local functions, unique concrete-receiver methods, unique struct construction, and root-`go.mod` local imports whose path is not covered by a replacement. Parser-recovery files, test or ignored files, conditional files, embedding or interface dispatch, reflection, cgo, and runtime dispatch remain unresolved. Unsupported breadth and parser-rejected files are reported separately in the Graph-root benchmark; the admitted subset is not presented as complete Go-language support.
+
+v0.458.0 deepens bounded Rust crate relations. Four fixed large Rust source scopes (Tokio, Rust core, alloc, and std), plus one clean crate contract fixture, verify module/use/trait/impl identity, unique inherent methods and associated functions, struct/enum construction, and the existing `implements` edge. All 300 admitted positives and 150 disposable negatives pass. Trait-object dispatch, dereference or embedding ambiguity, cfg, complex generics, macro/proc-macro expansion, build scripts, FFI, generated code, and runtime dispatch remain unresolved or nonclaims; parser-rejected files and unsupported breadth are reported separately rather than presented as complete Rust compiler semantics.
 
 v0.449.0 adds basic `.md` and `.markdown` graphs. ATX and Setext headings become searchable resources with hierarchical `contains` edges, while complete project-local relative file links become exact `references` only when they uniquely match an indexed file. Fenced, indented, and inline code, HTML blocks, external, root-relative, reference-style, image, dynamic, and heading-anchor links, plus `.mdx`, remain opaque, unresolved, or nonclaims rather than guessed runtime documentation behavior.
 
