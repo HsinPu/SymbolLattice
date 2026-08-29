@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v361";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v362";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v166";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v167";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -1515,6 +1515,23 @@ export interface GoProjectFunctionFact {
   readonly unconditionallyAvailable: boolean;
 }
 
+/** One syntax-proven Go method retained for concrete receiver resolution. */
+export interface GoProjectMethodFact {
+  readonly receiverTypeName: string;
+  readonly name: string;
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly unconditionallyAvailable: boolean;
+}
+
+/** One syntax-proven Go struct type retained for local instantiation resolution. */
+export interface GoProjectStructFact {
+  readonly name: string;
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly unconditionallyAvailable: boolean;
+}
+
 /** One eligible literal Go import; `localName` is present only for an explicit alias. */
 export interface GoProjectImportFact {
   readonly moduleSpecifier: string;
@@ -1529,12 +1546,36 @@ export interface GoProjectBareCallFact {
   readonly range: SourceRange;
 }
 
+/** One source-proven Go method call through a named typed receiver. */
+export interface GoProjectMethodCallFact {
+  readonly callerId: string;
+  readonly receiverName: string;
+  readonly receiverTypeName: string;
+  readonly methodName: string;
+  readonly range: SourceRange;
+}
+
+/** One source-proven Go `new(T)` or `T{}` construction through a named struct. */
+export interface GoProjectInstantiationFact {
+  readonly callerId: string;
+  readonly typeName: string;
+  readonly range: SourceRange;
+}
+
 /** Syntax-only Go package facts retained for a later bounded project resolver. */
 export interface GoProjectFacts {
   readonly packageName: string;
   readonly functions: readonly GoProjectFunctionFact[];
   readonly imports: readonly GoProjectImportFact[];
   readonly bareCalls: readonly GoProjectBareCallFact[];
+  /** Omitted only by artifact facts persisted before concrete method-call extraction. */
+  readonly methods?: readonly GoProjectMethodFact[];
+  /** Omitted only by artifact facts persisted before concrete method-call extraction. */
+  readonly methodCalls?: readonly GoProjectMethodCallFact[];
+  /** Omitted only by artifact facts persisted before struct instantiation extraction. */
+  readonly structs?: readonly GoProjectStructFact[];
+  /** Omitted only by artifact facts persisted before struct instantiation extraction. */
+  readonly instantiations?: readonly GoProjectInstantiationFact[];
 }
 
 /** One complete direct root Ada package specification or body retained for project pairing. */

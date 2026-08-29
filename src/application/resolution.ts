@@ -5026,6 +5026,13 @@ function projectGoProjectFacts(input: {
   >();
   const packageKey = (filePath: string, packageName: string, functionName: string): string =>
     `${goPackageDirectory(filePath)}\u0000${packageName}\u0000${functionName}`;
+  const methodKey = (
+    filePath: string,
+    packageName: string,
+    receiverTypeName: string,
+    methodName: string
+  ): string =>
+    `${goPackageDirectory(filePath)}\u0000${packageName}\u0000${receiverTypeName}\u0000${methodName}`;
   const isOwnedFunctionFact = (
     artifactFilePath: string,
     functionFact: {
@@ -5040,6 +5047,55 @@ function projectGoProjectFacts(input: {
       symbol.kind === "function" &&
       symbol.filePath === artifactFilePath &&
       symbol.name === functionFact.name;
+  };
+  const methodsByPackageReceiverAndName = new Map<
+    string,
+    Array<{
+      readonly filePath: string;
+      readonly symbolId: string;
+      readonly unconditionallyAvailable: boolean;
+    }>
+  >();
+  const isOwnedMethodFact = (
+    artifactFilePath: string,
+    methodFact: {
+      readonly receiverTypeName: string;
+      readonly name: string;
+      readonly symbolId: string;
+      readonly filePath: string;
+    }
+  ): boolean => {
+    const symbol = input.symbolsById.get(methodFact.symbolId);
+    return methodFact.filePath === artifactFilePath &&
+      symbol !== undefined &&
+      symbol.kind === "method" &&
+      symbol.filePath === artifactFilePath &&
+      symbol.name === methodFact.name &&
+      symbol.qualifiedName === `${artifactFilePath}#${methodFact.receiverTypeName}.${methodFact.name}`;
+  };
+  const structsByPackageAndName = new Map<
+    string,
+    Array<{
+      readonly filePath: string;
+      readonly symbolId: string;
+      readonly unconditionallyAvailable: boolean;
+    }>
+  >();
+  const isOwnedStructFact = (
+    artifactFilePath: string,
+    structFact: {
+      readonly name: string;
+      readonly symbolId: string;
+      readonly filePath: string;
+    }
+  ): boolean => {
+    const symbol = input.symbolsById.get(structFact.symbolId);
+    return structFact.filePath === artifactFilePath &&
+      symbol !== undefined &&
+      symbol.kind === "type" &&
+      symbol.filePath === artifactFilePath &&
+      symbol.name === structFact.name &&
+      symbol.qualifiedName === `${artifactFilePath}#${structFact.name}`;
   };
 
   for (const [filePath, facts] of [...input.factsByFile.entries()].sort(([left], [right]) =>
@@ -5061,9 +5117,45 @@ function projectGoProjectFacts(input: {
       });
       functionsByPackageAndName.set(key, candidates);
     }
+    for (const methodFact of goFacts.methods ?? []) {
+      if (!isOwnedMethodFact(filePath, methodFact)) {
+        continue;
+      }
+      const key = methodKey(filePath, goFacts.packageName, methodFact.receiverTypeName, methodFact.name);
+      const candidates = methodsByPackageReceiverAndName.get(key) ?? [];
+      candidates.push({
+        filePath: methodFact.filePath,
+        symbolId: methodFact.symbolId,
+        unconditionallyAvailable: methodFact.unconditionallyAvailable
+      });
+      methodsByPackageReceiverAndName.set(key, candidates);
+    }
+    for (const structFact of goFacts.structs ?? []) {
+      if (!isOwnedStructFact(filePath, structFact)) {
+        continue;
+      }
+      const key = packageKey(filePath, goFacts.packageName, structFact.name);
+      const candidates = structsByPackageAndName.get(key) ?? [];
+      candidates.push({
+        filePath: structFact.filePath,
+        symbolId: structFact.symbolId,
+        unconditionallyAvailable: structFact.unconditionallyAvailable
+      });
+      structsByPackageAndName.set(key, candidates);
+    }
   }
 
   for (const candidates of functionsByPackageAndName.values()) {
+    candidates.sort(
+      (left, right) => compareStableText(left.filePath, right.filePath) || compareStableText(left.symbolId, right.symbolId)
+    );
+  }
+  for (const candidates of methodsByPackageReceiverAndName.values()) {
+    candidates.sort(
+      (left, right) => compareStableText(left.filePath, right.filePath) || compareStableText(left.symbolId, right.symbolId)
+    );
+  }
+  for (const candidates of structsByPackageAndName.values()) {
     candidates.sort(
       (left, right) => compareStableText(left.filePath, right.filePath) || compareStableText(left.symbolId, right.symbolId)
     );
@@ -5121,6 +5213,102 @@ function projectGoProjectFacts(input: {
           [target.id],
           [],
           [filePath, target.filePath]
+        )
+      });
+    }
+
+    for (const call of goFacts.methodCalls ?? []) {
+      const caller = input.symbolsById.get(call.callerId);
+      const candidates = methodsByPackageReceiverAndName.get(
+        methodKey(filePath, goFacts.packageName, call.receiverTypeName, call.methodName)
+      ) ?? [];
+      if (
+        caller === undefined ||
+        caller.filePath !== filePath ||
+        (caller.kind !== "function" && caller.kind !== "method") ||
+        candidates.length !== 1 ||
+        candidates[0] === undefined ||
+        !candidates[0].unconditionallyAvailable
+      ) {
+        continue;
+      }
+      const target = input.symbolsById.get(candidates[0].symbolId);
+      if (
+        target === undefined ||
+        target.filePath !== candidates[0].filePath ||
+        target.kind !== "method"
+      ) {
+        continue;
+      }
+      edges.push({
+        id: createEdgeId({
+          sourceId: caller.id,
+          targetId: target.id,
+          kind: "calls",
+          line: call.range.start.line,
+          column: call.range.start.column,
+          referenceName: call.methodName
+        }),
+        sourceId: caller.id,
+        targetId: target.id,
+        kind: "calls",
+        filePath,
+        range: call.range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: call.methodName,
+        evidence: referenceEvidence(
+          "project.go.same-package.unique-concrete-receiver-method-call",
+          target.filePath === filePath ? "syntax" : "module",
+          [target.id],
+          [],
+          target.filePath === filePath ? [] : [filePath, target.filePath]
+        )
+      });
+    }
+
+    for (const instantiation of goFacts.instantiations ?? []) {
+      const caller = input.symbolsById.get(instantiation.callerId);
+      const candidates = structsByPackageAndName.get(
+        packageKey(filePath, goFacts.packageName, instantiation.typeName)
+      ) ?? [];
+      if (
+        caller === undefined ||
+        caller.filePath !== filePath ||
+        (caller.kind !== "function" && caller.kind !== "method") ||
+        candidates.length !== 1 ||
+        candidates[0] === undefined ||
+        !candidates[0].unconditionallyAvailable
+      ) {
+        continue;
+      }
+      const target = input.symbolsById.get(candidates[0].symbolId);
+      if (target === undefined || target.filePath !== candidates[0].filePath || target.kind !== "type") {
+        continue;
+      }
+      edges.push({
+        id: createEdgeId({
+          sourceId: caller.id,
+          targetId: target.id,
+          kind: "instantiates",
+          line: instantiation.range.start.line,
+          column: instantiation.range.start.column,
+          referenceName: instantiation.typeName
+        }),
+        sourceId: caller.id,
+        targetId: target.id,
+        kind: "instantiates",
+        filePath,
+        range: instantiation.range,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: instantiation.typeName,
+        evidence: referenceEvidence(
+          "project.go.same-package.unique-struct-instantiation",
+          target.filePath === filePath ? "syntax" : "module",
+          [target.id],
+          [],
+          target.filePath === filePath ? [] : [filePath, target.filePath]
         )
       });
     }

@@ -30,6 +30,152 @@ afterEach(async () => {
 });
 
 describe("Go project resolution", () => {
+  it("resolves a unique concrete receiver method across same-package files and rejects interface dispatch", async () => {
+    const projectPath = await createInlineProject({
+      "go.mod": "module example.test/root\n\ngo 1.22\n",
+      "service.go": [
+        "package sample",
+        "",
+        "type Service struct{}",
+        "",
+        "func (s *Service) Run() {}"
+      ].join("\n"),
+      "caller.go": [
+        "package sample",
+        "",
+        "type Runner interface { Run() }",
+        "",
+        "func caller(service *Service) { service.Run() }",
+        "func interfaceCaller(r Runner) { r.Run() }"
+      ].join("\n")
+    });
+    const store = new SqliteGraphStore();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = store.getSnapshot(projectPath);
+    const method = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "service.go#Service.Run"
+    );
+    const caller = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "caller.go#caller"
+    );
+    expect(snapshot.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: caller?.id,
+          targetId: method?.id,
+          kind: "calls",
+          resolution: "exact",
+          confidence: 1,
+          referenceName: "Run",
+          evidence: {
+            ruleId: "project.go.same-package.unique-concrete-receiver-method-call",
+            stage: "module",
+            candidateSymbolIds: [method?.id],
+            resolutionPath: ["caller.go", "service.go"]
+          }
+        })
+      ])
+    );
+    expect(
+      snapshot.edges.filter(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.sourceId === snapshot.symbols.find((symbol) => symbol.qualifiedName === "caller.go#interfaceCaller")?.id &&
+          edge.referenceName === "Run" &&
+          edge.resolution === "exact"
+      )
+    ).toEqual([]);
+  });
+
+  it.each([
+    [
+      "duplicate methods",
+      {
+        "service.go": "package sample\ntype Service struct{}\nfunc (s *Service) Run() {}\n",
+        "duplicate.go": "package sample\nfunc (s *Service) Run() {}\n"
+      }
+    ],
+    [
+      "conditional methods",
+      {
+        "service_windows.go": "//go:build windows\npackage sample\ntype Service struct{}\nfunc (s *Service) Run() {}\n"
+      }
+    ]
+  ])("keeps Go method calls unresolved for %s", async (_description, extraFiles) => {
+    const projectPath = await createInlineProject({
+      "go.mod": "module example.test/root\n\ngo 1.22\n",
+      ...extraFiles,
+      "caller.go": "package sample\nfunc caller(service *Service) { service.Run() }\n"
+    });
+    const store = new SqliteGraphStore();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    expect(
+      store.getSnapshot(projectPath).edges.filter(
+        (edge) =>
+          edge.kind === "calls" &&
+          edge.referenceName === "Run" &&
+          edge.resolution === "exact" &&
+          edge.evidence?.ruleId === "project.go.same-package.unique-concrete-receiver-method-call"
+      )
+    ).toEqual([]);
+  });
+
+  it("resolves unique same-package struct constructions and rejects interface construction", async () => {
+    const projectPath = await createInlineProject({
+      "go.mod": "module example.test/root\n\ngo 1.22\n",
+      "types.go": "package sample\ntype Service struct{}\n",
+      "caller.go": [
+        "package sample",
+        "",
+        "type Runner interface { Run() }",
+        "",
+        "func caller() { _ = new(Service); _ = &Service{}; _ = Service{}; _ = new(Runner) }"
+      ].join("\n")
+    });
+    const store = new SqliteGraphStore();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
+
+    await service.init({ projectPath });
+
+    const snapshot = store.getSnapshot(projectPath);
+    const typeSymbol = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "types.go#Service"
+    );
+    const caller = snapshot.symbols.find(
+      (symbol) => symbol.qualifiedName === "caller.go#caller"
+    );
+    const constructions = snapshot.edges.filter(
+      (edge) =>
+        edge.kind === "instantiates" &&
+        edge.sourceId === caller?.id &&
+        edge.resolution === "exact" &&
+        edge.evidence?.ruleId === "project.go.same-package.unique-struct-instantiation"
+    );
+    expect(constructions).toHaveLength(3);
+    expect(constructions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          targetId: typeSymbol?.id,
+          confidence: 1,
+          evidence: expect.objectContaining({ candidateSymbolIds: [typeSymbol?.id] })
+        })
+      ])
+    );
+    expect(snapshot.edges.some(
+      (edge) =>
+        edge.kind === "instantiates" &&
+        edge.sourceId === caller?.id &&
+        edge.referenceName === "Runner" &&
+        edge.resolution === "exact"
+    )).toBe(false);
+  });
+
   it("keeps fsnotify-shaped package calls and root-module imports exact across persistence and sync", async () => {
     const projectPath = await createInlineProject({
       "go.mod": "module github.com/fsnotify/fsnotify\n\ngo 1.22\n",

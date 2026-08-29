@@ -144,6 +144,82 @@ func (p *Pointer) Write() {}`
     });
   });
 
+  it("retains concrete receiver method-call facts while rejecting interface and escaped receivers", () => {
+    const facts = extractGoFileFacts({
+      filePath: "receiver.go",
+      language: "go",
+      sourceText: `package receiver
+type Service struct{}
+type Runner interface { Run() }
+func (s *Service) Run() {}
+func caller(service *Service) { service.Run(); }
+func unsafeCaller(service *Service, runner Runner) { runner.Run(); consume(service); }
+func reassignedCaller(service *Service) { alias := service; _ = alias; service.Run(); }
+func consume(value *Service) {}
+`
+    });
+
+    const method = methodByName(facts, "Run");
+    expect(facts.goProjectFacts?.methods).toEqual([
+      expect.objectContaining({
+        receiverTypeName: "Service",
+        name: "Run",
+        symbolId: method.id,
+        filePath: "receiver.go",
+        unconditionallyAvailable: true
+      })
+    ]);
+    expect(facts.goProjectFacts?.methodCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          callerId: expect.any(String),
+          receiverName: "service",
+          receiverTypeName: "Service",
+          methodName: "Run",
+          range: expect.any(Object)
+        }),
+        expect.objectContaining({
+          callerId: expect.any(String),
+          receiverName: "runner",
+          receiverTypeName: "Runner",
+          methodName: "Run",
+          range: expect.any(Object)
+        })
+      ])
+    );
+    expect(
+      facts.goProjectFacts?.methodCalls?.some((call) => call.receiverName === "service" && call.callerId.includes("unsafeCaller"))
+    ).not.toBe(true);
+    expect(
+      facts.goProjectFacts?.methodCalls?.some((call) => call.callerId.includes("reassignedCaller"))
+    ).not.toBe(true);
+  });
+
+  it("retains struct identities and direct construction facts", () => {
+    const facts = extractGoFileFacts({
+      filePath: "construct.go",
+      language: "go",
+      sourceText: `package construct
+type Service struct{}
+func caller() { _ = new(Service); _ = &Service{}; _ = Service{} }
+`
+    });
+
+    const typeSymbol = facts.symbols.find(
+      (symbol) => symbol.kind === "type" && symbol.qualifiedName === "construct.go#Service"
+    );
+    expect(typeSymbol).toBeDefined();
+    expect(facts.goProjectFacts?.structs).toEqual([
+      expect.objectContaining({ name: "Service", symbolId: typeSymbol?.id, filePath: "construct.go" })
+    ]);
+    expect(facts.goProjectFacts?.instantiations).toHaveLength(3);
+    expect(facts.goProjectFacts?.instantiations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ callerId: expect.any(String), typeName: "Service", range: expect.any(Object) })
+      ])
+    );
+  });
+
   it("retains a clean fsnotify package function when recovery is elsewhere in the file", () => {
     const facts = extractGoFileFacts({
       filePath: "fsnotify.go",
@@ -314,6 +390,39 @@ func callee() {}
         }
       })
     ]);
+  });
+
+  it("retains calls whose boolean result is negated by Go unary syntax", () => {
+    const facts = extractGoFileFacts({
+      filePath: "negated.go",
+      language: "go",
+      sourceText: `package sample
+type Service struct{}
+func (s *Service) Ready() bool { return true }
+func callee() bool { return true }
+func caller(service *Service) {
+  if !callee() { return }
+  if !service.Ready() { return }
+}
+`
+    });
+    const caller = functionByName(facts, "caller");
+    const callee = functionByName(facts, "callee");
+    expect(facts.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sourceId: caller.id, targetId: callee.id, referenceName: "callee" })
+      ])
+    );
+    expect(facts.goProjectFacts?.methodCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          callerId: caller.id,
+          receiverName: "service",
+          receiverTypeName: "Service",
+          methodName: "Ready"
+        })
+      ])
+    );
   });
 
   it("emits exact Rust top-level function calls with the unique target evidence", () => {

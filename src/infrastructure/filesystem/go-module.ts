@@ -44,20 +44,51 @@ function isSafeGoModulePath(value: string): boolean {
   );
 }
 
+interface ParsedGoModule {
+  readonly modulePath: string;
+  /** Module path prefixes whose imports may be redirected by `replace`. */
+  readonly replacedModulePrefixes: readonly string[];
+}
+
 /**
  * Reads the intentionally narrow root-module subset needed to map an exact
- * internal import path onto an already indexed Go source directory. A
- * non-comment root line beginning a `replace` directive disables this narrow
- * resolver: replacements, nested modules, and external modules remain
- * deliberately unresolved rather than guessed.
+ * internal import path onto an already indexed Go source directory. A replace
+ * directive is safe to ignore only when it targets a different module path;
+ * imports under the replaced prefix remain unresolved instead of guessed.
  */
-function parseGoModulePath(sourceText: string): string | null {
+function parseGoModulePath(sourceText: string): ParsedGoModule | null {
   let modulePath: string | null = null;
+  const replacedModulePrefixes: string[] = [];
+  let inReplaceBlock = false;
 
   for (const rawLine of sourceText.split(/\r?\n/u)) {
     const line = rawLine.replace(/\s+\/\/.*$/u, "").trim();
-    if (/^replace(?:\s|\(|$)/u.test(line)) {
-      return null;
+    if (line === "") {
+      continue;
+    }
+    if (inReplaceBlock) {
+      if (line === ")") {
+        inReplaceBlock = false;
+        continue;
+      }
+      const replacement = /^([^\s]+)(?:\s+[^\s]+)?\s+=>\s+[^\s]+/u.exec(line)?.[1];
+      if (replacement === undefined || !isSafeGoModulePath(replacement)) {
+        return null;
+      }
+      replacedModulePrefixes.push(replacement);
+      continue;
+    }
+    if (/^replace\s*\(\s*$/u.test(line)) {
+      inReplaceBlock = true;
+      continue;
+    }
+    if (/^replace(?:\s|$)/u.test(line)) {
+      const replacement = /^replace\s+([^\s]+)(?:\s+[^\s]+)?\s+=>\s+[^\s]+$/u.exec(line)?.[1];
+      if (replacement === undefined || !isSafeGoModulePath(replacement)) {
+        return null;
+      }
+      replacedModulePrefixes.push(replacement);
+      continue;
     }
     if (!line.startsWith("module")) {
       continue;
@@ -70,7 +101,9 @@ function parseGoModulePath(sourceText: string): string | null {
     modulePath = candidate;
   }
 
-  return modulePath;
+  return modulePath === null || inReplaceBlock
+    ? null
+    : { modulePath, replacedModulePrefixes };
 }
 
 function localImportDirectory(modulePath: string, moduleSpecifier: string): string | null {
@@ -82,6 +115,15 @@ function localImportDirectory(modulePath: string, moduleSpecifier: string): stri
   }
   const directory = moduleSpecifier.slice(modulePath.length + 1);
   return directory === "" || !isSafeGoModulePath(directory) ? null : directory;
+}
+
+function isReplacedModuleSpecifier(
+  moduleSpecifier: string,
+  replacedModulePrefixes: readonly string[]
+): boolean {
+  return replacedModulePrefixes.some(
+    (prefix) => moduleSpecifier === prefix || moduleSpecifier.startsWith(`${prefix}/`)
+  );
 }
 
 function firstGoPackageFileByDirectory(
@@ -191,7 +233,8 @@ export async function createGoModuleProjectModuleResolver(input: {
       configurationInputs: [rootInput]
     };
   }
-  const modulePath = parseGoModulePath(moduleSource);
+  const parsedModule = parseGoModulePath(moduleSource);
+  const modulePath = parsedModule?.modulePath ?? null;
   const firstPackageFileByDirectory = firstGoPackageFileByDirectory(input.sourceDocuments);
 
   return {
@@ -202,6 +245,9 @@ export async function createGoModuleProjectModuleResolver(input: {
         }
         const directory = localImportDirectory(modulePath, moduleSpecifier);
         if (directory === null) {
+          return unresolved([rootInput.path]);
+        }
+        if (parsedModule !== null && isReplacedModuleSpecifier(moduleSpecifier, parsedModule.replacedModulePrefixes)) {
           return unresolved([rootInput.path]);
         }
         const sourceNestedModule = containingNestedModuleInput(

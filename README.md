@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.456.0
+目前版本：v0.457.0
 
 ## 主要能力
 
@@ -74,6 +74,8 @@ v0.454.0 加深Java project relation。合法modern Java來源即使legacy parse
 v0.455.0 加深 TypeScript project configuration evidence。經 TypeScript 6.0.3 oracle 證明不影響 module resolution 或 program structure 的 boolean `stableTypeOrdering`，可在保留原始 config hash 的前提下交由產品內 TypeScript 5.9.3 安全解析；其他未知或型別錯誤選項仍會失敗。Project references 只接受 project-local、tracked、唯一且無循環的 config chain，並將完整 evidence 帶入 unresolved workspace fallback。Workspace package exports 只對 literal root／exact subpath 建立 exact target；conditional object、array 與 wildcard 維持 nonclaim。六個固定大型 TypeScript corpus 的 102,537 個核准 relation candidates、300 個固定正向與 150 個負向案例全部通過，FP、FN 與 evidenceInvalid 皆為 0；parse-rejected files、package conditions、wildcards、overloads 與 runtime dispatch 不在完整支援宣稱內。
 
 v0.456.0 加深 TypeScript namespace member call。`import * as ns` 的靜態 property call 只有在 module target 唯一、exported member 為 value-space 且 callable、沒有 shadow／mutation／computed／optional／ambiguous evidence 時，才建立既有 `calls` exact edge；同樣規則可沿單一路徑穿過 explicit re-export。Type-only namespace、動態或歧義 namespace 維持 unresolved，沒有新增 GraphEdge kind 或 runtime dispatch 推測。
+
+v0.457.0 加深 Go 的 bounded project relations。四個固定大型、乾淨 checkout（Kubernetes、Prometheus、etcd、Hugo）以獨立 masked-source truth 驗證 300 個正向候選全部 exact，並以 150 個 disposable 負向案例守住 dynamic／computed call、receiver mutation／escape、shadow、interface dispatch、build constraint、nested module、replaced module 與 malformed source 的 fail-closed 行為。產品現在可在唯一 package-local function、唯一 concrete receiver method、唯一 struct construction，以及 root `go.mod` 未被對應 `replace` 影響的 local import 上建立既有 exact edge；parser-recovery、test／ignored／conditional files、embedding／interface／reflection／cgo／runtime dispatch 維持 unresolved。大型 corpus 的 unsupported breadth 與 parser-rejected files 另列在 Graph 根目錄 benchmark，不把核准 subset 包裝成完整 Go 語言支援。
 
 v0.449.0 新增 `.md`／`.markdown` 基礎圖譜：ATX／Setext heading 會形成可搜尋的 resource 與階層 `contains`，完整的 project-local 相對檔案連結會在唯一命中 indexed file 時形成 exact `references`。Fenced／indented／inline code、HTML block、external／root-relative／reference-style／image／dynamic links、heading anchor 與 `.mdx` 維持 opaque、unresolved 或 nonclaim，不推測執行期文件行為。
 

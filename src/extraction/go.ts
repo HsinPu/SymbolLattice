@@ -6,6 +6,10 @@ import {
   type ArtifactFacts,
   type GraphEdge,
   type GoProjectImportFact,
+  type GoProjectInstantiationFact,
+  type GoProjectMethodCallFact,
+  type GoProjectMethodFact,
+  type GoProjectStructFact,
   type RouteMethod,
   type SourcePosition,
   type SourceRange,
@@ -29,10 +33,29 @@ interface StaticGoFunction {
   readonly body: GoSyntaxNode;
   readonly parameterNames: readonly string[];
   readonly bindingNames: readonly string[];
+  readonly parameterTypes: ReadonlyMap<string, string>;
 }
 
 interface StaticGoMethod extends StaticGoFunction {
   readonly receiverName: string;
+  readonly receiverVariableName?: string;
+}
+
+interface StaticGoMethodCall {
+  readonly receiverName: string;
+  readonly receiverTypeName: string;
+  readonly methodName: string;
+  readonly node: GoSyntaxNode;
+}
+
+interface StaticGoStruct {
+  readonly name: string;
+  readonly node: GoSyntaxNode;
+}
+
+interface StaticGoInstantiation {
+  readonly typeName: string;
+  readonly node: GoSyntaxNode;
 }
 
 interface GinReceiver {
@@ -902,6 +925,55 @@ function staticGoFrameRequests(
   return requests;
 }
 
+function staticGoParameterTypes(
+  input: GoExtractFileFactsInput,
+  parameters: GoSyntaxNode
+): ReadonlyMap<string, string> {
+  const types = new Map<string, string>();
+  for (const parameter of directChildren(parameters).filter((child) => child.name === "Parameter")) {
+    const names = descendantsNamed(parameter, "DefName")
+      .map((name) => identifierText(input, name))
+      .filter((name): name is string => name !== null);
+    if (names.length !== 1) {
+      continue;
+    }
+    const typeNode = directChildren(parameter).find(
+      (child) => child.name === "TypeName" || child.name === "PointerType"
+    );
+    if (typeNode === undefined) {
+      continue;
+    }
+    const typeText = nodeText(input, typeNode).trim();
+    const typeMatch = /^\*?([A-Za-z_][A-Za-z0-9_]*)$/u.exec(typeText);
+    const name = names[0];
+    if (typeMatch?.[1] !== undefined && name !== undefined) {
+      types.set(name, typeMatch[1]);
+    }
+  }
+  return types;
+}
+
+function staticGoStruct(
+  input: GoExtractFileFactsInput,
+  node: GoSyntaxNode
+): StaticGoStruct | null {
+  if (node.name !== "TypeDecl" || hasSyntaxError(node)) {
+    return null;
+  }
+  const typeSpec = directChildren(node).find((child) => child.name === "TypeSpec");
+  const nameNode = typeSpec === undefined
+    ? undefined
+    : directChildren(typeSpec).find((child) => child.name === "DefName");
+  const structType = typeSpec === undefined
+    ? undefined
+    : directChildren(typeSpec).find((child) => child.name === "StructType");
+  const name = nameNode === undefined ? null : identifierText(input, nameNode);
+  if (name === null || structType === undefined) {
+    return null;
+  }
+  return { name, node };
+}
+
 function staticGoFunction(
   input: GoExtractFileFactsInput,
   node: GoSyntaxNode
@@ -925,7 +997,14 @@ function staticGoFunction(
     .flatMap((parameterOrResult) => descendantsNamed(parameterOrResult, "DefName"))
     .map((binding) => identifierText(input, binding))
     .filter((binding): binding is string => binding !== null);
-  return { name, node, body, parameterNames, bindingNames };
+  return {
+    name,
+    node,
+    body,
+    parameterNames,
+    bindingNames,
+    parameterTypes: staticGoParameterTypes(input, parameters)
+  };
 }
 
 function staticGoMethod(
@@ -964,13 +1043,24 @@ function staticGoMethod(
     .flatMap((parameterOrResult) => descendantsNamed(parameterOrResult, "DefName"))
     .map((binding) => identifierText(input, binding))
     .filter((binding): binding is string => binding !== null);
+  const receiverParameterTypes = staticGoParameterTypes(input, receiverParameters ?? parameters);
+  const receiverVariableName = [...receiverParameterTypes.keys()][0];
+  const parameterTypes = new Map(staticGoParameterTypes(input, parameters));
+  if (receiverVariableName !== undefined) {
+    const receiverTypeName = receiverParameterTypes.get(receiverVariableName);
+    if (receiverTypeName !== undefined) {
+      parameterTypes.set(receiverVariableName, receiverTypeName);
+    }
+  }
   return {
     name,
     node,
     body,
     parameterNames,
     bindingNames,
-    receiverName: receiverMatch[1]
+    parameterTypes,
+    receiverName: receiverMatch[1],
+    ...(receiverVariableName === undefined ? {} : { receiverVariableName })
   };
 }
 
@@ -1069,6 +1159,65 @@ function hasGoDotImport(root: GoSyntaxNode): boolean {
     );
 }
 
+/**
+ * Lezer represents a negated call/selector as a unary expression attached to
+ * the callee/receiver (for example `!ready()` and `!svc.Ready()`).  The
+ * logical operator applies to the call result in valid Go source, so retain
+ * only the identifier child as the source-proven callable/receiver name.
+ * Other unary/computed shapes remain unsupported.
+ */
+function directGoIdentifierNode(node: GoSyntaxNode | undefined): GoSyntaxNode | undefined {
+  if (node?.name === "VariableName") {
+    return node;
+  }
+  if (node?.name !== "UnaryExp") {
+    return undefined;
+  }
+  const children = directChildren(node);
+  if (!children.some((child) => child.name === "LogicOp" && child.from + 1 === child.to)) {
+    return undefined;
+  }
+  return children.find((child) => child.name === "VariableName");
+}
+
+function simpleGoReceiverNameBeforeField(
+  input: GoExtractFileFactsInput,
+  field: GoSyntaxNode
+): string | null {
+  let cursor = field.from - 1;
+  while (cursor >= 0 && /\s/u.test(input.sourceText[cursor] ?? "")) {
+    cursor -= 1;
+  }
+  if (input.sourceText[cursor] !== ".") {
+    return null;
+  }
+  cursor -= 1;
+  while (cursor >= 0 && /\s/u.test(input.sourceText[cursor] ?? "")) {
+    cursor -= 1;
+  }
+  const end = cursor + 1;
+  while (cursor >= 0 && /[A-Za-z0-9_]/u.test(input.sourceText[cursor] ?? "")) {
+    cursor -= 1;
+  }
+  const start = cursor + 1;
+  const receiver = input.sourceText.slice(start, end);
+  return /^[A-Za-z_][A-Za-z0-9_]*$/u.test(receiver) ? receiver : null;
+}
+
+function hasGoFunctionLiteralAncestor(
+  node: GoSyntaxNode,
+  boundary: GoSyntaxNode
+): boolean {
+  let ancestor = node.parent;
+  while (ancestor !== null && ancestor !== boundary) {
+    if (ancestor.name === "FunctionLiteral") {
+      return true;
+    }
+    ancestor = ancestor.parent;
+  }
+  return false;
+}
+
 function staticGoDirectCalls(
   input: GoExtractFileFactsInput,
   functionDeclaration: StaticGoFunction
@@ -1095,10 +1244,11 @@ function staticGoDirectCalls(
     }
     if (candidate.name === "CallExpr") {
       const callee = directChildren(candidate)[0];
-      const name = callee?.name === "VariableName" ? identifierText(input, callee) : null;
+      const identifier = directGoIdentifierNode(callee);
+      const name = identifier === undefined ? null : identifierText(input, identifier);
       if (name !== null && candidate.parent?.name !== "CallExpr") {
         const calls = callsByName.get(name) ?? [];
-        calls.push(callee!);
+        calls.push(identifier!);
         callsByName.set(name, calls);
       }
     }
@@ -1109,6 +1259,117 @@ function staticGoDirectCalls(
 
   visit(functionDeclaration.body);
   return { callsByName, unsafeBindingNames };
+}
+
+/**
+ * Collects only calls through a named parameter or method receiver whose type
+ * is one simple identifier. Passing the receiver to another call or assigning
+ * to it invalidates the proof for the whole declaration; interface, qualified,
+ * composite, and function-literal receivers remain outside this slice.
+ */
+function staticGoMethodCalls(
+  input: GoExtractFileFactsInput,
+  functionDeclaration: StaticGoFunction
+): readonly StaticGoMethodCall[] {
+  const calls: StaticGoMethodCall[] = [];
+  const emittedFieldOffsets = new Set<number>();
+  const bodyText = nodeText(input, functionDeclaration.body);
+  const safeReceivers = new Map<string, boolean>();
+  for (const receiverName of functionDeclaration.parameterTypes.keys()) {
+    const escapedName = escapeRegularExpression(receiverName);
+    const bareReceiver = `\\b${escapedName}\\b(?!\\s*\\.)`;
+    const reassigned = new RegExp(
+      `\\b${escapedName}\\s*(?::=|=|\\+=|-=|\\*=|/=|%=|&=|\\|=|\\^=|<<=|>>=)`
+    ).test(bodyText);
+    const escaped =
+      new RegExp(`\\([^)]*\\b${escapedName}\\b[^)]*\\)`).test(bodyText) ||
+      new RegExp(
+        `(?:\\b(?:var\\s+)?[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)?(?:\\s+\\*?[A-Za-z_][A-Za-z0-9_]*)?\\s*(?::=|=(?!=))\\s*|\\breturn\\s+|<-\\s*)${bareReceiver}`
+      ).test(bodyText) ||
+      new RegExp(`\\bfunc\\s*\\([^)]*\\)\\s*\\{[^}]*\\b${escapedName}\\b`).test(bodyText);
+    safeReceivers.set(receiverName, !reassigned && !escaped);
+  }
+
+  for (const methodNode of descendantsNamed(functionDeclaration.body, "FieldName")) {
+    if (
+      hasGoFunctionLiteralAncestor(methodNode, functionDeclaration.body) ||
+      emittedFieldOffsets.has(methodNode.from)
+    ) {
+      continue;
+    }
+    let cursor = methodNode.to;
+    while (cursor < input.sourceText.length && /\s/u.test(input.sourceText[cursor] ?? "")) {
+      cursor += 1;
+    }
+    if (input.sourceText[cursor] !== "(") {
+      continue;
+    }
+    const receiverName = simpleGoReceiverNameBeforeField(input, methodNode);
+    const methodName = identifierText(input, methodNode);
+    const receiverTypeName =
+      receiverName === null ? undefined : functionDeclaration.parameterTypes.get(receiverName);
+    if (
+      receiverName !== null &&
+      receiverTypeName !== undefined &&
+      methodName !== null &&
+      safeReceivers.get(receiverName) === true
+    ) {
+      emittedFieldOffsets.add(methodNode.from);
+      calls.push({
+        receiverName,
+        receiverTypeName,
+        methodName,
+        node: methodNode
+      });
+    }
+  }
+  return calls;
+}
+
+function staticGoInstantiations(
+  input: GoExtractFileFactsInput,
+  functionDeclaration: StaticGoFunction
+): readonly StaticGoInstantiation[] {
+  const instantiations: StaticGoInstantiation[] = [];
+
+  function addTypeName(node: GoSyntaxNode | undefined): void {
+    const typeName = node === undefined ? null : identifierText(input, node);
+    if (node !== undefined && typeName !== null && typeName !== "") {
+      instantiations.push({ typeName, node });
+    }
+  }
+
+  function visit(candidate: GoSyntaxNode): void {
+    if (candidate !== functionDeclaration.body && candidate.name === "FunctionLiteral") {
+      return;
+    }
+    if (candidate.name === "CallExpr") {
+      const children = directChildren(candidate);
+      const callee = children[0];
+      const argumentsNode = children.find((child) => child.name === "Arguments");
+      if (callee?.name === "VariableName" && identifierText(input, callee) === "new") {
+        const argument = argumentsNode === undefined
+          ? undefined
+          : directChildren(argumentsNode).find((child) => child.name === "VariableName");
+        if (
+          argument !== undefined &&
+          directChildren(argumentsNode!).filter((child) => child.name === "VariableName").length === 1
+        ) {
+          addTypeName(argument);
+        }
+      }
+    }
+    if (candidate.name === "TypedLiteral") {
+      const typeName = directChildren(candidate).find((child) => child.name === "TypeName");
+      addTypeName(typeName);
+    }
+    for (const child of directChildren(candidate)) {
+      visit(child);
+    }
+  }
+
+  visit(functionDeclaration.body);
+  return instantiations;
 }
 
 /**
@@ -3319,6 +3580,31 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     return symbol;
   }
 
+  function addStruct(structDeclaration: StaticGoStruct): SymbolNode {
+    const qualifiedName = `${input.filePath}#${structDeclaration.name}`;
+    const identity = `${qualifiedName}\u0000type`;
+    const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
+    declarationOrdinals.set(identity, declarationOrdinal + 1);
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "type",
+        declarationOrdinal
+      }),
+      name: structDeclaration.name,
+      qualifiedName,
+      kind: "type",
+      filePath: input.filePath,
+      range: rangeFor(lineStarts, structDeclaration.node.from, structDeclaration.node.to),
+      isExported: /^[A-Z]/u.test(structDeclaration.name),
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(symbol, structDeclaration.node);
+    return symbol;
+  }
+
   function addDirectCall(caller: SymbolNode, target: SymbolNode, call: GoSyntaxNode): void {
     const range = rangeFor(lineStarts, call.from, call.to);
     edges.push({
@@ -3666,6 +3952,9 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
     );
   }
 
+  const structs = directChildren(root)
+    .map((node) => staticGoStruct(input, node))
+    .filter((candidate): candidate is StaticGoStruct => candidate !== null);
   const functions = directChildren(root)
     .map((node) => staticGoFunction(input, node))
     .filter(
@@ -3677,6 +3966,10 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
   const functionsByName = new Map<string, SymbolNode[]>();
   const functionSymbols = new Map<StaticGoFunction, SymbolNode>();
   const methodSymbolsByDeclaration = new Map<StaticGoMethod, SymbolNode>();
+  const structSymbols = new Map<StaticGoStruct, SymbolNode>();
+  for (const structDeclaration of structs) {
+    structSymbols.set(structDeclaration, addStruct(structDeclaration));
+  }
   for (const functionDeclaration of functions) {
     const symbol = addFunction(functionDeclaration);
     functionSymbols.set(functionDeclaration, symbol);
@@ -4464,6 +4757,8 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
       readonly targetName: string;
       readonly range: SourceRange;
     }> = [];
+    const methodCalls: GoProjectMethodCallFact[] = [];
+    const instantiations: GoProjectInstantiationFact[] = [];
     if (!hasGoDotImport(root)) {
       const callers = [
         ...functions.map((declaration) => ({
@@ -4496,6 +4791,40 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
         }
       }
     }
+    const methodCallDeclarations: Array<{
+      readonly declaration: StaticGoFunction;
+      readonly symbol: SymbolNode | undefined;
+    }> = [
+      ...functions.map((declaration) => ({
+        declaration,
+        symbol: functionSymbols.get(declaration)
+      })),
+      ...methods.map((declaration) => ({
+        declaration,
+        symbol: methodSymbolsByDeclaration.get(declaration)
+      }))
+    ];
+    for (const caller of methodCallDeclarations) {
+      if (caller.symbol === undefined) {
+        continue;
+      }
+      for (const methodCall of staticGoMethodCalls(input, caller.declaration)) {
+        methodCalls.push({
+          callerId: caller.symbol.id,
+          receiverName: methodCall.receiverName,
+          receiverTypeName: methodCall.receiverTypeName,
+          methodName: methodCall.methodName,
+          range: rangeFor(lineStarts, methodCall.node.from, methodCall.node.to)
+        });
+      }
+      for (const instantiation of staticGoInstantiations(input, caller.declaration)) {
+        instantiations.push({
+          callerId: caller.symbol.id,
+          typeName: instantiation.typeName,
+          range: rangeFor(lineStarts, instantiation.node.from, instantiation.node.to)
+        });
+      }
+    }
     goProjectFacts = {
       packageName: projectPackageName,
       functions: functions.map((declaration) => {
@@ -4512,7 +4841,36 @@ export function extractGoFileFacts(input: GoExtractFileFactsInput): ArtifactFact
         };
       }),
       imports: projectImports,
-      bareCalls
+      bareCalls,
+      structs: structs.map((structDeclaration) => {
+        const symbol = structSymbols.get(structDeclaration);
+        if (symbol === undefined) {
+          throw new Error("Missing Go struct symbol for syntax-proven declaration.");
+        }
+        return {
+          name: structDeclaration.name,
+          symbolId: symbol.id,
+          filePath: input.filePath,
+          unconditionallyAvailable:
+            !hasRecognizedGoBuildConstraint(input) && !hasRecognizedGoPlatformSuffix(input.filePath)
+        } satisfies GoProjectStructFact;
+      }),
+      methods: methods.map((methodDeclaration) => {
+        const symbol = methodSymbolsByDeclaration.get(methodDeclaration);
+        if (symbol === undefined) {
+          throw new Error("Missing Go method symbol for syntax-proven declaration.");
+        }
+        return {
+          receiverTypeName: methodDeclaration.receiverName,
+          name: methodDeclaration.name,
+          symbolId: symbol.id,
+          filePath: input.filePath,
+          unconditionallyAvailable:
+            !hasRecognizedGoBuildConstraint(input) && !hasRecognizedGoPlatformSuffix(input.filePath)
+        } satisfies GoProjectMethodFact;
+      }),
+      methodCalls,
+      instantiations
     };
   }
 

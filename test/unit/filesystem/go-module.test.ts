@@ -151,6 +151,25 @@ describe("root Go module package resolution", () => {
     );
   });
 
+  it("keeps an unrelated external replacement from hiding a root-module import", async () => {
+    const projectPath = await createProject({
+      "go.mod":
+        "module example.test/warehouse\n\ngo 1.22\n\n" +
+        "replace example.com/external => ../external\n",
+      "cmd/server/main.go": "package main\n",
+      "api/request/list.go": "package request\n"
+    });
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+
+    expect(
+      scan.moduleResolver.resolve("cmd/server/main.go", "example.test/warehouse/api/request")
+    ).toEqual({
+      targetFilePath: "api/request/list.go",
+      strategy: "go-module-package",
+      configurationPaths: ["go.mod"]
+    });
+  });
+
   it("does not cross a nested go.mod boundary from the root module", async () => {
     const projectPath = await createProject({
       "go.mod": "module example.test/warehouse\n\ngo 1.22\n",
