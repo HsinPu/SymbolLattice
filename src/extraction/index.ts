@@ -730,6 +730,7 @@ type RouteBindingKind =
   | "express-receiver"
   | "express-default-factory"
   | "express-namespace"
+  | "typescript-namespace"
   | "express-router-factory"
   | "custom-framework-constructor"
   | "custom-framework-receiver"
@@ -3344,6 +3345,15 @@ function staticTypeScriptMemberCall(
   if (declaration === undefined) {
     return null;
   }
+  if (binding?.kind === "typescript-namespace") {
+    return {
+      method: access.name,
+      receiverTypeName: receiver.text,
+      receiverBindingSpace: "value",
+      receiverMemberKind: "static",
+      inlineParameterMember: false
+    };
+  }
   if (ts.isClassDeclaration(declaration) || directValueImportSpecifier(declaration) !== null) {
     return {
       method: access.name,
@@ -4568,7 +4578,9 @@ function collectScopedRouteReceiverBindings(
               ? "express-namespace"
               : isReactNativeImport(node)
                 ? "react-native-namespace"
-                : "other"
+                : importClause.isTypeOnly
+                  ? "other"
+                  : "typescript-namespace"
           );
         } else {
           for (const element of importClause.namedBindings.elements) {

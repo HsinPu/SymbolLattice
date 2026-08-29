@@ -613,6 +613,189 @@ describe("project reference resolution", () => {
     ).toEqual([]);
   });
 
+  it("resolves a static namespace import member call to one exported callable", () => {
+    const sourceDocuments = [
+      {
+        absolutePath: "C:/project/src/math.ts",
+        relativePath: "src/math.ts",
+        language: "typescript" as const,
+        sourceText: "export function add(left: number, right: number) { return left + right; }",
+        contentHash: "math"
+      },
+      {
+        absolutePath: "C:/project/src/consumer.ts",
+        relativePath: "src/consumer.ts",
+        language: "typescript" as const,
+        sourceText:
+          'import * as math from "./math.js"; export function total() { return math.add(1, 2); }',
+        contentHash: "consumer"
+      }
+    ];
+    const snapshot = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles: sourceDocuments.map((document) =>
+        extractFileFacts({
+          filePath: document.relativePath,
+          sourceText: document.sourceText,
+          language: document.language
+        })
+      ),
+      indexedAt: "2026-07-29T00:00:00.000Z"
+    });
+    const add = snapshot.symbols.find((symbol) => symbol.filePath === "src/math.ts" && symbol.name === "add");
+    const total = snapshot.symbols.find((symbol) => symbol.qualifiedName === "src/consumer.ts#total");
+
+    expect(snapshot.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "calls",
+          sourceId: total?.id,
+          referenceName: "add",
+          resolution: "exact",
+          confidence: 1,
+          targetId: add?.id,
+          evidence: expect.objectContaining({
+            ruleId: "syntax.typescript.proven-namespace-member-call",
+            stage: "module"
+          })
+        })
+      ])
+    );
+    expect(snapshot.pendingReferences.filter((reference) => reference.relationKind === "calls")).toEqual([]);
+  });
+
+  it("resolves a static namespace member through one explicit re-export path", () => {
+    const sourceDocuments = [
+      {
+        absolutePath: "C:/project/src/math.ts",
+        relativePath: "src/math.ts",
+        language: "typescript" as const,
+        sourceText: "export function add(left: number, right: number) { return left + right; }",
+        contentHash: "math"
+      },
+      {
+        absolutePath: "C:/project/src/barrel.ts",
+        relativePath: "src/barrel.ts",
+        language: "typescript" as const,
+        sourceText: 'export { add } from "./math.js";',
+        contentHash: "barrel"
+      },
+      {
+        absolutePath: "C:/project/src/consumer.ts",
+        relativePath: "src/consumer.ts",
+        language: "typescript" as const,
+        sourceText:
+          'import * as math from "./barrel.js"; export function total() { return math.add(1, 2); }',
+        contentHash: "consumer"
+      }
+    ];
+    const snapshot = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles: sourceDocuments.map((document) =>
+        extractFileFacts({
+          filePath: document.relativePath,
+          sourceText: document.sourceText,
+          language: document.language
+        })
+      ),
+      indexedAt: "2026-07-29T00:00:00.000Z"
+    });
+    const add = snapshot.symbols.find((symbol) => symbol.filePath === "src/math.ts" && symbol.name === "add");
+    const total = snapshot.symbols.find((symbol) => symbol.qualifiedName === "src/consumer.ts#total");
+
+    expect(snapshot.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "calls",
+          sourceId: total?.id,
+          referenceName: "add",
+          resolution: "exact",
+          confidence: 1,
+          targetId: add?.id,
+          evidence: expect.objectContaining({
+            ruleId: "syntax.typescript.proven-namespace-member-call",
+            resolutionPath: ["src/consumer.ts", "src/barrel.ts", "src/math.ts"]
+          })
+        })
+      ])
+    );
+  });
+
+  it("keeps type-only, shadowed, computed, mutated, and ambiguous namespace calls unresolved", () => {
+    const cases = [
+      {
+        name: "type-only",
+        sourceText: 'import type * as math from "./math.js"; export function total() { return math.add(1, 2); }',
+        mathSource: "export function add(left: number, right: number) { return left + right; }"
+      },
+      {
+        name: "non-callable",
+        sourceText: 'import * as math from "./math.js"; export function total() { return math.add(); }',
+        mathSource: "export const add = 1;"
+      },
+      {
+        name: "shadowed",
+        sourceText:
+          'import * as math from "./math.js"; export function total() { const math = { add: () => 0 }; return math.add(); }',
+        mathSource: "export function add(left: number, right: number) { return left + right; }"
+      },
+      {
+        name: "computed",
+        sourceText: 'import * as math from "./math.js"; export function total() { return math["add"](1, 2); }',
+        mathSource: "export function add(left: number, right: number) { return left + right; }"
+      },
+      {
+        name: "mutated",
+        sourceText:
+          'import * as math from "./math.js"; export function total() { math.add = () => 0; return math.add(1, 2); }',
+        mathSource: "export function add(left: number, right: number) { return left + right; }"
+      },
+      {
+        name: "ambiguous",
+        sourceText: 'import * as math from "./barrel.js"; export function total() { return math.add(1, 2); }',
+        mathSource: "export function add(left: number, right: number) { return left + right; }",
+        barrelSource: 'export * from "./left.js"; export * from "./right.js";',
+        leftSource: "export function add(left: number, right: number) { return left + right; }",
+        rightSource: "export function add(left: number, right: number) { return left - right; }"
+      }
+    ] as const;
+
+    for (const testCase of cases) {
+      const files = {
+        "src/math.ts": testCase.mathSource,
+        "src/consumer.ts": testCase.sourceText,
+        ...(testCase.barrelSource === undefined ? {} : { "src/barrel.ts": testCase.barrelSource }),
+        ...(testCase.leftSource === undefined ? {} : { "src/left.ts": testCase.leftSource }),
+        ...(testCase.rightSource === undefined ? {} : { "src/right.ts": testCase.rightSource })
+      };
+      const sourceDocuments = Object.entries(files).map(([relativePath, sourceText]) => ({
+        absolutePath: `C:/project/${relativePath}`,
+        relativePath,
+        language: "typescript" as const,
+        sourceText,
+        contentHash: `${testCase.name}:${relativePath}`
+      }));
+      const snapshot = resolveProjectFacts({
+        sourceDocuments,
+        extractedFiles: sourceDocuments.map((document) =>
+          extractFileFacts({
+            filePath: document.relativePath,
+            sourceText: document.sourceText,
+            language: document.language
+          })
+        ),
+        indexedAt: "2026-07-29T00:00:00.000Z"
+      });
+
+      expect(
+        snapshot.edges.filter(
+          (edge) => edge.kind === "calls" && edge.referenceName === "add" && edge.resolution === "exact"
+        ),
+        testCase.name
+      ).toEqual([]);
+    }
+  });
+
   it("resolves the nearest lexical binding before an imported alias", () => {
     const sourceDocuments = [
       {

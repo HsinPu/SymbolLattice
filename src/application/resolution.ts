@@ -13819,6 +13819,40 @@ export function resolveProjectFacts(input: {
           : topLevelLocalCandidates(symbols, reference.filePath, receiverTypeName).filter(
               (symbol) => symbol.kind === "class" || symbol.kind === "interface"
             );
+    const namespaceImportBindings =
+      receiverTypeName === undefined || scopedReceiver?.hasBinding === true
+        ? []
+        : (importBindingsByFile.get(reference.filePath) ?? []).filter(
+            (binding) =>
+              binding.localName === receiverTypeName &&
+              binding.importedName === "*" &&
+              binding.isTypeOnly !== true
+          );
+    const namespaceImportedCandidates = canonicalExportCandidates(
+      namespaceImportBindings.flatMap((binding) => {
+        const key = moduleKey(reference.filePath, binding.moduleSpecifier);
+        const targetPath = moduleTargetPathByKey.get(key);
+        const resolution = moduleResolutionByKey.get(key);
+        const targetEntry = targetPath === undefined
+          ? undefined
+          : exportSurfaces.get(targetPath)?.get(reference.referenceName);
+        if (
+          targetEntry === undefined ||
+          targetEntry.ambiguous ||
+          resolution === undefined
+        ) {
+          return [];
+        }
+        return targetEntry.candidates
+          .filter(
+            (candidate) =>
+              candidate.isTypeOnly !== true &&
+              (candidate.symbol.kind === "function" ||
+                callableTypeScriptMemberSymbolIds.has(candidate.symbol.id))
+          )
+          .map((candidate) => reExportCandidate(reference.filePath, resolution, candidate));
+      })
+    );
     const importedReceiverCandidates = canonicalExportCandidates(
       (scopedReceiver?.hasBinding === true ? [] : importBindingsByFile.get(reference.filePath) ?? [])
         .filter(
@@ -13848,7 +13882,9 @@ export function resolveProjectFacts(input: {
       (candidate, index, all) => all.findIndex((other) => other.id === candidate.id) === index
     );
     const directMemberCandidates =
-      receiverMemberKind === undefined
+      namespaceImportBindings.length > 0
+        ? []
+        : receiverMemberKind === undefined
         ? []
         : reference.callReceiverTargetQualifiedName !== undefined
         ? symbols.filter(
@@ -13879,7 +13915,11 @@ export function resolveProjectFacts(input: {
           )
         : { candidates: [], path: [] };
     const memberCandidates =
-      directMemberCandidates.length === 0 ? inherited.candidates : directMemberCandidates;
+      namespaceImportedCandidates.length > 0
+        ? namespaceImportedCandidates.map((candidate) => candidate.symbol)
+        : directMemberCandidates.length === 0
+          ? inherited.candidates
+          : directMemberCandidates;
     const runtimeSurfaceTainted =
       receiverMemberKind !== undefined &&
       [
@@ -13912,6 +13952,9 @@ export function resolveProjectFacts(input: {
     const target =
       !decoratorTainted && memberCandidates.length === 1 ? memberCandidates[0] : undefined;
     if (target !== undefined) {
+      const namespaceCandidate = namespaceImportedCandidates.find(
+        (candidate) => candidate.symbol.id === target.id
+      );
       resolvedEdges.push(
         referenceEdge(
           reference,
@@ -13919,14 +13962,18 @@ export function resolveProjectFacts(input: {
           "exact",
           1,
           referenceEvidence(
-            "syntax.typescript.proven-receiver-member-call",
+            namespaceImportedCandidates.length > 0
+              ? "syntax.typescript.proven-namespace-member-call"
+              : "syntax.typescript.proven-receiver-member-call",
             target.filePath === reference.filePath ? "lexical" : "module",
             candidateSymbolIds(memberCandidates),
             uniqueConfigurationPaths([
+              ...namespaceImportedCandidates.map((candidate) => candidate.configurationPaths),
               ...importedReceiverCandidates.map((candidate) => candidate.configurationPaths),
               ...inherited.path.map((edge) => edge.evidence?.configurationPaths ?? [])
             ]),
-            target.filePath === reference.filePath ? [] : [reference.filePath, target.filePath]
+            namespaceCandidate?.path ??
+              (target.filePath === reference.filePath ? [] : [reference.filePath, target.filePath])
           )
         )
       );
