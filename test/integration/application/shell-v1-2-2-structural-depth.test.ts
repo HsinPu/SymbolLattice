@@ -155,8 +155,8 @@ describe("Shell structural v1.2.2 persistence", () => {
     });
 
     const synced = await upgradedService.sync({ projectPath });
-    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v363");
-    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v168");
+    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v364");
+    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v169");
     expect(synced.lastIndexWork).toMatchObject({
       mode: "incremental",
       reExtractedFiles: ["scripts/deploy.sh"],
@@ -166,7 +166,7 @@ describe("Shell structural v1.2.2 persistence", () => {
     const facts = upgradedStore.getArtifactFacts(projectPath)[0];
     expect(facts).toMatchObject({
       filePath: "scripts/deploy.sh",
-      extractorVersion: "multi-language-ast-v363"
+      extractorVersion: "multi-language-ast-v364"
     });
     expect(facts?.symbols.filter(({ kind }) => kind === "function").map(({ name }) => name))
       .toEqual(["left", "right"]);

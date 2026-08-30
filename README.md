@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.458.0
+目前版本：v0.459.0
 
 ## 主要能力
 
@@ -78,6 +78,8 @@ v0.456.0 加深 TypeScript namespace member call。`import * as ns` 的靜態 pr
 v0.457.0 加深 Go 的 bounded project relations。四個固定大型、乾淨 checkout（Kubernetes、Prometheus、etcd、Hugo）以獨立 masked-source truth 驗證 300 個正向候選全部 exact，並以 150 個 disposable 負向案例守住 dynamic／computed call、receiver mutation／escape、shadow、interface dispatch、build constraint、nested module、replaced module 與 malformed source 的 fail-closed 行為。產品現在可在唯一 package-local function、唯一 concrete receiver method、唯一 struct construction，以及 root `go.mod` 未被對應 `replace` 影響的 local import 上建立既有 exact edge；parser-recovery、test／ignored／conditional files、embedding／interface／reflection／cgo／runtime dispatch 維持 unresolved。大型 corpus 的 unsupported breadth 與 parser-rejected files 另列在 Graph 根目錄 benchmark，不把核准 subset 包裝成完整 Go 語言支援。
 
 v0.458.0 加深 Rust 的 bounded crate relations。Tokio、Rust core／alloc／std 四個固定大型 source scope，加上一個乾淨 crate contract fixture，驗證 module／use／trait／impl identity、唯一 inherent method／associated function、struct／enum construction 與既有 `implements` edge；300 個核准正向與 150 個 disposable 負向均通過。Trait-object dispatch、deref／embedding ambiguity、cfg、complex generics、macro／proc-macro、build script、FFI、generated code 與 runtime dispatch 維持 unresolved 或 nonclaim；大型 corpus 的 parser-rejected 與 unsupported breadth 另列，不宣稱完整 Rust compiler 語意。
+
+v0.459.0 加深 Kotlin 的 bounded JVM relations。固定 Kotlin compiler、Ktor、kotlinx.coroutines 三個大型 source scope，加上一個乾淨 synthetic project，驗證 class／object／interface／enum／typealias identity、explicit import、唯一 direct／member／extension call、constructor instantiation、heritage 與 explicit override；300 個核准正向與 150 個 disposable 負向均通過。Overload、default parameter、extension ambiguity、generic／reified、delegation、sealed/interface dispatch、compiler plugin、coroutine runtime、generated/reflection、Java interop 與 external dependency linkage 維持 unresolved 或 nonclaim；大型 corpus unsupported breadth 與 parser-rejected files 另列，不宣稱完整 Kotlin compiler 支援。
 
 v0.449.0 新增 `.md`／`.markdown` 基礎圖譜：ATX／Setext heading 會形成可搜尋的 resource 與階層 `contains`，完整的 project-local 相對檔案連結會在唯一命中 indexed file 時形成 exact `references`。Fenced／indented／inline code、HTML block、external／root-relative／reference-style／image／dynamic links、heading anchor 與 `.mdx` 維持 opaque、unresolved 或 nonclaim，不推測執行期文件行為。
 

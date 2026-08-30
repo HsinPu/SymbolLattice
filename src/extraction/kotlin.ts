@@ -5,6 +5,12 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type GraphEdge,
+  type KotlinCallableFact,
+  type KotlinCallFact,
+  type KotlinFacts,
+  type KotlinImportFact,
+  type KotlinInstantiationFact,
+  type KotlinTypeFact,
   type JvmDependencyInjectionReferenceFact,
   type JvmFacts,
   type PendingReference,
@@ -35,6 +41,7 @@ interface StaticKotlinType {
   readonly name: string;
   readonly node: KotlinSyntaxNode;
   readonly body: KotlinSyntaxNode;
+  readonly isExported: boolean;
 }
 
 interface StaticKotlinFunction {
@@ -43,6 +50,25 @@ interface StaticKotlinFunction {
   readonly node: KotlinSyntaxNode;
   readonly body: KotlinSyntaxNode | null;
   readonly receiverName: string | null;
+  readonly parameterNames: readonly string[];
+  readonly parameterCount: number;
+  readonly requiredParameterCount: number;
+  readonly isExported: boolean;
+}
+
+interface StaticKotlinEnum {
+  readonly name: string;
+  readonly node: KotlinSyntaxNode;
+  readonly body: KotlinSyntaxNode;
+  readonly variantNames: readonly string[];
+  readonly isExported: boolean;
+}
+
+interface StaticKotlinTypeAlias {
+  readonly name: string;
+  readonly node: KotlinSyntaxNode;
+  readonly targetName: string | null;
+  readonly isExported: boolean;
 }
 
 interface StaticKotlinSupertypeReference {
@@ -280,12 +306,48 @@ function identifierText(node: KotlinSyntaxNode): string | null {
   return /^[A-Za-z_][A-Za-z0-9_]*$/u.test(value) ? value : null;
 }
 
+/** Kotlin defaults declarations to public; explicit private/internal/protected modifiers are not cross-module evidence. */
+function staticKotlinDeclarationIsExported(node: KotlinSyntaxNode): boolean {
+  const modifiers = directChildren(node).find((child) => child.kind() === "modifiers");
+  if (modifiers === undefined) {
+    return true;
+  }
+  return !directChildren(modifiers).some((modifier) =>
+    modifier.kind() === "visibility_modifier" &&
+    /\b(?:private|internal|protected)\b/u.test(nodeText(modifier))
+  );
+}
+
+function staticKotlinParameterShape(node: KotlinSyntaxNode): {
+  readonly names: readonly string[];
+  readonly parameterCount: number;
+  readonly requiredParameterCount: number;
+} {
+  const parameterList = directChildren(node).find(
+    (child) => child.kind() === "function_value_parameters"
+  );
+  const parameters = parameterList === undefined
+    ? []
+    : directChildren(parameterList).filter((child) => child.kind() === "parameter");
+  const names = parameters
+    .map((parameter) => directChildren(parameter).find((child) => child.kind() === "simple_identifier"))
+    .map((nameNode) => nameNode === undefined ? null : identifierText(nameNode))
+    .filter((name): name is string => name !== null);
+  const requiredParameterCount = parameters.filter(
+    (parameter) => !nodeText(parameter).includes("=")
+  ).length;
+  return { names, parameterCount: parameters.length, requiredParameterCount };
+}
+
 function staticKotlinType(node: KotlinSyntaxNode): StaticKotlinType | null {
   const isObject = node.kind() === "object_declaration";
   if (!isObject && node.kind() !== "class_declaration") {
     return null;
   }
   const children = directChildren(node);
+  if (children.some((child) => child.kind() === "enum")) {
+    return null;
+  }
   const nameNode = children.find((child) => child.kind() === "type_identifier");
   const body = children.find((child) => child.kind() === "class_body");
   const name = nameNode === undefined ? null : identifierText(nameNode);
@@ -299,7 +361,16 @@ function staticKotlinType(node: KotlinSyntaxNode): StaticKotlinType | null {
     // SymbolLattice has no separate object symbol kind. A direct named Kotlin
     // object is therefore a class-like owner, but only when its braced body
     // proves local members that framework extraction may inspect.
-    return body === undefined ? null : { kind: "class", isObject: true, name, node, body };
+    return body === undefined
+      ? null
+      : {
+          kind: "class",
+          isObject: true,
+          name,
+          node,
+          body,
+          isExported: staticKotlinDeclarationIsExported(node)
+        };
   }
   const classOrInterface = children.find(
     (child) => child.kind() === "class" || child.kind() === "interface"
@@ -313,12 +384,80 @@ function staticKotlinType(node: KotlinSyntaxNode): StaticKotlinType | null {
   const memberScope = body ?? node;
   const kind = classOrInterface.kind();
   if (kind === "class") {
-    return { kind: "class", isObject: false, name, node, body: memberScope };
+    return {
+      kind: "class",
+      isObject: false,
+      name,
+      node,
+      body: memberScope,
+      isExported: staticKotlinDeclarationIsExported(node)
+    };
   }
   if (kind === "interface") {
-    return { kind: "interface", isObject: false, name, node, body: memberScope };
+    return {
+      kind: "interface",
+      isObject: false,
+      name,
+      node,
+      body: memberScope,
+      isExported: staticKotlinDeclarationIsExported(node)
+    };
   }
   return null;
+}
+
+function staticKotlinEnum(node: KotlinSyntaxNode): StaticKotlinEnum | null {
+  if (node.kind() !== "class_declaration") {
+    return null;
+  }
+  const children = directChildren(node);
+  if (!children.some((child) => child.kind() === "enum")) {
+    return null;
+  }
+  const nameNode = children.find((child) => child.kind() === "type_identifier");
+  const body = children.find((child) => child.kind() === "enum_class_body");
+  const name = nameNode === undefined ? null : identifierText(nameNode);
+  if (name === null || body === undefined) {
+    return null;
+  }
+  const variantNames = directChildren(body)
+    .filter((child) => child.kind() === "enum_entry")
+    .map((entry) => directChildren(entry).find((child) => child.kind() === "simple_identifier"))
+    .map((variant) => variant === undefined ? null : identifierText(variant))
+    .filter((variant): variant is string => variant !== null);
+  return {
+    name,
+    node,
+    body,
+    variantNames,
+    isExported: staticKotlinDeclarationIsExported(node)
+  };
+}
+
+function staticKotlinTypeAlias(node: KotlinSyntaxNode): StaticKotlinTypeAlias | null {
+  if (node.kind() !== "type_alias") {
+    return null;
+  }
+  const children = directChildren(node);
+  const nameNode = children.find((child) => child.kind() === "type_identifier");
+  const target = children.find((child) => child.kind() === "user_type");
+  const name = nameNode === undefined ? null : identifierText(nameNode);
+  const targetName = target === undefined
+    ? null
+    : (() => {
+        const targetChildren = directChildren(target);
+        return targetChildren.length === 1 && targetChildren[0]?.kind() === "type_identifier"
+          ? identifierText(targetChildren[0])
+          : null;
+      })();
+  return name === null
+    ? null
+    : {
+        name,
+        node,
+        targetName,
+        isExported: staticKotlinDeclarationIsExported(node)
+      };
 }
 
 function staticKotlinFunction(node: KotlinSyntaxNode): StaticKotlinFunction | null {
@@ -341,12 +480,17 @@ function staticKotlinFunction(node: KotlinSyntaxNode): StaticKotlinFunction | nu
           .at(-1)
       : undefined;
   const body = children.find((child) => child.kind() === "function_body") ?? null;
+  const parameterShape = staticKotlinParameterShape(node);
   return {
     name,
     nameNode,
     node,
     body,
-    receiverName: receiver === undefined ? null : nodeText(receiver)
+    receiverName: receiver === undefined ? null : nodeText(receiver),
+    parameterNames: parameterShape.names,
+    parameterCount: parameterShape.parameterCount,
+    requiredParameterCount: parameterShape.requiredParameterCount,
+    isExported: staticKotlinDeclarationIsExported(node)
   };
 }
 
@@ -467,6 +611,44 @@ function staticKotlinDirectImports(root: KotlinSyntaxNode): ReadonlyMap<string, 
     }
   }
   return imports;
+}
+
+function staticKotlinImportFacts(
+  root: KotlinSyntaxNode,
+  sourceId: string,
+  filePath: string
+): readonly KotlinImportFact[] {
+  const importList = directChildren(root).find((child) => child.kind() === "import_list");
+  if (importList === undefined) {
+    return [];
+  }
+  return directChildren(importList)
+    .filter((child) => child.kind() === "import_header")
+    .flatMap((header) => {
+      const text = nodeText(header).trim();
+      const match = /^import\s+([A-Za-z_][A-Za-z0-9_.]*|[A-Za-z_][A-Za-z0-9_.]*\.\*)(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?$/u.exec(text);
+      if (match?.[1] === undefined) {
+        return [];
+      }
+      const importedPath = match[1];
+      const isWildcard = importedPath.endsWith(".*");
+      const pathWithoutWildcard = isWildcard ? importedPath.slice(0, -2) : importedPath;
+      const importedName = isWildcard ? "*" : pathWithoutWildcard.split(".").at(-1);
+      const localName = match[2] ?? importedName;
+      if (importedName === undefined || localName === undefined) {
+        return [];
+      }
+      return [{
+        sourceId,
+        filePath,
+        importedPath,
+        importedName,
+        localName,
+        isWildcard,
+        isAliased: match[2] !== undefined,
+        range: rangeForNode(header)
+      } satisfies KotlinImportFact];
+    });
 }
 
 function hasKotlinImport(root: KotlinSyntaxNode): boolean {
@@ -1895,6 +2077,211 @@ function staticDirectCall(node: KotlinSyntaxNode): StaticKotlinCall | null {
   return { name, suffix };
 }
 
+function kotlinDescendants(node: KotlinSyntaxNode, kind: string): readonly KotlinSyntaxNode[] {
+  const matches: KotlinSyntaxNode[] = [];
+  const visit = (candidate: KotlinSyntaxNode): void => {
+    if (candidate.kind() === kind) {
+      matches.push(candidate);
+    }
+    for (const child of directChildren(candidate)) {
+      visit(child);
+    }
+  };
+  visit(node);
+  return matches;
+}
+
+function staticKotlinCallArgumentCount(suffix: KotlinSyntaxNode): number | null {
+  const children = directChildren(suffix);
+  if (children.length !== 1 || children[0]?.kind() !== "value_arguments") {
+    return null;
+  }
+  const valueArguments = children[0];
+  const arguments_ = directChildren(valueArguments).filter((child) => child.kind() === "value_argument");
+  if (arguments_.some((argument) => nodeText(argument).includes("="))) {
+    return null;
+  }
+  return arguments_.length;
+}
+
+function staticKotlinCallShape(node: KotlinSyntaxNode): {
+  readonly callKind: "direct" | "member";
+  readonly referenceName: string;
+  readonly receiverName?: string;
+  readonly argumentCount: number;
+} | null {
+  if (node.kind() !== "call_expression") {
+    return null;
+  }
+  const children = directChildren(node);
+  if (children.length !== 2 || children[1]?.kind() !== "call_suffix") {
+    return null;
+  }
+  const argumentCount = staticKotlinCallArgumentCount(children[1]);
+  if (argumentCount === null) {
+    return null;
+  }
+  if (children[0]?.kind() === "simple_identifier") {
+    const referenceName = identifierText(children[0]);
+    return referenceName === null ? null : { callKind: "direct", referenceName, argumentCount };
+  }
+  if (children[0]?.kind() !== "navigation_expression") {
+    return null;
+  }
+  const navigation = directChildren(children[0]);
+  const receiver = navigation[0];
+  const suffix = navigation[1];
+  if (navigation.length !== 2 || receiver?.kind() !== "simple_identifier" || suffix?.kind() !== "navigation_suffix") {
+    return null;
+  }
+  const receiverName = identifierText(receiver);
+  const suffixText = nodeText(suffix);
+  const methodNode = directChildren(suffix).find((child) => child.kind() === "simple_identifier");
+  const referenceName = methodNode === undefined ? null : identifierText(methodNode);
+  if (receiverName === null || referenceName === null || !suffixText.startsWith(".")) {
+    return null;
+  }
+  return { callKind: "member", referenceName, receiverName, argumentCount };
+}
+
+function staticKotlinSimpleUserTypeName(node: KotlinSyntaxNode | undefined): string | null {
+  if (node?.kind() !== "user_type") {
+    return null;
+  }
+  const children = directChildren(node);
+  return children.length === 1 && children[0]?.kind() === "type_identifier"
+    ? identifierText(children[0])
+    : null;
+}
+
+function staticKotlinFunctionLocalTypes(
+  functionDeclaration: StaticKotlinFunction
+): ReadonlyMap<string, string> {
+  const types = new Map<string, string>();
+  const ambiguousNames = new Set<string>();
+  const remember = (name: string, typeName: string): void => {
+    if (ambiguousNames.has(name)) {
+      return;
+    }
+    const previous = types.get(name);
+    if (previous !== undefined && previous !== typeName) {
+      types.delete(name);
+      ambiguousNames.add(name);
+      return;
+    }
+    types.set(name, typeName);
+  };
+  const parameterList = directChildren(functionDeclaration.node).find(
+    (child) => child.kind() === "function_value_parameters"
+  );
+  for (const parameter of parameterList === undefined
+    ? []
+    : directChildren(parameterList).filter((child) => child.kind() === "parameter")) {
+    const nameNode = directChildren(parameter).find((child) => child.kind() === "simple_identifier");
+    const typeNode = directChildren(parameter).find((child) => child.kind() === "user_type");
+    const name = nameNode === undefined ? null : identifierText(nameNode);
+    const typeName = staticKotlinSimpleUserTypeName(typeNode);
+    if (name !== null && typeName !== null) {
+      remember(name, typeName);
+    }
+  }
+  for (const property of kotlinDescendants(functionDeclaration.body ?? functionDeclaration.node, "property_declaration")) {
+    const variable = directChildren(property).find((child) => child.kind() === "variable_declaration");
+    const nameNode = variable === undefined
+      ? undefined
+      : directChildren(variable).find((child) => child.kind() === "simple_identifier");
+    const typeNode = variable === undefined
+      ? undefined
+      : directChildren(variable).find((child) => child.kind() === "user_type");
+    const name = nameNode === undefined ? null : identifierText(nameNode);
+    const typeName = staticKotlinSimpleUserTypeName(typeNode);
+    if (name !== null && typeName !== null) {
+      remember(name, typeName);
+    }
+  }
+  if (functionDeclaration.receiverName !== null) {
+    // Extension receiver syntax is a type, not a local value binding; calls on
+    // `this` inside the extension are nevertheless concrete receiver calls.
+    remember("this", functionDeclaration.receiverName);
+  }
+  return types;
+}
+
+function staticKotlinRelationCalls(
+  functionDeclaration: StaticKotlinFunction,
+  ownerTypeName: string | undefined
+): readonly KotlinCallFact[] {
+  if (functionDeclaration.body === null) {
+    return [];
+  }
+  const localTypes = new Map(staticKotlinFunctionLocalTypes(functionDeclaration));
+  if (ownerTypeName !== undefined) {
+    localTypes.set("this", ownerTypeName);
+  }
+  const unsafeNames = new Set<string>();
+  const bodyText = nodeText(functionDeclaration.body);
+  for (const name of localTypes.keys()) {
+    if (name === "this") {
+      continue;
+    }
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+    if (
+      new RegExp(`\\b${escaped}\\s*=`, "u").test(bodyText) ||
+      new RegExp(`\\breturn\\s+[^;\\n]*\\b${escaped}\\b`, "u").test(bodyText) ||
+      new RegExp(`\\([^)]*\\b${escaped}\\b[^)]*\\)`, "u").test(bodyText)
+    ) {
+      unsafeNames.add(name);
+    }
+  }
+  const facts: KotlinCallFact[] = [];
+  const visit = (node: KotlinSyntaxNode): void => {
+    if (node !== functionDeclaration.body && (node.kind() === "function_declaration" || node.kind() === "lambda_literal")) {
+      return;
+    }
+    const shape = staticKotlinCallShape(node);
+    if (shape !== null) {
+      if (shape.callKind === "direct") {
+        if (!functionDeclaration.parameterNames.includes(shape.referenceName)) {
+          facts.push({
+            sourceId: "",
+            filePath: "",
+            referenceName: shape.referenceName,
+            callKind: "direct",
+            argumentCount: shape.argumentCount,
+            range: rangeForNode(node)
+          });
+        }
+      } else {
+        const receiverName = shape.receiverName;
+        const receiverTypeName = receiverName === undefined
+          ? undefined
+          : localTypes.get(receiverName) ?? (/^[A-Z]/u.test(receiverName) ? receiverName : undefined);
+        if (
+          receiverName !== undefined &&
+          receiverTypeName !== undefined &&
+          !unsafeNames.has(receiverName)
+        ) {
+          facts.push({
+            sourceId: "",
+            filePath: "",
+            referenceName: shape.referenceName,
+            callKind: "member",
+            receiverName,
+            receiverTypeName,
+            argumentCount: shape.argumentCount,
+            range: rangeForNode(node)
+          });
+        }
+      }
+    }
+    for (const child of directChildren(node)) {
+      visit(child);
+    }
+  };
+  visit(functionDeclaration.body);
+  return facts;
+}
+
 function isKotlinZeroArgumentCall(call: StaticKotlinCall): boolean {
   const suffixChildren = directChildren(call.suffix);
   const arguments_ = suffixChildren[0];
@@ -2113,6 +2500,11 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
   const jvmTypeFacts: JvmFacts["types"][number][] = [];
   const jvmHeritageReferences: JvmFacts["heritageReferences"][number][] = [];
   const jvmDependencyInjectionReferences: JvmDependencyInjectionReferenceFact[] = [];
+  const kotlinTypeFacts: KotlinTypeFact[] = [];
+  const kotlinCallableFacts: KotlinCallableFact[] = [];
+  const kotlinImportFacts: KotlinImportFact[] = [];
+  const kotlinCallFacts: KotlinCallFact[] = [];
+  const kotlinInstantiationFacts: KotlinInstantiationFact[] = [];
   const springBootPropertiesValueReferences: SpringBootPropertiesValueReferenceFact[] = [];
   const springBootConfigurationPropertiesPrefixes: SpringBootConfigurationPropertiesPrefixReferenceFact[] = [];
   const reactNativeNativeMethods: ReactNativeFacts["nativeMethods"][number][] = [];
@@ -2184,14 +2576,87 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
       kind: declaration.kind,
       filePath: input.filePath,
       range: rangeForNode(declaration.node),
-      isExported: true,
+      isExported: declaration.isExported,
       declarationOrdinal
     };
     symbols.push(symbol);
     addContainment(fileNode, symbol, declaration.node);
+    const normalizedPackage = packageName ?? "";
+    const primaryConstructor = directChildren(declaration.node).find(
+      (child) => child.kind() === "primary_constructor"
+    );
+    const constructorParameters = primaryConstructor === undefined
+      ? []
+      : directChildren(primaryConstructor).filter((child) => child.kind() === "class_parameter");
+    const hasSecondaryConstructor = kotlinDescendants(declaration.node, "secondary_constructor").length > 0;
+    kotlinTypeFacts.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      packageName: normalizedPackage,
+      qualifiedTypePath: normalizedPackage === "" ? declaration.name : `${normalizedPackage}.${declaration.name}`,
+      declarationKind: declaration.isObject ? "object" : declaration.kind,
+      isExported: declaration.isExported,
+      range: rangeForNode(declaration.node),
+      ...(hasSecondaryConstructor
+        ? {}
+        : constructorParameters.length === 0 && !declaration.isObject
+        ? { constructorParameterCount: 0, constructorRequiredParameterCount: 0 }
+        : constructorParameters.length > 0
+          ? {
+              constructorParameterCount: constructorParameters.length,
+              constructorRequiredParameterCount: constructorParameters.filter(
+                (parameter) => !nodeText(parameter).includes("=")
+              ).length
+            }
+          : {})
+    });
     if (packageName !== null) {
       jvmTypeFacts.push({ symbolId: symbol.id, packageName });
     }
+    return symbol;
+  }
+
+  function addKotlinExtraType(
+    declaration: StaticKotlinEnum | StaticKotlinTypeAlias,
+    packageName: string | null
+  ): SymbolNode {
+    const qualifiedName = input.filePath + "#" + declaration.name;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "type");
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "type",
+        declarationOrdinal
+      }),
+      name: declaration.name,
+      qualifiedName,
+      kind: "type",
+      filePath: input.filePath,
+      range: rangeForNode(declaration.node),
+      isExported: declaration.isExported,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(fileNode, symbol, declaration.node);
+    const normalizedPackage = packageName ?? "";
+    const enumDeclaration = "variantNames" in declaration;
+    kotlinTypeFacts.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      packageName: normalizedPackage,
+      qualifiedTypePath: normalizedPackage === "" ? declaration.name : `${normalizedPackage}.${declaration.name}`,
+      declarationKind: enumDeclaration ? "enum" : "typealias",
+      isExported: declaration.isExported,
+      range: rangeForNode(declaration.node),
+      ...(enumDeclaration
+        ? { variantNames: declaration.variantNames }
+        : declaration.targetName === null
+          ? {}
+          : { aliasTargetName: declaration.targetName })
+    });
     return symbol;
   }
 
@@ -2210,11 +2675,27 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
       kind: "method",
       filePath: input.filePath,
       range: rangeForNode(declaration.node),
-      isExported: true,
+      isExported: declaration.isExported,
       declarationOrdinal
     };
     symbols.push(symbol);
     addContainment(parent, symbol, declaration.node);
+    const packageName = staticKotlinPackage(root) ?? "";
+    kotlinCallableFacts.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      packageName,
+      callableKind: "method",
+      ownerTypeName: parent.name,
+      ownerTypeId: parent.id,
+      receiverTypeName: parent.name,
+      parameterCount: declaration.parameterCount,
+      requiredParameterCount: declaration.requiredParameterCount,
+      isExported: declaration.isExported,
+      isOverride: hasKotlinOverrideModifier(declaration),
+      range: rangeForNode(declaration.node)
+    });
     return symbol;
   }
 
@@ -2364,11 +2845,24 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
       kind: "function",
       filePath: input.filePath,
       range: rangeForNode(declaration.node),
-      isExported: true,
+      isExported: declaration.isExported,
       declarationOrdinal
     };
     symbols.push(symbol);
     addContainment(fileNode, symbol, declaration.node);
+    const packageName = staticKotlinPackage(root) ?? "";
+    kotlinCallableFacts.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      packageName,
+      callableKind: declaration.receiverName === null ? "function" : "extension",
+      ...(declaration.receiverName === null ? {} : { receiverTypeName: declaration.receiverName }),
+      parameterCount: declaration.parameterCount,
+      requiredParameterCount: declaration.requiredParameterCount,
+      isExported: declaration.isExported,
+      range: rangeForNode(declaration.node)
+    });
     return symbol;
   }
 
@@ -2471,6 +2965,8 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
     const functionsByName = new Map<string, SymbolNode[]>();
     const typesByName = new Map<string, SymbolNode[]>();
     const declaredTypes: Array<{ declaration: StaticKotlinType; symbol: SymbolNode }> = [];
+
+    kotlinImportFacts.push(...staticKotlinImportFacts(root, fileNode.id, input.filePath));
 
     for (const declaration of topLevel
       .map((node) => staticKotlinType(node))
@@ -2595,6 +3091,12 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
       }
     }
 
+    for (const declaration of topLevel
+      .map((node) => staticKotlinEnum(node) ?? staticKotlinTypeAlias(node))
+      .filter((candidate): candidate is StaticKotlinEnum | StaticKotlinTypeAlias => candidate !== null)) {
+      addKotlinExtraType(declaration, packageName);
+    }
+
     for (const { declaration, symbol } of declaredTypes) {
       addExactSameFileSupertypeRelations(symbol, declaration, typesByName);
       for (const reference of staticKotlinDirectSupertypeReferences(declaration)) {
@@ -2606,12 +3108,79 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
       readonly declaration: StaticKotlinFunction;
       readonly symbol: SymbolNode;
     }> = [];
+    const callableSymbols = new Map<StaticKotlinFunction, SymbolNode>();
+    for (const { declaration } of declaredTypes) {
+      for (const methodDeclaration of directChildren(declaration.body)
+        .map((node) => staticKotlinFunction(node))
+        .filter((candidate): candidate is StaticKotlinFunction => candidate !== null)) {
+        const symbol = symbols.find(
+          (candidate) => candidate.kind === "method" &&
+            candidate.filePath === input.filePath &&
+            candidate.name === methodDeclaration.name &&
+            candidate.range.start.line === rangeForNode(methodDeclaration.node).start.line &&
+            candidate.range.start.column === rangeForNode(methodDeclaration.node).start.column
+        );
+        if (symbol !== undefined) {
+          callableSymbols.set(methodDeclaration, symbol);
+        }
+      }
+    }
     for (const functionDeclaration of topLevelFunctions) {
       const symbol = addFunction(functionDeclaration);
       topLevelFunctionSymbols.push({ declaration: functionDeclaration, symbol });
+      callableSymbols.set(functionDeclaration, symbol);
       const candidates = functionsByName.get(functionDeclaration.name) ?? [];
       candidates.push(symbol);
       functionsByName.set(functionDeclaration.name, candidates);
+    }
+
+    for (const { declaration } of declaredTypes) {
+      const ownerTypeName = declaration.name;
+      for (const methodDeclaration of directChildren(declaration.body)
+        .map((node) => staticKotlinFunction(node))
+        .filter((candidate): candidate is StaticKotlinFunction => candidate !== null)) {
+        const caller = callableSymbols.get(methodDeclaration);
+        if (caller === undefined) {
+          continue;
+        }
+        for (const call of staticKotlinRelationCalls(methodDeclaration, ownerTypeName)) {
+          kotlinCallFacts.push({
+            ...call,
+            sourceId: caller.id,
+            filePath: input.filePath
+          });
+        }
+      }
+    }
+    for (const { declaration, symbol } of topLevelFunctionSymbols) {
+      for (const call of staticKotlinRelationCalls(declaration, undefined)) {
+        kotlinCallFacts.push({
+          ...call,
+          sourceId: symbol.id,
+          filePath: input.filePath
+        });
+      }
+    }
+    const localTypeNames = new Set([
+      ...kotlinTypeFacts.filter((fact) => fact.filePath === input.filePath).map((fact) => fact.name),
+      ...kotlinImportFacts
+        .filter((fact) => !fact.isWildcard && !fact.isAliased)
+        .map((fact) => fact.localName)
+    ]);
+    for (const call of kotlinCallFacts) {
+      if (
+        call.callKind === "direct" &&
+        /^[A-Z]/u.test(call.referenceName) &&
+        localTypeNames.has(call.referenceName)
+      ) {
+        kotlinInstantiationFacts.push({
+          sourceId: call.sourceId,
+          filePath: call.filePath,
+          typeName: call.referenceName,
+          argumentCount: call.argumentCount,
+          range: call.range
+        });
+      }
     }
 
     if (
@@ -2692,6 +3261,14 @@ export function extractKotlinFileFacts(input: KotlinExtractFileFactsInput): Arti
       heritageReferences: jvmHeritageReferences,
       dependencyInjectionReferences: jvmDependencyInjectionReferences
     },
+    kotlinFacts: {
+      packageName: staticKotlinPackage(root) ?? "",
+      types: kotlinTypeFacts,
+      callables: kotlinCallableFacts,
+      imports: kotlinImportFacts,
+      calls: kotlinCallFacts,
+      instantiations: kotlinInstantiationFacts
+    } satisfies KotlinFacts,
     springBootPropertiesFacts: {
       valueReferences: springBootPropertiesValueReferences,
       configurationPropertiesPrefixes: springBootConfigurationPropertiesPrefixes

@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v363";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v364";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v168";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v169";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -2388,6 +2388,87 @@ export type JavaMemberCallReferenceFact =
       readonly receiverQualifierRootName: string;
     });
 
+/** Kotlin declaration shapes retained for bounded project-local relation resolution. */
+export type KotlinTypeDeclarationKind = "class" | "object" | "interface" | "enum" | "typealias";
+
+export interface KotlinTypeFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly packageName: string;
+  readonly qualifiedTypePath: string;
+  readonly declarationKind: KotlinTypeDeclarationKind;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+  readonly variantNames?: readonly string[];
+  readonly aliasTargetName?: string;
+  readonly constructorParameterCount?: number;
+  readonly constructorRequiredParameterCount?: number;
+}
+
+export type KotlinCallableKind = "function" | "method" | "extension";
+
+export interface KotlinCallableFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly packageName: string;
+  readonly callableKind: KotlinCallableKind;
+  readonly ownerTypeName?: string;
+  readonly ownerTypeId?: string;
+  readonly receiverTypeName?: string;
+  readonly parameterCount: number;
+  readonly requiredParameterCount: number;
+  readonly isExported: boolean;
+  readonly isOverride?: boolean;
+  readonly range: SourceRange;
+}
+
+/** One explicit, unaliased Kotlin import retained for exact project resolution. */
+export interface KotlinImportFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly importedPath: string;
+  readonly importedName: string;
+  readonly localName: string;
+  readonly isWildcard: boolean;
+  readonly isAliased: boolean;
+  readonly range: SourceRange;
+}
+
+/** One direct Kotlin call through a top-level name, concrete receiver, or object. */
+export interface KotlinCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly callKind: "direct" | "member";
+  readonly receiverName?: string;
+  readonly receiverTypeName?: string;
+  readonly receiverTypePath?: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+/** One direct Kotlin class-constructor call; objects, aliases, and dynamic calls stay out. */
+export interface KotlinInstantiationFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly typeName: string;
+  readonly typePath?: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only Kotlin relation facts. Unsupported JVM/compiler/runtime semantics remain nonclaims. */
+export interface KotlinFacts {
+  readonly packageName: string;
+  readonly types: readonly KotlinTypeFact[];
+  readonly callables: readonly KotlinCallableFact[];
+  readonly imports: readonly KotlinImportFact[];
+  readonly calls: readonly KotlinCallFact[];
+  readonly instantiations: readonly KotlinInstantiationFact[];
+}
+
 /** Syntax-only JVM package, import, heritage, and DI-point facts for project resolution. */
 export interface JvmFacts {
   readonly types: readonly JvmTypeFact[];
@@ -2833,6 +2914,8 @@ export interface ArtifactFacts {
   readonly javaFacts?: JavaFacts;
   /** Omitted only by artifact facts persisted before v0.215. */
   readonly jvmFacts?: JvmFacts;
+  /** Omitted only by artifact facts persisted before v0.459 Kotlin relation depth. */
+  readonly kotlinFacts?: KotlinFacts;
   /** Omitted only by artifact facts persisted before v0.92. */
   readonly springBootPropertiesFacts?: SpringBootPropertiesFacts;
   /** Omitted only by artifact facts persisted before v0.66. */
