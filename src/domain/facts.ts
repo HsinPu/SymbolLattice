@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v365";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v366";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v170";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v171";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -2896,6 +2896,96 @@ export interface SwiftFacts {
   readonly overrides?: readonly SwiftOverrideFact[];
 }
 
+/** Dart declaration shapes retained for bounded project-local relation resolution. */
+export type DartTypeDeclarationKind = "class" | "mixin" | "enum" | "typedef" | "extension";
+
+export interface DartTypeFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly qualifiedTypePath: string;
+  readonly declarationKind: DartTypeDeclarationKind;
+  readonly isExported: boolean;
+  readonly isAbstract?: boolean;
+  readonly range: SourceRange;
+}
+
+export type DartCallableKind = "function" | "method" | "constructor" | "extension";
+
+export interface DartCallableFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly callableKind: DartCallableKind;
+  readonly ownerTypeName?: string;
+  readonly ownerTypeId?: string;
+  readonly receiverTypeName?: string;
+  readonly parameterCount: number;
+  readonly requiredParameterCount: number;
+  readonly parameterTypeNames?: readonly string[];
+  readonly returnTypeName?: string;
+  readonly isExported: boolean;
+  readonly isOverride?: boolean;
+  readonly range: SourceRange;
+}
+
+export interface DartImportFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly importedPath: string;
+  readonly relationKind: "imports" | "exports";
+  readonly isAliased: boolean;
+  readonly hasShowHide: boolean;
+  readonly range: SourceRange;
+}
+
+export interface DartCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly callKind: "direct" | "member";
+  readonly receiverName?: string;
+  readonly receiverTypeName?: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface DartInstantiationFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly typeName: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface DartHeritageFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly relationKind: "extends" | "with" | "implements";
+  readonly sourceTypeKind: DartTypeDeclarationKind;
+  readonly range: SourceRange;
+}
+
+export interface DartOverrideFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly methodName: string;
+  readonly ownerTypeName: string;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only Dart relation facts. Analyzer/package/runtime semantics remain nonclaims. */
+export interface DartFacts {
+  readonly types: readonly DartTypeFact[];
+  readonly callables: readonly DartCallableFact[];
+  readonly imports: readonly DartImportFact[];
+  readonly calls: readonly DartCallFact[];
+  readonly instantiations: readonly DartInstantiationFact[];
+  readonly heritage?: readonly DartHeritageFact[];
+  readonly overrides?: readonly DartOverrideFact[];
+}
+
 /**
  * Syntax-only React Native bridge facts. JavaScript callsites and native
  * implementations remain independent until project resolution proves their
@@ -3021,6 +3111,8 @@ export interface ArtifactFacts {
   readonly kotlinFacts?: KotlinFacts;
   /** Omitted only by artifact facts persisted before v0.460 Swift relation depth. */
   readonly swiftFacts?: SwiftFacts;
+  /** Omitted only by artifact facts persisted before v0.461 Dart relation depth. */
+  readonly dartFacts?: DartFacts;
   /** Omitted only by artifact facts persisted before v0.92. */
   readonly springBootPropertiesFacts?: SpringBootPropertiesFacts;
   /** Omitted only by artifact facts persisted before v0.66. */

@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.460.0
+目前版本：v0.461.0
 
 ## 主要能力
 
@@ -82,6 +82,8 @@ v0.458.0 加深 Rust 的 bounded crate relations。Tokio、Rust core／alloc／s
 v0.459.0 加深 Kotlin 的 bounded JVM relations。固定 Kotlin compiler、Ktor、kotlinx.coroutines 三個大型 source scope，加上一個乾淨 synthetic project，驗證 class／object／interface／enum／typealias identity、explicit import、唯一 direct／member／extension call、constructor instantiation、heritage 與 explicit override；300 個核准正向與 150 個 disposable 負向均通過。Overload、default parameter、extension ambiguity、generic／reified、delegation、sealed/interface dispatch、compiler plugin、coroutine runtime、generated/reflection、Java interop 與 external dependency linkage 維持 unresolved 或 nonclaim；大型 corpus unsupported breadth 與 parser-rejected files 另列，不宣稱完整 Kotlin compiler 支援。
 
 v0.460.0 加深 Swift bounded project relations。固定 Swift 標準庫 core／Concurrency、SwiftNIO 與 Swift Collections 三個大型、乾淨、可核對 checkout，加入 class／struct／enum／protocol／actor／typealias identity、explicit import、唯一 direct／member／extension call、explicit initializer instantiation、heritage／conformance、signature accepts／returns 與明確 override。合成 oracle 的 300 個核准正向與 150 個 disposable 負向均通過，所有 exact edge 都帶 singleton target evidence；protocol witness／dynamic dispatch、generic／associatedtype、property wrapper／macro／result builder、async actor runtime、Objective-C／SDK、generated／reflection／conditional compilation 與 external module 維持 unresolved 或 nonclaim。三個大型 corpus 的 parser-rejected files 與 unsupported breadth recall 另列，Windows 無 Swift／Xcode toolchain，因此不宣稱完整 Swift compiler 語意。
+
+v0.461.0 加深 Dart／Flutter bounded project relations。固定 Dart SDK 3.9.4、Flutter 3.35.2 與 flutter/packages 固定 commit 三個大型 source scope，加入 class／mixin／enum／extension／typedef identity、literal import／export、唯一 direct／typed member／extension call、constructor instantiation、extends／with／implements、signature accepts／returns 與明確 `@override`。合成 oracle 的 300 個正向與 150 個 disposable 負向均通過；dynamic／noSuchMethod、generic／tear-off、mixin runtime dispatch、late／mutation／escape、async／isolate、build_runner／generated／reflection、conditional import、Flutter platform channel 與 external package 維持 unresolved 或 nonclaim。parser-rejected files 與 unsupported breadth recall 另列，Windows 無 Dart／Flutter toolchain，因此不宣稱完整 analyzer／Flutter 語意。
 
 v0.449.0 新增 `.md`／`.markdown` 基礎圖譜：ATX／Setext heading 會形成可搜尋的 resource 與階層 `contains`，完整的 project-local 相對檔案連結會在唯一命中 indexed file 時形成 exact `references`。Fenced／indented／inline code、HTML block、external／root-relative／reference-style／image／dynamic links、heading anchor 與 `.mdx` 維持 opaque、unresolved 或 nonclaim，不推測執行期文件行為。
 

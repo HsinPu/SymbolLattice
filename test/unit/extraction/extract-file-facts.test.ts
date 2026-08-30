@@ -16710,6 +16710,8 @@ describe("source extraction", () => {
     ]);
     expect(facts.symbols.filter((symbol) => symbol.kind === "method").map((symbol) => symbol.qualifiedName)).toEqual([
       "lib/main.dart#MyApp.build",
+      "lib/main.dart#HomePage.HomePage",
+      "lib/main.dart#SettingsPage.SettingsPage",
       "lib/main.dart#HealthCheck.check"
     ]);
     expect(facts.symbols.filter((symbol) => symbol.kind === "function").map((symbol) => symbol.qualifiedName)).toEqual([

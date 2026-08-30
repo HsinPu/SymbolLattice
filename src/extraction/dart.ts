@@ -4,6 +4,14 @@ import {
   createEdgeId,
   createSymbolId,
   type ArtifactFacts,
+  type DartCallFact,
+  type DartCallableFact,
+  type DartFacts,
+  type DartHeritageFact,
+  type DartImportFact,
+  type DartInstantiationFact,
+  type DartOverrideFact,
+  type DartTypeFact,
   type GraphEdge,
   type RouteMethod,
   type SourcePosition,
@@ -26,11 +34,19 @@ interface StaticDartClass {
   readonly name: string;
   readonly node: DartSyntaxNode;
   readonly body: DartSyntaxNode;
+  readonly isExported: boolean;
+  readonly isAbstract: boolean;
 }
 
 interface StaticDartFunction {
   readonly name: string;
   readonly node: DartSyntaxNode;
+  readonly parameterCount: number;
+  readonly requiredParameterCount: number;
+  readonly parameterTypeNames: readonly string[];
+  readonly returnTypeName: string | null;
+  readonly isExported: boolean;
+  readonly isOverride: boolean;
 }
 
 interface StaticDartFunctionBody {
@@ -41,6 +57,52 @@ interface StaticDartFunctionBody {
 interface StaticDartDirectCall {
   readonly name: string;
   readonly node: DartSyntaxNode;
+}
+
+interface StaticDartTypeAlias {
+  readonly name: string;
+  readonly node: DartSyntaxNode;
+}
+
+interface StaticDartEnum {
+  readonly name: string;
+  readonly node: DartSyntaxNode;
+}
+
+interface StaticDartMixin {
+  readonly name: string;
+  readonly node: DartSyntaxNode;
+  readonly body: DartSyntaxNode;
+}
+
+interface StaticDartExtension {
+  readonly name: string;
+  readonly receiverTypeName: string;
+  readonly node: DartSyntaxNode;
+  readonly body: DartSyntaxNode;
+}
+
+interface StaticDartInitializer {
+  readonly name: string;
+  readonly node: DartSyntaxNode;
+  readonly parameterCount: number;
+  readonly requiredParameterCount: number;
+  readonly parameterTypeNames: readonly string[];
+}
+
+interface StaticDartCall {
+  readonly name: string;
+  readonly receiverName?: string;
+  readonly receiverTypeName?: string;
+  readonly callKind: "direct" | "member";
+  readonly argumentCount: number;
+  readonly firstNode: DartSyntaxNode;
+  readonly lastNode: DartSyntaxNode;
+}
+
+interface StaticDartHeritage {
+  readonly name: string;
+  readonly relationKind: "extends" | "with" | "implements";
 }
 
 interface StaticFlutterRoute {
@@ -113,7 +175,7 @@ function rangeForSpan(
 function hasSyntaxError(node: DartSyntaxNode): boolean {
   return (
     node.kind() === "ERROR" ||
-    (node.kind() !== "program" && nodeText(node).length === 0) ||
+    (node.kind() !== "program" && node.kind() !== "Function" && nodeText(node).length === 0) ||
     directChildren(node).some((child) => hasSyntaxError(child))
   );
 }
@@ -121,6 +183,53 @@ function hasSyntaxError(node: DartSyntaxNode): boolean {
 function identifierText(node: DartSyntaxNode): string | null {
   const value = nodeText(node);
   return /^[A-Za-z_][A-Za-z0-9_]*$/u.test(value) ? value : null;
+}
+
+function dartExportedName(name: string): boolean {
+  return !name.startsWith("_");
+}
+
+function simpleDartTypeName(node: DartSyntaxNode | undefined): string | null {
+  if (node?.kind() !== "type_identifier") {
+    return null;
+  }
+  return identifierText(node);
+}
+
+function dartParameterShape(node: DartSyntaxNode): {
+  readonly parameterCount: number;
+  readonly requiredParameterCount: number;
+  readonly parameterTypeNames: readonly string[];
+} {
+  const parameterList = directChildren(node).find((child) => child.kind() === "formal_parameter_list");
+  const parameters = parameterList === undefined
+    ? []
+    : directChildren(parameterList).filter((child) => child.kind() === "formal_parameter");
+  const names: string[] = [];
+  let required = parameters.length;
+  for (const parameter of parameters) {
+    const children = directChildren(parameter);
+    const typeName = simpleDartTypeName(children.find((child) => child.kind() === "type_identifier"));
+    if (typeName !== null) names.push(typeName);
+    if (children.some((child) => child.kind() === "default_parameter" || child.kind() === "named_parameter" || child.kind() === "optional_parameter")) {
+      required = 0;
+    }
+  }
+  const raw = parameterList === undefined ? "" : nodeText(parameterList);
+  if (raw.includes("[") || raw.includes("{") || raw.includes("=")) {
+    required = 0;
+  }
+  return { parameterCount: parameters.length, requiredParameterCount: names.length === parameters.length ? required : -1, parameterTypeNames: names };
+}
+
+function dartReturnTypeName(node: DartSyntaxNode): string | null {
+  const children = directChildren(node);
+  const functionType = children.find((child) => child.kind() === "type_identifier");
+  return functionType === undefined ? null : simpleDartTypeName(functionType);
+}
+
+function dartHasOverrideAnnotation(node: DartSyntaxNode): boolean {
+  return directChildren(node).some((child) => child.kind() === "marker_annotation" && nodeText(child) === "@override");
 }
 
 function staticDartClass(node: DartSyntaxNode): StaticDartClass | null {
@@ -132,7 +241,69 @@ function staticDartClass(node: DartSyntaxNode): StaticDartClass | null {
   const nameNode = identifiers[0];
   const body = children.find((child) => child.kind() === "class_body");
   const name = nameNode === undefined || identifiers.length !== 1 ? null : identifierText(nameNode);
+  return name === null || body === undefined ? null : { name, node, body, isExported: dartExportedName(name), isAbstract: directChildren(node).some((child) => child.kind() === "abstract") };
+}
+
+function staticDartMixin(node: DartSyntaxNode): StaticDartMixin | null {
+  if (node.kind() !== "mixin_declaration") return null;
+  const children = directChildren(node);
+  const nameNode = children.find((child) => child.kind() === "identifier");
+  const body = children.find((child) => child.kind() === "class_body");
+  const name = nameNode === undefined ? null : identifierText(nameNode);
   return name === null || body === undefined ? null : { name, node, body };
+}
+
+function staticDartEnum(node: DartSyntaxNode): StaticDartEnum | null {
+  if (node.kind() !== "enum_declaration") return null;
+  const nameNode = directChildren(node).find((child) => child.kind() === "identifier");
+  const name = nameNode === undefined ? null : identifierText(nameNode);
+  return name === null ? null : { name, node };
+}
+
+function staticDartTypeAlias(node: DartSyntaxNode): StaticDartTypeAlias | null {
+  if (node.kind() !== "type_alias") return null;
+  const nameNode = directChildren(node).find((child) => child.kind() === "type_identifier");
+  const name = nameNode === undefined ? null : identifierText(nameNode);
+  return name === null ? null : { name, node };
+}
+
+function staticDartExtension(node: DartSyntaxNode): StaticDartExtension | null {
+  if (node.kind() !== "extension_declaration") return null;
+  const children = directChildren(node);
+  const nameNode = children.find((child) => child.kind() === "identifier");
+  const onIndex = children.findIndex((child) => child.kind() === "on");
+  const receiver = onIndex < 0 ? undefined : children[onIndex + 1];
+  const body = children.find((child) => child.kind() === "extension_body");
+  const name = nameNode === undefined ? null : identifierText(nameNode);
+  const receiverTypeName = simpleDartTypeName(receiver);
+  return name === null || receiverTypeName === null || body === undefined
+    ? null
+    : { name, receiverTypeName, node, body };
+}
+
+function staticDartHeritageReferences(node: DartSyntaxNode): readonly StaticDartHeritage[] {
+  const references: StaticDartHeritage[] = [];
+  const superclass = directChildren(node).find((child) => child.kind() === "superclass");
+  const superclassName = superclass === undefined
+    ? null
+    : simpleDartTypeName(directChildren(superclass).find((child) => child.kind() === "type_identifier"));
+  if (superclassName !== null) references.push({ name: superclassName, relationKind: "extends" });
+  const mixins = directChildren(node).find((child) => child.kind() === "mixins") ??
+    (superclass === undefined ? undefined : directChildren(superclass).find((child) => child.kind() === "mixins"));
+  if (mixins !== undefined) {
+    for (const type of directChildren(mixins).filter((child) => child.kind() === "type_identifier")) {
+      const name = simpleDartTypeName(type);
+      if (name !== null) references.push({ name, relationKind: "with" });
+    }
+  }
+  const interfaces = directChildren(node).find((child) => child.kind() === "interfaces");
+  if (interfaces !== undefined) {
+    for (const type of directChildren(interfaces).filter((child) => child.kind() === "type_identifier")) {
+      const name = simpleDartTypeName(type);
+      if (name !== null) references.push({ name, relationKind: "implements" });
+    }
+  }
+  return references;
 }
 
 function staticDartFunctionSignature(node: DartSyntaxNode): StaticDartFunction | null {
@@ -142,7 +313,18 @@ function staticDartFunctionSignature(node: DartSyntaxNode): StaticDartFunction |
   const identifiers = directChildren(node).filter((child) => child.kind() === "identifier");
   const nameNode = identifiers[0];
   const name = nameNode === undefined || identifiers.length !== 1 ? null : identifierText(nameNode);
-  return name === null ? null : { name, node };
+  if (name === null) return null;
+  const parameterShape = dartParameterShape(node);
+  return {
+    name,
+    node,
+    parameterCount: parameterShape.parameterCount,
+    requiredParameterCount: parameterShape.requiredParameterCount,
+    parameterTypeNames: parameterShape.parameterTypeNames,
+    returnTypeName: dartReturnTypeName(node),
+    isExported: dartExportedName(name),
+    isOverride: false
+  };
 }
 
 function staticDartMethod(node: DartSyntaxNode): StaticDartFunction | null {
@@ -165,6 +347,24 @@ function staticDartMethod(node: DartSyntaxNode): StaticDartFunction | null {
   }
 
   return null;
+}
+
+function staticDartInitializer(node: DartSyntaxNode): StaticDartInitializer | null {
+  if (node.kind() !== "declaration" && node.kind() !== "method_signature") return null;
+  const signature = directChildren(node).find(
+    (child) => child.kind() === "constructor_signature" || child.kind() === "constant_constructor_signature"
+  );
+  if (signature === undefined) return null;
+  const nameNode = directChildren(signature).find((child) => child.kind() === "identifier" || child.kind() === "qualified");
+  const qualifiedNameNode = nameNode?.kind() === "qualified"
+    ? directChildren(nameNode).find((child) => child.kind() === "identifier")
+    : undefined;
+  const name = nameNode?.kind() === "qualified"
+    ? qualifiedNameNode === undefined ? null : identifierText(qualifiedNameNode)
+    : nameNode === undefined ? null : identifierText(nameNode);
+  if (name === null) return null;
+  const shape = dartParameterShape(signature);
+  return { name, node, parameterCount: shape.parameterCount, requiredParameterCount: shape.requiredParameterCount, parameterTypeNames: shape.parameterTypeNames };
 }
 
 function staticTopLevelDartFunctions(
@@ -360,6 +560,124 @@ function staticEmptySelectorArguments(selector: DartSyntaxNode): boolean {
   return argumentPart !== undefined && staticEmptyArguments(argumentPart);
 }
 
+function staticDartSelectorArgumentCount(selector: DartSyntaxNode): number | null {
+  const selectorChildren = staticSelectorArguments(selector);
+  if (selectorChildren === null) return null;
+  const argumentPart = directChildren(selector)[0];
+  if (argumentPart?.kind() !== "argument_part") return null;
+  const argumentNode = directChildren(argumentPart)[0];
+  if (argumentNode?.kind() !== "arguments") return null;
+  const arguments_ = directChildren(argumentNode);
+  if (arguments_.some((child) => child.kind() === "named_argument" || child.kind() === "spread_element")) return null;
+  return arguments_.filter((child) => child.kind() !== "(" && child.kind() !== ")" && child.kind() !== ",").length;
+}
+
+function staticDartMemberName(selector: DartSyntaxNode): string | null {
+  const text = nodeText(selector);
+  if (!text.startsWith(".")) return null;
+  const name = text.slice(1);
+  return /^[A-Za-z_][A-Za-z0-9_]*$/u.test(name) ? name : null;
+}
+
+function staticDartCallShape(
+  children: readonly DartSyntaxNode[],
+  index: number
+): StaticDartCall | null {
+  const receiver = children[index];
+  const firstSelector = children[index + 1];
+  const secondSelector = children[index + 2];
+  if (receiver?.kind() !== "identifier" || firstSelector === undefined) return null;
+  const receiverName = identifierText(receiver);
+  if (receiverName === null) return null;
+  const directName = firstSelector.kind() === "selector" && !nodeText(firstSelector).startsWith(".") ? null : undefined;
+  if (directName === null) {
+    const name = receiverName;
+    const argumentCount = staticDartSelectorArgumentCount(firstSelector);
+    return argumentCount === null
+      ? null
+      : { name, callKind: "direct", argumentCount, firstNode: receiver, lastNode: firstSelector };
+  }
+  const memberName = staticDartMemberName(firstSelector);
+  if (memberName === null || secondSelector?.kind() !== "selector") return null;
+  const argumentCount = staticDartSelectorArgumentCount(secondSelector);
+  return argumentCount === null
+    ? null
+    : { name: memberName, callKind: "member", receiverName, argumentCount, firstNode: receiver, lastNode: secondSelector };
+}
+
+function staticDartTypeBindings(declaration: StaticDartFunction, body: DartSyntaxNode): ReadonlyMap<string, string> {
+  const bindings = new Map<string, string>();
+  const parameterList = directChildren(declaration.node).find((child) => child.kind() === "formal_parameter_list");
+  if (parameterList !== undefined) {
+    for (const parameter of directChildren(parameterList).filter((child) => child.kind() === "formal_parameter")) {
+      const children = directChildren(parameter);
+      const nameNode = children.find((child) => child.kind() === "identifier");
+      const typeNode = children.find((child) => child.kind() === "type_identifier");
+      const name = nameNode === undefined ? null : identifierText(nameNode);
+      const typeName = simpleDartTypeName(typeNode);
+      if (name !== null && typeName !== null) bindings.set(name, typeName);
+    }
+  }
+  function visit(node: DartSyntaxNode): void {
+    if (node.kind() === "function_expression" || node.kind() === "local_function_declaration") return;
+    if (node.kind() === "initialized_variable_definition") {
+      const children = directChildren(node);
+      const finalOrConst = children.find((child) => child.kind() === "final_builtin" || child.kind() === "const_builtin");
+      const nameNode = children.find((child) => child.kind() === "identifier");
+      const typeNode = children.find((child) => child.kind() === "type_identifier");
+      const name = nameNode === undefined ? null : identifierText(nameNode);
+      const typeName = simpleDartTypeName(typeNode);
+      if (finalOrConst !== undefined && name !== null && typeName !== null) bindings.set(name, typeName);
+    }
+    for (const child of directChildren(node)) visit(child);
+  }
+  visit(body);
+  return bindings;
+}
+
+function collectStaticDartCalls(
+  body: DartSyntaxNode,
+  declaration: StaticDartFunction
+): readonly StaticDartCall[] {
+  const bindings = staticDartTypeBindings(declaration, body);
+  const tainted = new Set<string>();
+  const bodySource = nodeText(body);
+  for (const name of bindings.keys()) {
+    const declarationPattern = new RegExp(`(?:\\bfinal\\b|\\bconst\\b|\\bvar\\b)\\s+(?:[A-Za-z_][A-Za-z0-9_]*\\s+)?${name}\\s*=`, "gu");
+    const bodyWithoutDeclaration = bodySource.replace(declarationPattern, "");
+    if (new RegExp(`(?:\\breturn\\s+${name}\\b|\\b${name}\\s*=|\\([^)]*\\b${name}\\b[^)]*\\))`, "u").test(bodyWithoutDeclaration)) {
+      tainted.add(name);
+    }
+  }
+  const calls: StaticDartCall[] = [];
+  function visit(node: DartSyntaxNode, isRoot: boolean): void {
+    if (!isRoot && (node.kind() === "function_expression" || node.kind() === "local_function_declaration" || node.kind() === "class_definition" || node.kind() === "mixin_declaration")) return;
+    const children = directChildren(node);
+    for (let index = 0; index < children.length; index += 1) {
+      const call = staticDartCallShape(children, index);
+      if (call !== null) {
+        if (call.callKind !== "member" || call.receiverName === undefined || !tainted.has(call.receiverName)) {
+          const receiverTypeName = call.callKind === "member" && call.receiverName !== undefined
+            ? bindings.get(call.receiverName)
+            : undefined;
+          if (receiverTypeName === undefined) calls.push(call);
+          else calls.push({ ...call, receiverTypeName });
+        }
+      }
+    }
+    for (const child of children) visit(child, false);
+  }
+  visit(body, true);
+  return calls;
+}
+
+function rangeForDartCall(
+  lineStarts: readonly number[],
+  call: StaticDartCall
+): SourceRange {
+  return rangeForSpan(lineStarts, call.firstNode.range().start.index, call.lastNode.range().end.index);
+}
+
 function staticPlainDartPath(node: DartSyntaxNode): string | null {
   if (node.kind() !== "string_literal") {
     return null;
@@ -541,6 +859,13 @@ export function extractDartFileFacts(input: DartExtractFileFactsInput): Artifact
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
+  const dartTypes: DartTypeFact[] = [];
+  const dartCallables: DartCallableFact[] = [];
+  const dartImports: DartImportFact[] = [];
+  const dartCalls: DartCallFact[] = [];
+  const dartInstantiations: DartInstantiationFact[] = [];
+  const dartHeritage: DartHeritageFact[] = [];
+  const dartOverrides: DartOverrideFact[] = [];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -609,15 +934,82 @@ export function extractDartFileFacts(input: DartExtractFileFactsInput): Artifact
       kind: "class",
       filePath: input.filePath,
       range: rangeForNode(declaration.node),
-      isExported: true,
+      isExported: declaration.isExported,
       declarationOrdinal
     };
     symbols.push(symbol);
     addContainment(fileNode, symbol, declaration.node);
+    dartTypes.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      qualifiedTypePath: declaration.name,
+      declarationKind: "class",
+      isExported: declaration.isExported,
+      ...(declaration.isAbstract ? { isAbstract: true } : {}),
+      range: symbol.range
+    });
     return symbol;
   }
 
-  function addMethod(parent: SymbolNode, declaration: StaticDartFunction): SymbolNode {
+  function addTypeSymbol(
+    name: string,
+    node: DartSyntaxNode,
+    declarationKind: DartTypeFact["declarationKind"]
+  ): SymbolNode {
+    const qualifiedName = input.filePath + "#" + name;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "type");
+    const isExported = dartExportedName(name);
+    const symbol: SymbolNode = {
+      id: createSymbolId({ filePath: input.filePath, qualifiedName, kind: "type", declarationOrdinal }),
+      name,
+      qualifiedName,
+      kind: "type",
+      filePath: input.filePath,
+      range: rangeForNode(node),
+      isExported,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(fileNode, symbol, node);
+    dartTypes.push({ symbolId: symbol.id, filePath: input.filePath, name, qualifiedTypePath: name, declarationKind, isExported, range: symbol.range });
+    return symbol;
+  }
+
+  function addMixin(declaration: StaticDartMixin): SymbolNode {
+    const symbol = addTypeSymbol(declaration.name, declaration.node, "mixin");
+    for (const method of directChildren(declaration.body)
+      .map((node) => staticDartMethod(node))
+      .filter((candidate): candidate is StaticDartFunction => candidate !== null)) {
+      addMethod(symbol, method);
+    }
+    return symbol;
+  }
+
+  function addEnum(declaration: StaticDartEnum): SymbolNode {
+    return addTypeSymbol(declaration.name, declaration.node, "enum");
+  }
+
+  function addTypeAlias(declaration: StaticDartTypeAlias): SymbolNode {
+    return addTypeSymbol(declaration.name, declaration.node, "typedef");
+  }
+
+  function addExtension(declaration: StaticDartExtension): SymbolNode {
+    const symbol = addTypeSymbol(declaration.name, declaration.node, "extension");
+    for (const method of directChildren(declaration.body)
+      .map((node) => staticDartMethod(node))
+      .filter((candidate): candidate is StaticDartFunction => candidate !== null)) {
+      addMethod(symbol, method, "extension", declaration.receiverTypeName);
+    }
+    return symbol;
+  }
+
+  function addMethod(
+    parent: SymbolNode,
+    declaration: StaticDartFunction,
+    callableKind: DartCallableFact["callableKind"] = "method",
+    receiverTypeName?: string
+  ): SymbolNode {
     const qualifiedName = parent.qualifiedName + "." + declaration.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, "method");
     const symbol: SymbolNode = {
@@ -632,11 +1024,58 @@ export function extractDartFileFacts(input: DartExtractFileFactsInput): Artifact
       kind: "method",
       filePath: input.filePath,
       range: rangeForNode(declaration.node),
+      isExported: declaration.isExported,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(parent, symbol, declaration.node);
+    dartCallables.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      callableKind,
+      ...(callableKind === "extension"
+        ? { receiverTypeName: receiverTypeName ?? parent.name }
+        : { ownerTypeName: parent.name, ownerTypeId: parent.id }),
+      parameterCount: declaration.parameterCount,
+      requiredParameterCount: declaration.requiredParameterCount,
+      parameterTypeNames: declaration.parameterTypeNames,
+      ...(declaration.returnTypeName === null ? {} : { returnTypeName: declaration.returnTypeName }),
+      isExported: declaration.isExported,
+      ...(declaration.isOverride ? { isOverride: true } : {}),
+      range: symbol.range
+    });
+    return symbol;
+  }
+
+  function addInitializer(parent: SymbolNode, declaration: StaticDartInitializer): SymbolNode {
+    const qualifiedName = parent.qualifiedName + "." + declaration.name;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "method");
+    const symbol: SymbolNode = {
+      id: createSymbolId({ filePath: input.filePath, qualifiedName, kind: "method", declarationOrdinal }),
+      name: declaration.name,
+      qualifiedName,
+      kind: "method",
+      filePath: input.filePath,
+      range: rangeForNode(declaration.node),
       isExported: true,
       declarationOrdinal
     };
     symbols.push(symbol);
     addContainment(parent, symbol, declaration.node);
+    dartCallables.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      callableKind: "constructor",
+      ownerTypeName: parent.name,
+      ownerTypeId: parent.id,
+      parameterCount: declaration.parameterCount,
+      requiredParameterCount: declaration.requiredParameterCount,
+      parameterTypeNames: declaration.parameterTypeNames,
+      isExported: true,
+      range: symbol.range
+    });
     return symbol;
   }
 
@@ -655,12 +1094,55 @@ export function extractDartFileFacts(input: DartExtractFileFactsInput): Artifact
       kind: "function",
       filePath: input.filePath,
       range: rangeForNode(declaration.node),
-      isExported: true,
+      isExported: declaration.isExported,
       declarationOrdinal
     };
     symbols.push(symbol);
     addContainment(fileNode, symbol, declaration.node);
+    dartCallables.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      callableKind: "function",
+      parameterCount: declaration.parameterCount,
+      requiredParameterCount: declaration.requiredParameterCount,
+      parameterTypeNames: declaration.parameterTypeNames,
+      ...(declaration.returnTypeName === null ? {} : { returnTypeName: declaration.returnTypeName }),
+      isExported: declaration.isExported,
+      range: symbol.range
+    });
     return symbol;
+  }
+
+  function recordCallableBody(
+    source: SymbolNode,
+    declaration: StaticDartFunction,
+    body: DartSyntaxNode,
+    ownerTypeName: string | null
+  ): void {
+    for (const call of collectStaticDartCalls(body, declaration)) {
+      const range = rangeForDartCall(lineStarts, call);
+      dartCalls.push({
+        sourceId: source.id,
+        filePath: input.filePath,
+        referenceName: call.name,
+        callKind: call.callKind,
+        ...(call.receiverName === undefined ? {} : { receiverName: call.receiverName }),
+        ...(call.receiverTypeName === undefined ? {} : { receiverTypeName: call.receiverTypeName }),
+        argumentCount: call.argumentCount,
+        range
+      });
+      if (call.callKind === "direct" && /^[A-Z][A-Za-z0-9_]*$/u.test(call.name)) {
+        dartInstantiations.push({
+          sourceId: source.id,
+          filePath: input.filePath,
+          typeName: call.name,
+          argumentCount: call.argumentCount,
+          range
+        });
+      }
+    }
+    void ownerTypeName;
   }
 
   function addDirectCall(
@@ -745,6 +1227,18 @@ export function extractDartFileFacts(input: DartExtractFileFactsInput): Artifact
   if (!hasSyntaxError(root)) {
     const topLevel = directChildren(root);
     const classesByName = new Map<string, SymbolNode[]>();
+    const topLevelMixins = topLevel
+      .map((node) => staticDartMixin(node))
+      .filter((candidate): candidate is StaticDartMixin => candidate !== null);
+    const topLevelEnums = topLevel
+      .map((node) => staticDartEnum(node))
+      .filter((candidate): candidate is StaticDartEnum => candidate !== null);
+    const topLevelTypeAliases = topLevel
+      .map((node) => staticDartTypeAlias(node))
+      .filter((candidate): candidate is StaticDartTypeAlias => candidate !== null);
+    const topLevelExtensions = topLevel
+      .map((node) => staticDartExtension(node))
+      .filter((candidate): candidate is StaticDartExtension => candidate !== null);
     const topLevelFunctionDeclarations = topLevel
       .map((node) => staticDartFunctionSignature(node))
       .filter((candidate): candidate is StaticDartFunction => candidate !== null);
@@ -753,6 +1247,22 @@ export function extractDartFileFacts(input: DartExtractFileFactsInput): Artifact
     const functionDeclarationCounts = new Map<string, number>();
     const functionsByName = new Map<string, StaticDartFunctionBody[]>();
 
+    for (const moduleNode of topLevel.filter((node) => node.kind() === "import_or_export")) {
+      const raw = nodeText(moduleNode).replace(/\s+/gu, " ").trim();
+      const relationKind: DartImportFact["relationKind"] = raw.startsWith("export ") ? "exports" : "imports";
+      const uriMatch = /^(?:import|export)\s+(['"])([^'"]+)\1/u.exec(raw);
+      if (uriMatch === null || uriMatch[2] === undefined) continue;
+      dartImports.push({
+        sourceId: fileNode.id,
+        filePath: input.filePath,
+        importedPath: uriMatch[2],
+        relationKind,
+        isAliased: /\bas\s+[A-Za-z_][A-Za-z0-9_]*\b/u.test(raw),
+        hasShowHide: /\b(?:show|hide)\b/u.test(raw),
+        range: rangeForNode(moduleNode)
+      });
+    }
+
     for (const declaration of topLevel
       .map((node) => staticDartClass(node))
       .filter((candidate): candidate is StaticDartClass => candidate !== null)) {
@@ -760,11 +1270,62 @@ export function extractDartFileFacts(input: DartExtractFileFactsInput): Artifact
       const classes = classesByName.get(declaration.name) ?? [];
       classes.push(classSymbol);
       classesByName.set(declaration.name, classes);
+      for (const reference of staticDartHeritageReferences(declaration.node)) {
+        dartHeritage.push({ sourceId: classSymbol.id, filePath: input.filePath, referenceName: reference.name, relationKind: reference.relationKind === "with" ? "with" : reference.relationKind, sourceTypeKind: "class", range: classSymbol.range });
+      }
+      const bodyChildren = directChildren(declaration.body);
+      for (let index = 0; index < bodyChildren.length; index += 1) {
+        const node = bodyChildren[index];
+        if (node === undefined) continue;
+        const method = staticDartMethod(node);
+        if (method !== null) {
+          const methodDeclaration = { ...method, isOverride: bodyChildren[index - 1]?.kind() === "marker_annotation" && nodeText(bodyChildren[index - 1]!) === "@override" };
+          const methodSymbol = addMethod(classSymbol, methodDeclaration);
+          const nextNode = bodyChildren[index + 1];
+          const body = nextNode?.kind() === "function_body" ? nextNode : null;
+          if (body !== null) recordCallableBody(methodSymbol, methodDeclaration, body, declaration.name);
+          if (methodDeclaration.isOverride) dartOverrides.push({ sourceId: methodSymbol.id, filePath: input.filePath, methodName: methodDeclaration.name, ownerTypeName: declaration.name, range: methodSymbol.range });
+          continue;
+        }
+        const initializer = staticDartInitializer(node);
+        if (initializer !== null) {
+          const initializerSymbol = addInitializer(classSymbol, initializer);
+          const nextNode = bodyChildren[index + 1];
+          const body = nextNode?.kind() === "function_body" ? nextNode : null;
+          if (body !== null) {
+            const initializerFunction: StaticDartFunction = {
+              name: initializer.name,
+              node: initializer.node,
+              parameterCount: initializer.parameterCount,
+              requiredParameterCount: initializer.requiredParameterCount,
+              parameterTypeNames: initializer.parameterTypeNames,
+              returnTypeName: null,
+              isExported: true,
+              isOverride: false
+            };
+            recordCallableBody(initializerSymbol, initializerFunction, body, declaration.name);
+          }
+        }
+      }
+    }
 
-      for (const methodDeclaration of directChildren(declaration.body)
-        .map((node) => staticDartMethod(node))
-        .filter((candidate): candidate is StaticDartFunction => candidate !== null)) {
-        addMethod(classSymbol, methodDeclaration);
+    for (const declaration of topLevelMixins) addMixin(declaration);
+    for (const declaration of topLevelEnums) addEnum(declaration);
+    for (const declaration of topLevelTypeAliases) addTypeAlias(declaration);
+    for (const declaration of topLevelExtensions) {
+      const extensionSymbol = addExtension(declaration);
+      for (const reference of staticDartHeritageReferences(declaration.node)) {
+        dartHeritage.push({ sourceId: extensionSymbol.id, filePath: input.filePath, referenceName: reference.name, relationKind: reference.relationKind === "extends" ? "implements" : reference.relationKind, sourceTypeKind: "extension", range: extensionSymbol.range });
+      }
+      const bodyChildren = directChildren(declaration.body);
+      for (let index = 0; index < bodyChildren.length; index += 1) {
+        const node = bodyChildren[index];
+        if (node === undefined) continue;
+        const method = staticDartMethod(node);
+        if (method === null) continue;
+        const methodSymbol = input.filePath === "" ? undefined : symbols.find((symbol) => symbol.qualifiedName === `${extensionSymbol.qualifiedName}.${method.name}`);
+        const nextNode = bodyChildren[index + 1];
+        if (methodSymbol !== undefined && nextNode?.kind() === "function_body") recordCallableBody(methodSymbol, method, nextNode, declaration.receiverTypeName);
       }
     }
 
@@ -780,6 +1341,8 @@ export function extractDartFileFacts(input: DartExtractFileFactsInput): Artifact
       const candidates = functionsByName.get(function_.declaration.name) ?? [];
       candidates.push(function_);
       functionsByName.set(function_.declaration.name, candidates);
+      const symbol = functionSymbols.get(function_.declaration.node);
+      if (symbol !== undefined) recordCallableBody(symbol, function_.declaration, function_.body, null);
     }
 
     if (!hasCrossFileDartVisibility(topLevel)) {
@@ -851,6 +1414,15 @@ export function extractDartFileFacts(input: DartExtractFileFactsInput): Artifact
       routers: [],
       routes: [],
       importedRouterInclusions: []
-    }
+    },
+    dartFacts: {
+      types: dartTypes,
+      callables: dartCallables,
+      imports: dartImports,
+      calls: dartCalls,
+      instantiations: dartInstantiations,
+      ...(dartHeritage.length === 0 ? {} : { heritage: dartHeritage }),
+      ...(dartOverrides.length === 0 ? {} : { overrides: dartOverrides })
+    } satisfies DartFacts
   };
 }
