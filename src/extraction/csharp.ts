@@ -4,6 +4,14 @@ import {
   createEdgeId,
   createSymbolId,
   type ArtifactFacts,
+  type CsharpCallFact,
+  type CsharpCallableFact,
+  type CsharpFacts,
+  type CsharpHeritageFact,
+  type CsharpInstantiationFact,
+  type CsharpOverrideFact,
+  type CsharpTypeFact,
+  type CsharpUsingFact,
   type GraphEdge,
   type RouteMethod,
   type SourcePosition,
@@ -28,8 +36,12 @@ type CsharpSyntaxNode = SgNode;
 interface StaticCsharpType {
   readonly baseName: string | null;
   readonly kind: "class" | "interface";
+  readonly declarationKind: "class" | "interface";
+  readonly namespaceName: string;
   readonly isPartial: boolean;
   readonly isStatic: boolean;
+  readonly isAbstract: boolean;
+  readonly isExported: boolean;
   readonly name: string;
   readonly node: CsharpSyntaxNode;
   readonly body: CsharpSyntaxNode;
@@ -41,11 +53,42 @@ interface StaticCsharpMethod {
   readonly name: string;
   readonly node: CsharpSyntaxNode;
   readonly parameterCount: number | null;
+  readonly requiredParameterCount: number | null;
+  readonly parameterTypeNames: readonly string[];
+  readonly returnTypeName: string | null;
+  readonly isOverride: boolean;
+  readonly isExported: boolean;
 }
 
 interface StaticCsharpFunction {
   readonly name: string;
   readonly node: CsharpSyntaxNode;
+  readonly parameterCount: number | null;
+  readonly requiredParameterCount: number | null;
+  readonly parameterTypeNames: readonly string[];
+  readonly returnTypeName: string | null;
+  readonly isExported: boolean;
+}
+
+interface StaticCsharpExtraType {
+  readonly name: string;
+  readonly node: CsharpSyntaxNode;
+  readonly declarationKind: "record" | "struct" | "enum" | "delegate";
+  readonly namespaceName: string;
+}
+
+interface StaticCsharpConstructor {
+  readonly name: string;
+  readonly node: CsharpSyntaxNode;
+  readonly parameterCount: number | null;
+  readonly requiredParameterCount: number | null;
+  readonly parameterTypeNames: readonly string[];
+  readonly isExported: boolean;
+}
+
+interface StaticCsharpDeclarationEntry {
+  readonly node: CsharpSyntaxNode;
+  readonly namespaceName: string;
 }
 
 interface StaticCsharpAttribute {
@@ -84,6 +127,22 @@ interface StaticMemberInvocation {
   readonly receiver: CsharpSyntaxNode;
   readonly name: string;
   readonly argumentList: CsharpSyntaxNode;
+}
+
+interface StaticCsharpCall {
+  readonly name: string;
+  readonly callKind: "direct" | "member";
+  readonly receiverName?: string;
+  readonly receiverTypeName?: string;
+  readonly receiverIsType?: boolean;
+  readonly argumentCount: number;
+  readonly node: CsharpSyntaxNode;
+}
+
+interface StaticCsharpInstantiation {
+  readonly typeName: string;
+  readonly argumentCount: number;
+  readonly node: CsharpSyntaxNode;
 }
 
 const ASPNET_MVC_NAMESPACE = "Microsoft.AspNetCore.Mvc";
@@ -300,7 +359,49 @@ function hasDirectMvcImport(root: CsharpSyntaxNode): boolean {
   );
 }
 
-function staticCsharpType(node: CsharpSyntaxNode): StaticCsharpType | null {
+function csharpQualifiedName(node: CsharpSyntaxNode | undefined): string | null {
+  if (node === undefined) return null;
+  if (node.kind() === "identifier") return identifierText(node);
+  if (node.kind() !== "qualified_name") return null;
+  const text = nodeText(node).trim();
+  return /^[A-Za-z_][A-Za-z0-9_.]*$/u.test(text) ? text : null;
+}
+
+function csharpIsExported(node: CsharpSyntaxNode): boolean {
+  return directChildren(node).some((child) => child.kind() === "modifier" && ["public", "protected", "internal"].includes(nodeText(child)));
+}
+
+function csharpParameterShape(parameterList: CsharpSyntaxNode | undefined): {
+  readonly parameterCount: number | null;
+  readonly requiredParameterCount: number | null;
+  readonly parameterTypeNames: readonly string[];
+} {
+  if (parameterList === undefined) return { parameterCount: null, requiredParameterCount: null, parameterTypeNames: [] };
+  const children = directChildren(parameterList);
+  if (children.some((child) => !["(", ")", ",", "parameter"].includes(String(child.kind())))) return { parameterCount: null, requiredParameterCount: null, parameterTypeNames: [] };
+  const parameters = children.filter((child) => child.kind() === "parameter");
+  const names: string[] = [];
+  for (const parameter of parameters) {
+    const parts = directChildren(parameter);
+    const typeNode = parts.find((child) => child.kind() === "identifier" || child.kind() === "predefined_type" || child.kind() === "qualified_name");
+    const typeName = typeNode === undefined ? null : nodeText(typeNode);
+    if (typeName === null || !/^[A-Za-z_][A-Za-z0-9_.]*$/u.test(typeName) || typeName === "var" || typeName === "dynamic") return { parameterCount: null, requiredParameterCount: null, parameterTypeNames: [] };
+    names.push(typeName);
+  }
+  const hasDefault = parameters.some((parameter) => nodeText(parameter).includes("="));
+  const hasParams = parameters.some((parameter) => /\bparams\b/u.test(nodeText(parameter)));
+  return { parameterCount: parameters.length, requiredParameterCount: hasDefault || hasParams ? null : parameters.length, parameterTypeNames: names };
+}
+
+function csharpReturnTypeName(node: CsharpSyntaxNode, parametersIndex: number): string | null {
+  const parts = directChildren(node).slice(0, parametersIndex).filter((child) => ["identifier", "predefined_type", "qualified_name"].includes(String(child.kind())));
+  const candidate = parts.at(-2) ?? parts.at(-1);
+  if (candidate === undefined) return null;
+  const name = nodeText(candidate);
+  return /^[A-Za-z_][A-Za-z0-9_.]*$/u.test(name) && name !== "void" ? name : null;
+}
+
+function staticCsharpType(node: CsharpSyntaxNode, namespaceName = ""): StaticCsharpType | null {
   const kind =
     node.kind() === "class_declaration"
       ? "class"
@@ -328,7 +429,56 @@ function staticCsharpType(node: CsharpSyntaxNode): StaticCsharpType | null {
       : /^:\s*(PageModel|Microsoft\.AspNetCore\.Mvc\.RazorPages\.PageModel)$/u.exec(baseText)?.[1] ?? null;
   return name === null || body === undefined
     ? null
-    : { baseName, kind, isPartial, isStatic, name, node, body };
+    : { baseName, kind, declarationKind: kind, namespaceName, isPartial, isStatic, isAbstract: children.some((child) => child.kind() === "modifier" && nodeText(child) === "abstract"), isExported: csharpIsExported(node), name, node, body };
+}
+
+function staticCsharpExtraType(node: CsharpSyntaxNode, namespaceName: string): StaticCsharpExtraType | null {
+  const declarationKind = node.kind() === "record_declaration" ? "record" : node.kind() === "struct_declaration" ? "struct" : node.kind() === "enum_declaration" ? "enum" : node.kind() === "delegate_declaration" ? "delegate" : null;
+  if (declarationKind === null) return null;
+  const children = directChildren(node);
+  // Delegate declarations put the return type before the declared name.  Use
+  // the identifier immediately preceding the parameter list so `delegate
+  // Point Handler(...)` is recorded as Handler rather than Point.
+  const parameterIndex = declarationKind === "delegate"
+    ? children.findIndex((child) => child.kind() === "parameter_list")
+    : -1;
+  const nameNode = parameterIndex > 0
+    ? children.slice(0, parameterIndex).filter((child) => child.kind() === "identifier").at(-1)
+    : children.find((child) => child.kind() === "identifier");
+  const name = nameNode === undefined ? null : identifierText(nameNode);
+  return name === null ? null : { name, node, declarationKind, namespaceName };
+}
+
+function csharpDeclarationEntries(root: CsharpSyntaxNode): readonly StaticCsharpDeclarationEntry[] {
+  const entries: StaticCsharpDeclarationEntry[] = [];
+  function visit(nodes: readonly CsharpSyntaxNode[], namespaceName: string): void {
+    let activeNamespace = namespaceName;
+    for (const node of nodes) {
+      if (node.kind() === "file_scoped_namespace_declaration") {
+        const name = csharpQualifiedName(directChildren(node).find((child) => child.kind() === "qualified_name"));
+        if (name !== null) activeNamespace = name;
+        continue;
+      }
+      if (node.kind() === "namespace_declaration") {
+        const name = csharpQualifiedName(directChildren(node).find((child) => child.kind() === "qualified_name"));
+        const list = directChildren(node).find((child) => child.kind() === "declaration_list");
+        if (list !== undefined) visit(directChildren(list), name === null ? activeNamespace : name);
+        continue;
+      }
+      if (["class_declaration", "interface_declaration", "record_declaration", "struct_declaration", "enum_declaration", "delegate_declaration"].includes(String(node.kind()))) entries.push({ node, namespaceName: activeNamespace });
+    }
+  }
+  visit(directChildren(root), "");
+  return entries;
+}
+
+function staticCsharpHeritageNames(node: CsharpSyntaxNode): readonly string[] {
+  const baseList = directChildren(node).find((child) => child.kind() === "base_list");
+  if (baseList === undefined) return [];
+  return directChildren(baseList)
+    .filter((child) => child.kind() === "identifier" || child.kind() === "qualified_name")
+    .map((child) => nodeText(child))
+    .filter((name) => /^[A-Za-z_][A-Za-z0-9_.]*$/u.test(name));
 }
 
 function directTopLevelTypeNodes(root: CsharpSyntaxNode): readonly CsharpSyntaxNode[] {
@@ -377,11 +527,35 @@ function staticCsharpMethod(node: CsharpSyntaxNode): StaticCsharpMethod | null {
     (child) => child.kind() === "block" || child.kind() === "arrow_expression_clause"
   );
   const parameterList = children[parametersIndex];
+  const parameterShape = csharpParameterShape(parameterList);
   const parameterCount = parameterList === undefined ? null : boundedCsharpParameterCount(parameterList);
   const isStatic = children.some(
     (child) => child.kind() === "modifier" && nodeText(child) === "static"
   );
-  return name === null ? null : { body: body ?? null, isStatic, name, node, parameterCount };
+  return name === null
+    ? null
+    : {
+        body: body ?? null,
+        isStatic,
+        name,
+        node,
+        parameterCount,
+        requiredParameterCount: parameterShape.requiredParameterCount,
+        parameterTypeNames: parameterShape.parameterTypeNames,
+        returnTypeName: csharpReturnTypeName(node, parametersIndex),
+        isOverride: children.some((child) => child.kind() === "modifier" && nodeText(child) === "override"),
+        isExported: csharpIsExported(node)
+      };
+}
+
+function staticCsharpConstructor(node: CsharpSyntaxNode): StaticCsharpConstructor | null {
+  if (node.kind() !== "constructor_declaration") return null;
+  const children = directChildren(node);
+  const parametersIndex = children.findIndex((child) => child.kind() === "parameter_list");
+  const nameNode = children.slice(0, Math.max(0, parametersIndex)).find((child) => child.kind() === "identifier");
+  const name = nameNode === undefined ? null : identifierText(nameNode);
+  const shape = csharpParameterShape(parametersIndex < 0 ? undefined : children[parametersIndex]);
+  return name === null ? null : { name, node, parameterCount: shape.parameterCount, requiredParameterCount: shape.requiredParameterCount, parameterTypeNames: shape.parameterTypeNames, isExported: csharpIsExported(node) };
 }
 
 function hasDirectRazorPagesImport(root: CsharpSyntaxNode): boolean {
@@ -530,7 +704,19 @@ function staticCsharpFunction(node: CsharpSyntaxNode): StaticCsharpFunction | nu
     .filter((child) => child.kind() === "identifier")
     .at(-1);
   const name = nameNode === undefined ? null : identifierText(nameNode);
-  return name === null ? null : { name, node: functionNode };
+  const parameterList = children[parametersIndex];
+  const parameterShape = csharpParameterShape(parameterList);
+  return name === null
+    ? null
+    : {
+        name,
+        node: functionNode,
+        parameterCount: parameterShape.parameterCount,
+        requiredParameterCount: parameterShape.requiredParameterCount,
+        parameterTypeNames: parameterShape.parameterTypeNames,
+        returnTypeName: csharpReturnTypeName(functionNode, parametersIndex),
+        isExported: true
+      };
 }
 
 function staticVariableDeclaration(node: CsharpSyntaxNode): StaticCsharpVariableDeclaration | null {
@@ -600,6 +786,113 @@ function staticArgumentValues(argumentList: CsharpSyntaxNode): readonly CsharpSy
     values.push(children[0]);
   }
   return values;
+}
+
+function staticCsharpArgumentCount(argumentList: CsharpSyntaxNode): number | null {
+  const children = directChildren(argumentList);
+  if (argumentList.kind() !== "argument_list" || children.some((child) => !["(", ")", ",", "argument"].includes(String(child.kind())))) return null;
+  const arguments_ = children.filter((child) => child.kind() === "argument");
+  if (arguments_.some((argument) => nodeText(argument).includes(":"))) return null;
+  return arguments_.length;
+}
+
+function staticCsharpSimpleMember(node: CsharpSyntaxNode): { readonly receiverName: string; readonly name: string } | null {
+  if (node.kind() !== "member_access_expression") return null;
+  const children = directChildren(node);
+  const receiver = children[0];
+  const nameNode = children.at(-1);
+  const receiverName = receiver === undefined ? null : identifierText(receiver);
+  const name = nameNode === undefined ? null : identifierText(nameNode);
+  return receiverName === null || name === null || children.length !== 3 || children[1]?.kind() !== "."
+    ? null
+    : { receiverName, name };
+}
+
+function staticCsharpTypeBindings(declaration: { readonly node: CsharpSyntaxNode }, body: CsharpSyntaxNode): ReadonlyMap<string, string> {
+  const bindings = new Map<string, string>();
+  const parameterList = directChildren(declaration.node).find((child) => child.kind() === "parameter_list");
+  if (parameterList !== undefined) {
+    for (const parameter of directChildren(parameterList).filter((child) => child.kind() === "parameter")) {
+      const children = directChildren(parameter);
+      const identifiers = children.filter((child) => child.kind() === "identifier");
+      const typeNode = children.find((child) => child.kind() === "identifier" || child.kind() === "predefined_type" || child.kind() === "qualified_name");
+      const nameNode = identifiers.at(-1);
+      const name = nameNode === undefined ? null : identifierText(nameNode);
+      const typeName = typeNode === undefined ? null : nodeText(typeNode);
+      if (name !== null && typeName !== null && name !== typeName && /^[A-Za-z_][A-Za-z0-9_.]*$/u.test(typeName) && typeName !== "dynamic" && typeName !== "var") {
+        if (bindings.has(name) && bindings.get(name) !== typeName) bindings.delete(name);
+        else bindings.set(name, typeName);
+      }
+    }
+  }
+  function visit(node: CsharpSyntaxNode): void {
+    if (node.kind() === "local_function_statement" || node.kind() === "lambda_expression" || node.kind() === "anonymous_method_expression") return;
+    if (node.kind() === "variable_declaration") {
+      const children = directChildren(node);
+      const typeNode = children.find((child) => child.kind() === "identifier" || child.kind() === "predefined_type" || child.kind() === "qualified_name");
+      const typeName = typeNode === undefined ? null : nodeText(typeNode);
+      if (typeName !== null && typeName !== "var" && typeName !== "dynamic") {
+        for (const declarator of children.filter((child) => child.kind() === "variable_declarator")) {
+          const nameNode = directChildren(declarator).find((child) => child.kind() === "identifier");
+          const name = nameNode === undefined ? null : identifierText(nameNode);
+          if (name !== null) {
+            if (bindings.has(name) && bindings.get(name) !== typeName) bindings.delete(name);
+            else bindings.set(name, typeName);
+          }
+        }
+      }
+    }
+    for (const child of directChildren(node)) visit(child);
+  }
+  visit(body);
+  return bindings;
+}
+
+function collectCsharpCalls(
+  body: CsharpSyntaxNode,
+  declaration: { readonly node: CsharpSyntaxNode }
+): { readonly calls: readonly StaticCsharpCall[]; readonly instantiations: readonly StaticCsharpInstantiation[] } {
+  const bindings = staticCsharpTypeBindings(declaration, body);
+  const bodyText = nodeText(body);
+  const tainted = new Set<string>();
+  for (const name of bindings.keys()) {
+    const stripped = bodyText.replace(new RegExp(`(?:\\b(?:var|const|readonly|[A-Za-z_][A-Za-z0-9_.<>]*)\\s+)${name}\\s*=`, "gu"), "");
+    if (new RegExp(`(?:\\breturn\\s+${name}\\b|\\b${name}\\s*=|\\([^)]*\\b${name}\\b[^)]*\\))`, "u").test(stripped)) tainted.add(name);
+  }
+  const calls: StaticCsharpCall[] = [];
+  const instantiations: StaticCsharpInstantiation[] = [];
+  function visit(node: CsharpSyntaxNode, isRoot: boolean): void {
+    if (!isRoot && (node.kind() === "local_function_statement" || node.kind() === "lambda_expression" || node.kind() === "anonymous_method_expression" || node.kind() === "class_declaration" || node.kind() === "interface_declaration")) return;
+    if (node.kind() === "invocation_expression") {
+      const children = directChildren(node);
+      const argumentList = children.find((child) => child.kind() === "argument_list");
+      const argumentCount = argumentList === undefined ? null : staticCsharpArgumentCount(argumentList);
+      const callee = children[0];
+      if (argumentCount !== null && callee !== undefined && children.length === 2) {
+        const directName = identifierText(callee);
+        if (directName !== null) calls.push({ name: directName, callKind: "direct", argumentCount, node });
+        else {
+          const member = staticCsharpSimpleMember(callee);
+          if (member !== null && !tainted.has(member.receiverName)) {
+            const receiverIsType = /^[A-Z]/u.test(member.receiverName);
+            const receiverTypeName = bindings.get(member.receiverName) ?? (receiverIsType ? member.receiverName : null);
+            calls.push({ name: member.name, callKind: "member", receiverName: member.receiverName, ...(receiverTypeName === null ? {} : { receiverTypeName }), ...(receiverIsType ? { receiverIsType: true } : {}), argumentCount, node });
+          }
+        }
+      }
+    }
+    if (node.kind() === "object_creation_expression") {
+      const children = directChildren(node);
+      const typeNode = children.find((child) => child.kind() === "identifier" || child.kind() === "qualified_name");
+      const argumentList = children.find((child) => child.kind() === "argument_list");
+      const typeName = typeNode === undefined ? null : nodeText(typeNode);
+      const argumentCount = argumentList === undefined ? null : staticCsharpArgumentCount(argumentList);
+      if (typeName !== null && argumentCount !== null && /^[A-Za-z_][A-Za-z0-9_.]*$/u.test(typeName)) instantiations.push({ typeName, argumentCount, node });
+    }
+    for (const child of directChildren(node)) visit(child, false);
+  }
+  visit(body, true);
+  return { calls, instantiations };
 }
 
 function hasNoArguments(invocation: StaticMemberInvocation): boolean {
@@ -752,6 +1045,13 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
     isRazorPageModel?: boolean;
     razorPageHandlerMethods?: Array<{ handlerName: string; methodId: string }>;
   }> = [];
+  const csharpTypes: CsharpTypeFact[] = [];
+  const csharpCallables: CsharpCallableFact[] = [];
+  const csharpUsings: CsharpUsingFact[] = [];
+  const csharpCalls: CsharpCallFact[] = [];
+  const csharpInstantiations: CsharpInstantiationFact[] = [];
+  const csharpHeritage: CsharpHeritageFact[] = [];
+  const csharpOverrides: CsharpOverrideFact[] = [];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -820,15 +1120,72 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
       kind: declaration.kind,
       filePath: input.filePath,
       range: rangeForNode(declaration.node),
-      isExported: true,
+      isExported: declaration.isExported,
       declarationOrdinal
     };
     symbols.push(symbol);
     addContainment(fileNode, symbol, declaration.node);
+    const qualifiedTypePath = declaration.namespaceName === "" ? declaration.name : `${declaration.namespaceName}.${declaration.name}`;
+    csharpTypes.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      namespaceName: declaration.namespaceName,
+      qualifiedTypePath,
+      declarationKind: declaration.declarationKind,
+      isExported: declaration.isExported,
+      isPartial: declaration.isPartial,
+      ...(declaration.isAbstract ? { isAbstract: true } : {}),
+      range: symbol.range
+    });
+    for (const targetName of staticCsharpHeritageNames(declaration.node)) {
+      csharpHeritage.push({ sourceId: symbol.id, filePath: input.filePath, referenceName: targetName, relationKind: "extends", sourceTypeKind: declaration.declarationKind, range: symbol.range });
+    }
     return symbol;
   }
 
-  function addMethod(parent: SymbolNode, declaration: StaticCsharpMethod): SymbolNode {
+  function addNamespace(namespaceName: string): SymbolNode {
+    const name = namespaceName;
+    const qualifiedName = input.filePath + "#namespace:" + name;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "module");
+    const symbol: SymbolNode = { id: createSymbolId({ filePath: input.filePath, qualifiedName, kind: "module", declarationOrdinal }), name, qualifiedName, kind: "module", filePath: input.filePath, range: fileNode.range, isExported: true, declarationOrdinal };
+    symbols.push(symbol);
+    addContainment(fileNode, symbol, root);
+    csharpTypes.push({ symbolId: symbol.id, filePath: input.filePath, name, namespaceName, qualifiedTypePath: name, declarationKind: "namespace", isExported: true, range: symbol.range });
+    return symbol;
+  }
+
+  function addExtraType(declaration: StaticCsharpExtraType): SymbolNode {
+    const qualifiedName = input.filePath + "#" + declaration.name;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "type");
+    const isExported = csharpIsExported(declaration.node);
+    const symbol: SymbolNode = {
+      id: createSymbolId({ filePath: input.filePath, qualifiedName, kind: "type", declarationOrdinal }),
+      name: declaration.name,
+      qualifiedName,
+      kind: "type",
+      filePath: input.filePath,
+      range: rangeForNode(declaration.node),
+      isExported,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(fileNode, symbol, declaration.node);
+    csharpTypes.push({ symbolId: symbol.id, filePath: input.filePath, name: declaration.name, namespaceName: declaration.namespaceName, qualifiedTypePath: declaration.namespaceName === "" ? declaration.name : `${declaration.namespaceName}.${declaration.name}`, declarationKind: declaration.declarationKind, isExported, range: symbol.range });
+    for (const targetName of staticCsharpHeritageNames(declaration.node)) {
+      csharpHeritage.push({ sourceId: symbol.id, filePath: input.filePath, referenceName: targetName, relationKind: "extends", sourceTypeKind: declaration.declarationKind, range: symbol.range });
+    }
+    if (declaration.declarationKind === "record") {
+      const parameterList = directChildren(declaration.node).find((child) => child.kind() === "parameter_list");
+      const shape = csharpParameterShape(parameterList);
+      if (shape.parameterCount !== null) {
+        csharpCallables.push({ symbolId: symbol.id, filePath: input.filePath, name: declaration.name, namespaceName: declaration.namespaceName, callableKind: "constructor", ownerTypeName: declaration.name, ownerTypeId: symbol.id, parameterCount: shape.parameterCount, requiredParameterCount: shape.requiredParameterCount ?? shape.parameterCount, parameterTypeNames: shape.parameterTypeNames, isStatic: false, isExported, range: symbol.range });
+      }
+    }
+    return symbol;
+  }
+
+  function addMethod(parent: SymbolNode, declaration: StaticCsharpMethod, namespaceName = ""): SymbolNode {
     const qualifiedName = parent.qualifiedName + "." + declaration.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, "method");
     const symbol: SymbolNode = {
@@ -848,6 +1205,33 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
     };
     symbols.push(symbol);
     addContainment(parent, symbol, declaration.node);
+    csharpCallables.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      namespaceName,
+      callableKind: "method",
+      ownerTypeName: parent.name,
+      ownerTypeId: parent.id,
+      parameterCount: declaration.parameterCount ?? -1,
+      requiredParameterCount: declaration.requiredParameterCount ?? -1,
+      parameterTypeNames: declaration.parameterTypeNames,
+      ...(declaration.returnTypeName === null ? {} : { returnTypeName: declaration.returnTypeName }),
+      isStatic: declaration.isStatic,
+      isExported: declaration.isExported,
+      ...(declaration.isOverride ? { isOverride: true } : {}),
+      range: symbol.range
+    });
+    return symbol;
+  }
+
+  function addConstructor(parent: SymbolNode, declaration: StaticCsharpConstructor, namespaceName = ""): SymbolNode {
+    const qualifiedName = parent.qualifiedName + "." + declaration.name;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "method");
+    const symbol: SymbolNode = { id: createSymbolId({ filePath: input.filePath, qualifiedName, kind: "method", declarationOrdinal }), name: declaration.name, qualifiedName, kind: "method", filePath: input.filePath, range: rangeForNode(declaration.node), isExported: declaration.isExported, declarationOrdinal };
+    symbols.push(symbol);
+    addContainment(parent, symbol, declaration.node);
+    csharpCallables.push({ symbolId: symbol.id, filePath: input.filePath, name: declaration.name, namespaceName, callableKind: "constructor", ownerTypeName: parent.name, ownerTypeId: parent.id, parameterCount: declaration.parameterCount ?? -1, requiredParameterCount: declaration.requiredParameterCount ?? -1, parameterTypeNames: declaration.parameterTypeNames, isStatic: false, isExported: declaration.isExported, range: symbol.range });
     return symbol;
   }
 
@@ -871,7 +1255,40 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
     };
     symbols.push(symbol);
     addContainment(fileNode, symbol, declaration.node);
+    csharpCallables.push({ symbolId: symbol.id, filePath: input.filePath, name: declaration.name, namespaceName: "", callableKind: "function", parameterCount: declaration.parameterCount ?? -1, requiredParameterCount: declaration.requiredParameterCount ?? -1, parameterTypeNames: declaration.parameterTypeNames, ...(declaration.returnTypeName === null ? {} : { returnTypeName: declaration.returnTypeName }), isStatic: true, isExported: declaration.isExported, range: symbol.range });
     return symbol;
+  }
+
+  function recordCsharpBody(
+    source: SymbolNode,
+    declaration: { readonly node: CsharpSyntaxNode },
+    body: CsharpSyntaxNode
+  ): void {
+    if (hasCsharpPreprocessing(body)) return;
+    const collected = collectCsharpCalls(body, declaration);
+    for (const call of collected.calls) {
+      const range = rangeForNode(call.node);
+      csharpCalls.push({
+        sourceId: source.id,
+        filePath: input.filePath,
+        referenceName: call.name,
+        callKind: call.callKind,
+        ...(call.receiverName === undefined ? {} : { receiverName: call.receiverName }),
+        ...(call.receiverTypeName === undefined ? {} : { receiverTypeName: call.receiverTypeName }),
+        ...(call.receiverIsType === undefined ? {} : { receiverIsType: call.receiverIsType }),
+        argumentCount: call.argumentCount,
+        range
+      });
+    }
+    for (const instantiation of collected.instantiations) {
+      csharpInstantiations.push({
+        sourceId: source.id,
+        filePath: input.filePath,
+        typeName: instantiation.typeName,
+        argumentCount: instantiation.argumentCount,
+        range: rangeForNode(instantiation.node)
+      });
+    }
   }
 
   function addRoute(
@@ -959,9 +1376,23 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
   }
 
   if (!hasSyntaxError(root)) {
-    const types = directTopLevelTypeNodes(root)
-      .map((node) => staticCsharpType(node))
+    const declarationEntries = csharpDeclarationEntries(root);
+    for (const usingNode of directChildren(root).filter((node) => node.kind() === "using_directive" || node.kind() === "global_using_directive")) {
+      const raw = nodeText(usingNode).replace(/\s+/gu, " ").trim();
+      const match = /^(?:global\s+)?using\s+(static\s+)?([A-Za-z_][A-Za-z0-9_.]*)(?:\s*=\s*[A-Za-z_][A-Za-z0-9_.]*)?\s*;$/u.exec(raw);
+      if (match === null || match[2] === undefined) continue;
+      csharpUsings.push({ sourceId: fileNode.id, filePath: input.filePath, importedPath: match[2], isStatic: match[1] !== undefined, isAlias: raw.includes("="), range: rangeForNode(usingNode) });
+    }
+    for (const namespaceName of [...new Set(declarationEntries.map((entry) => entry.namespaceName).filter((name) => name !== ""))].sort()) {
+      addNamespace(namespaceName);
+    }
+    const types = declarationEntries
+      .filter((entry) => entry.node.kind() === "class_declaration" || entry.node.kind() === "interface_declaration")
+      .map((entry) => staticCsharpType(entry.node, entry.namespaceName))
       .filter((candidate): candidate is StaticCsharpType => candidate !== null);
+    const extraTypes = declarationEntries
+      .map((entry) => staticCsharpExtraType(entry.node, entry.namespaceName))
+      .filter((candidate): candidate is StaticCsharpExtraType => candidate !== null);
     const hasMvcImport = hasDirectMvcImport(root);
     const hasRazorPagesImport = hasDirectRazorPagesImport(root);
     const hasPreprocessing = hasCsharpPreprocessing(root);
@@ -998,7 +1429,10 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
         .map((node) => staticCsharpMethod(node))
         .filter((candidate): candidate is StaticCsharpMethod => candidate !== null);
       for (const methodDeclaration of methods) {
-        const methodSymbol = addMethod(typeSymbol, methodDeclaration);
+        const methodSymbol = addMethod(typeSymbol, methodDeclaration, type.namespaceName);
+        if (methodDeclaration.isOverride) {
+          csharpOverrides.push({ sourceId: methodSymbol.id, filePath: input.filePath, methodName: methodDeclaration.name, ownerTypeName: type.name, range: methodSymbol.range });
+        }
         const handlerName =
           directClassFact?.isRazorPageModel === true
             ? razorPageHandlerName(methodDeclaration)
@@ -1007,6 +1441,7 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
           directClassFact.razorPageHandlerMethods.push({ handlerName, methodId: methodSymbol.id });
         }
         staticClassMethods.push({ declaration: methodDeclaration, symbol: methodSymbol, type, typeSymbol });
+        if (methodDeclaration.body !== null) recordCsharpBody(methodSymbol, methodDeclaration, methodDeclaration.body);
         if (controllerPath === null) {
           continue;
         }
@@ -1023,7 +1458,17 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
       if (directClassFact !== null) {
         csharpDirectClassFacts.push(directClassFact);
       }
+      for (const child of directChildren(type.body)) {
+        const constructor = staticCsharpConstructor(child);
+        if (constructor !== null) {
+          const constructorSymbol = addConstructor(typeSymbol, constructor, type.namespaceName);
+          const body = directChildren(constructor.node).find((candidate) => candidate.kind() === "block");
+          if (body !== undefined) recordCsharpBody(constructorSymbol, constructor, body);
+        }
+      }
     }
+
+    for (const extra of extraTypes) addExtraType(extra);
 
     if (!hasAmbiguousUsing && !hasPreprocessing) {
       for (const caller of staticClassMethods) {
@@ -1078,6 +1523,8 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
         ...(functionsByName.get(functionDeclaration.name) ?? []),
         symbol
       ]);
+      const body = directChildren(functionDeclaration.node).find((child) => child.kind() === "block" || child.kind() === "arrow_expression_clause");
+      if (body !== undefined) recordCsharpBody(symbol, functionDeclaration, body);
     }
 
     const builders = new Set<string>();
@@ -1146,6 +1593,16 @@ export function extractCsharpFileFacts(input: CsharpExtractFileFactsInput): Arti
       routes: [],
       importedRouterInclusions: []
     },
-    csharpDirectClassFacts
+    csharpDirectClassFacts,
+    csharpFacts: {
+      namespaceName: "",
+      types: csharpTypes,
+      callables: csharpCallables,
+      usings: csharpUsings,
+      calls: csharpCalls,
+      instantiations: csharpInstantiations,
+      ...(csharpHeritage.length === 0 ? {} : { heritage: csharpHeritage }),
+      ...(csharpOverrides.length === 0 ? {} : { overrides: csharpOverrides })
+    } satisfies CsharpFacts
   };
 }

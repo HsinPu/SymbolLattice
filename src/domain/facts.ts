@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v366";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v367";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v171";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v172";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -3041,6 +3041,107 @@ export interface CsharpDirectClassFact {
   }[];
 }
 
+/** C# declaration shapes retained for bounded project-local relation resolution. */
+export type CsharpTypeDeclarationKind =
+  | "namespace"
+  | "class"
+  | "record"
+  | "struct"
+  | "interface"
+  | "enum"
+  | "delegate";
+
+export interface CsharpTypeFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly namespaceName: string;
+  readonly qualifiedTypePath: string;
+  readonly declarationKind: CsharpTypeDeclarationKind;
+  readonly isExported: boolean;
+  readonly isPartial?: boolean;
+  readonly isAbstract?: boolean;
+  readonly range: SourceRange;
+}
+
+export type CsharpCallableKind = "method" | "constructor" | "function";
+
+export interface CsharpCallableFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly namespaceName: string;
+  readonly callableKind: CsharpCallableKind;
+  readonly ownerTypeName?: string;
+  readonly ownerTypeId?: string;
+  readonly parameterCount: number;
+  readonly requiredParameterCount: number;
+  readonly parameterTypeNames?: readonly string[];
+  readonly returnTypeName?: string;
+  readonly isStatic: boolean;
+  readonly isExported: boolean;
+  readonly isOverride?: boolean;
+  readonly range: SourceRange;
+}
+
+export interface CsharpUsingFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly importedPath: string;
+  readonly isStatic: boolean;
+  readonly isAlias: boolean;
+  readonly range: SourceRange;
+}
+
+export interface CsharpCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly callKind: "direct" | "member";
+  readonly receiverName?: string;
+  readonly receiverTypeName?: string;
+  readonly receiverIsType?: boolean;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface CsharpInstantiationFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly typeName: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface CsharpHeritageFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly relationKind: "extends" | "implements";
+  readonly sourceTypeKind: CsharpTypeDeclarationKind;
+  readonly range: SourceRange;
+}
+
+export interface CsharpOverrideFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly methodName: string;
+  readonly ownerTypeName: string;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only C# relation facts; compiler, NuGet, reflection and runtime semantics remain nonclaims. */
+export interface CsharpFacts {
+  readonly namespaceName: string;
+  readonly types: readonly CsharpTypeFact[];
+  readonly callables: readonly CsharpCallableFact[];
+  readonly usings: readonly CsharpUsingFact[];
+  readonly calls: readonly CsharpCallFact[];
+  readonly instantiations: readonly CsharpInstantiationFact[];
+  readonly heritage?: readonly CsharpHeritageFact[];
+  readonly overrides?: readonly CsharpOverrideFact[];
+}
+
 /**
  * Syntax-proven, file-local facts. They deliberately retain unresolved source
  * references so later resolution stages can be recomputed without reparsing.
@@ -3113,6 +3214,8 @@ export interface ArtifactFacts {
   readonly swiftFacts?: SwiftFacts;
   /** Omitted only by artifact facts persisted before v0.461 Dart relation depth. */
   readonly dartFacts?: DartFacts;
+  /** Omitted only by artifact facts persisted before v0.462 C# relation depth. */
+  readonly csharpFacts?: CsharpFacts;
   /** Omitted only by artifact facts persisted before v0.92. */
   readonly springBootPropertiesFacts?: SpringBootPropertiesFacts;
   /** Omitted only by artifact facts persisted before v0.66. */
