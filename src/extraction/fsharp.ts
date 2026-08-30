@@ -2,6 +2,14 @@ import {
   createEdgeId,
   createSymbolId,
   type ArtifactFacts,
+  type FsharpCallFact,
+  type FsharpCallableFact,
+  type FsharpFacts,
+  type FsharpHeritageFact,
+  type FsharpInstantiationFact,
+  type FsharpOpenFact,
+  type FsharpOverrideFact,
+  type FsharpTypeFact,
   type GraphEdge,
   type RouteMethod,
   type SourcePosition,
@@ -26,6 +34,88 @@ interface StaticFsharpFunction {
   readonly name: string;
   readonly start: number;
   readonly end: number;
+}
+
+interface FsharpParameterShape {
+  readonly parameterCount: number;
+  readonly parameterNames: readonly string[];
+  readonly parameterTypeNames: readonly string[];
+}
+
+interface FsharpRawType {
+  readonly name: string;
+  readonly moduleName: string;
+  readonly declarationKind: "module" | "namespace" | "class" | "record" | "struct" | "union" | "interface" | "enum" | "delegate" | "typealias";
+  readonly isExported: boolean;
+  readonly isAbstract: boolean;
+  readonly start: number;
+  readonly end: number;
+  readonly indent: number;
+  readonly headerText: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly constructorParameters: FsharpParameterShape | null;
+  readonly bases: readonly { readonly name: string; readonly relationKind: "extends" | "implements" }[];
+}
+
+interface FsharpRawCallable {
+  readonly key: string;
+  readonly name: string;
+  readonly moduleName: string;
+  readonly ownerTypeName?: string;
+  readonly callableKind: "function" | "method" | "constructor";
+  readonly parameterCount: number;
+  readonly parameterNames: readonly string[];
+  readonly parameterTypeNames: readonly string[];
+  readonly returnTypeName?: string;
+  readonly isStatic: boolean;
+  readonly isExported: boolean;
+  readonly isOverride: boolean;
+  readonly start: number;
+  readonly end: number;
+  readonly indent: number;
+  readonly bodyStart: number;
+  readonly bodyEnd: number;
+  readonly startLine: number;
+  readonly endLine: number;
+}
+
+interface FsharpRawOpen {
+  readonly importedPath: string;
+  readonly isAlias: boolean;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface FsharpRawCall {
+  readonly sourceKey: string;
+  readonly referenceName: string;
+  readonly callKind: "direct" | "member" | "pipeline";
+  readonly receiverName?: string;
+  readonly receiverTypeName?: string;
+  readonly receiverIsType?: boolean;
+  readonly receiverModuleName?: string;
+  readonly argumentCount: number;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface FsharpRawInstantiation {
+  readonly sourceKey: string;
+  readonly typeName: string;
+  readonly argumentCount: number;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface FsharpRawRelationFacts {
+  readonly valid: boolean;
+  readonly moduleName: string;
+  readonly types: readonly FsharpRawType[];
+  readonly callables: readonly FsharpRawCallable[];
+  readonly opens: readonly FsharpRawOpen[];
+  readonly calls: readonly FsharpRawCall[];
+  readonly instantiations: readonly FsharpRawInstantiation[];
 }
 
 interface StaticFsharpDirectCall {
@@ -341,6 +431,236 @@ function linesFor(sourceText: string, sanitizedText: string): readonly FsharpLin
   return lines;
 }
 
+function fsharpIdentifier(value: string | undefined): string | null {
+  return value !== undefined && /^[A-Za-z_][A-Za-z0-9_']*$/u.test(value) ? value : null;
+}
+
+function fsharpQualifiedIdentifier(value: string | undefined): string | null {
+  return value !== undefined && /^[A-Za-z_][A-Za-z0-9_'.]*(?:\.[A-Za-z_][A-Za-z0-9_']*)*$/u.test(value)
+    ? value
+    : null;
+}
+
+function fsharpIsExported(line: string): boolean {
+  return !/\bprivate\b/u.test(line);
+}
+
+function fsharpParameterShape(text: string): FsharpParameterShape | null {
+  const groups = [...text.matchAll(/\(([^()]*)\)/gu)];
+  if (groups.length === 0) return null;
+  const parameterNames: string[] = [];
+  const parameterTypeNames: string[] = [];
+  for (const group of groups) {
+    const content = (group[1] ?? "").trim();
+    if (content === "") continue;
+    const parameters = content.split(",").map((part) => part.trim()).filter((part) => part.length > 0);
+    for (const parameter of parameters) {
+      const match = /^(?:[A-Za-z_][A-Za-z0-9_']*\s*:\s*)?([A-Za-z_][A-Za-z0-9_'.]*(?:<[^>]+>)?)$/u.exec(parameter);
+      if (match === null || match[1] === undefined || parameter.includes("->")) return null;
+      const nameMatch = /^([A-Za-z_][A-Za-z0-9_']*)\s*:/u.exec(parameter);
+      const typeName = match[1].replace(/<[^>]+>$/u, "");
+      if (typeName === "var" || typeName === "obj" || typeName === "dynamic" || fsharpQualifiedIdentifier(typeName) === null) return null;
+      parameterNames.push(nameMatch?.[1] ?? "");
+      parameterTypeNames.push(typeName);
+    }
+  }
+  return { parameterCount: parameterTypeNames.length, parameterNames, parameterTypeNames };
+}
+
+function fsharpArrowParameterShape(text: string): FsharpParameterShape | null {
+  if (!text.includes("->")) return null;
+  const segments = text.split("->").map((part) => part.trim()).filter((part) => part.length > 0);
+  if (segments.length < 2) return null;
+  const parameters = segments.slice(0, -1).map((part) => part.replace(/^:\s*/u, "")).filter((part) => part !== "unit");
+  if (parameters.some((part) => fsharpQualifiedIdentifier(part) === null)) return null;
+  return { parameterCount: parameters.length, parameterNames: parameters.map(() => ""), parameterTypeNames: parameters };
+}
+
+function fsharpReturnType(text: string): string | undefined {
+  const explicit = /\)\s*:\s*([A-Za-z_][A-Za-z0-9_'.]*)(?:\s*=|\s*$)/u.exec(text)?.[1];
+  if (explicit !== undefined && explicit !== "unit") return explicit;
+  const arrow = text.split("->").at(-1)?.trim();
+  return arrow !== undefined && arrow !== "unit" && fsharpQualifiedIdentifier(arrow) !== null ? arrow : undefined;
+}
+
+function fsharpBlockEnd(lines: readonly FsharpLine[], startLine: number, indent: number): number {
+  for (let index = startLine + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line !== undefined && line.content.length > 0 && line.indent <= indent) return index - 1;
+  }
+  return lines.length - 1;
+}
+
+function fsharpTypeDeclarationKind(
+  line: FsharpLine,
+  previous: FsharpLine | undefined,
+  body: string,
+  parameterText: string | undefined
+): FsharpRawType["declarationKind"] {
+  const header = `${previous?.content ?? ""} ${line.content}`;
+  if (/^delegate\s+of\b/u.test(body)) return "delegate";
+  if (/^interface\b/u.test(body) || /\babstract\s+[A-Za-z_][A-Za-z0-9_']*\s*:/u.test(body)) return "interface";
+  if (/^struct\b/u.test(body) || /\bStruct\b/u.test(header)) return "struct";
+  if (/^\{/u.test(body) || (body === "" && line.content.startsWith("type ") && /\{/.test(previous?.content ?? ""))) return "record";
+  if (/^\|/u.test(body) || /\|/.test(body)) return /\|\s*[A-Za-z_][A-Za-z0-9_']*\s*=\s*-?\d+/u.test(body) ? "enum" : "union";
+  if (parameterText !== undefined || /^class\b/u.test(body) || /\binherit\s+[A-Za-z_]/u.test(body)) return "class";
+  return "typealias";
+}
+
+function parseFsharpRelations(sourceText: string): FsharpRawRelationFacts {
+  const sanitized = sanitizeFsharp(sourceText);
+  if (!sanitized.valid || sanitized.text.includes("\t") || sourceText.split(/\r?\n/u).some((line) => /^\s*#(?:if|elif|else|endif)\b/u.test(line))) return { valid: false, moduleName: "", types: [], callables: [], opens: [], calls: [], instantiations: [] };
+  const lines = linesFor(sourceText, sanitized.text);
+  const blocks: Array<{ readonly kind: "module" | "type"; readonly indent: number; readonly name: string }> = [];
+  const rawTypes: FsharpRawType[] = [];
+  const rawCallables: FsharpRawCallable[] = [];
+  const rawOpens: FsharpRawOpen[] = [];
+  let rootModuleName = "";
+  const functionRanges: Array<{ readonly startLine: number; readonly endLine: number; readonly indent: number }> = [];
+  const moduleNameAt = (): string => blocks.filter((block) => block.kind === "module").at(-1)?.name ?? "";
+  const currentType = (): { readonly name: string; readonly indent: number; readonly startLine: number } | null => {
+    const block = [...blocks].reverse().find((candidate) => candidate.kind === "type");
+    return block === undefined ? null : { name: block.name, indent: block.indent, startLine: 0 };
+  };
+  const lineOffset = (line: FsharpLine): number => line.start + line.indent;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line === undefined || line.content.length === 0) continue;
+    while (blocks.length > 0 && (blocks.at(-1)?.indent ?? -1) >= 0 && line.indent <= (blocks.at(-1)?.indent ?? -1)) blocks.pop();
+    const previous = index > 0 ? lines[index - 1] : undefined;
+    const moduleMatch = /^(namespace|module)\s+([A-Za-z_][A-Za-z0-9_'.]*)(\s*=)?$/u.exec(line.content);
+    if (moduleMatch !== null && moduleMatch[1] !== undefined && moduleMatch[2] !== undefined) {
+      const parent = moduleNameAt();
+      const fullName = parent === "" ? moduleMatch[2] : `${parent}.${moduleMatch[2]}`;
+      if (rootModuleName === "" && parent === "") rootModuleName = fullName;
+      rawTypes.push({ name: fullName, moduleName: parent, declarationKind: moduleMatch[1] === "namespace" ? "namespace" : "module", isExported: true, isAbstract: false, start: lineOffset(line), end: lineOffset(line) + line.content.length, indent: line.indent, headerText: line.content, startLine: index, endLine: index, constructorParameters: null, bases: [] });
+      blocks.push({ kind: "module", indent: moduleMatch[3] === undefined ? -1 : line.indent, name: fullName });
+      continue;
+    }
+    const openMatch = /^open\s+([A-Za-z_][A-Za-z0-9_'.]*)(?:\s+as\s+[A-Za-z_][A-Za-z0-9_']*)?$/u.exec(line.content);
+    if (openMatch !== null && openMatch[1] !== undefined) {
+      rawOpens.push({ importedPath: openMatch[1], isAlias: /\s+as\s+/u.test(line.content), start: lineOffset(line), end: lineOffset(line) + line.content.length });
+      continue;
+    }
+    const insideFunction = functionRanges.some((range) => index > range.startLine && index <= range.endLine && line.indent > range.indent);
+    const typeMatch = /^type\s+([A-Z_][A-Za-z0-9_']*)(?:\s*\(([^)]*)\))?\s*(?:=\s*(.*))?$/u.exec(line.content);
+    if (!insideFunction && typeMatch !== null && typeMatch[1] !== undefined) {
+      const name = typeMatch[1];
+      const parameterText = typeMatch[2];
+      const body = (typeMatch[3] ?? "").trim();
+      const moduleName = moduleNameAt();
+      const declarationKind = fsharpTypeDeclarationKind(line, previous, body, parameterText);
+      const typeEndLine = fsharpBlockEnd(lines, index, line.indent);
+      const bases: Array<{ readonly name: string; readonly relationKind: "extends" | "implements" }> = [];
+      for (let bodyIndex = index; bodyIndex <= typeEndLine; bodyIndex += 1) {
+        const bodyLine = lines[bodyIndex];
+        if (bodyLine === undefined) continue;
+        const inherit = /\binherit\s+([A-Za-z_][A-Za-z0-9_'.]*)/u.exec(bodyLine.content)?.[1];
+        if (inherit !== undefined) bases.push({ name: inherit, relationKind: "extends" });
+        const implementation = /^interface\s+([A-Za-z_][A-Za-z0-9_'.]*)\s+with\b/u.exec(bodyLine.content)?.[1];
+        if (implementation !== undefined) bases.push({ name: implementation, relationKind: "implements" });
+      }
+      rawTypes.push({ name, moduleName, declarationKind, isExported: fsharpIsExported(line.content), isAbstract: /\bAbstractClass\b|\babstract\b/u.test(`${previous?.content ?? ""} ${line.content}`), start: lineOffset(line), end: lineOffset(line) + line.content.length, indent: line.indent, headerText: line.content, startLine: index, endLine: typeEndLine, constructorParameters: parameterText === undefined ? null : fsharpParameterShape(`(${parameterText})`), bases: [...new Map(bases.map((base) => [`${base.relationKind}:${base.name}`, base])).values()] });
+      blocks.push({ kind: "type", indent: line.indent, name });
+      continue;
+    }
+    const activeType = currentType();
+    if (activeType !== null && line.indent > activeType.indent) {
+      const memberMatch = /^(?:(static)\s+)?(member|override|abstract|default)\s+(?:(?:[A-Za-z_][A-Za-z0-9_']*|_)[.]\s*)?([A-Za-z_][A-Za-z0-9_']*)\s*(.*)$/u.exec(line.content);
+      if (memberMatch !== null && memberMatch[3] !== undefined) {
+        const rest = memberMatch[4] ?? "";
+        const shape = fsharpParameterShape(rest) ?? fsharpArrowParameterShape(rest) ?? { parameterCount: 0, parameterNames: [], parameterTypeNames: [] };
+        const returnTypeName = fsharpReturnType(rest);
+        const endLine = fsharpBlockEnd(lines, index, line.indent);
+        rawCallables.push({ key: `method:${index}`, name: memberMatch[3], moduleName: moduleNameAt(), ownerTypeName: activeType.name, callableKind: "method", parameterCount: shape.parameterCount, parameterNames: shape.parameterNames, parameterTypeNames: shape.parameterTypeNames, ...(returnTypeName === undefined ? {} : { returnTypeName }), isStatic: memberMatch[1] !== undefined, isExported: fsharpIsExported(line.content), isOverride: memberMatch[2] === "override", start: lineOffset(line), end: lineOffset(line) + line.content.length, indent: line.indent, bodyStart: lineOffset(line), bodyEnd: endLine >= index ? (lines[endLine]?.start ?? sourceText.length) + (lines[endLine]?.content.length ?? 0) : lineOffset(line) + line.content.length, startLine: index, endLine });
+        continue;
+      }
+    }
+    if (insideFunction || activeType !== null) continue;
+    const functionMatch = /^let\s+(?:(?:private|internal|public)\s+)?(?:rec\s+)?([a-z_][A-Za-z0-9_']*)\s*(.*?)\s*=\s*(.*)$/u.exec(line.content);
+    if (functionMatch !== null && functionMatch[1] !== undefined && (functionMatch[2]?.includes("(") ?? false)) {
+      const rest = functionMatch[2] ?? "";
+      const shape = fsharpParameterShape(rest);
+      if (shape === null) continue;
+      const endLine = fsharpBlockEnd(lines, index, line.indent);
+      const returnTypeName = fsharpReturnType(rest);
+      const callable: FsharpRawCallable = { key: `function:${index}`, name: functionMatch[1], moduleName: moduleNameAt(), callableKind: "function", parameterCount: shape.parameterCount, parameterNames: shape.parameterNames, parameterTypeNames: shape.parameterTypeNames, ...(returnTypeName === undefined ? {} : { returnTypeName }), isStatic: true, isExported: fsharpIsExported(line.content), isOverride: false, start: lineOffset(line), end: lineOffset(line) + line.content.length, indent: line.indent, bodyStart: lineOffset(line), bodyEnd: endLine >= index ? (lines[endLine]?.start ?? sourceText.length) + (lines[endLine]?.content.length ?? 0) : lineOffset(line) + line.content.length, startLine: index, endLine };
+      rawCallables.push(callable);
+      functionRanges.push({ startLine: index, endLine, indent: line.indent });
+    }
+  }
+  const calls: FsharpRawCall[] = [];
+  const instantiations: FsharpRawInstantiation[] = [];
+  const callablesForBody = rawCallables.filter((callable) => callable.callableKind !== "constructor");
+  for (const callable of callablesForBody) {
+    const bindings = new Map<string, string>();
+    callable.parameterNames.forEach((name, index) => {
+      const typeName = callable.parameterTypeNames[index];
+      if (name !== "" && typeName !== undefined) bindings.set(name, typeName);
+    });
+    const tainted = new Set<string>();
+    const bodyLines = lines.slice(callable.startLine, callable.endLine + 1);
+    const bodyText = bodyLines.map((line) => line.content).join("\n");
+    for (const name of bindings.keys()) {
+      if (new RegExp(`(?:\\breturn\\s+${name}\\b|\\b[A-Za-z_][A-Za-z0-9_']*\\s*\\([^)]*\\b${name}\\b[^)]*\\))`, "u").test(bodyText)) tainted.add(name);
+    }
+    for (const bodyLine of bodyLines) {
+      if (bodyLine === undefined || bodyLine.content.length === 0) continue;
+      const lineText = bodyLine.content;
+      const localBinding = /^let\s+(mutable\s+)?([a-z_][A-Za-z0-9_']*)\s*(?::\s*([A-Za-z_][A-Za-z0-9_'.]*))?\s*=\s*([A-Z_][A-Za-z0-9_']*)\s*\(/u.exec(lineText);
+      if (localBinding?.[2] !== undefined) {
+        const localType = localBinding[3] ?? localBinding[4];
+        if (localType !== undefined && fsharpQualifiedIdentifier(localType) !== null && localType !== "dynamic" && localType !== "obj") bindings.set(localBinding[2], localType);
+        if (localBinding[1] !== undefined) tainted.add(localBinding[2]);
+        if (new RegExp(`(?:\\breturn\\s+${localBinding[2]}\\b|\\b[A-Za-z_][A-Za-z0-9_']*\\s*\\([^)]*\\b${localBinding[2]}\\b[^)]*\\))`, "u").test(bodyText)) tainted.add(localBinding[2]);
+      }
+      for (const mutation of lineText.matchAll(/\b([a-z_][A-Za-z0-9_']*)\s*<-/gu)) if (mutation[1] !== undefined) tainted.add(mutation[1]);
+      const declarationEquals = /^(?:let\b|(?:(?:static)\s+)?(?:member|override|abstract|default)\b)/u.test(lineText) ? lineText.indexOf("=") : -1;
+      const executableOffset = declarationEquals >= 0 ? declarationEquals + 1 : 0;
+      const executableText = declarationEquals >= 0 ? lineText.slice(executableOffset) : lineText;
+      const sourceOffset = bodyLine.start + bodyLine.indent + executableOffset;
+      const pipeline = /\|>\s*([a-z_][A-Za-z0-9_']*)\b/u.exec(executableText)?.[1];
+      if (pipeline !== undefined) {
+        const start = sourceOffset + Math.max(0, executableText.indexOf(pipeline));
+        calls.push({ sourceKey: callable.key, referenceName: pipeline, callKind: "pipeline", argumentCount: 1, start, end: start + pipeline.length });
+      }
+      for (const match of executableText.matchAll(/\b([A-Za-z_][A-Za-z0-9_']*)\.([A-Za-z_][A-Za-z0-9_']*)\s*\(([^()]*)\)/gu)) {
+        const receiverName = match[1];
+        const name = match[2];
+        if (receiverName === undefined || name === undefined || tainted.has(receiverName)) continue;
+        const offset = match.index ?? -1;
+        if (offset < 0) continue;
+        const argumentCount = (match[3] ?? "").trim() === "" ? 0 : (match[3] ?? "").split(",").length;
+        const receiverIsType = /^[A-Z_]/u.test(receiverName);
+        const receiverTypeName = bindings.get(receiverName) ?? (receiverIsType ? receiverName : undefined);
+        calls.push({ sourceKey: callable.key, referenceName: name, callKind: "member", receiverName, ...(receiverTypeName === undefined ? {} : { receiverTypeName }), ...(receiverIsType ? { receiverIsType: true } : {}), argumentCount, start: sourceOffset + offset, end: sourceOffset + offset + (match[0]?.length ?? 0) });
+      }
+      for (const match of executableText.matchAll(/\b([a-z_][A-Za-z0-9_']*)\s*\(([^()]*)\)/gu)) {
+        const name = match[1];
+        const offset = match.index ?? -1;
+        const previous = offset > 0 ? executableText[offset - 1] : undefined;
+        if (name === undefined || offset < 0 || previous === "." || /^let\s/.test(executableText.slice(0, offset))) continue;
+        const argumentCount = (match[2] ?? "").trim() === "" ? 0 : (match[2] ?? "").split(",").length;
+        calls.push({ sourceKey: callable.key, referenceName: name, callKind: "direct", argumentCount, start: sourceOffset + offset, end: sourceOffset + offset + name.length });
+      }
+      for (const match of executableText.matchAll(/\b(?:new\s+)?([A-Z_][A-Za-z0-9_']*)\s*\(([^()]*)\)/gu)) {
+        const typeName = match[1];
+        if (typeName === undefined) continue;
+        const argumentCount = (match[2] ?? "").trim() === "" ? 0 : (match[2] ?? "").split(",").length;
+        const offset = match.index ?? 0;
+        const start = sourceOffset + offset;
+        instantiations.push({ sourceKey: callable.key, typeName, argumentCount, start, end: start + typeName.length + (match[0]?.length ?? typeName.length) - typeName.length });
+      }
+    }
+  }
+  const constructorCallables: FsharpRawCallable[] = [];
+  for (const type of rawTypes) {
+    if (type.declarationKind !== "class" || type.constructorParameters === null) continue;
+    constructorCallables.push({ key: `constructor:${type.startLine}`, name: type.name, moduleName: type.moduleName, ownerTypeName: type.name, callableKind: "constructor", parameterCount: type.constructorParameters.parameterCount, parameterNames: type.constructorParameters.parameterNames, parameterTypeNames: type.constructorParameters.parameterTypeNames, isStatic: false, isExported: type.isExported, isOverride: false, start: type.start, end: type.end, indent: type.indent, bodyStart: type.start, bodyEnd: type.end, startLine: type.startLine, endLine: type.endLine });
+  }
+  return { valid: true, moduleName: rootModuleName, types: rawTypes, callables: [...rawCallables, ...constructorCallables], opens: rawOpens, calls, instantiations };
+}
+
 function directFsharpFunction(line: FsharpLine): StaticFsharpFunction | null {
   if (line.indent !== 0) {
     return null;
@@ -508,10 +828,21 @@ export function extractFsharpFileFacts(input: FsharpExtractFileFactsInput): Arti
   }
 
   const staticFacts = staticFsharpFacts(input.sourceText);
+  const relationFacts = parseFsharpRelations(input.sourceText);
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
   const declarationOrdinals = new Map<string, number>();
+  const fsharpTypes: FsharpTypeFact[] = [];
+  const fsharpCallables: FsharpCallableFact[] = [];
+  const fsharpOpens: FsharpOpenFact[] = [];
+  const fsharpCalls: FsharpCallFact[] = [];
+  const fsharpInstantiations: FsharpInstantiationFact[] = [];
+  const fsharpHeritage: FsharpHeritageFact[] = [];
+  const fsharpOverrides: FsharpOverrideFact[] = [];
+  const relationCallableSymbols = new Map<string, SymbolNode>();
+  const functionSymbolsByStart = new Map<number, SymbolNode>();
+  const legacyFunctionStarts = new Set(staticFacts.functions.map((functionFact) => functionFact.start));
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
     id: createSymbolId({
@@ -564,7 +895,67 @@ export function extractFsharpFileFacts(input: FsharpExtractFileFactsInput): Arti
     });
   }
 
+  function addFsharpContainment(parent: SymbolNode, child: SymbolNode, from: number, to: number): void {
+    const range = rangeFor(lineStarts, from, to);
+    edges.push({
+      id: createEdgeId({ sourceId: parent.id, targetId: child.id, kind: "contains", line: range.start.line, column: range.start.column, referenceName: child.name }),
+      sourceId: parent.id,
+      targetId: child.id,
+      kind: "contains",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: child.name,
+      evidence: { ruleId: "syntax.containment", stage: "syntax", candidateSymbolIds: [child.id] }
+    });
+  }
+
+  function addFsharpType(type: FsharpRawType, parent: SymbolNode): SymbolNode {
+    const qualifiedPath = type.declarationKind === "module" || type.declarationKind === "namespace"
+      ? type.name
+      : type.moduleName === "" ? type.name : `${type.moduleName}.${type.name}`;
+    const qualifiedName = type.declarationKind === "module" || type.declarationKind === "namespace"
+      ? `${fileNode.qualifiedName}#module:${type.name}`
+      : `${fileNode.qualifiedName}#${qualifiedPath}`;
+    const kind: SymbolNode["kind"] = type.declarationKind === "module" || type.declarationKind === "namespace"
+      ? "module"
+      : type.declarationKind === "class"
+        ? "class"
+        : type.declarationKind === "interface"
+          ? "interface"
+          : "type";
+    const declarationOrdinal = nextOrdinal(qualifiedName, kind);
+    const symbol: SymbolNode = { id: createSymbolId({ filePath: input.filePath, qualifiedName, kind, declarationOrdinal }), name: type.name, qualifiedName, kind, filePath: input.filePath, range: rangeFor(lineStarts, type.start, type.end), isExported: type.isExported, declarationOrdinal };
+    symbols.push(symbol);
+    addFsharpContainment(parent, symbol, type.start, type.end);
+    fsharpTypes.push({ symbolId: symbol.id, filePath: input.filePath, name: type.name, moduleName: type.moduleName, qualifiedTypePath: qualifiedPath, declarationKind: type.declarationKind, isExported: type.isExported, ...(type.isAbstract ? { isAbstract: true } : {}), range: symbol.range });
+    for (const base of type.bases) fsharpHeritage.push({ sourceId: symbol.id, filePath: input.filePath, referenceName: base.name, relationKind: base.relationKind, sourceTypeKind: type.declarationKind, range: symbol.range });
+    return symbol;
+  }
+
+  function addFsharpCallable(callable: FsharpRawCallable, owner: SymbolNode | undefined): SymbolNode {
+    const qualifiedName = callable.ownerTypeName === undefined
+      ? legacyFunctionStarts.has(callable.start)
+        ? `${fileNode.qualifiedName}.${callable.name}`
+        : `${fileNode.qualifiedName}#${callable.moduleName === "" ? "" : `${callable.moduleName}.`}${callable.name}`
+      : `${owner?.qualifiedName ?? `${fileNode.qualifiedName}#${callable.ownerTypeName}`}.${callable.name}`;
+    const kind: SymbolNode["kind"] = callable.callableKind === "function" ? "function" : "method";
+    const declarationOrdinal = nextOrdinal(qualifiedName, kind);
+    const symbol: SymbolNode = { id: createSymbolId({ filePath: input.filePath, qualifiedName, kind, declarationOrdinal }), name: callable.name, qualifiedName, kind, filePath: input.filePath, range: rangeFor(lineStarts, callable.start, callable.end), isExported: callable.isExported, declarationOrdinal };
+    symbols.push(symbol);
+    if (owner === undefined) addContainment(symbol, callable.start, callable.end);
+    else addFsharpContainment(owner, symbol, callable.start, callable.end);
+    relationCallableSymbols.set(callable.key, symbol);
+    if (callable.callableKind === "function") functionSymbolsByStart.set(callable.start, symbol);
+    fsharpCallables.push({ symbolId: symbol.id, filePath: input.filePath, name: callable.name, moduleName: callable.moduleName, callableKind: callable.callableKind, ...(callable.ownerTypeName === undefined ? {} : { ownerTypeName: callable.ownerTypeName }), ...(owner === undefined ? {} : { ownerTypeId: owner.id }), parameterCount: callable.parameterCount, requiredParameterCount: callable.parameterCount, parameterTypeNames: callable.parameterTypeNames, ...(callable.returnTypeName === undefined ? {} : { returnTypeName: callable.returnTypeName }), isStatic: callable.isStatic, isExported: callable.isExported, ...(callable.isOverride ? { isOverride: true } : {}), range: symbol.range });
+    if (callable.isOverride && callable.ownerTypeName !== undefined) fsharpOverrides.push({ sourceId: symbol.id, filePath: input.filePath, methodName: callable.name, ownerTypeName: callable.ownerTypeName, range: symbol.range });
+    return symbol;
+  }
+
   function addFunction(functionFact: StaticFsharpFunction): SymbolNode {
+    const existing = functionSymbolsByStart.get(functionFact.start);
+    if (existing !== undefined) return existing;
     const qualifiedName = fileNode.qualifiedName + "." + functionFact.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, "function");
     const symbol: SymbolNode = {
@@ -637,6 +1028,36 @@ export function extractFsharpFileFacts(input: FsharpExtractFileFactsInput): Arti
     });
   }
 
+  const moduleSymbols = new Map<string, SymbolNode>();
+  for (const type of relationFacts.types.filter((candidate) => candidate.declarationKind === "module" || candidate.declarationKind === "namespace").sort((left, right) => left.start - right.start)) {
+    const parent = type.moduleName === "" ? fileNode : moduleSymbols.get(type.moduleName) ?? fileNode;
+    const symbol = addFsharpType(type, parent);
+    moduleSymbols.set(type.name, symbol);
+  }
+  for (const type of relationFacts.types.filter((candidate) => candidate.declarationKind !== "module" && candidate.declarationKind !== "namespace").sort((left, right) => left.start - right.start)) {
+    const parent = type.moduleName === "" ? fileNode : moduleSymbols.get(type.moduleName) ?? fileNode;
+    addFsharpType(type, parent);
+  }
+  const findFsharpType = (moduleName: string, name: string): SymbolNode | undefined => {
+    const candidates = fsharpTypes.filter((fact) => fact.moduleName === moduleName && fact.name === name).map((fact) => symbols.find((symbol) => symbol.id === fact.symbolId)).filter((symbol): symbol is SymbolNode => symbol !== undefined);
+    return candidates.length === 1 ? candidates[0] : undefined;
+  };
+  for (const callable of [...relationFacts.callables].sort((left, right) => left.start - right.start)) {
+    const owner = callable.ownerTypeName === undefined ? undefined : findFsharpType(callable.moduleName, callable.ownerTypeName);
+    addFsharpCallable(callable, owner);
+  }
+  for (const open of relationFacts.opens) fsharpOpens.push({ sourceId: fileNode.id, filePath: input.filePath, importedPath: open.importedPath, isAlias: open.isAlias, range: rangeFor(lineStarts, open.start, open.end) });
+  for (const call of relationFacts.calls) {
+    const source = relationCallableSymbols.get(call.sourceKey);
+    if (source === undefined) continue;
+    fsharpCalls.push({ sourceId: source.id, filePath: input.filePath, referenceName: call.referenceName, callKind: call.callKind, ...(call.receiverName === undefined ? {} : { receiverName: call.receiverName }), ...(call.receiverTypeName === undefined ? {} : { receiverTypeName: call.receiverTypeName }), ...(call.receiverIsType === undefined ? {} : { receiverIsType: call.receiverIsType }), ...(call.receiverModuleName === undefined ? {} : { receiverModuleName: call.receiverModuleName }), argumentCount: call.argumentCount, range: rangeFor(lineStarts, call.start, call.end) });
+  }
+  for (const instantiation of relationFacts.instantiations) {
+    const source = relationCallableSymbols.get(instantiation.sourceKey);
+    if (source === undefined) continue;
+    fsharpInstantiations.push({ sourceId: source.id, filePath: input.filePath, typeName: instantiation.typeName, argumentCount: instantiation.argumentCount, range: rangeFor(lineStarts, instantiation.start, instantiation.end) });
+  }
+
   if (staticFacts.valid) {
     const functionsByName = new Map<string, SymbolNode[]>();
     const functionStartsById = new Map<string, number>();
@@ -694,6 +1115,17 @@ export function extractFsharpFileFacts(input: FsharpExtractFileFactsInput): Arti
     referenceScopes: [],
     importBindings: [],
     exportBindings: [],
-    reExportBindings: []
+    reExportBindings: [],
+    fsharpFacts: {
+      moduleName: relationFacts.moduleName,
+      parserRejected: !relationFacts.valid,
+      types: fsharpTypes,
+      callables: fsharpCallables,
+      opens: fsharpOpens,
+      calls: fsharpCalls,
+      instantiations: fsharpInstantiations,
+      heritage: fsharpHeritage,
+      overrides: fsharpOverrides
+    } satisfies FsharpFacts
   };
 }

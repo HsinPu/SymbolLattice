@@ -876,6 +876,7 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
     ...(facts.swiftFacts === undefined ? {} : { swiftFacts: facts.swiftFacts }),
     ...(facts.dartFacts === undefined ? {} : { dartFacts: facts.dartFacts }),
     ...(facts.csharpFacts === undefined ? {} : { csharpFacts: facts.csharpFacts }),
+    ...(facts.fsharpFacts === undefined ? {} : { fsharpFacts: facts.fsharpFacts }),
     ...(facts.razorFacts === undefined ? {} : { razorFacts: facts.razorFacts }),
     ...(facts.csharpDirectClassFacts === undefined ? {} : { csharpDirectClassFacts: facts.csharpDirectClassFacts }),
     ...(facts.pythonFacts === undefined ? {} : { pythonFacts: facts.pythonFacts })
