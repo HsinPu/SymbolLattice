@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v369";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v370";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v174";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v175";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -3347,6 +3347,97 @@ export interface OcamlFacts {
   readonly overrides?: readonly OcamlOverrideFact[];
 }
 
+/** Haskell declaration shapes retained for bounded project-local relation resolution. */
+export type HaskellTypeDeclarationKind =
+  | "module"
+  | "data"
+  | "newtype"
+  | "typealias"
+  | "record"
+  | "variant"
+  | "class";
+
+export interface HaskellTypeFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly moduleName: string;
+  readonly qualifiedTypePath: string;
+  readonly declarationKind: HaskellTypeDeclarationKind;
+  readonly constructorNames?: readonly string[];
+  readonly constructorArities?: Readonly<Record<string, number>>;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+}
+
+export type HaskellCallableKind = "function" | "method";
+
+export interface HaskellCallableFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly moduleName: string;
+  readonly callableKind: HaskellCallableKind;
+  readonly ownerTypeName?: string;
+  readonly parameterCount: number;
+  readonly requiredParameterCount: number;
+  readonly parameterTypeNames?: readonly string[];
+  readonly returnTypeName?: string;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+}
+
+export interface HaskellImportFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly importedModule: string;
+  readonly importedNames?: readonly string[];
+  readonly isQualified: boolean;
+  readonly alias?: string;
+  readonly range: SourceRange;
+}
+
+export interface HaskellCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly callKind: "direct" | "module";
+  readonly receiverModuleName?: string;
+  readonly receiverAlias?: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface HaskellInstantiationFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly constructorName: string;
+  readonly typeName?: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface HaskellHeritageFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly sourceTypeName: string;
+  readonly relationKind: "implements";
+  readonly range: SourceRange;
+}
+
+/** Syntax-only Haskell relation facts. Compiler inference and runtime semantics remain nonclaims. */
+export interface HaskellFacts {
+  readonly moduleName: string;
+  readonly parserRejected?: boolean;
+  readonly types: readonly HaskellTypeFact[];
+  readonly callables: readonly HaskellCallableFact[];
+  readonly imports: readonly HaskellImportFact[];
+  readonly calls: readonly HaskellCallFact[];
+  readonly instantiations: readonly HaskellInstantiationFact[];
+  readonly heritage?: readonly HaskellHeritageFact[];
+}
+
 /**
  * Syntax-proven, file-local facts. They deliberately retain unresolved source
  * references so later resolution stages can be recomputed without reparsing.
@@ -3425,6 +3516,8 @@ export interface ArtifactFacts {
   readonly fsharpFacts?: FsharpFacts;
   /** Omitted only by artifact facts persisted before v0.464 OCaml relation depth. */
   readonly ocamlFacts?: OcamlFacts;
+  /** Omitted only by artifact facts persisted before v0.465 Haskell relation depth. */
+  readonly haskellFacts?: HaskellFacts;
   /** Omitted only by artifact facts persisted before v0.92. */
   readonly springBootPropertiesFacts?: SpringBootPropertiesFacts;
   /** Omitted only by artifact facts persisted before v0.66. */

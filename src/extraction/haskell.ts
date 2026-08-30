@@ -3,6 +3,13 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type GraphEdge,
+  type HaskellCallFact,
+  type HaskellCallableFact,
+  type HaskellFacts,
+  type HaskellHeritageFact,
+  type HaskellImportFact,
+  type HaskellInstantiationFact,
+  type HaskellTypeFact,
   type RouteMethod,
   type SourcePosition,
   type SourceRange,
@@ -53,6 +60,85 @@ interface StaticHaskellFacts {
   readonly equationNames: readonly string[];
   readonly calls: readonly StaticHaskellDirectCall[];
   readonly routes: readonly StaticScottyRoute[];
+}
+
+interface HaskellRawType {
+  readonly name: string;
+  readonly moduleName: string;
+  readonly declarationKind: "module" | "data" | "newtype" | "typealias" | "record" | "variant" | "class";
+  readonly constructorNames: readonly string[];
+  readonly constructorArities: Readonly<Record<string, number>>;
+  readonly isExported: boolean;
+  readonly start: number;
+  readonly end: number;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly indent: number;
+}
+
+interface HaskellRawCallable {
+  readonly key: string;
+  readonly name: string;
+  readonly moduleName: string;
+  readonly callableKind: "function" | "method";
+  readonly ownerTypeName?: string;
+  readonly parameterCount: number;
+  readonly requiredParameterCount: number;
+  readonly parameterNames: readonly string[];
+  readonly parameterTypeNames: readonly string[];
+  readonly returnTypeName?: string;
+  readonly isExported: boolean;
+  readonly start: number;
+  readonly end: number;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly indent: number;
+}
+
+interface HaskellRawImport {
+  readonly importedModule: string;
+  readonly importedNames?: readonly string[];
+  readonly isQualified: boolean;
+  readonly alias?: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface HaskellRawCall {
+  readonly sourceKey: string;
+  readonly referenceName: string;
+  readonly callKind: "direct" | "module";
+  readonly receiverModuleName?: string;
+  readonly receiverAlias?: string;
+  readonly argumentCount: number;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface HaskellRawInstantiation {
+  readonly sourceKey: string;
+  readonly constructorName: string;
+  readonly argumentCount: number;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface HaskellRawHeritage {
+  readonly sourceTypeName: string;
+  readonly referenceName: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface HaskellRawRelationFacts {
+  readonly valid: boolean;
+  readonly moduleName: string;
+  readonly types: readonly HaskellRawType[];
+  readonly callables: readonly HaskellRawCallable[];
+  readonly imports: readonly HaskellRawImport[];
+  readonly calls: readonly HaskellRawCall[];
+  readonly instantiations: readonly HaskellRawInstantiation[];
+  readonly heritage: readonly HaskellRawHeritage[];
 }
 
 interface SanitizedHaskellSource {
@@ -410,6 +496,186 @@ function staticHaskellFacts(sourceText: string): StaticHaskellFacts {
   };
 }
 
+function haskellTypeIdentifier(value: string | undefined): string | null {
+  return value !== undefined && /^[A-Z][A-Za-z0-9_']*(?:\.[A-Z][A-Za-z0-9_']*)*$/u.test(value)
+    ? value
+    : null;
+}
+
+function haskellDeclarationEnd(lines: readonly HaskellLine[], startLine: number): number {
+  for (let index = startLine + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line !== undefined && line.content.length > 0 && line.indent === 0) {
+      return index - 1;
+    }
+  }
+  return lines.length - 1;
+}
+
+interface HaskellSignatureShape {
+  readonly parameterTypeNames: readonly string[];
+  readonly returnTypeName?: string;
+}
+
+function haskellSignatureShape(signature: string): HaskellSignatureShape | null {
+  const normalized = signature.replace(/\s+/gu, " ").trim();
+  if (normalized === "" || normalized.includes("=>") || /[{}[\]\\|]/u.test(normalized)) {
+    return null;
+  }
+  const segments = normalized.split("->").map((segment) => segment.trim());
+  if (segments.length === 0) return null;
+  const returnType = segments.at(-1);
+  const parameterTypes = segments.slice(0, -1);
+  if (returnType === undefined || parameterTypes.some((segment) => haskellTypeIdentifier(segment) === null)) {
+    return null;
+  }
+  const returnTypeName = haskellTypeIdentifier(returnType);
+  return {
+    parameterTypeNames: parameterTypes,
+    ...(returnTypeName === null ? {} : { returnTypeName })
+  };
+}
+
+function haskellDefinitionParameters(text: string): readonly string[] | null {
+  const normalized = text.trim();
+  if (normalized === "") return [];
+  if (/\b(?:where|guards?)\b|[{}[\]@:]|\\|\||\bcase\b/u.test(normalized)) return null;
+  const tokens = normalized.split(/\s+/u).filter((token) => token.length > 0);
+  if (tokens.some((token) => !/^[a-z_][A-Za-z0-9_']*$/u.test(token) && token !== "()")) return null;
+  return tokens.map((token) => token === "()" ? "" : token);
+}
+
+function haskellConstructorShapes(body: string): { readonly names: readonly string[]; readonly arities: Readonly<Record<string, number>> } {
+  const clean = body.replace(/\bderiving\b[\s\S]*$/u, "").trim();
+  if (clean === "") return { names: [], arities: {} };
+  const names: string[] = [];
+  const arities: Record<string, number> = {};
+  for (const part of clean.split("|")) {
+    const match = /^\s*([A-Z][A-Za-z0-9_']*)\b([\s\S]*)$/u.exec(part);
+    const name = match?.[1];
+    if (name === undefined) continue;
+    const rest = (match?.[2] ?? "").trim();
+    let arity = 0;
+    if (rest.includes("{")) {
+      arity = [...rest.matchAll(/::/gu)].length;
+    } else if (rest !== "") {
+      arity = rest.replace(/[(),]/gu, " ").split(/\s+/u).filter((token) => token.length > 0 && token !== "where").length;
+    }
+    names.push(name);
+    arities[name] = arity;
+  }
+  return { names, arities };
+}
+
+function parseHaskellRelations(sourceText: string): HaskellRawRelationFacts {
+  const sanitized = sanitizeHaskell(sourceText);
+  if (!sanitized.valid || sourceText.includes("{-#") || sourceText.includes("$(") || /^\s*#(?:if|elif|else|endif)\b/mu.test(sourceText)) {
+    return { valid: false, moduleName: "", types: [], callables: [], imports: [], calls: [], instantiations: [], heritage: [] };
+  }
+  const lines = linesFor(sourceText, sanitized.text);
+  if (lines === null) {
+    return { valid: false, moduleName: "", types: [], callables: [], imports: [], calls: [], instantiations: [], heritage: [] };
+  }
+  const moduleLine = lines.find((line) => /^module\s+/u.test(line.content));
+  const moduleName = moduleLine === undefined
+    ? ""
+    : /^module\s+([A-Z][A-Za-z0-9_']*(?:\.[A-Z][A-Za-z0-9_']*)*)\s*(?:\(.*\))?\s+where$/u.exec(moduleLine.content)?.[1] ?? "";
+  const types: HaskellRawType[] = [];
+  const imports: HaskellRawImport[] = [];
+  const heritage: HaskellRawHeritage[] = [];
+  const signatures = new Map<string, { readonly shape: HaskellSignatureShape; readonly line: HaskellLine }>();
+  if (moduleLine !== undefined && moduleName !== "") {
+    types.push({ name: moduleName, moduleName: "", declarationKind: "module", constructorNames: [], constructorArities: {}, isExported: true, start: moduleLine.start + moduleLine.indent, end: moduleLine.start + moduleLine.indent + moduleLine.content.length, startLine: lines.indexOf(moduleLine), endLine: lines.indexOf(moduleLine), indent: moduleLine.indent });
+  }
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line === undefined || line.content.length === 0 || line.indent !== 0) continue;
+    const importMatch = /^import\s+(qualified\s+)?([A-Z][A-Za-z0-9_'.]*)(?:\s+as\s+([A-Z][A-Za-z0-9_']*))?(?:\s*\((.*)\))?$/u.exec(line.content);
+    if (importMatch?.[2] !== undefined) {
+      const importedNames = importMatch[4] === undefined
+        ? undefined
+        : importMatch[4].split(",").map((name) => name.trim().replace(/\(\.\.\)$/u, "")).filter((name) => /^[A-Za-z_][A-Za-z0-9_']*$/u.test(name));
+      imports.push({ importedModule: importMatch[2], ...(importedNames === undefined ? {} : { importedNames }), isQualified: importMatch[1] !== undefined, ...(importMatch[3] === undefined ? {} : { alias: importMatch[3] }), start: line.start + line.indent, end: line.start + line.indent + line.content.length });
+      continue;
+    }
+    const signatureMatch = /^([a-z_][A-Za-z0-9_']*)\s*::\s*(.+)$/u.exec(line.content);
+    if (signatureMatch?.[1] !== undefined && signatureMatch[2] !== undefined) {
+      const shape = haskellSignatureShape(signatureMatch[2]);
+      if (shape !== null) signatures.set(signatureMatch[1], { shape, line });
+      continue;
+    }
+    const dataMatch = /^(data|newtype|type)\s+([A-Z][A-Za-z0-9_']*)\b(?:[^=]*)?(?:=\s*(.*))?$/u.exec(line.content);
+    if (dataMatch?.[1] !== undefined && dataMatch[2] !== undefined) {
+      const declarationKind = dataMatch[1] === "newtype" ? "newtype" : dataMatch[1] === "type" ? "typealias" : "data";
+      const endLine = haskellDeclarationEnd(lines, index);
+      const continuation = lines.slice(index, endLine + 1).map((candidate) => candidate?.content ?? "").join(" ");
+      const body = continuation.includes("=") ? continuation.slice(continuation.indexOf("=") + 1).trim() : (dataMatch[3] ?? "");
+      const constructors = declarationKind === "typealias" ? { names: [], arities: {} } : haskellConstructorShapes(body);
+      const finalKind = declarationKind === "data" && body.includes("{") ? "record" : declarationKind === "data" && body.includes("|") ? "variant" : declarationKind;
+      types.push({ name: dataMatch[2], moduleName, declarationKind: finalKind, constructorNames: constructors.names, constructorArities: constructors.arities, isExported: true, start: line.start + line.indent, end: line.start + line.indent + line.content.length, startLine: index, endLine, indent: line.indent });
+      continue;
+    }
+    const classMatch = /^class\s+([A-Z][A-Za-z0-9_']*)\b.*\bwhere$/u.exec(line.content);
+    if (classMatch?.[1] !== undefined) {
+      const endLine = haskellDeclarationEnd(lines, index);
+      types.push({ name: classMatch[1], moduleName, declarationKind: "class", constructorNames: [], constructorArities: {}, isExported: true, start: line.start + line.indent, end: line.start + line.indent + line.content.length, startLine: index, endLine, indent: line.indent });
+      continue;
+    }
+    const instanceMatch = /^instance\s+(?:\([^)]*\)\s*=>\s*)?([A-Z][A-Za-z0-9_']*)\s+([A-Z][A-Za-z0-9_']*)\s+where$/u.exec(line.content);
+    if (instanceMatch?.[1] !== undefined && instanceMatch[2] !== undefined) {
+      heritage.push({ referenceName: instanceMatch[1], sourceTypeName: instanceMatch[2], start: line.start + line.indent, end: line.start + line.indent + line.content.length });
+    }
+  }
+
+  const callables: HaskellRawCallable[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line === undefined || line.indent !== 0) continue;
+    const definition = /^([a-z_][A-Za-z0-9_']*)\s*(.*?)\s*=\s*(.*)$/u.exec(line.content);
+    const name = definition?.[1];
+    if (name === undefined) continue;
+    const signature = signatures.get(name);
+    if (signature === undefined) continue;
+    const parameterNames = haskellDefinitionParameters(definition?.[2] ?? "");
+    if (parameterNames === null || parameterNames.length !== signature.shape.parameterTypeNames.length) continue;
+    const endLine = haskellDeclarationEnd(lines, index);
+    callables.push({ key: `function:${index}:${name}`, name, moduleName, callableKind: "function", parameterCount: signature.shape.parameterTypeNames.length, requiredParameterCount: signature.shape.parameterTypeNames.length, parameterNames, parameterTypeNames: signature.shape.parameterTypeNames, ...(signature.shape.returnTypeName === undefined ? {} : { returnTypeName: signature.shape.returnTypeName }), isExported: true, start: line.start + line.indent, end: line.start + line.indent + line.content.length, startLine: index, endLine, indent: line.indent });
+  }
+
+  const calls: HaskellRawCall[] = [];
+  const instantiations: HaskellRawInstantiation[] = [];
+  const reserved = new Set(["let", "in", "if", "then", "else", "case", "of", "where", "do", "pure", "return", "error", "seq"]);
+  const callableNameCounts = new Map<string, number>();
+  for (const callable of callables) callableNameCounts.set(callable.name, (callableNameCounts.get(callable.name) ?? 0) + 1);
+  for (const callable of callables) {
+    if ((callableNameCounts.get(callable.name) ?? 0) !== 1) continue;
+    const bodyLines = lines.slice(callable.startLine, callable.endLine + 1);
+    const bodyText = bodyLines.map((line) => line.content).join("\n");
+    if (/\\|\b(case|where|do)\b|->/u.test(bodyText)) continue;
+    for (const bodyLine of bodyLines) {
+      if (bodyLine === undefined || bodyLine.content.length === 0) continue;
+      const equals = bodyLine.content.indexOf("=");
+      const executableOffset = equals >= 0 ? equals + 1 : 0;
+      const executable = equals >= 0 ? bodyLine.content.slice(executableOffset) : bodyLine.content;
+      const sourceOffset = bodyLine.start + bodyLine.indent + executableOffset;
+      for (const match of executable.matchAll(/\b([A-Z][A-Za-z0-9_']*)\.([a-z_][A-Za-z0-9_']*)\s+(?:\(([^()]*)\)|([a-z_][A-Za-z0-9_']*|[A-Z][A-Za-z0-9_']*|\d+|\(\)))/gu)) {
+        const receiver = match[1]; const name = match[2]; if (receiver === undefined || name === undefined) continue;
+        const argumentText = match[3] ?? match[4] ?? ""; const offset = match.index ?? 0; calls.push({ sourceKey: callable.key, referenceName: name, callKind: "module", receiverModuleName: receiver, receiverAlias: receiver, argumentCount: argumentText.trim() === "" || argumentText === "()" ? 0 : argumentText.split(",").length, start: sourceOffset + offset, end: sourceOffset + offset + (match[0]?.length ?? 0) });
+      }
+      for (const match of executable.matchAll(/\b([a-z_][A-Za-z0-9_']*)\s+(?:\(([^()]*)\)|([a-z_][A-Za-z0-9_']*|[A-Z][A-Za-z0-9_']*|\d+|\(\)))/gu)) {
+        const name = match[1]; const offset = match.index ?? -1; const previous = offset > 0 ? executable[offset - 1] : undefined; if (name === undefined || offset < 0 || previous === "." || reserved.has(name)) continue;
+        const argumentText = match[2] ?? match[3] ?? ""; calls.push({ sourceKey: callable.key, referenceName: name, callKind: "direct", argumentCount: argumentText.trim() === "" || argumentText === "()" ? 0 : argumentText.split(",").length, start: sourceOffset + offset, end: sourceOffset + offset + name.length });
+      }
+      for (const match of executable.matchAll(/\b([A-Z][A-Za-z0-9_']*)\s+(?:\(([^()]*)\)|([a-z_][A-Za-z0-9_']*|[A-Z][A-Za-z0-9_']*|\d+|\(\)))/gu)) {
+        const name = match[1]; const offset = match.index ?? -1; const previous = offset > 0 ? executable[offset - 1] : undefined; if (name === undefined || offset < 0 || previous === ".") continue;
+        const argumentText = match[2] ?? match[3] ?? ""; instantiations.push({ sourceKey: callable.key, constructorName: name, argumentCount: argumentText.trim() === "" || argumentText === "()" ? 0 : argumentText.split(",").length, start: sourceOffset + offset, end: sourceOffset + offset + (match[0]?.length ?? 0) });
+      }
+    }
+  }
+  return { valid: true, moduleName, types, callables, imports, calls, instantiations, heritage };
+}
+
 export function extractHaskellFileFacts(input: HaskellExtractFileFactsInput): ArtifactFacts {
   const scottyCapability = frameworkCapability("scotty");
   if (!scottyCapability.languages.includes(input.language)) {
@@ -417,10 +683,19 @@ export function extractHaskellFileFacts(input: HaskellExtractFileFactsInput): Ar
   }
 
   const staticFacts = staticHaskellFacts(input.sourceText);
+  const relationFacts = parseHaskellRelations(input.sourceText);
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
   const declarationOrdinals = new Map<string, number>();
+  const haskellTypes: HaskellTypeFact[] = [];
+  const haskellCallables: HaskellCallableFact[] = [];
+  const haskellImports: HaskellImportFact[] = [];
+  const haskellCalls: HaskellCallFact[] = [];
+  const haskellInstantiations: HaskellInstantiationFact[] = [];
+  const haskellHeritage: HaskellHeritageFact[] = [];
+  const relationCallableSymbols = new Map<string, SymbolNode>();
+  const functionSymbolsByStart = new Map<number, SymbolNode>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
     id: createSymbolId({
@@ -473,7 +748,74 @@ export function extractHaskellFileFacts(input: HaskellExtractFileFactsInput): Ar
     });
   }
 
+  function addHaskellContainment(parent: SymbolNode, child: SymbolNode, from: number, to: number): void {
+    const range = rangeFor(lineStarts, from, to);
+    edges.push({
+      id: createEdgeId({ sourceId: parent.id, targetId: child.id, kind: "contains", line: range.start.line, column: range.start.column, referenceName: child.name }),
+      sourceId: parent.id,
+      targetId: child.id,
+      kind: "contains",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: child.name,
+      evidence: { ruleId: "syntax.containment", stage: "syntax", candidateSymbolIds: [child.id] }
+    });
+  }
+
+  function addHaskellType(type: HaskellRawType, parent: SymbolNode): SymbolNode {
+    const qualifiedPath = type.declarationKind === "module"
+      ? type.name
+      : type.moduleName === "" ? type.name : `${type.moduleName}.${type.name}`;
+    const qualifiedName = type.declarationKind === "module"
+      ? `${fileNode.qualifiedName}#module:${type.name}`
+      : `${fileNode.qualifiedName}#${qualifiedPath}`;
+    const kind: SymbolNode["kind"] = type.declarationKind === "module"
+      ? "module"
+      : type.declarationKind === "class" ? "class" : "type";
+    const declarationOrdinal = nextOrdinal(qualifiedName, kind);
+    const symbol: SymbolNode = {
+      id: createSymbolId({ filePath: input.filePath, qualifiedName, kind, declarationOrdinal }),
+      name: type.name,
+      qualifiedName,
+      kind,
+      filePath: input.filePath,
+      range: rangeFor(lineStarts, type.start, type.end),
+      isExported: type.isExported,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addHaskellContainment(parent, symbol, type.start, type.end);
+    haskellTypes.push({ symbolId: symbol.id, filePath: input.filePath, name: type.name, moduleName: type.moduleName, qualifiedTypePath: qualifiedPath, declarationKind: type.declarationKind, constructorNames: type.constructorNames, constructorArities: type.constructorArities, isExported: type.isExported, range: symbol.range });
+    return symbol;
+  }
+
+  function addHaskellCallable(callable: HaskellRawCallable, owner: SymbolNode | undefined): SymbolNode {
+    const qualifiedPath = callable.moduleName === "" ? callable.name : `${callable.moduleName}.${callable.name}`;
+    const qualifiedName = `${fileNode.qualifiedName}#${qualifiedPath}`;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "function");
+    const symbol: SymbolNode = {
+      id: createSymbolId({ filePath: input.filePath, qualifiedName, kind: "function", declarationOrdinal }),
+      name: callable.name,
+      qualifiedName,
+      kind: callable.callableKind === "method" ? "method" : "function",
+      filePath: input.filePath,
+      range: rangeFor(lineStarts, callable.start, callable.end),
+      isExported: callable.isExported,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    if (owner === undefined) addContainment(symbol, callable.start, callable.end); else addHaskellContainment(owner, symbol, callable.start, callable.end);
+    relationCallableSymbols.set(callable.key, symbol);
+    if (callable.callableKind === "function") functionSymbolsByStart.set(callable.start, symbol);
+    haskellCallables.push({ symbolId: symbol.id, filePath: input.filePath, name: callable.name, moduleName: callable.moduleName, callableKind: callable.callableKind, ...(callable.ownerTypeName === undefined ? {} : { ownerTypeName: callable.ownerTypeName }), parameterCount: callable.parameterCount, requiredParameterCount: callable.requiredParameterCount, parameterTypeNames: callable.parameterTypeNames, ...(callable.returnTypeName === undefined ? {} : { returnTypeName: callable.returnTypeName }), isExported: callable.isExported, range: symbol.range });
+    return symbol;
+  }
+
   function addFunction(functionFact: StaticHaskellFunction): SymbolNode {
+    const existing = functionSymbolsByStart.get(functionFact.start);
+    if (existing !== undefined) return existing;
     const qualifiedName = fileNode.qualifiedName + "." + functionFact.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, "function");
     const symbol: SymbolNode = {
@@ -493,6 +835,7 @@ export function extractHaskellFileFacts(input: HaskellExtractFileFactsInput): Ar
     };
     symbols.push(symbol);
     addContainment(symbol, functionFact.start, functionFact.end);
+    functionSymbolsByStart.set(functionFact.start, symbol);
     return symbol;
   }
 
@@ -544,6 +887,44 @@ export function extractHaskellFileFacts(input: HaskellExtractFileFactsInput): Ar
         candidateSymbolIds: handler === null ? [] : [handler.id]
       }
     });
+  }
+
+  const moduleSymbols = new Map<string, SymbolNode>();
+  for (const type of relationFacts.types.filter((candidate) => candidate.declarationKind === "module").sort((left, right) => left.start - right.start)) {
+    const symbol = addHaskellType(type, fileNode);
+    moduleSymbols.set(type.name, symbol);
+  }
+  for (const type of relationFacts.types.filter((candidate) => candidate.declarationKind !== "module").sort((left, right) => left.start - right.start)) {
+    const parent = type.moduleName === "" ? fileNode : moduleSymbols.get(type.moduleName) ?? fileNode;
+    addHaskellType(type, parent);
+  }
+  const findHaskellType = (name: string, moduleName = ""): SymbolNode | undefined => {
+    const candidates = haskellTypes
+      .filter((fact) => fact.name === name && (moduleName === "" || fact.moduleName === moduleName))
+      .map((fact) => symbols.find((symbol) => symbol.id === fact.symbolId))
+      .filter((symbol): symbol is SymbolNode => symbol !== undefined);
+    return candidates.length === 1 ? candidates[0] : undefined;
+  };
+  for (const callable of [...relationFacts.callables].sort((left, right) => left.start - right.start)) {
+    addHaskellCallable(callable, callable.ownerTypeName === undefined ? undefined : findHaskellType(callable.ownerTypeName, callable.moduleName));
+  }
+  for (const importFact of relationFacts.imports) {
+    haskellImports.push({ sourceId: fileNode.id, filePath: input.filePath, importedModule: importFact.importedModule, ...(importFact.importedNames === undefined ? {} : { importedNames: importFact.importedNames }), isQualified: importFact.isQualified, ...(importFact.alias === undefined ? {} : { alias: importFact.alias }), range: rangeFor(lineStarts, importFact.start, importFact.end) });
+  }
+  for (const call of relationFacts.calls) {
+    const source = relationCallableSymbols.get(call.sourceKey);
+    if (source === undefined) continue;
+    haskellCalls.push({ sourceId: source.id, filePath: input.filePath, referenceName: call.referenceName, callKind: call.callKind, ...(call.receiverModuleName === undefined ? {} : { receiverModuleName: call.receiverModuleName }), ...(call.receiverAlias === undefined ? {} : { receiverAlias: call.receiverAlias }), argumentCount: call.argumentCount, range: rangeFor(lineStarts, call.start, call.end) });
+  }
+  for (const instantiation of relationFacts.instantiations) {
+    const source = relationCallableSymbols.get(instantiation.sourceKey);
+    if (source === undefined) continue;
+    haskellInstantiations.push({ sourceId: source.id, filePath: input.filePath, constructorName: instantiation.constructorName, argumentCount: instantiation.argumentCount, range: rangeFor(lineStarts, instantiation.start, instantiation.end) });
+  }
+  for (const heritageFact of relationFacts.heritage) {
+    const source = findHaskellType(heritageFact.sourceTypeName, relationFacts.moduleName);
+    if (source === undefined) continue;
+    haskellHeritage.push({ sourceId: source.id, filePath: input.filePath, referenceName: heritageFact.referenceName, sourceTypeName: heritageFact.sourceTypeName, relationKind: "implements", range: rangeFor(lineStarts, heritageFact.start, heritageFact.end) });
   }
 
   if (staticFacts.valid) {
@@ -620,6 +1001,16 @@ export function extractHaskellFileFacts(input: HaskellExtractFileFactsInput): Ar
     referenceScopes: [],
     importBindings: [],
     exportBindings: [],
-    reExportBindings: []
+    reExportBindings: [],
+    haskellFacts: {
+      moduleName: relationFacts.moduleName,
+      parserRejected: !relationFacts.valid,
+      types: haskellTypes,
+      callables: haskellCallables,
+      imports: haskellImports,
+      calls: haskellCalls,
+      instantiations: haskellInstantiations,
+      heritage: haskellHeritage
+    } satisfies HaskellFacts
   };
 }

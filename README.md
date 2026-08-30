@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.464.0
+目前版本：v0.465.0
 
 ## 主要能力
 
@@ -90,6 +90,8 @@ v0.462.0 加深 C#／.NET bounded project relations。固定 .NET runtime、ASP.
 v0.463.0 加深 F# bounded project relations。固定 dotnet/fsharp v15.2.400、Fable 5.9.0 與 FAKE 6.1.4 三個大型、乾淨 source scope，加入 module／namespace、class／record／struct／union／interface／enum／delegate／type alias identity、explicit `open`、唯一 project-local direct／pipeline／member／constructor call、extends／implements、signature accepts／returns 與明確 `override`。300 個 synthetic 正向為 TP300／FP0／FN0／evidenceInvalid0，150 個 disposable 負向全數 fail-close。型別推導、pipeline／composition ambiguity、pattern matching runtime、generic／inline、active pattern、computation expression、async/task runtime、reflection／quotation、type provider、generated／conditional code、NuGet／external assembly 與 project references 維持 unresolved 或 nonclaim；parser-rejected files 與 unsupported breadth recall 另列。Windows 沒有可用 .NET SDK／F# compiler validation，因此不宣稱完整 F# compiler 語意。
 
 v0.464.0 加深 OCaml bounded project relations。固定 OCaml 5.5.0、Dune 3.9.3 與 Jane Street Core v0.17.2 三個大型、乾淨 source scope，加入 module／class／record／variant／object／signature／type alias identity、explicit `open`、唯一 project-local direct／module／typed member call、class construction、extends／implements、signature accepts／returns 與明確 `method!` override。300 個 synthetic 正向為 TP300／FP0／FN0／evidenceInvalid0，150 個 disposable 負向全數 fail-close。型別推導、higher-order／partial application、functor／module signature strengthening、polymorphic variants／GADT、object subtyping、pattern matching runtime、PPX／generated code、async／reflection、opam／Dune dependency resolution、external package、conditional compilation 與 ambiguous opens 維持 unresolved 或 nonclaim；parser-rejected files 與 unsupported breadth recall 另列。Windows 沒有 OCaml／Merlin toolchain validation，因此不宣稱完整 OCaml compiler 語意。
+
+v0.465.0 加深 Haskell bounded project relations。固定 GHC 9.14.1、Cabal 3.18.1.0 與 Pandoc 3.9 三個大型、乾淨 source scope，加入 module、data／newtype／record／variant／type alias、class／instance identity、explicit import、唯一 project-local direct／qualified module call、constructor creation、typeclass implements 與簡單 signature accepts／returns。300 個 synthetic 正向為 TP300／FP0／FN0／evidenceInvalid0，150 個 disposable 負向全數 fail-close。型別推導、overloading／dictionary passing、higher-order／partial application、lazy runtime、pattern dispatch、GADT／existential／type family、Template Haskell／quasiquote／CPP、FFI、package resolver、external module、reflection、ambiguous export 與 dynamic dispatch 維持 unresolved 或 nonclaim；parser-rejected files 與 unsupported breadth recall 另列。Windows 沒有 GHC／Cabal／Stack／HLS toolchain validation，因此不宣稱完整 Haskell compiler 語意。
 
 v0.449.0 新增 `.md`／`.markdown` 基礎圖譜：ATX／Setext heading 會形成可搜尋的 resource 與階層 `contains`，完整的 project-local 相對檔案連結會在唯一命中 indexed file 時形成 exact `references`。Fenced／indented／inline code、HTML block、external／root-relative／reference-style／image／dynamic links、heading anchor 與 `.mdx` 維持 opaque、unresolved 或 nonclaim，不推測執行期文件行為。
 
