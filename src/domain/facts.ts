@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v364";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v365";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v169";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v170";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -2793,6 +2793,109 @@ export interface SwiftObjectiveCFacts {
   readonly extensionMethods?: readonly SwiftObjectiveCExtensionMethodFact[];
 }
 
+/** Swift declaration shapes retained for bounded project-local relation resolution. */
+export type SwiftTypeDeclarationKind =
+  | "class"
+  | "struct"
+  | "enum"
+  | "protocol"
+  | "actor"
+  | "typealias";
+
+export interface SwiftTypeFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  /** Swift has no package declaration in source; an empty module is deliberate. */
+  readonly moduleName: string;
+  readonly qualifiedTypePath: string;
+  readonly declarationKind: SwiftTypeDeclarationKind;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+  readonly isDecoratorTainted?: boolean;
+  readonly aliasTargetName?: string;
+}
+
+export type SwiftCallableKind = "function" | "method" | "initializer" | "extension";
+
+export interface SwiftCallableFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly moduleName: string;
+  readonly callableKind: SwiftCallableKind;
+  readonly ownerTypeName?: string;
+  readonly ownerTypeId?: string;
+  readonly receiverTypeName?: string;
+  readonly parameterCount: number;
+  readonly requiredParameterCount: number;
+  readonly parameterTypeNames?: readonly string[];
+  readonly returnTypeName?: string;
+  readonly isExported: boolean;
+  readonly isOverride?: boolean;
+  readonly range: SourceRange;
+}
+
+/** One direct Swift import. Wildcard and alias forms remain nonclaims. */
+export interface SwiftImportFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly importedPath: string;
+  readonly importedName: string;
+  readonly localName: string;
+  readonly isWildcard: boolean;
+  readonly isAliased: boolean;
+  readonly range: SourceRange;
+}
+
+export interface SwiftCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly callKind: "direct" | "member";
+  readonly receiverName?: string;
+  readonly receiverTypeName?: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface SwiftInstantiationFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly typeName: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface SwiftHeritageFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly relationKind: "extends" | "implements";
+  readonly sourceTypeKind: SwiftTypeDeclarationKind;
+  readonly range: SourceRange;
+}
+
+export interface SwiftOverrideFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly methodName: string;
+  readonly ownerTypeName: string;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only Swift relation facts. Runtime dispatch and compiler features remain nonclaims. */
+export interface SwiftFacts {
+  readonly moduleName: string;
+  readonly types: readonly SwiftTypeFact[];
+  readonly callables: readonly SwiftCallableFact[];
+  readonly imports: readonly SwiftImportFact[];
+  readonly calls: readonly SwiftCallFact[];
+  readonly instantiations: readonly SwiftInstantiationFact[];
+  readonly heritage?: readonly SwiftHeritageFact[];
+  readonly overrides?: readonly SwiftOverrideFact[];
+}
+
 /**
  * Syntax-only React Native bridge facts. JavaScript callsites and native
  * implementations remain independent until project resolution proves their
@@ -2916,6 +3019,8 @@ export interface ArtifactFacts {
   readonly jvmFacts?: JvmFacts;
   /** Omitted only by artifact facts persisted before v0.459 Kotlin relation depth. */
   readonly kotlinFacts?: KotlinFacts;
+  /** Omitted only by artifact facts persisted before v0.460 Swift relation depth. */
+  readonly swiftFacts?: SwiftFacts;
   /** Omitted only by artifact facts persisted before v0.92. */
   readonly springBootPropertiesFacts?: SpringBootPropertiesFacts;
   /** Omitted only by artifact facts persisted before v0.66. */
