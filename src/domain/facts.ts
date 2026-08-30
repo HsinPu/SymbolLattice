@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v370";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v371";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v175";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v176";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -1780,6 +1780,101 @@ export interface ScalaFacts {
   readonly routerMounts: readonly PlayRouterMountFact[];
 }
 
+/** Scala declarations retained for bounded project-local relation resolution. */
+export type ScalaRelationDeclarationKind = "object" | "class" | "caseclass" | "trait" | "enum" | "typealias";
+
+export interface ScalaRelationTypeFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly packageName: string;
+  readonly qualifiedTypePath: string;
+  readonly declarationKind: ScalaRelationDeclarationKind;
+  readonly isExported: boolean;
+  readonly constructorParameterCount?: number;
+  readonly constructorRequiredParameterCount?: number;
+  readonly range: SourceRange;
+}
+
+export type ScalaRelationCallableKind = "function" | "method" | "constructor";
+
+export interface ScalaRelationCallableFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly packageName: string;
+  readonly callableKind: ScalaRelationCallableKind;
+  readonly ownerTypeName?: string;
+  readonly ownerTypeId?: string;
+  readonly parameterCount: number;
+  readonly requiredParameterCount: number;
+  readonly parameterTypeNames?: readonly string[];
+  readonly returnTypeName?: string;
+  readonly isExported: boolean;
+  readonly isOverride?: boolean;
+  readonly range: SourceRange;
+}
+
+export interface ScalaRelationImportFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly importedPath: string;
+  readonly importedName: string;
+  readonly localName: string;
+  readonly isWildcard: boolean;
+  readonly isAliased: boolean;
+  readonly range: SourceRange;
+}
+
+export interface ScalaRelationCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly callKind: "direct" | "module" | "member";
+  readonly receiverName?: string;
+  readonly receiverTypeName?: string;
+  readonly receiverObjectName?: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface ScalaRelationInstantiationFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly typeName: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface ScalaRelationHeritageFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly relationKind: "extends" | "implements";
+  readonly range: SourceRange;
+}
+
+export interface ScalaRelationOverrideFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly methodName: string;
+  readonly ownerTypeName: string;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only Scala relation facts. Compiler inference and runtime semantics remain nonclaims. */
+export interface ScalaRelationFacts {
+  readonly packageName: string;
+  readonly parserRejected?: boolean;
+  readonly types: readonly ScalaRelationTypeFact[];
+  readonly callables: readonly ScalaRelationCallableFact[];
+  readonly imports: readonly ScalaRelationImportFact[];
+  readonly calls: readonly ScalaRelationCallFact[];
+  readonly instantiations: readonly ScalaRelationInstantiationFact[];
+  readonly heritage?: readonly ScalaRelationHeritageFact[];
+  readonly overrides?: readonly ScalaRelationOverrideFact[];
+}
+
 /** Syntax-only Java package facts retained for exact Play controller-action resolution. */
 export interface JavaFacts {
   readonly classes: readonly JavaClassFact[];
@@ -3506,6 +3601,8 @@ export interface ArtifactFacts {
   readonly jvmFacts?: JvmFacts;
   /** Omitted only by artifact facts persisted before v0.459 Kotlin relation depth. */
   readonly kotlinFacts?: KotlinFacts;
+  /** Omitted only by artifact facts persisted before v0.466 Scala relation depth. */
+  readonly scalaRelationFacts?: ScalaRelationFacts;
   /** Omitted only by artifact facts persisted before v0.460 Swift relation depth. */
   readonly swiftFacts?: SwiftFacts;
   /** Omitted only by artifact facts persisted before v0.461 Dart relation depth. */

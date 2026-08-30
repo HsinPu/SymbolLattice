@@ -5,6 +5,14 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type GraphEdge,
+  type ScalaRelationCallFact,
+  type ScalaRelationCallableFact,
+  type ScalaRelationFacts,
+  type ScalaRelationHeritageFact,
+  type ScalaRelationImportFact,
+  type ScalaRelationInstantiationFact,
+  type ScalaRelationOverrideFact,
+  type ScalaRelationTypeFact,
   type PendingReference,
   type RouteMethod,
   type SourcePosition,
@@ -47,6 +55,38 @@ interface StaticPlayRouterMount {
   readonly prefix: string;
   readonly routerName: string;
   readonly range: SourceRange;
+}
+
+interface ScalaRawParameterShape {
+  readonly parameterCount: number;
+  readonly requiredParameterCount: number;
+  readonly parameterNames: readonly string[];
+  readonly parameterTypeNames: readonly string[];
+}
+
+interface ScalaRawCall {
+  readonly sourceKey: string;
+  readonly referenceName: string;
+  readonly callKind: "direct" | "module" | "member";
+  readonly receiverName?: string;
+  readonly receiverTypeName?: string;
+  readonly receiverObjectName?: string;
+  readonly argumentCount: number;
+  readonly node: ScalaSyntaxNode;
+}
+
+interface ScalaRawInstantiation {
+  readonly sourceKey: string;
+  readonly typeName: string;
+  readonly argumentCount: number;
+  readonly node: ScalaSyntaxNode;
+}
+
+interface ScalaRawHeritage {
+  readonly sourceId: string;
+  readonly referenceName: string;
+  readonly relationKind: "extends" | "implements";
+  readonly node: ScalaSyntaxNode;
 }
 
 const PLAY_ROUTE_METHODS: Readonly<Record<string, RouteMethod>> = {
@@ -197,6 +237,71 @@ function staticScalaPackage(root: ScalaSyntaxNode): string | null {
     : null;
 }
 
+function walkScalaNodes(node: ScalaSyntaxNode, visitor: (candidate: ScalaSyntaxNode) => void): void {
+  visitor(node);
+  for (const child of directChildren(node)) walkScalaNodes(child, visitor);
+}
+
+function simpleScalaTypeName(value: string | undefined): string | null {
+  const normalized = value?.trim().replace(/\s+/gu, " ");
+  return normalized !== undefined && /^[A-Z_][A-Za-z0-9_]*(?:\.[A-Z_][A-Za-z0-9_]*)*$/u.test(normalized)
+    ? normalized
+    : null;
+}
+
+function scalaParameterShape(node: ScalaSyntaxNode): ScalaRawParameterShape {
+  const groups = directChildren(node).filter((child) => child.kind() === "parameters" || child.kind() === "class_parameters");
+  const parameterNames: string[] = [];
+  const parameterTypeNames: string[] = [];
+  let requiredParameterCount = 0;
+  for (const group of groups) {
+    for (const parameter of directChildren(group).filter((child) => child.kind() === "parameter" || child.kind() === "class_parameter")) {
+      const text = nodeText(parameter).trim();
+      const match = /^(?:val\s+|var\s+|using\s+|implicit\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([^=]+?)(?:\s*=.*)?$/u.exec(text);
+      const name = match?.[1];
+      const typeText = match?.[2]?.trim();
+      if (name === undefined || typeText === undefined || text.includes("=") || /\b(?:using|implicit|given)\b/u.test(text)) continue;
+      parameterNames.push(name);
+      const typeName = simpleScalaTypeName(typeText);
+      if (typeName !== null) parameterTypeNames.push(typeName);
+      requiredParameterCount += 1;
+    }
+  }
+  return { parameterCount: parameterNames.length, requiredParameterCount, parameterNames, parameterTypeNames: parameterTypeNames.length === parameterNames.length ? parameterTypeNames : [] };
+}
+
+function scalaReturnTypeName(node: ScalaSyntaxNode): string | undefined {
+  const header = nodeText(node).split("=")[0] ?? "";
+  const match = /:\s*([^:=]+?)\s*$/u.exec(header);
+  const typeName = simpleScalaTypeName(match?.[1]);
+  return typeName ?? undefined;
+}
+
+function scalaArgumentCount(node: ScalaSyntaxNode): number {
+  const argumentsNode = directChildren(node).find((child) => child.kind() === "arguments");
+  if (argumentsNode === undefined) return 0;
+  const text = nodeText(argumentsNode).trim();
+  if (text === "()") return 0;
+  const content = text.startsWith("(") && text.endsWith(")") ? text.slice(1, -1).trim() : text;
+  return content === "" ? 0 : content.split(",").length;
+}
+
+function scalaOwnerName(node: ScalaSyntaxNode): string | null {
+  const nameNode = directChildren(node).find((child) => child.kind() === "identifier");
+  return nameNode === undefined ? null : identifierText(nameNode);
+}
+
+function scalaTypeReferenceName(node: ScalaSyntaxNode): string | null {
+  const text = nodeText(node).trim();
+  const first = /^([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)/u.exec(text)?.[1];
+  return first === undefined ? null : first;
+}
+
+function scalaNodeKey(node: ScalaSyntaxNode): string {
+  const range = node.range();
+  return `${range.start.line}:${range.start.column}:${range.end.line}:${range.end.column}`;
+}
+
 function isPlayRoutesFile(filePath: string): boolean {
   const normalized = filePath.replaceAll("\\", "/");
   return /(?:^|\/)conf\/(?:routes|[^/]+\.routes)$/u.test(normalized);
@@ -308,6 +413,17 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
   const edges: GraphEdge[] = [];
   const pendingReferences: PendingReference[] = [];
   const scalaClassFacts: Array<{ symbolId: string; packageName: string }> = [];
+  const scalaRelationTypes: ScalaRelationTypeFact[] = [];
+  const scalaRelationCallables: ScalaRelationCallableFact[] = [];
+  const scalaRelationImports: ScalaRelationImportFact[] = [];
+  const scalaRelationCalls: ScalaRelationCallFact[] = [];
+  const scalaRelationInstantiations: ScalaRelationInstantiationFact[] = [];
+  const scalaRelationHeritage: ScalaRelationHeritageFact[] = [];
+  const scalaRelationOverrides: ScalaRelationOverrideFact[] = [];
+  const relationCallableSymbolsByNode = new Map<string, SymbolNode>();
+  const relationTypeSymbolsByName = new Map<string, SymbolNode[]>();
+  const ownerFieldTypes = new Map<string, ReadonlyMap<string, string>>();
+  let scalaRelationParserRejected = false;
   const playRouterMountFacts: Array<{
     symbolId: string;
     prefix: string;
@@ -394,6 +510,35 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
     if (declaration.kind === "class" && packageName !== null) {
       scalaClassFacts.push({ symbolId: symbol.id, packageName });
     }
+    const declarationKind: ScalaRelationTypeFact["declarationKind"] = declaration.node.kind() === "object_definition"
+      ? "object"
+      : declaration.node.kind() === "trait_definition"
+        ? "trait"
+        : nodeText(declaration.node).trimStart().startsWith("case class")
+          ? "caseclass"
+          : "class";
+    const constructorShape = declarationKind === "class" || declarationKind === "caseclass" ? scalaParameterShape(declaration.node) : null;
+    const relationFact: ScalaRelationTypeFact = {
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      packageName: packageName ?? "",
+      qualifiedTypePath: packageName === null || packageName === "" ? declaration.name : `${packageName}.${declaration.name}`,
+      declarationKind,
+      isExported: true,
+      ...(constructorShape === null ? {} : { constructorParameterCount: constructorShape.parameterCount, constructorRequiredParameterCount: constructorShape.requiredParameterCount }),
+      range: symbol.range
+    };
+    scalaRelationTypes.push(relationFact);
+    relationTypeSymbolsByName.set(`${relationFact.packageName}\u0000${relationFact.name}`, [...(relationTypeSymbolsByName.get(`${relationFact.packageName}\u0000${relationFact.name}`) ?? []), symbol]);
+    if (constructorShape !== null) {
+      const fields: Array<readonly [string, string]> = [];
+      constructorShape.parameterNames.forEach((name, index) => {
+        const typeName = constructorShape.parameterTypeNames[index];
+        if (typeName !== undefined) fields.push([name, typeName]);
+      });
+      ownerFieldTypes.set(symbol.id, new Map(fields));
+    }
     return symbol;
   }
 
@@ -417,6 +562,27 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
     };
     symbols.push(symbol);
     addContainment(parent, symbol, rangeForNode(declaration.node));
+    const shape = scalaParameterShape(declaration.node);
+    const returnTypeName = scalaReturnTypeName(declaration.node);
+    const relationCallable: ScalaRelationCallableFact = {
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      packageName: staticScalaPackage(parse("scala", input.sourceText).root()) ?? "",
+      callableKind: "method",
+      ownerTypeName: parent.name,
+      ownerTypeId: parent.id,
+      parameterCount: shape.parameterCount,
+      requiredParameterCount: shape.requiredParameterCount,
+      ...(shape.parameterTypeNames.length === shape.parameterCount ? { parameterTypeNames: shape.parameterTypeNames } : {}),
+      ...(returnTypeName === undefined ? {} : { returnTypeName }),
+      isExported: true,
+      ...(nodeText(declaration.node).trimStart().startsWith("override ") ? { isOverride: true } : {}),
+      range: symbol.range
+    };
+    scalaRelationCallables.push(relationCallable);
+    relationCallableSymbolsByNode.set(scalaNodeKey(declaration.node), symbol);
+    if (relationCallable.isOverride) scalaRelationOverrides.push({ sourceId: symbol.id, filePath: input.filePath, methodName: declaration.name, ownerTypeName: parent.name, range: symbol.range });
     return symbol;
   }
 
@@ -472,7 +638,7 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
     });
   }
 
-  function addFunction(declaration: StaticScalaFunction): void {
+  function addFunction(declaration: StaticScalaFunction): SymbolNode {
     const qualifiedName = input.filePath + "#" + declaration.name;
     const declarationOrdinal = nextOrdinal(qualifiedName, "function");
     const symbol: SymbolNode = {
@@ -492,6 +658,44 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
     };
     symbols.push(symbol);
     addContainment(fileNode, symbol, rangeForNode(declaration.node));
+    const shape = scalaParameterShape(declaration.node);
+    const packageName = staticScalaPackage(parse("scala", input.sourceText).root()) ?? "";
+    const returnTypeName = scalaReturnTypeName(declaration.node);
+    scalaRelationCallables.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      packageName,
+      callableKind: "function",
+      parameterCount: shape.parameterCount,
+      requiredParameterCount: shape.requiredParameterCount,
+      ...(shape.parameterTypeNames.length === shape.parameterCount ? { parameterTypeNames: shape.parameterTypeNames } : {}),
+      ...(returnTypeName === undefined ? {} : { returnTypeName }),
+      isExported: true,
+      range: symbol.range
+    });
+    relationCallableSymbolsByNode.set(scalaNodeKey(declaration.node), symbol);
+    return symbol;
+  }
+
+  function addRelationTypeSymbol(name: string, declarationKind: "enum" | "typealias", packageName: string, range: SourceRange): SymbolNode {
+    const qualifiedName = input.filePath + "#" + name;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "type");
+    const symbol: SymbolNode = {
+      id: createSymbolId({ filePath: input.filePath, qualifiedName, kind: "type", declarationOrdinal }),
+      name,
+      qualifiedName,
+      kind: "type",
+      filePath: input.filePath,
+      range,
+      isExported: true,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(fileNode, symbol, range);
+    scalaRelationTypes.push({ symbolId: symbol.id, filePath: input.filePath, name, packageName, qualifiedTypePath: packageName === "" ? name : `${packageName}.${name}`, declarationKind, isExported: true, range });
+    relationTypeSymbolsByName.set(`${packageName}\u0000${name}`, [...(relationTypeSymbolsByName.get(`${packageName}\u0000${name}`) ?? []), symbol]);
+    return symbol;
   }
 
   function addPlayRoute(routeFact: StaticPlayRoute): void {
@@ -572,13 +776,16 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
     }
   } else {
     const root = parse("scala", input.sourceText).root();
-    if (!hasSyntaxError(root)) {
+    scalaRelationParserRejected = hasSyntaxError(root);
+    if (!scalaRelationParserRejected) {
       const topLevel = directChildren(root);
       const packageName = staticScalaPackage(root);
+      const ownersByNodeKey = new Map<string, SymbolNode>();
       for (const declaration of topLevel
         .map((node) => staticScalaOwner(node))
         .filter((candidate): candidate is StaticScalaOwner => candidate !== null)) {
         const owner = addOwner(declaration, packageName);
+        ownersByNodeKey.set(scalaNodeKey(declaration.node), owner);
         const methods: SymbolNode[] = [];
         for (const method of directChildren(declaration.body)
           .map((node) => staticScalaFunction(node))
@@ -591,6 +798,109 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
         .map((node) => staticScalaFunction(node))
         .filter((candidate): candidate is StaticScalaFunction => candidate !== null)) {
         addFunction(declaration);
+      }
+      for (const node of topLevel) {
+        if (node.kind() === "enum_definition") {
+          const nameNode = directChildren(node).find((child) => child.kind() === "identifier");
+          const name = nameNode === undefined ? null : identifierText(nameNode);
+          if (name !== null) addRelationTypeSymbol(name, "enum", packageName ?? "", rangeForNode(node));
+        } else if (node.kind() === "type_definition") {
+          const nameNode = directChildren(node).find((child) => child.kind() === "type_identifier");
+          const name = nameNode === undefined ? null : scalaTypeReferenceName(nameNode);
+          if (name !== null) addRelationTypeSymbol(name, "typealias", packageName ?? "", rangeForNode(node));
+        }
+        if (node.kind() !== "import_declaration") continue;
+        const raw = nodeText(node).trim().replace(/^import\s+/u, "");
+        const range = rangeForNode(node);
+        const addImport = (importedPath: string, importedName: string, localName: string, isWildcard: boolean, isAliased: boolean): void => {
+          scalaRelationImports.push({ sourceId: fileNode.id, filePath: input.filePath, importedPath, importedName, localName, isWildcard, isAliased, range });
+        };
+        const selectorStart = raw.indexOf(".{");
+        if (selectorStart >= 0 && raw.endsWith("}")) {
+          const prefix = raw.slice(0, selectorStart);
+          const selectors = raw.slice(selectorStart + 2, -1).split(",").map((selector) => selector.trim()).filter((selector) => selector.length > 0);
+          for (const selector of selectors) {
+            if (selector === "_") { addImport(prefix, "", "", true, false); continue; }
+            const parts = selector.split(/\s*=>\s*/u);
+            const importedName = parts[0] ?? "";
+            const localName = parts[1] ?? importedName;
+            if (/^[A-Za-z_][A-Za-z0-9_]*$/u.test(importedName) && /^[A-Za-z_][A-Za-z0-9_]*$/u.test(localName)) addImport(`${prefix}.${importedName}`, importedName, localName, false, parts.length > 1);
+          }
+        } else if (raw.endsWith("._")) {
+          addImport(raw.slice(0, -2), "", "", true, false);
+        } else if (/^(?:[A-Za-z_][A-Za-z0-9_]*\.)+[A-Za-z_][A-Za-z0-9_]*$/u.test(raw)) {
+          const importedName = raw.split(".").at(-1) ?? raw;
+          addImport(raw, importedName, importedName, false, false);
+        }
+      }
+      for (const ownerDeclaration of topLevel
+        .map((node) => staticScalaOwner(node))
+        .filter((candidate): candidate is StaticScalaOwner => candidate !== null)) {
+        const owner = ownersByNodeKey.get(scalaNodeKey(ownerDeclaration.node));
+        const extendsClause = directChildren(ownerDeclaration.node).find((child) => child.kind() === "extends_clause");
+        if (owner === undefined || extendsClause === undefined) continue;
+        let first = true;
+        for (const parent of directChildren(extendsClause).filter((child) => child.kind() === "type_identifier" || child.kind() === "generic_type")) {
+          const referenceName = scalaTypeReferenceName(parent);
+          if (referenceName === null) continue;
+          scalaRelationHeritage.push({ sourceId: owner.id, filePath: input.filePath, referenceName, relationKind: first ? "extends" : "implements", range: rangeForNode(extendsClause) });
+          first = false;
+        }
+      }
+      const functionEntries: Array<{ readonly node: ScalaSyntaxNode; readonly source: SymbolNode; readonly ownerName?: string; readonly ownerId?: string }> = [];
+      for (const ownerDeclaration of topLevel
+        .map((node) => staticScalaOwner(node))
+        .filter((candidate): candidate is StaticScalaOwner => candidate !== null)) {
+        const owner = ownersByNodeKey.get(scalaNodeKey(ownerDeclaration.node));
+        if (owner === undefined) continue;
+        for (const methodDeclaration of directChildren(ownerDeclaration.body)
+          .map((node) => staticScalaFunction(node))
+          .filter((candidate): candidate is StaticScalaFunction => candidate !== null)) {
+          const source = relationCallableSymbolsByNode.get(scalaNodeKey(methodDeclaration.node));
+          if (source !== undefined) functionEntries.push({ node: methodDeclaration.node, source, ownerName: owner.name, ownerId: owner.id });
+        }
+      }
+      for (const functionDeclaration of topLevel
+        .map((node) => staticScalaFunction(node))
+        .filter((candidate): candidate is StaticScalaFunction => candidate !== null)) {
+        const source = relationCallableSymbolsByNode.get(scalaNodeKey(functionDeclaration.node));
+        if (source !== undefined) functionEntries.push({ node: functionDeclaration.node, source });
+      }
+      for (const entry of functionEntries) {
+        const bindings = new Map<string, string>(entry.ownerId === undefined ? [] : [...(ownerFieldTypes.get(entry.ownerId) ?? new Map()).entries()]);
+        const shape = scalaParameterShape(entry.node);
+        shape.parameterNames.forEach((name, index) => { const typeName = shape.parameterTypeNames[index]; if (typeName !== undefined) bindings.set(name, typeName); });
+        for (const match of nodeText(entry.node).matchAll(/\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([A-Z_][A-Za-z0-9_]*(?:\.[A-Z_][A-Za-z0-9_]*)*)\s*=/gu)) {
+          const name = match[1];
+          const typeName = match[2];
+          if (name !== undefined && typeName !== undefined) bindings.set(name, typeName);
+        }
+        walkScalaNodes(entry.node, (candidate) => {
+          if (candidate.kind() === "instance_expression") {
+            const typeNode = directChildren(candidate).find((child) => child.kind() === "type_identifier" || child.kind() === "generic_type");
+            const typeName = typeNode === undefined ? null : scalaTypeReferenceName(typeNode);
+            if (typeName !== null) scalaRelationInstantiations.push({ sourceId: entry.source.id, filePath: input.filePath, typeName, argumentCount: scalaArgumentCount(candidate), range: rangeForNode(candidate) });
+            return;
+          }
+          if (candidate.kind() !== "call_expression") return;
+          const callee = directChildren(candidate).find((child) => child.kind() !== "arguments");
+          if (callee === undefined) return;
+          const argumentCount = scalaArgumentCount(candidate);
+          if (callee.kind() === "field_expression") {
+            const parts = nodeText(callee).split(".");
+            const referenceName = parts.at(-1);
+            const receiverName = parts.slice(0, -1).join(".");
+            if (referenceName === undefined || receiverName === "") return;
+            const receiverTypeName = receiverName === "this" ? entry.ownerName : bindings.get(receiverName);
+            if (/^[A-Z]/u.test(receiverName)) scalaRelationCalls.push({ sourceId: entry.source.id, filePath: input.filePath, referenceName, callKind: "module", receiverObjectName: receiverName, argumentCount, range: rangeForNode(candidate) });
+            else scalaRelationCalls.push({ sourceId: entry.source.id, filePath: input.filePath, referenceName, callKind: "member", receiverName, ...(receiverTypeName === undefined ? {} : { receiverTypeName }), argumentCount, range: rangeForNode(candidate) });
+            return;
+          }
+          const referenceName = identifierText(callee);
+          if (referenceName === null) return;
+          if (/^[A-Z]/u.test(referenceName)) scalaRelationInstantiations.push({ sourceId: entry.source.id, filePath: input.filePath, typeName: referenceName, argumentCount, range: rangeForNode(candidate) });
+          else scalaRelationCalls.push({ sourceId: entry.source.id, filePath: input.filePath, referenceName, callKind: "direct", argumentCount, range: rangeForNode(candidate) });
+        });
       }
       addCanonicalMemberCall();
     }
@@ -623,6 +933,17 @@ export function extractScalaFileFacts(input: ScalaExtractFileFactsInput): Artifa
     scalaFacts: {
       classes: scalaClassFacts,
       routerMounts: playRouterMountFacts
+    },
+    scalaRelationFacts: {
+      packageName: isPlayRoutesFile(input.filePath) ? "" : (staticScalaPackage(parse("scala", input.sourceText).root()) ?? ""),
+      parserRejected: isPlayRoutesFile(input.filePath) || scalaRelationParserRejected,
+      types: scalaRelationTypes,
+      callables: scalaRelationCallables,
+      imports: scalaRelationImports,
+      calls: scalaRelationCalls,
+      instantiations: scalaRelationInstantiations,
+      heritage: scalaRelationHeritage,
+      overrides: scalaRelationOverrides
     }
   };
 }
