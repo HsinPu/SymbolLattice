@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v368";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v369";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v173";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v174";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -3246,6 +3246,107 @@ export interface FsharpFacts {
   readonly overrides?: readonly FsharpOverrideFact[];
 }
 
+/** OCaml declaration shapes retained for bounded project-local relation resolution. */
+export type OcamlTypeDeclarationKind =
+  | "module"
+  | "class"
+  | "record"
+  | "variant"
+  | "object"
+  | "interface"
+  | "enum"
+  | "typealias";
+
+export interface OcamlTypeFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly moduleName: string;
+  readonly qualifiedTypePath: string;
+  readonly declarationKind: OcamlTypeDeclarationKind;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+}
+
+export type OcamlCallableKind = "function" | "method" | "constructor";
+
+export interface OcamlCallableFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly moduleName: string;
+  readonly callableKind: OcamlCallableKind;
+  readonly ownerTypeName?: string;
+  readonly ownerTypeId?: string;
+  readonly parameterCount: number;
+  readonly requiredParameterCount: number;
+  readonly parameterTypeNames?: readonly string[];
+  readonly returnTypeName?: string;
+  readonly isStatic: boolean;
+  readonly isExported: boolean;
+  readonly isOverride?: boolean;
+  readonly range: SourceRange;
+}
+
+export interface OcamlOpenFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly importedPath: string;
+  readonly isAlias: boolean;
+  readonly range: SourceRange;
+}
+
+export interface OcamlCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly callKind: "direct" | "member" | "module";
+  readonly receiverName?: string;
+  readonly receiverTypeName?: string;
+  readonly receiverIsType?: boolean;
+  readonly receiverModuleName?: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface OcamlInstantiationFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly typeName: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface OcamlHeritageFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly relationKind: "extends" | "implements";
+  readonly sourceTypeKind: OcamlTypeDeclarationKind;
+  readonly range: SourceRange;
+}
+
+export interface OcamlOverrideFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly methodName: string;
+  readonly ownerTypeName: string;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only OCaml relation facts. Compiler inference and runtime semantics remain nonclaims. */
+export interface OcamlFacts {
+  readonly moduleName: string;
+  readonly parserRejected?: boolean;
+  readonly types: readonly OcamlTypeFact[];
+  readonly callables: readonly OcamlCallableFact[];
+  readonly opens: readonly OcamlOpenFact[];
+  readonly calls: readonly OcamlCallFact[];
+  readonly instantiations: readonly OcamlInstantiationFact[];
+  readonly heritage?: readonly OcamlHeritageFact[];
+  readonly overrides?: readonly OcamlOverrideFact[];
+}
+
 /**
  * Syntax-proven, file-local facts. They deliberately retain unresolved source
  * references so later resolution stages can be recomputed without reparsing.
@@ -3322,6 +3423,8 @@ export interface ArtifactFacts {
   readonly csharpFacts?: CsharpFacts;
   /** Omitted only by artifact facts persisted before v0.463 F# relation depth. */
   readonly fsharpFacts?: FsharpFacts;
+  /** Omitted only by artifact facts persisted before v0.464 OCaml relation depth. */
+  readonly ocamlFacts?: OcamlFacts;
   /** Omitted only by artifact facts persisted before v0.92. */
   readonly springBootPropertiesFacts?: SpringBootPropertiesFacts;
   /** Omitted only by artifact facts persisted before v0.66. */
