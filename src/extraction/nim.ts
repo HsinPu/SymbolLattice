@@ -2,6 +2,13 @@ import {
   createEdgeId,
   createSymbolId,
   type ArtifactFacts,
+  type NimCallFact,
+  type NimCallableFact,
+  type NimFacts,
+  type NimHeritageFact,
+  type NimImportFact,
+  type NimInstantiationFact,
+  type NimTypeFact,
   type GraphEdge,
   type RouteMethod,
   type SourcePosition,
@@ -546,6 +553,178 @@ function staticNimFacts(sourceText: string): StaticNimFacts {
   };
 }
 
+interface NimRawType {
+  readonly name: string;
+  readonly moduleName: string;
+  readonly declarationKind: "object" | "enum" | "distinct" | "alias";
+  readonly isExported: boolean;
+  readonly parentTypeName?: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface NimRawCallable {
+  readonly key: string;
+  readonly name: string;
+  readonly moduleName: string;
+  readonly parameterCount: number;
+  readonly parameterTypeNames: readonly string[];
+  readonly returnTypeName?: string;
+  readonly isExported: boolean;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface NimRawImport {
+  readonly importedModule: string;
+  readonly localName?: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface NimRawCall {
+  readonly sourceKey: string;
+  readonly referenceName: string;
+  readonly callKind: "direct" | "module";
+  readonly receiverModuleName?: string;
+  readonly argumentCount: number;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface NimRawInstantiation {
+  readonly sourceKey: string;
+  readonly typeName: string;
+  readonly argumentCount: number;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface NimRawHeritage {
+  readonly sourceTypeName: string;
+  readonly referenceName: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface NimRawRelationFacts {
+  readonly valid: boolean;
+  readonly moduleName: string;
+  readonly types: readonly NimRawType[];
+  readonly callables: readonly NimRawCallable[];
+  readonly imports: readonly NimRawImport[];
+  readonly calls: readonly NimRawCall[];
+  readonly instantiations: readonly NimRawInstantiation[];
+  readonly heritage: readonly NimRawHeritage[];
+}
+
+function emptyNimRelations(): NimRawRelationFacts {
+  return { valid: false, moduleName: "", types: [], callables: [], imports: [], calls: [], instantiations: [], heritage: [] };
+}
+
+function nimModuleName(filePath: string): string {
+  const fileName = filePath.replaceAll("\\", "/").split("/").at(-1) ?? filePath;
+  return fileName.replace(/\.(?:nim|nims|nimble)$/iu, "");
+}
+
+function nimTypeName(value: string): string | null {
+  const normalized = value.trim().replace(/\*$/u, "");
+  return /^[A-Za-z_][A-Za-z0-9_.]*$/u.test(normalized) ? normalized : null;
+}
+
+function nimArgumentCount(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed === "") return 0;
+  if (/[\[\]{}]|\b(?:if|for|while|case|proc|func|template|macro|iterator)\b/u.test(trimmed)) return null;
+  return trimmed.split(",").every((part) => /^[A-Za-z_][A-Za-z0-9_]*$|^-?[0-9]+(?:\.[0-9]+)?$/u.test(part.trim())) ? trimmed.split(",").length : null;
+}
+
+function parseNimParameterShape(parameters: string): { parameterCount: number; parameterTypeNames: string[] } | null {
+  const trimmed = parameters.trim();
+  if (trimmed === "") return { parameterCount: 0, parameterTypeNames: [] };
+  const parameterTypeNames: string[] = [];
+  const parts = trimmed.split(",");
+  for (const part of parts) {
+    const match = /^([A-Za-z_][A-Za-z0-9_]*)(?:\*)?\s*:\s*([A-Za-z_][A-Za-z0-9_.\[\]]*)$/u.exec(part.trim());
+    if (match === null || match[2] === undefined) return null;
+    const typeName = nimTypeName(match[2]);
+    if (typeName === null) return null;
+    parameterTypeNames.push(typeName);
+  }
+  return { parameterCount: parts.length, parameterTypeNames };
+}
+
+function parseNimRelations(sourceText: string, filePath: string): NimRawRelationFacts {
+  const sanitized = sanitizeNim(sourceText);
+  if (!sanitized.valid || sanitized.text.includes("\t") || /^\s*(?:template|macro|iterator|converter|method|concept)\b/mu.test(sanitized.text)) return emptyNimRelations();
+  const lines = linesFor(sanitized.text);
+  const moduleName = nimModuleName(filePath);
+  const types: NimRawType[] = [];
+  const callables: NimRawCallable[] = [];
+  const imports: NimRawImport[] = [];
+  const calls: NimRawCall[] = [];
+  const instantiations: NimRawInstantiation[] = [];
+  const heritage: NimRawHeritage[] = [];
+  let callableOrdinal = 0;
+  let inTypeBlock = false;
+  for (const line of lines) {
+    if (line.content.length === 0) continue;
+    if (line.indent === 0 && line.content === "type") {
+      inTypeBlock = true;
+      continue;
+    }
+    if (line.indent === 0 && line.content !== "type") inTypeBlock = false;
+    const typeLine = inTypeBlock && line.indent > 0 ? line.content : line.content.startsWith("type ") ? line.content.slice("type ".length).trim() : "";
+    const typeMatch = /^([A-Za-z_][A-Za-z0-9_]*)(\*)?\s*=\s*(?:(ref)\s+)?(object|enum|distinct(?:\s+[A-Za-z_][A-Za-z0-9_.]*)?|[A-Za-z_][A-Za-z0-9_.]*)\s*(?:of\s+([A-Za-z_][A-Za-z0-9_.]*))?/u.exec(typeLine);
+    if (typeMatch?.[1] !== undefined && typeMatch[4] !== undefined) {
+      const kindText = typeMatch[4];
+      const declarationKind = kindText === "object" ? "object" : kindText === "enum" ? "enum" : kindText.startsWith("distinct") ? "distinct" : "alias";
+      const parentTypeName = typeMatch[5];
+      types.push({ name: typeMatch[1], moduleName, declarationKind, isExported: typeMatch[2] === "*", ...(parentTypeName === undefined ? {} : { parentTypeName }), start: line.start, end: line.end });
+      if (parentTypeName !== undefined && declarationKind === "object") heritage.push({ sourceTypeName: typeMatch[1], referenceName: parentTypeName, start: line.start, end: line.end });
+      continue;
+    }
+    if (line.indent === 0 && line.content.startsWith("import ")) {
+      const importText = line.content.slice("import ".length).trim();
+      if (importText.startsWith("{") || importText.startsWith("from ") || importText.includes(" except ")) return emptyNimRelations();
+      for (const part of importText.split(",")) {
+        const match = /^([A-Za-z_][A-Za-z0-9_./]*)(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?$/u.exec(part.trim());
+        if (match?.[1] === undefined) return emptyNimRelations();
+        imports.push({ importedModule: match[1], ...(match[2] === undefined ? {} : { localName: match[2] }), start: line.start + line.content.indexOf(match[1]), end: line.start + line.content.indexOf(match[1]) + match[1].length });
+      }
+      continue;
+    }
+    if (line.indent !== 0) continue;
+    const callableMatch = /^(proc|func)\s+([A-Za-z_][A-Za-z0-9_]*)(\*)?\s*\(([^()]*)\)\s*(?::\s*([A-Za-z_][A-Za-z0-9_.\[\]]*))?\s*=\s*(.*)$/u.exec(line.content);
+    if (callableMatch?.[2] !== undefined && callableMatch[4] !== undefined && callableMatch[6] !== undefined) {
+      const shape = parseNimParameterShape(callableMatch[4]);
+      if (shape === null) continue;
+      const key = `${moduleName}\u0000${callableMatch[2]}\u0000${callableOrdinal++}`;
+      const returnTypeName = callableMatch[5] === undefined ? undefined : nimTypeName(callableMatch[5]) ?? undefined;
+      const callable: NimRawCallable = { key, name: callableMatch[2], moduleName, parameterCount: shape.parameterCount, parameterTypeNames: shape.parameterTypeNames, ...(returnTypeName === undefined ? {} : { returnTypeName }), isExported: callableMatch[3] === "*", start: line.start, end: line.end };
+      callables.push(callable);
+      const body = callableMatch[6].trim();
+      if (body.length === 0 || /\b(?:if|for|while|case|try|except|finally|template|macro|iterator|yield|await|spawn|parallel|block|defer|when|concept|mixin|include|import|cast|addr|unsafe)\b/u.test(body)) continue;
+      const bodyOffset = line.start + line.content.indexOf(callableMatch[6]) + (callableMatch[6].length - callableMatch[6].trimStart().length);
+      const qualified = /^([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\s*\(([^()]*)\)$/u.exec(body);
+      const direct = /^([A-Za-z_][A-Za-z0-9_]*)\s*\(([^()]*)\)$/u.exec(body);
+      if (qualified?.[1] !== undefined && qualified[2] !== undefined && qualified[3] !== undefined) {
+        const argumentCount = nimArgumentCount(qualified[3]);
+        if (argumentCount !== null) calls.push({ sourceKey: key, referenceName: qualified[2], callKind: "module", receiverModuleName: qualified[1], argumentCount, start: bodyOffset, end: bodyOffset + qualified[1].length + 1 + qualified[2].length });
+      } else if (direct?.[1] !== undefined && direct[2] !== undefined) {
+        const argumentCount = nimArgumentCount(direct[2]);
+        if (argumentCount !== null) {
+          const start = bodyOffset;
+          const end = start + direct[1].length;
+          if (/^[A-Z]/u.test(direct[1])) instantiations.push({ sourceKey: key, typeName: direct[1], argumentCount, start, end });
+          else if (!new Set(["discard", "echo", "return", "result", "assert", "raise", "quit"]).has(direct[1])) calls.push({ sourceKey: key, referenceName: direct[1], callKind: "direct", argumentCount, start, end });
+        }
+      }
+    }
+  }
+  return { valid: true, moduleName, types, callables, imports, calls, instantiations, heritage };
+}
+
 export function extractNimFileFacts(input: NimExtractFileFactsInput): ArtifactFacts {
   const jesterCapability = frameworkCapability("jester");
   if (!jesterCapability.languages.includes(input.language)) {
@@ -553,10 +732,18 @@ export function extractNimFileFacts(input: NimExtractFileFactsInput): ArtifactFa
   }
 
   const staticFacts = staticNimFacts(input.sourceText);
+  const relationFacts = parseNimRelations(input.sourceText, input.filePath);
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
   const declarationOrdinals = new Map<string, number>();
+  const nimTypes: NimTypeFact[] = [];
+  const nimCallables: NimCallableFact[] = [];
+  const nimImports: NimImportFact[] = [];
+  const nimCalls: NimCallFact[] = [];
+  const nimInstantiations: NimInstantiationFact[] = [];
+  const nimHeritage: NimHeritageFact[] = [];
+  const relationCallableSymbols = new Map<string, SymbolNode>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
     id: createSymbolId({
@@ -682,6 +869,45 @@ export function extractNimFileFacts(input: NimExtractFileFactsInput): ArtifactFa
     });
   }
 
+  function relationSymbol(
+    qualifiedName: string,
+    kind: SymbolNode["kind"],
+    start: number
+  ): SymbolNode | undefined {
+    const range = rangeFor(lineStarts, start, start);
+    return symbols.find((symbol) => symbol.qualifiedName === qualifiedName && symbol.kind === kind && symbol.range.start.line === range.start.line && symbol.range.start.column === range.start.column);
+  }
+
+  function addNimType(type: NimRawType): SymbolNode {
+    const qualifiedName = `${input.filePath}#type:${type.name}`;
+    const existing = relationSymbol(qualifiedName, "type", type.start);
+    if (existing !== undefined) {
+      nimTypes.push({ symbolId: existing.id, filePath: input.filePath, name: type.name, moduleName: type.moduleName, declarationKind: type.declarationKind, isExported: type.isExported, range: existing.range });
+      return existing;
+    }
+    const declarationOrdinal = nextOrdinal(qualifiedName, "type");
+    const symbol: SymbolNode = { id: createSymbolId({ filePath: input.filePath, qualifiedName, kind: "type", declarationOrdinal }), name: type.name, qualifiedName, kind: "type", filePath: input.filePath, range: rangeFor(lineStarts, type.start, type.end), isExported: type.isExported, declarationOrdinal };
+    symbols.push(symbol);
+    addContainment(symbol, type.start, type.end);
+    nimTypes.push({ symbolId: symbol.id, filePath: input.filePath, name: type.name, moduleName: type.moduleName, declarationKind: type.declarationKind, isExported: type.isExported, range: symbol.range });
+    return symbol;
+  }
+
+  function addNimCallable(callable: NimRawCallable): SymbolNode {
+    const qualifiedName = `${input.filePath}.${callable.name}`;
+    const existing = relationSymbol(qualifiedName, "function", callable.start);
+    const symbol = existing ?? (() => {
+      const declarationOrdinal = nextOrdinal(qualifiedName, "function");
+      const created: SymbolNode = { id: createSymbolId({ filePath: input.filePath, qualifiedName, kind: "function", declarationOrdinal }), name: callable.name, qualifiedName, kind: "function", filePath: input.filePath, range: rangeFor(lineStarts, callable.start, callable.end), isExported: callable.isExported, declarationOrdinal };
+      symbols.push(created);
+      addContainment(created, callable.start, callable.end);
+      return created;
+    })();
+    nimCallables.push({ symbolId: symbol.id, filePath: input.filePath, name: callable.name, moduleName: callable.moduleName, parameterCount: callable.parameterCount, ...(callable.parameterTypeNames.length === 0 ? {} : { parameterTypeNames: callable.parameterTypeNames }), ...(callable.returnTypeName === undefined ? {} : { returnTypeName: callable.returnTypeName }), isExported: callable.isExported, range: symbol.range });
+    relationCallableSymbols.set(callable.key, symbol);
+    return symbol;
+  }
+
   if (staticFacts.valid) {
     const functionsByName = new Map<string, SymbolNode[]>();
     const functionStartsById = new Map<string, number>();
@@ -731,6 +957,33 @@ export function extractNimFileFacts(input: NimExtractFileFactsInput): ArtifactFa
     }
   }
 
+  if (relationFacts.valid) {
+    const typeSymbols = new Map<string, SymbolNode[]>();
+    for (const type of [...relationFacts.types].sort((left, right) => left.start - right.start)) {
+      const symbol = addNimType(type);
+      typeSymbols.set(type.name, [...(typeSymbols.get(type.name) ?? []), symbol]);
+    }
+    for (const callable of [...relationFacts.callables].sort((left, right) => left.start - right.start)) addNimCallable(callable);
+    for (const imported of relationFacts.imports) {
+      nimImports.push({ sourceId: fileNode.id, filePath: input.filePath, importedModule: imported.importedModule, ...(imported.localName === undefined ? {} : { localName: imported.localName }), range: rangeFor(lineStarts, imported.start, imported.end) });
+    }
+    for (const call of relationFacts.calls) {
+      const source = relationCallableSymbols.get(call.sourceKey);
+      if (source === undefined) continue;
+      nimCalls.push({ sourceId: source.id, filePath: input.filePath, referenceName: call.referenceName, callKind: call.callKind, ...(call.receiverModuleName === undefined ? {} : { receiverModuleName: call.receiverModuleName }), argumentCount: call.argumentCount, range: rangeFor(lineStarts, call.start, call.end) });
+    }
+    for (const instantiation of relationFacts.instantiations) {
+      const source = relationCallableSymbols.get(instantiation.sourceKey);
+      if (source === undefined) continue;
+      nimInstantiations.push({ sourceId: source.id, filePath: input.filePath, typeName: instantiation.typeName, argumentCount: instantiation.argumentCount, range: rangeFor(lineStarts, instantiation.start, instantiation.end) });
+    }
+    for (const reference of relationFacts.heritage) {
+      const source = typeSymbols.get(reference.sourceTypeName)?.length === 1 ? typeSymbols.get(reference.sourceTypeName)?.[0] : undefined;
+      if (source === undefined) continue;
+      nimHeritage.push({ sourceId: source.id, filePath: input.filePath, sourceTypeName: reference.sourceTypeName, referenceName: reference.referenceName, relationKind: "extends", range: rangeFor(lineStarts, reference.start, reference.end) });
+    }
+  }
+
   return {
     symbols,
     edges,
@@ -739,6 +992,16 @@ export function extractNimFileFacts(input: NimExtractFileFactsInput): ArtifactFa
     referenceScopes: [],
     importBindings: [],
     exportBindings: [],
-    reExportBindings: []
+    reExportBindings: [],
+    nimFacts: {
+      moduleName: relationFacts.moduleName,
+      parserRejected: !relationFacts.valid,
+      types: nimTypes,
+      callables: nimCallables,
+      imports: nimImports,
+      calls: nimCalls,
+      instantiations: nimInstantiations,
+      heritage: nimHeritage
+    } satisfies NimFacts
   };
 }
