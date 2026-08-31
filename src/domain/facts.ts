@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v373";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v374";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v178";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v179";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -2040,6 +2040,80 @@ export interface ErlangFacts {
   readonly heritage?: readonly ErlangHeritageFact[];
 }
 
+/** Clojure declarations retained for bounded, syntax-only project relations. */
+export type ClojureTypeDeclarationKind = "namespace" | "record" | "protocol";
+
+export interface ClojureTypeFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly namespaceName: string;
+  readonly declarationKind: ClojureTypeDeclarationKind;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+}
+
+export interface ClojureCallableFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly namespaceName: string;
+  readonly parameterCount: number;
+  readonly parameterTypeNames?: readonly string[];
+  readonly returnTypeName?: string;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+}
+
+export interface ClojureImportFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly importedNamespace: string;
+  readonly alias?: string;
+  readonly referredNames?: readonly string[];
+  readonly range: SourceRange;
+}
+
+export interface ClojureCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly callKind: "direct" | "namespace";
+  readonly receiverNamespaceName?: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface ClojureInstantiationFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly typeName: string;
+  readonly constructorKind: "arrow" | "map-arrow";
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface ClojureHeritageFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly sourceTypeName: string;
+  readonly referenceName: string;
+  readonly relationKind: "implements";
+  readonly range: SourceRange;
+}
+
+/** Syntax-only Clojure relation facts. Macro expansion, vars and runtime dispatch remain nonclaims. */
+export interface ClojureFacts {
+  readonly namespaceName: string;
+  readonly parserRejected?: boolean;
+  readonly types: readonly ClojureTypeFact[];
+  readonly callables: readonly ClojureCallableFact[];
+  readonly imports: readonly ClojureImportFact[];
+  readonly calls: readonly ClojureCallFact[];
+  readonly instantiations: readonly ClojureInstantiationFact[];
+  readonly heritage?: readonly ClojureHeritageFact[];
+}
+
 /** Syntax-only Java package facts retained for exact Play controller-action resolution. */
 export interface JavaFacts {
   readonly classes: readonly JavaClassFact[];
@@ -3772,6 +3846,8 @@ export interface ArtifactFacts {
   readonly elixirFacts?: ElixirFacts;
   /** Omitted only by artifact facts persisted before v0.468 Erlang relation depth. */
   readonly erlangFacts?: ErlangFacts;
+  /** Omitted only by artifact facts persisted before v0.469 Clojure relation depth. */
+  readonly clojureFacts?: ClojureFacts;
   /** Omitted only by artifact facts persisted before v0.460 Swift relation depth. */
   readonly swiftFacts?: SwiftFacts;
   /** Omitted only by artifact facts persisted before v0.461 Dart relation depth. */

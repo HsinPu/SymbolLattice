@@ -2,6 +2,13 @@ import {
   createEdgeId,
   createSymbolId,
   type ArtifactFacts,
+  type ClojureCallFact,
+  type ClojureCallableFact,
+  type ClojureFacts,
+  type ClojureHeritageFact,
+  type ClojureImportFact,
+  type ClojureInstantiationFact,
+  type ClojureTypeFact,
   type GraphEdge,
   type RouteMethod,
   type SourcePosition,
@@ -65,6 +72,74 @@ interface StaticClojureFacts {
   readonly namespace: StaticClojureNamespace | null;
   readonly functions: readonly StaticClojureFunction[];
   readonly routes: readonly StaticCompojureRoute[];
+}
+
+interface ClojureRawType {
+  readonly name: string;
+  readonly namespaceName: string;
+  readonly declarationKind: "namespace" | "record" | "protocol";
+  readonly isExported: boolean;
+  readonly implementedProtocols: readonly string[];
+  readonly start: number;
+  readonly end: number;
+}
+
+interface ClojureRawCallable {
+  readonly key: string;
+  readonly name: string;
+  readonly namespaceName: string;
+  readonly parameterCount: number;
+  readonly parameterTypeNames: readonly string[];
+  readonly returnTypeName?: string;
+  readonly isExported: boolean;
+  readonly start: number;
+  readonly end: number;
+  readonly body: readonly ClojureForm[];
+}
+
+interface ClojureRawImport {
+  readonly importedNamespace: string;
+  readonly alias?: string;
+  readonly referredNames?: readonly string[];
+  readonly start: number;
+  readonly end: number;
+}
+
+interface ClojureRawCall {
+  readonly sourceKey: string;
+  readonly referenceName: string;
+  readonly callKind: "direct" | "namespace";
+  readonly receiverNamespaceName?: string;
+  readonly argumentCount: number;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface ClojureRawInstantiation {
+  readonly sourceKey: string;
+  readonly typeName: string;
+  readonly constructorKind: "arrow" | "map-arrow";
+  readonly argumentCount: number;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface ClojureRawHeritage {
+  readonly sourceTypeName: string;
+  readonly referenceName: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface ClojureRawRelationFacts {
+  readonly valid: boolean;
+  readonly namespaceName: string;
+  readonly types: readonly ClojureRawType[];
+  readonly callables: readonly ClojureRawCallable[];
+  readonly imports: readonly ClojureRawImport[];
+  readonly calls: readonly ClojureRawCall[];
+  readonly instantiations: readonly ClojureRawInstantiation[];
+  readonly heritage: readonly ClojureRawHeritage[];
 }
 
 interface ParsedFormResult {
@@ -435,6 +510,312 @@ function staticClojureFacts(sourceText: string): StaticClojureFacts {
   };
 }
 
+const CLOJURE_UNSUPPORTED_FORMS = new Set([
+  "fn",
+  "fn*",
+  "let",
+  "letfn",
+  "loop",
+  "recur",
+  "for",
+  "doseq",
+  "with-open",
+  "binding",
+  "case",
+  "cond",
+  "try",
+  "catch",
+  "finally",
+  "quote",
+  "var",
+  "set!",
+  "swap!",
+  "reset!",
+  "alter-var-root",
+  "eval",
+  "apply",
+  "resolve",
+  "load-string",
+  "read-string",
+  "reify",
+  "proxy",
+  "new",
+  ".",
+  "..",
+  "extend-type",
+  "extend-protocol",
+  "def",
+  "defn",
+  "defn-",
+  "defmacro",
+  "defmulti",
+  "defmethod",
+  "->",
+  "->>",
+  "as->",
+  "some->",
+  "some->>",
+  "doto",
+  "comp",
+  "partial",
+  "future",
+  "go"
+]);
+
+const CLOJURE_FORM_KEYWORDS = new Set([
+  "ns",
+  "defrecord",
+  "defprotocol",
+  "defn",
+  "defn-",
+  "if",
+  "when",
+  "unless",
+  "and",
+  "or",
+  "not",
+  "do",
+  "true",
+  "false",
+  "nil"
+]);
+
+function emptyClojureRelations(): ClojureRawRelationFacts {
+  return { valid: false, namespaceName: "", types: [], callables: [], imports: [], calls: [], instantiations: [], heritage: [] };
+}
+
+function isClojureNamespaceName(value: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*(?:[.-][A-Za-z0-9_]+)*$/u.test(value);
+}
+
+function isClojureQualifiedSymbol(value: string): boolean {
+  const parts = value.split("/");
+  return parts.length === 2 && parts.every((part) => part.length > 0 && isClojureNamespaceName(part));
+}
+
+function isClojureReferredName(value: string): boolean {
+  return isDirectSymbol(value) || /^(?:map->|->)[A-Z][A-Za-z0-9_.-]*$/u.test(value);
+}
+
+function containsClojureUnsupportedForm(form: ClojureForm): boolean {
+  const first = atomValue(childrenOf(form)[0]);
+  if (first !== null && CLOJURE_UNSUPPORTED_FORMS.has(first)) {
+    return true;
+  }
+  return childrenOf(form).some(containsClojureUnsupportedForm);
+}
+
+function clojureTypeHint(form: ClojureForm | undefined): string | null {
+  const value = atomValue(form);
+  if (value === null || !value.startsWith("^") || value.length <= 1) {
+    return null;
+  }
+  const typeName = value.slice(1);
+  return isClojureNamespaceName(typeName) ? typeName : null;
+}
+
+function parseClojureRequireClauses(namespaceForm: ClojureForm): { valid: boolean; imports: ClojureRawImport[] } {
+  const imports: ClojureRawImport[] = [];
+  for (const clause of childrenOf(namespaceForm).slice(2)) {
+    const clauseChildren = childrenOf(clause);
+    if (clause.kind !== "list" || atomValue(clauseChildren[0]) !== ":require") {
+      continue;
+    }
+    for (const entry of clauseChildren.slice(1)) {
+      if (entry.kind !== "vector") {
+        return { valid: false, imports: [] };
+      }
+      const entryChildren = childrenOf(entry);
+      const importedNamespace = atomValue(entryChildren[0]);
+      if (importedNamespace === null || !isClojureNamespaceName(importedNamespace)) {
+        return { valid: false, imports: [] };
+      }
+      let alias: string | undefined;
+      let referredNames: string[] | undefined;
+      for (let index = 1; index < entryChildren.length; index += 1) {
+        const option = atomValue(entryChildren[index]);
+        if (option === ":as") {
+          const candidate = atomValue(entryChildren[index + 1]);
+          if (candidate === null || !isClojureNamespaceName(candidate) || alias !== undefined) {
+            return { valid: false, imports: [] };
+          }
+          alias = candidate;
+          index += 1;
+        } else if (option === ":refer") {
+          const target = entryChildren[index + 1];
+          if (target?.kind !== "vector" || referredNames !== undefined) {
+            return { valid: false, imports: [] };
+          }
+          const names = childrenOf(target).map(atomValue);
+          if (names.some((name) => name === null || !isClojureReferredName(name))) {
+            return { valid: false, imports: [] };
+          }
+          referredNames = names.filter((name): name is string => name !== null);
+          index += 1;
+        } else {
+          return { valid: false, imports: [] };
+        }
+      }
+      imports.push({ importedNamespace, ...(alias === undefined ? {} : { alias }), ...(referredNames === undefined ? {} : { referredNames }), start: entry.start, end: entry.end });
+    }
+  }
+  return { valid: true, imports };
+}
+
+function parseClojureDefn(
+  form: ClojureForm,
+  namespaceName: string,
+  ordinal: number
+): { callable: ClojureRawCallable | null; calls: ClojureRawCall[]; instantiations: ClojureRawInstantiation[] } {
+  const children = childrenOf(form);
+  const defnName = atomValue(children[0]);
+  if (form.kind !== "list" || (defnName !== "defn" && defnName !== "defn-") || children.length < 4) {
+    return { callable: null, calls: [], instantiations: [] };
+  }
+  let nameIndex = 1;
+  let returnTypeName: string | undefined;
+  const explicitReturnType = clojureTypeHint(children[nameIndex]);
+  if (explicitReturnType !== null) {
+    returnTypeName = explicitReturnType;
+    nameIndex += 1;
+  }
+  const name = atomValue(children[nameIndex]);
+  if (name === null || !isDirectSymbol(name) || name.startsWith(":") || name.includes("/")) {
+    return { callable: null, calls: [], instantiations: [] };
+  }
+  let parameterIndex = -1;
+  for (let index = nameIndex + 1; index < children.length; index += 1) {
+    const candidate = children[index];
+    if (candidate?.kind === "vector") {
+      parameterIndex = index;
+      break;
+    }
+    if (candidate?.kind !== "string" && candidate?.kind !== "map") {
+      return { callable: null, calls: [], instantiations: [] };
+    }
+  }
+  const parameterVector = parameterIndex < 0 ? undefined : children[parameterIndex];
+  if (parameterVector === undefined) {
+    return { callable: null, calls: [], instantiations: [] };
+  }
+  const parameterTypeNames: string[] = [];
+  const parameterChildren = childrenOf(parameterVector);
+  for (let index = 0; index < parameterChildren.length; index += 1) {
+    const typeHint = clojureTypeHint(parameterChildren[index]);
+    if (typeHint !== null) {
+      const parameterName = atomValue(parameterChildren[index + 1]);
+      if (parameterName === null || !isDirectSymbol(parameterName) || parameterName.startsWith(":")) {
+        return { callable: null, calls: [], instantiations: [] };
+      }
+      parameterTypeNames.push(typeHint);
+      index += 1;
+      continue;
+    }
+    const parameterName = atomValue(parameterChildren[index]);
+    if (parameterName === null || !isDirectSymbol(parameterName) || parameterName.startsWith(":") || parameterName === "&") {
+      return { callable: null, calls: [], instantiations: [] };
+    }
+  }
+  const body = children.slice(parameterIndex + 1);
+  if (body.length === 0 || body.some(containsClojureUnsupportedForm)) {
+    return { callable: null, calls: [], instantiations: [] };
+  }
+  const key = `${namespaceName}\u0000${name}\u0000${ordinal}`;
+  const callable: ClojureRawCallable = {
+    key,
+    name,
+    namespaceName,
+    parameterCount: parameterChildren.filter((child) => clojureTypeHint(child) === null).length,
+    parameterTypeNames,
+    ...(returnTypeName === undefined ? {} : { returnTypeName }),
+    isExported: defnName === "defn",
+    start: form.start,
+    end: form.end,
+    body
+  };
+  const calls: ClojureRawCall[] = [];
+  const instantiations: ClojureRawInstantiation[] = [];
+  const visit = (candidate: ClojureForm): void => {
+    if (candidate.kind !== "list") {
+      for (const child of childrenOf(candidate)) visit(child);
+      return;
+    }
+    const candidateChildren = childrenOf(candidate);
+    const callee = atomValue(candidateChildren[0]);
+    const isConstructorCallee = callee !== null && /^(?:map->|->)[A-Z][A-Za-z0-9_.-]*$/u.test(callee);
+    if (callee !== null && (isDirectSymbol(callee) || isClojureQualifiedSymbol(callee) || isConstructorCallee) && !callee.startsWith(":") && !CLOJURE_FORM_KEYWORDS.has(callee)) {
+      const arrowMatch = /^(map->|->)([A-Z][A-Za-z0-9_.-]*)$/u.exec(callee);
+      if (arrowMatch?.[2] !== undefined) {
+        instantiations.push({ sourceKey: key, typeName: arrowMatch[2], constructorKind: arrowMatch[1] === "map->" ? "map-arrow" : "arrow", argumentCount: candidateChildren.length - 1, start: candidate.start, end: candidate.end });
+      } else if (isClojureQualifiedSymbol(callee)) {
+        const [receiverNamespaceName, referenceName] = callee.split("/");
+        if (receiverNamespaceName !== undefined && referenceName !== undefined && isDirectSymbol(referenceName)) {
+          calls.push({ sourceKey: key, referenceName, callKind: "namespace", receiverNamespaceName, argumentCount: candidateChildren.length - 1, start: candidate.start, end: candidate.end });
+        }
+      } else {
+        calls.push({ sourceKey: key, referenceName: callee, callKind: "direct", argumentCount: candidateChildren.length - 1, start: candidate.start, end: candidate.end });
+      }
+    }
+    for (const child of candidateChildren.slice(1)) visit(child);
+  };
+  for (const bodyForm of body) visit(bodyForm);
+  return { callable, calls, instantiations };
+}
+
+function parseClojureRelations(sourceText: string): ClojureRawRelationFacts {
+  const parsed = parseClojureForms(sourceText);
+  if (!parsed.valid || /[#@'`~]/u.test(sourceText) || /\^[^A-Z]/u.test(sourceText) || /\b(?:defmacro|defmulti|defmethod|eval|apply|resolve|reify|proxy|gen-class|ns-unmap|alter-var-root|intern|load-string|read-string)\b/u.test(sourceText)) {
+    return emptyClojureRelations();
+  }
+  const namespaceForms = parsed.forms.filter((form) => staticNamespace(form) !== null);
+  if (namespaceForms.length !== 1 || namespaceForms[0] === undefined) {
+    return emptyClojureRelations();
+  }
+  const namespaceForm = namespaceForms[0];
+  const namespaceName = staticNamespace(namespaceForm)?.name;
+  if (namespaceName === undefined) {
+    return emptyClojureRelations();
+  }
+  const requireResult = parseClojureRequireClauses(namespaceForm);
+  if (!requireResult.valid) {
+    return emptyClojureRelations();
+  }
+  const types: ClojureRawType[] = [{ name: namespaceName, namespaceName, declarationKind: "namespace", isExported: true, implementedProtocols: [], start: namespaceForm.start, end: namespaceForm.end }];
+  const callables: ClojureRawCallable[] = [];
+  const calls: ClojureRawCall[] = [];
+  const instantiations: ClojureRawInstantiation[] = [];
+  const heritage: ClojureRawHeritage[] = [];
+  let callableOrdinal = 0;
+  for (const form of parsed.forms) {
+    const children = childrenOf(form);
+    const head = atomValue(children[0]);
+    if (form.kind !== "list" || head === "ns") continue;
+    if (head === "defrecord" || head === "defprotocol") {
+      const name = atomValue(children[1]);
+      if (name === null || !/^[A-Z][A-Za-z0-9_.-]*$/u.test(name)) return emptyClojureRelations();
+      if (head === "defrecord" && children[2]?.kind !== "vector") return emptyClojureRelations();
+      const implementedProtocols = head === "defrecord"
+        ? children.slice(3).filter((child) => child.kind === "atom").map(atomValue).filter((value): value is string => value !== null && isClojureNamespaceName(value))
+        : [];
+      if (head === "defrecord" && children.slice(3).some((child) => child.kind !== "atom" && child.kind !== "list")) return emptyClojureRelations();
+      types.push({ name, namespaceName, declarationKind: head === "defrecord" ? "record" : "protocol", isExported: true, implementedProtocols, start: form.start, end: form.end });
+      for (const protocol of implementedProtocols) {
+        heritage.push({ sourceTypeName: name, referenceName: protocol, start: form.start, end: form.end });
+      }
+      continue;
+    }
+    if (head === "defn" || head === "defn-") {
+      const parsedDefn = parseClojureDefn(form, namespaceName, callableOrdinal);
+      callableOrdinal += 1;
+      if (parsedDefn.callable === null) return emptyClojureRelations();
+      callables.push(parsedDefn.callable);
+      calls.push(...parsedDefn.calls);
+      instantiations.push(...parsedDefn.instantiations);
+    }
+  }
+  return { valid: true, namespaceName, types, callables, imports: requireResult.imports, calls, instantiations, heritage };
+}
+
 function lineStartsFor(sourceText: string): readonly number[] {
   const starts = [0];
   for (let index = 0; index < sourceText.length; index += 1) {
@@ -488,10 +869,18 @@ export function extractClojureFileFacts(input: ClojureExtractFileFactsInput): Ar
   }
 
   const staticFacts = staticClojureFacts(input.sourceText);
+  const relationFacts = parseClojureRelations(input.sourceText);
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
   const declarationOrdinals = new Map<string, number>();
+  const clojureTypes: ClojureTypeFact[] = [];
+  const clojureCallables: ClojureCallableFact[] = [];
+  const clojureImports: ClojureImportFact[] = [];
+  const clojureCalls: ClojureCallFact[] = [];
+  const clojureInstantiations: ClojureInstantiationFact[] = [];
+  const clojureHeritage: ClojureHeritageFact[] = [];
+  const relationCallableSymbols = new Map<string, SymbolNode>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
     id: createSymbolId({
@@ -646,6 +1035,74 @@ export function extractClojureFileFacts(input: ClojureExtractFileFactsInput): Ar
     });
   }
 
+  function findRelationSymbol(
+    qualifiedName: string,
+    kind: SymbolNode["kind"],
+    start?: number
+  ): SymbolNode | undefined {
+    return symbols.find((symbol) => {
+      if (symbol.qualifiedName !== qualifiedName || symbol.kind !== kind) {
+        return false;
+      }
+      if (start === undefined) {
+        return true;
+      }
+      const range = rangeFor(lineStarts, start, start);
+      return symbol.range.start.line === range.start.line && symbol.range.start.column === range.start.column;
+    });
+  }
+
+  function addClojureType(type: ClojureRawType, namespaceSymbol: SymbolNode | undefined): SymbolNode {
+    const kind: SymbolNode["kind"] = type.declarationKind === "protocol" ? "interface" : type.declarationKind === "record" ? "type" : "class";
+    const qualifiedName = type.declarationKind === "namespace"
+      ? `${input.filePath}#${type.name}`
+      : `${input.filePath}#${type.namespaceName}.${type.name}`;
+    const existing = findRelationSymbol(qualifiedName, kind, type.start);
+    if (existing !== undefined) {
+      clojureTypes.push({ symbolId: existing.id, filePath: input.filePath, name: type.name, namespaceName: type.namespaceName, declarationKind: type.declarationKind, isExported: type.isExported, range: existing.range });
+      return existing;
+    }
+    const declarationOrdinal = nextOrdinal(qualifiedName, kind);
+    const symbol: SymbolNode = {
+      id: createSymbolId({ filePath: input.filePath, qualifiedName, kind, declarationOrdinal }),
+      name: type.name,
+      qualifiedName,
+      kind,
+      filePath: input.filePath,
+      range: rangeFor(lineStarts, type.start, type.end),
+      isExported: type.isExported,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(type.declarationKind === "namespace" ? fileNode : namespaceSymbol ?? fileNode, symbol, type.start, type.end);
+    clojureTypes.push({ symbolId: symbol.id, filePath: input.filePath, name: type.name, namespaceName: type.namespaceName, declarationKind: type.declarationKind, isExported: type.isExported, range: symbol.range });
+    return symbol;
+  }
+
+  function addClojureCallable(callable: ClojureRawCallable, namespaceSymbol: SymbolNode | undefined): SymbolNode {
+    const qualifiedName = `${input.filePath}#${callable.namespaceName}.${callable.name}`;
+    const existing = findRelationSymbol(qualifiedName, "function", callable.start);
+    const symbol = existing ?? (() => {
+      const declarationOrdinal = nextOrdinal(qualifiedName, "function");
+      const created: SymbolNode = {
+        id: createSymbolId({ filePath: input.filePath, qualifiedName, kind: "function", declarationOrdinal }),
+        name: callable.name,
+        qualifiedName,
+        kind: "function",
+        filePath: input.filePath,
+        range: rangeFor(lineStarts, callable.start, callable.end),
+        isExported: callable.isExported,
+        declarationOrdinal
+      };
+      symbols.push(created);
+      addContainment(namespaceSymbol ?? fileNode, created, callable.start, callable.end);
+      return created;
+    })();
+    clojureCallables.push({ symbolId: symbol.id, filePath: input.filePath, name: callable.name, namespaceName: callable.namespaceName, parameterCount: callable.parameterCount, ...(callable.parameterTypeNames.length === 0 ? {} : { parameterTypeNames: callable.parameterTypeNames }), ...(callable.returnTypeName === undefined ? {} : { returnTypeName: callable.returnTypeName }), isExported: callable.isExported, range: symbol.range });
+    relationCallableSymbols.set(callable.key, symbol);
+    return symbol;
+  }
+
   if (staticFacts.valid && staticFacts.namespace !== null) {
     const namespaceSymbol = addNamespace(staticFacts.namespace);
     const functionsByName = new Map<string, SymbolNode[]>();
@@ -664,6 +1121,40 @@ export function extractClojureFileFacts(input: ClojureExtractFileFactsInput): Ar
     }
   }
 
+  if (relationFacts.valid) {
+    const namespaceFact = relationFacts.types.find((type) => type.declarationKind === "namespace");
+    const namespaceSymbol = namespaceFact === undefined ? undefined : addClojureType(namespaceFact, undefined);
+    const relationTypes = [...relationFacts.types]
+      .filter((type) => type.declarationKind !== "namespace")
+      .sort((left, right) => left.start - right.start);
+    const typeSymbols = new Map<string, SymbolNode[]>();
+    for (const type of relationTypes) {
+      const symbol = addClojureType(type, namespaceSymbol);
+      typeSymbols.set(type.name, [...(typeSymbols.get(type.name) ?? []), symbol]);
+    }
+    for (const callable of [...relationFacts.callables].sort((left, right) => left.start - right.start)) {
+      addClojureCallable(callable, namespaceSymbol);
+    }
+    for (const imported of relationFacts.imports) {
+      clojureImports.push({ sourceId: fileNode.id, filePath: input.filePath, importedNamespace: imported.importedNamespace, ...(imported.alias === undefined ? {} : { alias: imported.alias }), ...(imported.referredNames === undefined ? {} : { referredNames: imported.referredNames }), range: rangeFor(lineStarts, imported.start, imported.end) });
+    }
+    for (const call of relationFacts.calls) {
+      const source = relationCallableSymbols.get(call.sourceKey);
+      if (source === undefined) continue;
+      clojureCalls.push({ sourceId: source.id, filePath: input.filePath, referenceName: call.referenceName, callKind: call.callKind, ...(call.receiverNamespaceName === undefined ? {} : { receiverNamespaceName: call.receiverNamespaceName }), argumentCount: call.argumentCount, range: rangeFor(lineStarts, call.start, call.end) });
+    }
+    for (const instantiation of relationFacts.instantiations) {
+      const source = relationCallableSymbols.get(instantiation.sourceKey);
+      if (source === undefined) continue;
+      clojureInstantiations.push({ sourceId: source.id, filePath: input.filePath, typeName: instantiation.typeName, constructorKind: instantiation.constructorKind, argumentCount: instantiation.argumentCount, range: rangeFor(lineStarts, instantiation.start, instantiation.end) });
+    }
+    for (const heritage of relationFacts.heritage) {
+      const source = typeSymbols.get(heritage.sourceTypeName)?.length === 1 ? typeSymbols.get(heritage.sourceTypeName)?.[0] : undefined;
+      if (source === undefined) continue;
+      clojureHeritage.push({ sourceId: source.id, filePath: input.filePath, sourceTypeName: heritage.sourceTypeName, referenceName: heritage.referenceName, relationKind: "implements", range: rangeFor(lineStarts, heritage.start, heritage.end) });
+    }
+  }
+
   return {
     symbols,
     edges,
@@ -672,6 +1163,16 @@ export function extractClojureFileFacts(input: ClojureExtractFileFactsInput): Ar
     referenceScopes: [],
     importBindings: [],
     exportBindings: [],
-    reExportBindings: []
+    reExportBindings: [],
+    clojureFacts: {
+      namespaceName: relationFacts.namespaceName,
+      parserRejected: !relationFacts.valid,
+      types: clojureTypes,
+      callables: clojureCallables,
+      imports: clojureImports,
+      calls: clojureCalls,
+      instantiations: clojureInstantiations,
+      heritage: clojureHeritage
+    } satisfies ClojureFacts
   };
 }
