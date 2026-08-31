@@ -2,6 +2,13 @@ import {
   createEdgeId,
   createSymbolId,
   type ArtifactFacts,
+  type ErlangCallFact,
+  type ErlangCallableFact,
+  type ErlangFacts,
+  type ErlangHeritageFact,
+  type ErlangImportFact,
+  type ErlangInstantiationFact,
+  type ErlangTypeFact,
   type GraphEdge,
   type SourcePosition,
   type SourceRange,
@@ -80,6 +87,76 @@ interface ErlangStaticFacts {
   readonly routes: readonly StaticCowboyRoute[];
 }
 
+interface ErlangRawType {
+  readonly name: string;
+  readonly moduleName: string;
+  readonly declarationKind: "module" | "record" | "type" | "opaque" | "behaviour";
+  readonly isExported: boolean;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface ErlangRawCallable {
+  readonly sourceKey: string;
+  readonly name: string;
+  readonly moduleName: string;
+  readonly arity: number;
+  readonly callableKind: "function" | "callback";
+  readonly parameterTypeNames: readonly string[];
+  readonly returnTypeName?: string;
+  readonly isExported: boolean;
+  readonly start: number;
+  readonly end: number;
+  readonly bodyStartIndex?: number;
+  readonly bodyEndIndex?: number;
+}
+
+interface ErlangRawImport {
+  readonly importKind: "module" | "include";
+  readonly importedModule: string;
+  readonly importedNames?: readonly string[];
+  readonly includePath?: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface ErlangRawCall {
+  readonly sourceKey: string;
+  readonly referenceName: string;
+  readonly callKind: "direct" | "module";
+  readonly receiverModuleName?: string;
+  readonly argumentCount: number;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface ErlangRawInstantiation {
+  readonly sourceKey: string;
+  readonly typeName: string;
+  readonly argumentCount: number;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface ErlangRawHeritage {
+  readonly sourceTypeName: string;
+  readonly referenceName: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+interface ErlangRelationFacts {
+  readonly valid: boolean;
+  readonly moduleName: string;
+  readonly exported: ReadonlySet<string>;
+  readonly types: readonly ErlangRawType[];
+  readonly callables: readonly ErlangRawCallable[];
+  readonly imports: readonly ErlangRawImport[];
+  readonly calls: readonly ErlangRawCall[];
+  readonly instantiations: readonly ErlangRawInstantiation[];
+  readonly heritage: readonly ErlangRawHeritage[];
+}
+
 const OPEN_TO_CLOSE: ReadonlyMap<string, string> = new Map([
   ["(", ")"],
   ["[", "]"],
@@ -88,7 +165,7 @@ const OPEN_TO_CLOSE: ReadonlyMap<string, string> = new Map([
   ["<<", ">>"]
 ]);
 const CLOSERS = new Set<string>([")", "]", "}", ">>"]);
-const TWO_CHARACTER_SYMBOLS = new Set<string>(["->", "=>", "<<", ">>", "#{", ":="]);
+const TWO_CHARACTER_SYMBOLS = new Set<string>(["->", "=>", "<<", ">>", "#{", ":=", "::"]);
 
 function isWhitespace(character: string): boolean {
   return character === " " || character === "\t" || character === "\r" || character === "\n";
@@ -357,7 +434,24 @@ function directExportEntries(
   statement: ErlangStatement,
   pairs: ReadonlyMap<number, number>
 ): readonly string[] | null {
-  if (!isExportAttribute(tokens, statement)) {
+  return directExportLikeEntries(tokens, statement, pairs, "export");
+}
+
+function directExportTypeEntries(
+  tokens: readonly ErlangToken[],
+  statement: ErlangStatement,
+  pairs: ReadonlyMap<number, number>
+): readonly string[] | null {
+  return directExportLikeEntries(tokens, statement, pairs, "export_type");
+}
+
+function directExportLikeEntries(
+  tokens: readonly ErlangToken[],
+  statement: ErlangStatement,
+  pairs: ReadonlyMap<number, number>,
+  attributeName: "export" | "export_type"
+): readonly string[] | null {
+  if (tokens[statement.startIndex]?.text !== "-" || tokens[statement.startIndex + 1]?.kind !== "atom" || tokens[statement.startIndex + 1]?.text !== attributeName) {
     return null;
   }
   const openingParenthesis = statement.startIndex + 2;
@@ -794,6 +888,275 @@ function staticErlangFacts(sourceText: string): ErlangStaticFacts {
   };
 }
 
+function erlangTokenName(token: ErlangToken | undefined): string | null {
+  if (token?.kind === "atom") return token.text;
+  if (token?.kind === "quoted-atom" && token.escaped !== true) return token.value ?? null;
+  return null;
+}
+
+function erlangDelimitedArity(
+  tokens: readonly ErlangToken[],
+  opening: number,
+  closing: number
+): number | null {
+  if (opening + 1 === closing) return 0;
+  let depth = 0;
+  let arity = 1;
+  for (let index = opening + 1; index < closing; index += 1) {
+    const token = tokens[index];
+    if (token === undefined) return null;
+    if (OPEN_TO_CLOSE.has(token.text)) {
+      depth += 1;
+    } else if (CLOSERS.has(token.text)) {
+      depth -= 1;
+      if (depth < 0) return null;
+    } else if (token.text === "," && depth === 0) {
+      arity += 1;
+    }
+  }
+  return depth === 0 ? arity : null;
+}
+
+const ERLANG_BUILTIN_TYPES = new Set([
+  "any",
+  "atom",
+  "binary",
+  "bitstring",
+  "boolean",
+  "byte",
+  "char",
+  "float",
+  "function",
+  "integer",
+  "iodata",
+  "iolist",
+  "list",
+  "map",
+  "maybe_improper_list",
+  "module",
+  "no_return",
+  "non_neg_integer",
+  "number",
+  "pid",
+  "port",
+  "reference",
+  "term",
+  "timeout",
+  "tuple"
+]);
+
+function erlangTypeNames(
+  tokens: readonly ErlangToken[],
+  start: number,
+  end: number
+): readonly string[] {
+  const names: string[] = [];
+  for (let index = start; index < end; index += 1) {
+    const token = tokens[index];
+    const next = tokens[index + 1];
+    const name = erlangTokenName(token);
+    if (name === null || ERLANG_BUILTIN_TYPES.has(name) || next?.text !== "(") continue;
+    if (tokens[index - 1]?.text === ":") continue;
+    if (!names.includes(name)) names.push(name);
+  }
+  return names;
+}
+
+function erlangSpecShape(
+  tokens: readonly ErlangToken[],
+  opening: number,
+  closing: number,
+  statementEnd: number,
+  pairs: ReadonlyMap<number, number>
+): { readonly arity: number; readonly parameterTypeNames: readonly string[]; readonly returnTypeName?: string } | null {
+  const arity = erlangDelimitedArity(tokens, opening, closing);
+  const arrow = tokens[closing + 1];
+  if (arity === null || arrow?.text !== "->") return null;
+  const parameterTypeNames = erlangTypeNames(tokens, opening + 1, closing);
+  const returnTypeNames = erlangTypeNames(tokens, closing + 2, statementEnd);
+  const returnTypeName = returnTypeNames[0];
+  // Ensure the type expression itself is balanced before retaining a spec.
+  for (let index = closing + 2; index < statementEnd; index += 1) {
+    const token = tokens[index];
+    if (token === undefined) return null;
+    if (OPEN_TO_CLOSE.has(token.text) && pairs.get(index) === undefined) return null;
+  }
+  return { arity, parameterTypeNames, ...(returnTypeName === undefined ? {} : { returnTypeName }) };
+}
+
+function erlangImportNames(
+  tokens: readonly ErlangToken[],
+  listOpening: number,
+  listClosing: number
+): readonly string[] | null {
+  if (listOpening + 1 === listClosing) return [];
+  const names: string[] = [];
+  let cursor = listOpening + 1;
+  while (cursor < listClosing) {
+    const name = erlangTokenName(tokens[cursor]);
+    const slash = tokens[cursor + 1];
+    const arityToken = tokens[cursor + 2];
+    if (name === null || slash?.text !== "/" || arityToken?.kind !== "number") return null;
+    names.push(`${name}/${arityToken.text}`);
+    cursor += 3;
+    if (cursor === listClosing) break;
+    if (tokens[cursor]?.text !== ",") return null;
+    cursor += 1;
+  }
+  return cursor === listClosing ? names : null;
+}
+
+function parseErlangRelations(sourceText: string): ErlangRelationFacts {
+  const tokens = tokenizeErlang(sourceText);
+  if (tokens === null) return { valid: false, moduleName: "", exported: new Set(), types: [], callables: [], imports: [], calls: [], instantiations: [], heritage: [] };
+  const pairs = pairedDelimiters(tokens);
+  const statements = pairs === null ? null : topLevelStatements(tokens);
+  if (pairs === null || statements === null) return { valid: false, moduleName: "", exported: new Set(), types: [], callables: [], imports: [], calls: [], instantiations: [], heritage: [] };
+  const modules = statements.map((statement) => directModule(tokens, statement)).filter((module): module is StaticErlangModule => module !== null);
+  if (modules.length > 1) return { valid: false, moduleName: "", exported: new Set(), types: [], callables: [], imports: [], calls: [], instantiations: [], heritage: [] };
+  const module = modules[0];
+  const moduleName = module?.name ?? "";
+  const exported = new Set<string>();
+  const exportedTypes = new Set<string>();
+  for (const statement of statements) {
+    if (isExportAttribute(tokens, statement)) {
+      const entries = directExportEntries(tokens, statement, pairs);
+      if (entries === null) return { valid: false, moduleName: "", exported: new Set(), types: [], callables: [], imports: [], calls: [], instantiations: [], heritage: [] };
+      for (const entry of entries) exported.add(entry);
+      continue;
+    }
+    if (tokens[statement.startIndex]?.text === "-" && tokens[statement.startIndex + 1]?.kind === "atom" && tokens[statement.startIndex + 1]?.text === "export_type") {
+      const entries = directExportTypeEntries(tokens, statement, pairs);
+      if (entries === null) return { valid: false, moduleName: "", exported: new Set(), types: [], callables: [], imports: [], calls: [], instantiations: [], heritage: [] };
+      for (const entry of entries) exportedTypes.add(entry);
+    }
+  }
+  const types: ErlangRawType[] = module === undefined ? [] : [{ name: module.name, moduleName: "", declarationKind: "module", isExported: true, start: module.start, end: module.end }];
+  const callables: ErlangRawCallable[] = [];
+  const imports: ErlangRawImport[] = [];
+  const calls: ErlangRawCall[] = [];
+  const instantiations: ErlangRawInstantiation[] = [];
+  const heritage: ErlangRawHeritage[] = [];
+  const specs = new Map<string, { readonly parameterTypeNames: readonly string[]; readonly returnTypeName?: string; readonly arity: number }>();
+  const unsupportedBodyTokens = new Set(["case", "if", "receive", "try", "catch", "after", "fun", "when", ";", "->", "?"]);
+  const supportedAttributes = new Set(["module", "export", "export_type", "record", "type", "opaque", "behaviour", "behavior", "import", "include", "include_lib", "spec", "callback"]);
+
+  for (const statement of statements) {
+    const startIndex = statement.startIndex;
+    const attribute = tokens[startIndex + 1];
+    if (tokens[startIndex]?.text !== "-") continue;
+    if (attribute?.kind !== "atom" || !supportedAttributes.has(attribute.text)) return { valid: false, moduleName: "", exported: new Set(), types: [], callables: [], imports: [], calls: [], instantiations: [], heritage: [] };
+    const attributeName = attribute.text;
+    if (attributeName === "record" && module !== undefined) {
+      const name = erlangTokenName(tokens[startIndex + 3]);
+      const opening = startIndex + 5;
+      const closing = pairs.get(opening);
+      if (name !== null && tokens[startIndex + 2]?.text === "(" && tokens[startIndex + 3]?.kind === "atom" && tokens[opening]?.text === "{" && closing !== undefined && tokens[closing]?.text === "}") {
+        types.push({ name, moduleName: module.name, declarationKind: "record", isExported: true, start: tokens[startIndex]?.start ?? 0, end: tokens[statement.endIndex - 1]?.end ?? 0 });
+      }
+      continue;
+    }
+    if ((attributeName === "type" || attributeName === "opaque") && module !== undefined) {
+      const name = erlangTokenName(tokens[startIndex + 2]);
+      const opening = startIndex + 3;
+      const closing = pairs.get(opening);
+      if (name !== null && tokens[startIndex + 2]?.kind === "atom" && tokens[opening]?.text === "(" && closing !== undefined && tokens[closing + 1]?.text === "::") {
+        types.push({ name, moduleName: module.name, declarationKind: attributeName, isExported: exportedTypes.has(`${name}/${erlangDelimitedArity(tokens, opening, closing) ?? 0}`), start: tokens[startIndex]?.start ?? 0, end: tokens[statement.endIndex - 1]?.end ?? 0 });
+      }
+      continue;
+    }
+    if ((attributeName === "behaviour" || attributeName === "behavior") && module !== undefined) {
+      const opening = startIndex + 2;
+      const closing = pairs.get(opening);
+      const target = erlangTokenName(tokens[startIndex + 3]);
+      if (tokens[opening]?.text === "(" && closing === startIndex + 4 && target !== null) {
+        heritage.push({ sourceTypeName: module.name, referenceName: target, start: tokens[startIndex]?.start ?? 0, end: tokens[statement.endIndex - 1]?.end ?? 0 });
+      }
+      continue;
+    }
+    if (attributeName === "import" || attributeName === "include" || attributeName === "include_lib") {
+      const opening = startIndex + 2;
+      const closing = pairs.get(opening);
+      if (tokens[opening]?.text !== "(" || closing === undefined) continue;
+      if (attributeName === "import") {
+        const moduleToken = erlangTokenName(tokens[startIndex + 3]);
+        const listOpening = startIndex + 5;
+        const listClosing = pairs.get(listOpening);
+        const names = listClosing === undefined ? null : erlangImportNames(tokens, listOpening, listClosing);
+        if (moduleToken !== null && tokens[startIndex + 4]?.text === "," && listClosing !== undefined && names !== null) imports.push({ importKind: "module", importedModule: moduleToken, importedNames: names, start: tokens[startIndex]?.start ?? 0, end: tokens[statement.endIndex - 1]?.end ?? 0 });
+      } else {
+        const pathToken = tokens[startIndex + 3];
+        if (pathToken?.kind === "string" && pathToken.value !== undefined && closing === startIndex + 4) imports.push({ importKind: "include", importedModule: pathToken.value, includePath: pathToken.value, start: tokens[startIndex]?.start ?? 0, end: tokens[statement.endIndex - 1]?.end ?? 0 });
+      }
+      continue;
+    }
+    if (attributeName === "spec" || attributeName === "callback") {
+      const name = erlangTokenName(tokens[startIndex + 2]);
+      const opening = startIndex + 3;
+      const closing = pairs.get(opening);
+      const shape = closing === undefined ? null : erlangSpecShape(tokens, opening, closing, statement.endIndex, pairs);
+      if (module !== undefined && name !== null && shape !== null) {
+        const sourceKey = `${name}\u0000${shape.arity}\u0000${attributeName}\u0000${tokens[startIndex]?.start ?? 0}`;
+        if (attributeName === "callback") callables.push({ sourceKey, name, moduleName: module.name, arity: shape.arity, callableKind: "callback", parameterTypeNames: shape.parameterTypeNames, ...(shape.returnTypeName === undefined ? {} : { returnTypeName: shape.returnTypeName }), isExported: true, start: tokens[startIndex]?.start ?? 0, end: tokens[statement.endIndex - 1]?.end ?? 0 });
+        else specs.set(`${name}/${shape.arity}`, shape);
+      }
+      continue;
+    }
+  }
+
+  if (module !== undefined) {
+    for (const statement of statements) {
+      const method = directFunction(tokens, statement, pairs, exported);
+      if (method === null) continue;
+      const sourceKey = `${method.name}\u0000${method.arity}\u0000${method.start}`;
+      const shape = specs.get(`${method.name}/${method.arity}`);
+      const bodyStart = pairs.get(statement.startIndex + 1);
+      const bodyTokens = bodyStart === undefined ? [] : tokens.slice(bodyStart + 2, statement.endIndex);
+      const unsafeBody = bodyTokens.some((token) => unsupportedBodyTokens.has(token.text));
+      if (unsafeBody) continue;
+      callables.push({ sourceKey, name: method.name, moduleName: module.name, arity: method.arity, callableKind: "function", parameterTypeNames: shape?.parameterTypeNames ?? [], ...(shape?.returnTypeName === undefined ? {} : { returnTypeName: shape.returnTypeName }), isExported: method.isExported, start: method.start, end: method.end, ...(bodyStart === undefined ? {} : { bodyStartIndex: bodyStart + 2, bodyEndIndex: statement.endIndex }) });
+    }
+    for (const callable of callables.filter((candidate) => candidate.callableKind === "function" && candidate.bodyStartIndex !== undefined && candidate.bodyEndIndex !== undefined)) {
+      const bodyStart = callable.bodyStartIndex!;
+      const bodyEnd = callable.bodyEndIndex!;
+      const bodyTokens = tokens.slice(bodyStart, bodyEnd);
+      for (let index = 0; index < bodyTokens.length; index += 1) {
+        const current = bodyTokens[index];
+        const next = bodyTokens[index + 1];
+        const afterNext = bodyTokens[index + 2];
+        if (current === undefined) continue;
+        if (current.kind === "atom" && next?.text === ":" && afterNext?.kind === "atom" && bodyTokens[index + 3]?.text === "(") {
+          const opening = index + 3;
+          const closing = pairs.get(bodyStart + opening);
+          if (closing !== undefined && closing < bodyEnd) {
+            const arity = erlangDelimitedArity(tokens, bodyStart + opening, closing);
+            if (arity !== null) calls.push({ sourceKey: callable.sourceKey, referenceName: `${afterNext.text}/${arity}`, callKind: "module", receiverModuleName: current.text, argumentCount: arity, start: current.start, end: tokens[closing]?.end ?? afterNext.end });
+          }
+          continue;
+        }
+        if (current.kind !== "atom" || next?.text !== "(") continue;
+        if (bodyTokens[index - 1]?.text === ":") continue;
+        const opening = index + 1;
+        const closing = pairs.get(bodyStart + opening);
+        if (closing === undefined || closing >= bodyEnd) continue;
+        const arity = erlangDelimitedArity(tokens, bodyStart + opening, closing);
+        if (arity !== null) calls.push({ sourceKey: callable.sourceKey, referenceName: `${current.text}/${arity}`, callKind: "direct", argumentCount: arity, start: current.start, end: tokens[closing]?.end ?? current.end });
+      }
+      for (let index = 0; index + 2 < bodyTokens.length; index += 1) {
+        const recordMarker = bodyTokens[index];
+        const record = bodyTokens[index + 1];
+        const opening = bodyTokens[index + 2];
+        if (recordMarker?.text !== "#" || record?.kind !== "atom" || opening?.text !== "{") continue;
+        const closing = pairs.get(bodyStart + index + 2);
+        if (closing === undefined || closing >= bodyEnd) continue;
+        const arity = erlangDelimitedArity(tokens, bodyStart + index + 2, closing);
+        if (arity !== null) instantiations.push({ sourceKey: callable.sourceKey, typeName: record.text, argumentCount: arity, start: recordMarker.start, end: tokens[closing]?.end ?? opening.end });
+      }
+    }
+  }
+  return { valid: true, moduleName, exported, types, callables, imports, calls, instantiations, heritage };
+}
+
 function lineStartsFor(sourceText: string): readonly number[] {
   const starts = [0];
   for (let index = 0; index < sourceText.length; index += 1) {
@@ -849,10 +1212,20 @@ export function extractErlangFileFacts(input: ErlangExtractFileFactsInput): Arti
   }
 
   const staticFacts = staticErlangFacts(input.sourceText);
+  const relationFacts = parseErlangRelations(input.sourceText);
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
   const declarationOrdinals = new Map<string, number>();
+  const erlangTypes: ErlangTypeFact[] = [];
+  const erlangCallables: ErlangCallableFact[] = [];
+  const erlangImports: ErlangImportFact[] = [];
+  const erlangCalls: ErlangCallFact[] = [];
+  const erlangInstantiations: ErlangInstantiationFact[] = [];
+  const erlangHeritage: ErlangHeritageFact[] = [];
+  const relationCallableSymbols = new Map<string, SymbolNode>();
+  const staticMethodSymbols = new Map<string, SymbolNode>();
+  let moduleSymbol: SymbolNode | null = null;
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
     id: createSymbolId({
@@ -1032,10 +1405,11 @@ export function extractErlangFileFacts(input: ErlangExtractFileFactsInput): Arti
   }
 
   if (staticFacts.valid && staticFacts.module !== null) {
-    const moduleSymbol = addModule(staticFacts.module);
+    moduleSymbol = addModule(staticFacts.module);
     const methodsByIdentity = new Map<string, SymbolNode[]>();
     for (const methodFact of [...staticFacts.methods].sort((left, right) => left.start - right.start)) {
       const method = addMethod(moduleSymbol, methodFact);
+      staticMethodSymbols.set(`${methodFact.name}\u0000${methodFact.arity}\u0000${methodFact.start}`, method);
       const identity = staticFacts.module.name + "\u0000" + methodFact.name + "\u0000" + methodFact.arity;
       methodsByIdentity.set(identity, [...(methodsByIdentity.get(identity) ?? []), method]);
     }
@@ -1062,6 +1436,66 @@ export function extractErlangFileFacts(input: ErlangExtractFileFactsInput): Arti
     }
   }
 
+  function findSymbolAtStart(qualifiedName: string, kind: SymbolNode["kind"], start: number): SymbolNode | undefined {
+    return symbols.find((symbol) => symbol.qualifiedName === qualifiedName && symbol.kind === kind && symbol.range.start.line === rangeFor(lineStarts, start, start).start.line && symbol.range.start.column === rangeFor(lineStarts, start, start).start.column);
+  }
+
+  function addErlangType(type: ErlangRawType): SymbolNode {
+    if (type.declarationKind === "module" && moduleSymbol !== null) {
+      erlangTypes.push({ symbolId: moduleSymbol.id, filePath: input.filePath, name: type.name, moduleName: type.moduleName, qualifiedTypePath: type.name, declarationKind: type.declarationKind, isExported: type.isExported, range: moduleSymbol.range });
+      return moduleSymbol;
+    }
+    const qualifiedTypePath = type.moduleName === "" ? type.name : `${type.moduleName}.${type.name}`;
+    const qualifiedName = type.declarationKind === "module" ? `${input.filePath}#${type.name}` : `${input.filePath}#${qualifiedTypePath}`;
+    const kind: SymbolNode["kind"] = type.declarationKind === "module" ? "class" : "type";
+    const existing = findSymbolAtStart(qualifiedName, kind, type.start);
+    const symbol = existing ?? (() => {
+      const declarationOrdinal = nextOrdinal(qualifiedName, kind);
+      const created: SymbolNode = { id: createSymbolId({ filePath: input.filePath, qualifiedName, kind, declarationOrdinal }), name: type.name, qualifiedName, kind, filePath: input.filePath, range: rangeFor(lineStarts, type.start, type.end), isExported: type.isExported, declarationOrdinal };
+      symbols.push(created);
+      addContainment(moduleSymbol ?? fileNode, created, type.start, type.end);
+      return created;
+    })();
+    erlangTypes.push({ symbolId: symbol.id, filePath: input.filePath, name: type.name, moduleName: type.moduleName, qualifiedTypePath, declarationKind: type.declarationKind, isExported: type.isExported, range: symbol.range });
+    return symbol;
+  }
+
+  function addErlangCallable(callable: ErlangRawCallable): SymbolNode {
+    const methodName = `${callable.name}/${callable.arity}`;
+    const qualifiedName = `${input.filePath}#${callable.moduleName}.${methodName}`;
+    const staticSymbol = callable.callableKind === "function" ? staticMethodSymbols.get(`${callable.name}\u0000${callable.arity}\u0000${callable.start}`) : undefined;
+    const existing = staticSymbol ?? findSymbolAtStart(qualifiedName, "method", callable.start);
+    const symbol = existing ?? (() => {
+      const declarationOrdinal = nextOrdinal(qualifiedName, "method");
+      const created: SymbolNode = { id: createSymbolId({ filePath: input.filePath, qualifiedName, kind: "method", declarationOrdinal }), name: methodName, qualifiedName, kind: "method", filePath: input.filePath, range: rangeFor(lineStarts, callable.start, callable.end), isExported: callable.isExported, declarationOrdinal };
+      symbols.push(created);
+      addContainment(moduleSymbol ?? fileNode, created, callable.start, callable.end);
+      return created;
+    })();
+    erlangCallables.push({ symbolId: symbol.id, filePath: input.filePath, name: callable.name, moduleName: callable.moduleName, arity: callable.arity, callableKind: callable.callableKind, ...(callable.parameterTypeNames.length === 0 ? {} : { parameterTypeNames: callable.parameterTypeNames }), ...(callable.returnTypeName === undefined ? {} : { returnTypeName: callable.returnTypeName }), isExported: callable.isExported, range: symbol.range });
+    relationCallableSymbols.set(callable.sourceKey, symbol);
+    return symbol;
+  }
+
+  if (relationFacts.valid) {
+    const relationModules = new Map<string, SymbolNode>();
+    for (const type of relationFacts.types.filter((candidate) => candidate.declarationKind === "module")) relationModules.set(type.name, addErlangType(type));
+    for (const type of relationFacts.types.filter((candidate) => candidate.declarationKind !== "module")) addErlangType(type);
+    for (const callable of [...relationFacts.callables].sort((left, right) => left.start - right.start)) addErlangCallable(callable);
+    for (const imported of relationFacts.imports) erlangImports.push({ sourceId: fileNode.id, filePath: input.filePath, importKind: imported.importKind, importedModule: imported.importedModule, ...(imported.importedNames === undefined ? {} : { importedNames: imported.importedNames }), ...(imported.includePath === undefined ? {} : { includePath: imported.includePath }), range: rangeFor(lineStarts, imported.start, imported.end) });
+    for (const call of relationFacts.calls) {
+      const source = relationCallableSymbols.get(call.sourceKey);
+      if (source === undefined) continue;
+      erlangCalls.push({ sourceId: source.id, filePath: input.filePath, referenceName: call.referenceName, callKind: call.callKind, ...(call.receiverModuleName === undefined ? {} : { receiverModuleName: call.receiverModuleName }), argumentCount: call.argumentCount, range: rangeFor(lineStarts, call.start, call.end) });
+    }
+    for (const instantiation of relationFacts.instantiations) {
+      const source = relationCallableSymbols.get(instantiation.sourceKey);
+      if (source === undefined) continue;
+      erlangInstantiations.push({ sourceId: source.id, filePath: input.filePath, typeName: instantiation.typeName, argumentCount: instantiation.argumentCount, range: rangeFor(lineStarts, instantiation.start, instantiation.end) });
+    }
+    for (const reference of relationFacts.heritage) erlangHeritage.push({ sourceId: relationModules.get(reference.sourceTypeName)?.id ?? moduleSymbol?.id ?? fileNode.id, filePath: input.filePath, referenceName: reference.referenceName, sourceTypeName: reference.sourceTypeName, relationKind: "implements", range: rangeFor(lineStarts, reference.start, reference.end) });
+  }
+
   return {
     symbols,
     edges,
@@ -1070,6 +1504,16 @@ export function extractErlangFileFacts(input: ErlangExtractFileFactsInput): Arti
     referenceScopes: [],
     importBindings: [],
     exportBindings: [],
-    reExportBindings: []
+    reExportBindings: [],
+    erlangFacts: {
+      moduleName: relationFacts.moduleName,
+      parserRejected: !relationFacts.valid,
+      types: erlangTypes,
+      callables: erlangCallables,
+      imports: erlangImports,
+      calls: erlangCalls,
+      instantiations: erlangInstantiations,
+      heritage: erlangHeritage
+    } satisfies ErlangFacts
   };
 }

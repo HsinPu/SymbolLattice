@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v372";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v373";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v177";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v178";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -1962,6 +1962,84 @@ export interface ElixirFacts {
   readonly heritage?: readonly ElixirHeritageFact[];
 }
 
+/** Erlang declarations retained for bounded project-local relation resolution. */
+export type ErlangTypeDeclarationKind = "module" | "record" | "type" | "opaque" | "behaviour";
+
+export interface ErlangTypeFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly moduleName: string;
+  readonly qualifiedTypePath: string;
+  readonly declarationKind: ErlangTypeDeclarationKind;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+}
+
+export type ErlangCallableKind = "function" | "callback";
+
+export interface ErlangCallableFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly moduleName: string;
+  readonly arity: number;
+  readonly callableKind: ErlangCallableKind;
+  readonly parameterTypeNames?: readonly string[];
+  readonly returnTypeName?: string;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+}
+
+export interface ErlangImportFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly importKind: "module" | "include";
+  readonly importedModule: string;
+  readonly importedNames?: readonly string[];
+  readonly includePath?: string;
+  readonly range: SourceRange;
+}
+
+export interface ErlangCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly callKind: "direct" | "module";
+  readonly receiverModuleName?: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface ErlangInstantiationFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly typeName: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface ErlangHeritageFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly sourceTypeName: string;
+  readonly relationKind: "implements";
+  readonly range: SourceRange;
+}
+
+/** Syntax-only Erlang relation facts. BEAM and OTP runtime semantics remain nonclaims. */
+export interface ErlangFacts {
+  readonly moduleName: string;
+  readonly parserRejected?: boolean;
+  readonly types: readonly ErlangTypeFact[];
+  readonly callables: readonly ErlangCallableFact[];
+  readonly imports: readonly ErlangImportFact[];
+  readonly calls: readonly ErlangCallFact[];
+  readonly instantiations: readonly ErlangInstantiationFact[];
+  readonly heritage?: readonly ErlangHeritageFact[];
+}
+
 /** Syntax-only Java package facts retained for exact Play controller-action resolution. */
 export interface JavaFacts {
   readonly classes: readonly JavaClassFact[];
@@ -3692,6 +3770,8 @@ export interface ArtifactFacts {
   readonly scalaRelationFacts?: ScalaRelationFacts;
   /** Omitted only by artifact facts persisted before v0.467 Elixir relation depth. */
   readonly elixirFacts?: ElixirFacts;
+  /** Omitted only by artifact facts persisted before v0.468 Erlang relation depth. */
+  readonly erlangFacts?: ErlangFacts;
   /** Omitted only by artifact facts persisted before v0.460 Swift relation depth. */
   readonly swiftFacts?: SwiftFacts;
   /** Omitted only by artifact facts persisted before v0.461 Dart relation depth. */

@@ -860,6 +860,7 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
     ...(facts.scalaFacts === undefined ? {} : { scalaFacts: facts.scalaFacts }),
     ...(facts.scalaRelationFacts === undefined ? {} : { scalaRelationFacts: facts.scalaRelationFacts }),
     ...(facts.elixirFacts === undefined ? {} : { elixirFacts: facts.elixirFacts }),
+    ...(facts.erlangFacts === undefined ? {} : { erlangFacts: facts.erlangFacts }),
     ...(facts.javaFacts === undefined ? {} : { javaFacts: facts.javaFacts }),
     ...(facts.jvmFacts === undefined ? {} : { jvmFacts: facts.jvmFacts }),
     ...(facts.springBootPropertiesFacts === undefined
