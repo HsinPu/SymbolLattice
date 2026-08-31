@@ -2,6 +2,10 @@ import {
   createEdgeId,
   createSymbolId,
   type ArtifactFacts,
+  type NixAttributeFact,
+  type NixCallFact,
+  type NixFacts,
+  type NixImportFact,
   type GraphEdge,
   type LocalBinding,
   type PendingReference,
@@ -32,6 +36,7 @@ interface NixLetBlock {
 interface NixDeclaration {
   readonly name: string;
   readonly kind: Extract<SymbolKind, "function" | "variable">;
+  readonly parameterCount?: number;
   readonly start: number;
   readonly end: number;
   readonly ruleSuffix: "binding" | "inherit";
@@ -426,6 +431,31 @@ function isFunctionValue(
   return code[skipWhitespace(code, index, end)] === ":";
 }
 
+function simpleFunctionParameterCount(
+  code: string,
+  start: number,
+  end: number,
+  pairs: ReadonlyMap<number, number>
+): number | undefined {
+  let index = skipWhitespace(code, start, end);
+  const first = readIdentifier(code, index, end);
+  if (first !== null) {
+    index = first.end;
+    if (code[index] === "@") {
+      return undefined;
+    }
+    return code[skipWhitespace(code, index, end)] === ":" ? 1 : undefined;
+  }
+  if (code[index] !== "{") {
+    return undefined;
+  }
+  const close = pairs.get(index);
+  if (close === undefined || close >= end) {
+    return undefined;
+  }
+  return undefined;
+}
+
 function inheritedDeclarations(
   code: string,
   start: number,
@@ -503,9 +533,12 @@ function directDeclarations(
       return null;
     }
     const valueStart = skipWhitespace(code, equals + 1, terminal);
+    const functionValue = isFunctionValue(code, valueStart, terminal, pairs);
+    const parameterCount = functionValue ? simpleFunctionParameterCount(code, valueStart, terminal, pairs) : undefined;
     declarations.push({
       name: attrPath.name,
-      kind: isFunctionValue(code, valueStart, terminal, pairs) ? "function" : "variable",
+      kind: functionValue ? "function" : "variable",
+      ...(parameterCount === undefined ? {} : { parameterCount }),
       start: index,
       end: terminal + 1,
       ruleSuffix: "binding"
@@ -599,6 +632,11 @@ export function extractNixFileFacts(input: NixExtractFileFactsInput): ArtifactFa
   const referenceScopes: ReferenceScope[] = [];
   const exportBindings: Array<{ readonly localName: string; readonly exportedName: string; readonly range: SourceRange }> = [];
   const declarationOrdinals = new Map<string, number>();
+  const nixAttributes: NixAttributeFact[] = [];
+  const nixImports: NixImportFact[] = [];
+  const nixCalls: NixCallFact[] = [];
+  const declarationEntries: Array<{ readonly declaration: NixDeclaration; readonly scopeId: string; readonly symbol: SymbolNode }> = [];
+  let parserRejected = false;
 
   function facts(): ArtifactFacts {
     return {
@@ -609,7 +647,13 @@ export function extractNixFileFacts(input: NixExtractFileFactsInput): ArtifactFa
       referenceScopes,
       importBindings: [],
       exportBindings,
-      reExportBindings: []
+      reExportBindings: [],
+      nixFacts: {
+        parserRejected,
+        attributes: nixAttributes,
+        imports: nixImports,
+        calls: nixCalls
+      } satisfies NixFacts
     };
   }
 
@@ -646,6 +690,17 @@ export function extractNixFileFacts(input: NixExtractFileFactsInput): ArtifactFa
       declarationOrdinal
     };
     symbols.push(symbol);
+    declarationEntries.push({ declaration, scopeId, symbol });
+    nixAttributes.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      scopeId,
+      kind: declaration.kind,
+      ...(declaration.parameterCount === undefined ? {} : { parameterCount: declaration.parameterCount }),
+      isExported,
+      range
+    });
     edges.push({
       id: createEdgeId({
         sourceId: fileNode.id,
@@ -685,10 +740,12 @@ export function extractNixFileFacts(input: NixExtractFileFactsInput): ArtifactFa
 
   const code = nixCodeMask(input.sourceText);
   if (code === null) {
+    parserRejected = true;
     return facts();
   }
   const pairs = delimiterPairs(code);
   if (pairs === null) {
+    parserRejected = true;
     return facts();
   }
   const root = returnedAttrset(code, pairs);
@@ -697,16 +754,19 @@ export function extractNixFileFacts(input: NixExtractFileFactsInput): ArtifactFa
       ? directDeclarations(code, 0, code.length, pairs)
       : directDeclarations(code, root.start + 1, root.end, pairs);
   if (rootDeclarations === null) {
+    parserRejected = true;
     return facts();
   }
   const scopedLets = letBlocks(code);
   if (scopedLets === null) {
+    parserRejected = true;
     return facts();
   }
   const letDeclarations: Array<{ readonly block: NixLetBlock; readonly declarations: readonly NixDeclaration[] }> = [];
   for (const block of scopedLets) {
     const declarations = directDeclarations(code, block.start, block.end, pairs);
     if (declarations === null) {
+      parserRejected = true;
       return facts();
     }
     letDeclarations.push({ block, declarations });
@@ -727,6 +787,17 @@ export function extractNixFileFacts(input: NixExtractFileFactsInput): ArtifactFa
   }
   for (const imported of staticImports(code)) {
     const range = rangeForSpan(lineStarts, imported.start, imported.end);
+    const containingDeclarations = declarationEntries.filter(
+      (entry) => entry.declaration.start <= imported.start && imported.end <= entry.declaration.end
+    );
+    const binding = containingDeclarations.length === 1 ? containingDeclarations[0] : undefined;
+    nixImports.push({
+      sourceId: fileNode.id,
+      filePath: input.filePath,
+      ...(binding === undefined ? {} : { bindingSymbolId: binding.symbol.id, bindingName: binding.declaration.name }),
+      importedPath: imported.path,
+      range
+    });
     const reference: PendingReference = {
       id: createEdgeId({
         sourceId: fileNode.id,
@@ -744,6 +815,37 @@ export function extractNixFileFacts(input: NixExtractFileFactsInput): ArtifactFa
     };
     pendingReferences.push(reference);
     referenceScopes.push({ referenceId: reference.id, scopeIds: [FILE_SCOPE_ID] });
+  }
+  for (const entry of declarationEntries) {
+    if (entry.declaration.kind !== "function" || entry.declaration.parameterCount !== 1) {
+      continue;
+    }
+    const declarationText = code.slice(entry.declaration.start, entry.declaration.end);
+    const equals = declarationText.indexOf("=");
+    const colon = equals < 0 ? -1 : declarationText.indexOf(":", equals + 1);
+    if (colon < 0) {
+      continue;
+    }
+    const bodyStart = entry.declaration.start + colon + 1;
+    const bodyEnd = entry.declaration.end;
+    const body = code.slice(bodyStart, bodyEnd).replace(/;\s*$/u, "").trim();
+    if (body.length === 0 || /[{}\[\];:=?]/u.test(body) || /\b(?:with|let|in|if|then|else|assert|rec|inherit|builtins|derivation|callPackage|mkDerivation|import|fetch|override)\b/u.test(body)) {
+      continue;
+    }
+    const attributeCall = /^([A-Za-z_][A-Za-z0-9_'-]*)\.([A-Za-z_][A-Za-z0-9_'-]*)\s+([A-Za-z_][A-Za-z0-9_'-]*)$/u.exec(body);
+    const directCall = /^([A-Za-z_][A-Za-z0-9_'-]*)\s+([A-Za-z_][A-Za-z0-9_'-]*)$/u.exec(body);
+    const match = attributeCall ?? directCall;
+    if (match === null || match[1] === undefined || match[2] === undefined) {
+      continue;
+    }
+    const calleeStart = bodyStart + code.slice(bodyStart, bodyEnd).search(/\S/u);
+    const calleeEnd = calleeStart + (attributeCall === null ? match[1].length : `${match[1]}.${match[2]}`.length);
+    const range = rangeForSpan(lineStarts, calleeStart, calleeEnd);
+    if (attributeCall !== null) {
+      nixCalls.push({ sourceId: entry.symbol.id, filePath: input.filePath, referenceName: match[2], callKind: "attribute", receiverName: match[1], argumentCount: 1, range });
+    } else {
+      nixCalls.push({ sourceId: entry.symbol.id, filePath: input.filePath, referenceName: match[1], callKind: "direct", argumentCount: 1, range });
+    }
   }
   return facts();
 }

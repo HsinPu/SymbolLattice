@@ -862,6 +862,7 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
     ...(facts.elixirFacts === undefined ? {} : { elixirFacts: facts.elixirFacts }),
     ...(facts.erlangFacts === undefined ? {} : { erlangFacts: facts.erlangFacts }),
     ...(facts.clojureFacts === undefined ? {} : { clojureFacts: facts.clojureFacts }),
+    ...(facts.nixFacts === undefined ? {} : { nixFacts: facts.nixFacts }),
     ...(facts.javaFacts === undefined ? {} : { javaFacts: facts.javaFacts }),
     ...(facts.jvmFacts === undefined ? {} : { jvmFacts: facts.jvmFacts }),
     ...(facts.springBootPropertiesFacts === undefined

@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v374";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v375";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v179";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v180";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -2114,6 +2114,45 @@ export interface ClojureFacts {
   readonly heritage?: readonly ClojureHeritageFact[];
 }
 
+/** Nix attribute declarations retained for bounded project-local relation resolution. */
+export interface NixAttributeFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly scopeId: string;
+  readonly kind: "function" | "variable";
+  readonly parameterCount?: number;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+}
+
+export interface NixImportFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly bindingSymbolId?: string;
+  readonly bindingName?: string;
+  readonly importedPath: string;
+  readonly range: SourceRange;
+}
+
+export interface NixCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly callKind: "direct" | "attribute";
+  readonly receiverName?: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only Nix relation facts. Evaluation, derivations, flakes, and runtime semantics remain nonclaims. */
+export interface NixFacts {
+  readonly parserRejected?: boolean;
+  readonly attributes: readonly NixAttributeFact[];
+  readonly imports: readonly NixImportFact[];
+  readonly calls: readonly NixCallFact[];
+}
+
 /** Syntax-only Java package facts retained for exact Play controller-action resolution. */
 export interface JavaFacts {
   readonly classes: readonly JavaClassFact[];
@@ -3848,6 +3887,8 @@ export interface ArtifactFacts {
   readonly erlangFacts?: ErlangFacts;
   /** Omitted only by artifact facts persisted before v0.469 Clojure relation depth. */
   readonly clojureFacts?: ClojureFacts;
+  /** Omitted only by artifact facts persisted before v0.470 Nix relation depth. */
+  readonly nixFacts?: NixFacts;
   /** Omitted only by artifact facts persisted before v0.460 Swift relation depth. */
   readonly swiftFacts?: SwiftFacts;
   /** Omitted only by artifact facts persisted before v0.461 Dart relation depth. */

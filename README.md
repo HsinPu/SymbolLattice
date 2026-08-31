@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.469.0
+目前版本：v0.470.0
 
 ## 主要能力
 
@@ -96,6 +96,8 @@ v0.465.0 加深 Haskell bounded project relations。固定 GHC 9.14.1、Cabal 3.
 v0.466.0 加深 Scala bounded project relations。固定 Scala 3.9.0、Scala 2.13.18 與 sbt 1.12.15 三個大型、乾淨 source scope，加入 package／object／class／case class／trait／enum／type alias identity、explicit import、唯一 project-local direct／object／typed member call、constructor／case-class creation、single inheritance／trait implementation、簡單 signature accepts／returns 與明確 `override`。300 個 synthetic 正向為 TP300／FP0／FN0／evidenceInvalid0，150 個 disposable 負向全數 fail-close。overload／default／given／implicit、extension、higher-order／partial application、generic／type member、path-dependent／opaque／match type、inline／quoted／macro／TASTy、pattern／async／Akka runtime、reflection、Java linkage、sbt/generated code、conditional compilation、ambiguous import 與 external dependency 維持 unresolved 或 nonclaim；parser-rejected files 與 unsupported breadth recall 另列。Windows 沒有 Scala／scalac／sbt／Java toolchain validation，因此不宣稱完整 Scala compiler 語意。
 
 v0.467.0 加深 Elixir bounded project relations。固定 Elixir v1.20.4、Phoenix v1.8.13、Ecto v3.14.2 與 Livebook v0.19.9 四個大型、乾淨 source scope，加入 module／protocol／struct／exception／type／behaviour identity、explicit alias／import、唯一 project-local direct／qualified module call、struct creation、behaviour／protocol implementation 與簡單 `@spec` accepts／returns。300 個 synthetic 正向為 TP300／FP0／FN0／evidenceInvalid0，150 個 disposable 負向全數 fail-close；macro／quote／unquote／sigil、pattern／guard／多 clause dispatch、protocol consolidation、OTP／GenServer／process runtime、NIF／FFI／Erlang interop、Mix／Hex／umbrella／external package、conditional compilation、reopened module、ambiguous alias 與 dynamic dispatch 維持 unresolved 或 nonclaim。四個大型 corpus 的 parser-rejected files 與 unsupported breadth recall 另列；Windows 沒有 Elixir／Erlang／OTP toolchain，因此不宣稱完整 Elixir compiler 語意。
+
+v0.470.0 加深 Nix bounded project relations。保留既有 attrset／let／inherit／literal `import` 掃描，新增 function attribute facts、單一 identifier lambda 的唯一 local call，以及 `binding = import ./file.nix` 後唯一 `binding.attr` project-local call；所有 exact edge 都帶 singleton evidence。300 個 synthetic 正向為 TP300／FP0／FN0／evidenceInvalid0，150 個 disposable 負向全數 fail-close。`with`／`rec`／dynamic attr、derivation／`mkDerivation`／`callPackage`、flake inputs、fetcher／固定點、覆寫／merge、Nix evaluator、依賴／overlay／外部 package 與 generated／conditional code 維持 unresolved 或 nonclaim；四個大型 corpus 的 parser-rejected files 與 unsupported breadth recall 另列，Windows 沒有 Nix evaluator/toolchain，因此不宣稱完整 Nix 語意。
 
 v0.469.0 加深 Clojure bounded project relations。固定 Clojure 1.12.5、Ring 1.10.0、Reitit 0.9.2 與 tools.reader 1.6.0 四個 production source scope，加入 namespace／record／protocol identity、明確 `ns :require` alias／`:refer`、唯一 project-local local／referred／qualified call、`->Type`／`map->Type` record construction、record-to-protocol `implements` 與簡單 `^Type` accepts／returns。300 個 synthetic 正向為 TP300／FP0／FN0／evidenceInvalid0，150 個 disposable 負向全數 fail-close；macro／reader conditional／metadata、dynamic var／rebind、`eval`／`apply`／`resolve`、higher-order／destructuring／threading、protocol／multimethod runtime dispatch、Java interop／reflection、Leiningen／deps.edn dependency、generated code 與 external namespace 維持 unresolved 或 nonclaim。四個大型 corpus 的 parser-rejected files 與 unsupported breadth recall 另列；Windows 沒有 Clojure／JVM／Leiningen／Babashka toolchain，因此不宣稱完整 Clojure compiler 語意。
 
