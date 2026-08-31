@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.466.0
+目前版本：v0.467.0
 
 ## 主要能力
 
@@ -36,12 +36,12 @@ SymbolLattice 可在單次 `init` 或 `sync` 中處理多語言 repository。不
 
 | 類別 | 語言與格式 |
 | --- | --- |
-| 已完成大型專案深度驗證 | TypeScript、Java、HTML、Markdown、CSS、JavaScript、JSP、Python、Ruby、Shell、Lua、Luau、Julia、Perl、R |
+| 已完成大型專案深度驗證 | TypeScript、Java、HTML、Markdown、CSS、JavaScript、JSP、Python、Ruby、Shell、Lua、Luau、Julia、Perl、R、Elixir |
 | Web 與模板 | ArkTS、Vue、Svelte、Astro、Razor、PHP、Blade、Liquid、Twig、CFML |
 | JVM、.NET 與應用程式 | Groovy、Kotlin、Scala、C#、F#、VB.NET、Dart |
 | 系統與原生語言 | C、C++、Objective-C、Rust、Go、Swift、Zig、Nim、Fortran、Ada、Pascal、COBOL |
 | 資料、設定與 schema | SQL、GraphQL、Protocol Buffers、Terraform/OpenTofu、Nix、YAML、XML、Java Properties、Solidity |
-| Functional 與 BEAM | Elixir、Erlang、Clojure、Haskell、OCaml |
+| Functional 與 BEAM | Erlang、Clojure、Haskell、OCaml |
 
 Java 深度包含唯一專案型別的明確 import、annotation、泛型 direct heritage／object creation，以及 `build.gradle(.kts)` 或 module-named Gradle build script 證據；重複 qualified type、wildcard／static import、lambda 內建立、anonymous interface 與外部 classpath 仍保守省略。
 
@@ -94,6 +94,8 @@ v0.464.0 加深 OCaml bounded project relations。固定 OCaml 5.5.0、Dune 3.9.
 v0.465.0 加深 Haskell bounded project relations。固定 GHC 9.14.1、Cabal 3.18.1.0 與 Pandoc 3.9 三個大型、乾淨 source scope，加入 module、data／newtype／record／variant／type alias、class／instance identity、explicit import、唯一 project-local direct／qualified module call、constructor creation、typeclass implements 與簡單 signature accepts／returns。300 個 synthetic 正向為 TP300／FP0／FN0／evidenceInvalid0，150 個 disposable 負向全數 fail-close。型別推導、overloading／dictionary passing、higher-order／partial application、lazy runtime、pattern dispatch、GADT／existential／type family、Template Haskell／quasiquote／CPP、FFI、package resolver、external module、reflection、ambiguous export 與 dynamic dispatch 維持 unresolved 或 nonclaim；parser-rejected files 與 unsupported breadth recall 另列。Windows 沒有 GHC／Cabal／Stack／HLS toolchain validation，因此不宣稱完整 Haskell compiler 語意。
 
 v0.466.0 加深 Scala bounded project relations。固定 Scala 3.9.0、Scala 2.13.18 與 sbt 1.12.15 三個大型、乾淨 source scope，加入 package／object／class／case class／trait／enum／type alias identity、explicit import、唯一 project-local direct／object／typed member call、constructor／case-class creation、single inheritance／trait implementation、簡單 signature accepts／returns 與明確 `override`。300 個 synthetic 正向為 TP300／FP0／FN0／evidenceInvalid0，150 個 disposable 負向全數 fail-close。overload／default／given／implicit、extension、higher-order／partial application、generic／type member、path-dependent／opaque／match type、inline／quoted／macro／TASTy、pattern／async／Akka runtime、reflection、Java linkage、sbt/generated code、conditional compilation、ambiguous import 與 external dependency 維持 unresolved 或 nonclaim；parser-rejected files 與 unsupported breadth recall 另列。Windows 沒有 Scala／scalac／sbt／Java toolchain validation，因此不宣稱完整 Scala compiler 語意。
+
+v0.467.0 加深 Elixir bounded project relations。固定 Elixir v1.20.4、Phoenix v1.8.13、Ecto v3.14.2 與 Livebook v0.19.9 四個大型、乾淨 source scope，加入 module／protocol／struct／exception／type／behaviour identity、explicit alias／import、唯一 project-local direct／qualified module call、struct creation、behaviour／protocol implementation 與簡單 `@spec` accepts／returns。300 個 synthetic 正向為 TP300／FP0／FN0／evidenceInvalid0，150 個 disposable 負向全數 fail-close；macro／quote／unquote／sigil、pattern／guard／多 clause dispatch、protocol consolidation、OTP／GenServer／process runtime、NIF／FFI／Erlang interop、Mix／Hex／umbrella／external package、conditional compilation、reopened module、ambiguous alias 與 dynamic dispatch 維持 unresolved 或 nonclaim。四個大型 corpus 的 parser-rejected files 與 unsupported breadth recall 另列；Windows 沒有 Elixir／Erlang／OTP toolchain，因此不宣稱完整 Elixir compiler 語意。
 
 v0.449.0 新增 `.md`／`.markdown` 基礎圖譜：ATX／Setext heading 會形成可搜尋的 resource 與階層 `contains`，完整的 project-local 相對檔案連結會在唯一命中 indexed file 時形成 exact `references`。Fenced／indented／inline code、HTML block、external／root-relative／reference-style／image／dynamic links、heading anchor 與 `.mdx` 維持 opaque、unresolved 或 nonclaim，不推測執行期文件行為。
 

@@ -16,7 +16,7 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.466.0
+Current version: v0.467.0
 
 ## Highlights
 
@@ -36,12 +36,12 @@ One `init` or `sync` can process a multi-language repository. Analysis depth var
 
 | Category | Languages and formats |
 | --- | --- |
-| Deeply validated on large projects | TypeScript, Java, HTML, Markdown, CSS, JavaScript, JSP, Python, Ruby, Shell, Lua, Luau, Julia, Perl, R |
+| Deeply validated on large projects | TypeScript, Java, HTML, Markdown, CSS, JavaScript, JSP, Python, Ruby, Shell, Lua, Luau, Julia, Perl, R, Elixir |
 | Web and templates | ArkTS, Vue, Svelte, Astro, Razor, PHP, Blade, Liquid, Twig, CFML |
 | JVM, .NET, and applications | Groovy, Kotlin, Scala, C#, F#, VB.NET, Dart |
 | Systems and native | C, C++, Objective-C, Rust, Go, Swift, Zig, Nim, Fortran, Ada, Pascal, COBOL |
 | Data, configuration, and schemas | SQL, GraphQL, Protocol Buffers, Terraform/OpenTofu, Nix, YAML, XML, Java Properties, Solidity |
-| Functional and BEAM | Elixir, Erlang, Clojure, Haskell, OCaml |
+| Functional and BEAM | Erlang, Clojure, Haskell, OCaml |
 
 Java depth includes explicit imports, annotations, generic direct heritage and object creation, plus evidence from `build.gradle(.kts)` or module-named Gradle build scripts; duplicate qualified types, wildcard or static imports, lambda-contained construction, anonymous interfaces, and external classpaths remain conservatively omitted.
 
@@ -94,6 +94,8 @@ v0.464.0 deepens bounded OCaml project relations. Three fixed, clean source scop
 v0.465.0 deepens bounded Haskell project relations. Three fixed, clean source scopes (GHC 9.14.1, Cabal 3.18.1.0, and Pandoc 3.9) now cover module, data/newtype/record/variant/type-alias, class/instance identity, explicit imports, unique project-local direct/qualified-module calls, constructor creation, typeclass `implements`, and simple signature accepts/returns. The 300 synthetic positives score TP300/FP0/FN0/evidenceInvalid0, and all 150 disposable negatives fail closed. Type inference, overloading/dictionary passing, higher-order/partial application, lazy runtime behavior, pattern dispatch, GADTs/existentials/type families, Template Haskell/quasiquotation/CPP, FFI, package resolution, external modules, reflection, ambiguous exports, and dynamic dispatch remain unresolved or nonclaims; parser-rejected files and unsupported breadth recall are reported separately. This Windows host has no GHC, Cabal, Stack, or HLS toolchain validation, so complete Haskell compiler semantics are not claimed.
 
 v0.466.0 deepens bounded Scala project relations. Three fixed, clean source scopes (Scala 3.9.0, Scala 2.13.18, and sbt 1.12.15) now cover package/object/class/case-class/trait/enum/type-alias identity, explicit imports, unique project-local direct/object/typed-member calls, constructor and case-class creation, single inheritance/trait implementation, simple signature accepts/returns, and explicit `override`. The 300 synthetic positives score TP300/FP0/FN0/evidenceInvalid0, and all 150 disposable negatives fail closed. Overloads/defaults/givens/implicits, extensions, higher-order/partial application, generics/type members, path-dependent/opaque/match types, inline/quoted/macros/TASTy, pattern/async/Akka runtime, reflection, Java linkage, sbt/generated code, conditional compilation, ambiguous imports, and external dependencies remain unresolved or nonclaims; parser-rejected files and unsupported breadth recall are reported separately. This Windows host has no Scala, scalac, sbt, or Java toolchain validation, so complete Scala compiler semantics are not claimed.
+
+v0.467.0 deepens bounded Elixir project relations. Four fixed, clean source scopes (Elixir v1.20.4, Phoenix v1.8.13, Ecto v3.14.2, and Livebook v0.19.9) now cover module/protocol/struct/exception/type/behaviour identity, explicit aliases/imports, unique project-local direct/qualified-module calls, struct creation, behaviour/protocol implementation, and simple `@spec` accepts/returns. The 300 synthetic positives score TP300/FP0/FN0/evidenceInvalid0, and all 150 disposable negatives fail closed. Macros/quote/unquote/sigils, pattern/guard/multi-clause dispatch, protocol consolidation, OTP/GenServer/process runtime, NIF/FFI/Erlang interop, Mix/Hex/umbrella/external packages, conditional compilation, reopened modules, ambiguous aliases, and dynamic dispatch remain unresolved or nonclaims. Parser-rejected files and unsupported breadth recall are reported separately; this Windows host has no Elixir, Erlang, or OTP toolchain, so complete Elixir compiler semantics are not claimed.
 
 v0.449.0 adds basic `.md` and `.markdown` graphs. ATX and Setext headings become searchable resources with hierarchical `contains` edges, while complete project-local relative file links become exact `references` only when they uniquely match an indexed file. Fenced, indented, and inline code, HTML blocks, external, root-relative, reference-style, image, dynamic, and heading-anchor links, plus `.mdx`, remain opaque, unresolved, or nonclaims rather than guessed runtime documentation behavior.
 

@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v371";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v372";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v176";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v177";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -1875,6 +1875,93 @@ export interface ScalaRelationFacts {
   readonly overrides?: readonly ScalaRelationOverrideFact[];
 }
 
+/** Elixir declarations retained for bounded project-local relation resolution. */
+export type ElixirTypeDeclarationKind = "module" | "protocol" | "struct" | "exception" | "type" | "behaviour";
+
+export interface ElixirTypeFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly moduleName: string;
+  readonly qualifiedTypePath: string;
+  readonly declarationKind: ElixirTypeDeclarationKind;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+}
+
+export type ElixirCallableKind = "function" | "callback";
+
+export interface ElixirCallableFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly moduleName: string;
+  readonly callableKind: ElixirCallableKind;
+  readonly parameterCount: number;
+  readonly requiredParameterCount: number;
+  readonly parameterTypeNames?: readonly string[];
+  readonly returnTypeName?: string;
+  readonly isExported: boolean;
+  readonly isPrivate?: boolean;
+  readonly range: SourceRange;
+}
+
+export interface ElixirAliasFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly importedModule: string;
+  readonly localName: string;
+  readonly range: SourceRange;
+}
+
+export interface ElixirImportFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly importedModule: string;
+  readonly importedNames?: readonly string[];
+  readonly range: SourceRange;
+}
+
+export interface ElixirCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly callKind: "direct" | "module";
+  readonly receiverModuleName?: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface ElixirInstantiationFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly typeName: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface ElixirHeritageFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly sourceTypeName: string;
+  readonly relationKind: "implements";
+  readonly range: SourceRange;
+}
+
+/** Syntax-only Elixir relation facts. Macro, BEAM and runtime semantics remain nonclaims. */
+export interface ElixirFacts {
+  readonly moduleName: string;
+  readonly parserRejected?: boolean;
+  readonly types: readonly ElixirTypeFact[];
+  readonly callables: readonly ElixirCallableFact[];
+  readonly aliases: readonly ElixirAliasFact[];
+  readonly imports: readonly ElixirImportFact[];
+  readonly calls: readonly ElixirCallFact[];
+  readonly instantiations: readonly ElixirInstantiationFact[];
+  readonly heritage?: readonly ElixirHeritageFact[];
+}
+
 /** Syntax-only Java package facts retained for exact Play controller-action resolution. */
 export interface JavaFacts {
   readonly classes: readonly JavaClassFact[];
@@ -3603,6 +3690,8 @@ export interface ArtifactFacts {
   readonly kotlinFacts?: KotlinFacts;
   /** Omitted only by artifact facts persisted before v0.466 Scala relation depth. */
   readonly scalaRelationFacts?: ScalaRelationFacts;
+  /** Omitted only by artifact facts persisted before v0.467 Elixir relation depth. */
+  readonly elixirFacts?: ElixirFacts;
   /** Omitted only by artifact facts persisted before v0.460 Swift relation depth. */
   readonly swiftFacts?: SwiftFacts;
   /** Omitted only by artifact facts persisted before v0.461 Dart relation depth. */
