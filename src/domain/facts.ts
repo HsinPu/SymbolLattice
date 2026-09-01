@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v381";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v382";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v186";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v187";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -2483,6 +2483,75 @@ export interface PhpFacts {
   readonly heritage: readonly PhpHeritageFact[];
 }
 
+/** Objective-C declarations retained for bounded, syntax-only project relations. */
+export type ObjcTypeDeclarationKind = "class" | "protocol";
+
+export interface ObjcTypeFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly declarationKind: ObjcTypeDeclarationKind;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+}
+
+export interface ObjcCallableFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly ownerTypeName: string;
+  readonly polarity?: "+" | "-";
+  readonly parameterCount: number;
+  readonly parameterTypeNames?: readonly string[];
+  readonly returnTypeName?: string;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+}
+
+export interface ObjcImportFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly importedPath: string;
+  readonly range: SourceRange;
+}
+
+export interface ObjcHeritageFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly sourceTypeName: string;
+  readonly targetTypeName: string;
+  readonly relationKind: "extends" | "implements";
+  readonly range: SourceRange;
+}
+
+export interface ObjcCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly receiverTypeName: string;
+  readonly referenceName: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface ObjcInstantiationFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly typeName: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only Objective-C relation facts. Dynamic dispatch, categories, macros, and runtime swizzling remain nonclaims. */
+export interface ObjcFacts {
+  readonly parserRejected?: boolean;
+  readonly types: readonly ObjcTypeFact[];
+  readonly callables: readonly ObjcCallableFact[];
+  readonly imports: readonly ObjcImportFact[];
+  readonly heritage: readonly ObjcHeritageFact[];
+  readonly calls: readonly ObjcCallFact[];
+  readonly instantiations: readonly ObjcInstantiationFact[];
+}
+
 /** Syntax-only Java package facts retained for exact Play controller-action resolution. */
 export interface JavaFacts {
   readonly classes: readonly JavaClassFact[];
@@ -4229,6 +4298,8 @@ export interface ArtifactFacts {
   readonly cFacts?: CFacts;
   /** Omitted only by artifact facts persisted before v0.475 PHP relation depth. */
   readonly phpFacts?: PhpFacts;
+  /** Omitted only by artifact facts persisted before v0.476 Objective-C relation depth. */
+  readonly objcFacts?: ObjcFacts;
   /** Omitted only by artifact facts persisted before v0.460 Swift relation depth. */
   readonly swiftFacts?: SwiftFacts;
   /** Omitted only by artifact facts persisted before v0.461 Dart relation depth. */
