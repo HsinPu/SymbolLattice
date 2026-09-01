@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v379";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v380";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v184";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v185";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -2349,6 +2349,65 @@ export interface CppFacts {
   readonly instantiations: readonly CppInstantiationFact[];
 }
 
+/** C declarations retained for bounded, syntax-only project relations. */
+export type CTypeDeclarationKind = "struct" | "union" | "enum" | "typedef";
+
+export interface CTypeFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly declarationKind: CTypeDeclarationKind;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+}
+
+export interface CCallableFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly parameterCount: number;
+  readonly variadic?: boolean;
+  readonly parameterTypeNames?: readonly string[];
+  readonly returnTypeName?: string;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+}
+
+export interface CPrototypeFact {
+  readonly name: string;
+  readonly parameterCount: number;
+  readonly variadic?: boolean;
+  readonly parameterTypeNames?: readonly string[];
+  readonly returnTypeName?: string;
+  readonly range: SourceRange;
+}
+
+export interface CImportFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly importedPath: string;
+  readonly range: SourceRange;
+}
+
+export interface CCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only C relation facts. Preprocessor and indirect dispatch remain nonclaims. */
+export interface CFacts {
+  readonly parserRejected?: boolean;
+  readonly unsafePreprocessor?: boolean;
+  readonly types: readonly CTypeFact[];
+  readonly callables: readonly CCallableFact[];
+  readonly prototypes: readonly CPrototypeFact[];
+  readonly imports: readonly CImportFact[];
+  readonly calls: readonly CCallFact[];
+}
+
 /** Syntax-only Java package facts retained for exact Play controller-action resolution. */
 export interface JavaFacts {
   readonly classes: readonly JavaClassFact[];
@@ -4091,6 +4150,8 @@ export interface ArtifactFacts {
   readonly zigFacts?: ZigFacts;
   /** Omitted only by artifact facts persisted before v0.473 C++ relation depth. */
   readonly cppFacts?: CppFacts;
+  /** Omitted only by artifact facts persisted before v0.474 C relation depth. */
+  readonly cFacts?: CFacts;
   /** Omitted only by artifact facts persisted before v0.460 Swift relation depth. */
   readonly swiftFacts?: SwiftFacts;
   /** Omitted only by artifact facts persisted before v0.461 Dart relation depth. */

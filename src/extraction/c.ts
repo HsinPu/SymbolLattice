@@ -4,6 +4,12 @@ import {
   createEdgeId,
   createSymbolId,
   type ArtifactFacts,
+  type CCallFact,
+  type CCallableFact,
+  type CImportFact,
+  type CPrototypeFact,
+  type CTypeFact,
+  type CTypeDeclarationKind,
   type GraphEdge,
   type SourcePosition,
   type SourceRange,
@@ -69,6 +75,12 @@ interface CPreprocessorFacts {
   conditionalDepthAt(offset: number): number | null;
 }
 
+interface StaticCTypeDeclaration {
+  readonly name: string;
+  readonly declarationKind: CTypeDeclarationKind;
+  readonly node: CSyntaxNode;
+}
+
 function directChildren(node: CSyntaxNode): readonly CSyntaxNode[] {
   const children: CSyntaxNode[] = [];
   for (let child = node.firstChild; child !== null; child = child.nextSibling) {
@@ -129,6 +141,71 @@ function identifierText(input: CExtractFileFactsInput, node: CSyntaxNode): strin
   return /^[A-Za-z_][A-Za-z0-9_]*$/u.test(value) ? value : null;
 }
 
+function typeIdentifierText(input: CExtractFileFactsInput, node: CSyntaxNode): string | null {
+  if (node.name !== "TypeIdentifier") return null;
+  return identifierText(input, node);
+}
+
+function typeTagName(input: CExtractFileFactsInput, node: CSyntaxNode): string | null {
+  const tag = directChildren(node).find((child) => child.name === "TypeIdentifier");
+  return tag === undefined ? null : typeIdentifierText(input, tag);
+}
+
+function staticCTypeDeclarations(
+  input: CExtractFileFactsInput,
+  node: CSyntaxNode
+): readonly StaticCTypeDeclaration[] {
+  const declarations: StaticCTypeDeclaration[] = [];
+  const declarationKind: CTypeDeclarationKind | undefined =
+    node.name === "StructSpecifier"
+      ? "struct"
+      : node.name === "UnionSpecifier"
+        ? "union"
+        : node.name === "EnumSpecifier"
+          ? "enum"
+          : node.name === "TypeDefinition"
+            ? "typedef"
+            : undefined;
+  if (declarationKind === undefined) return declarations;
+  if (declarationKind === "typedef") {
+    for (const child of directChildren(node)) {
+      if (["StructSpecifier", "UnionSpecifier", "EnumSpecifier"].includes(child.name)) {
+        const nestedKind: CTypeDeclarationKind =
+          child.name === "StructSpecifier"
+            ? "struct"
+            : child.name === "UnionSpecifier"
+              ? "union"
+              : "enum";
+        const nestedName = typeTagName(input, child);
+        if (nestedName !== null) declarations.push({ name: nestedName, declarationKind: nestedKind, node: child });
+      }
+    }
+    const aliases = directChildren(node)
+      .filter((child) => child.name === "TypeIdentifier")
+      .map((child) => typeIdentifierText(input, child))
+      .filter((name): name is string => name !== null);
+    const alias = aliases.at(-1);
+    if (alias !== undefined && !declarations.some((candidate) => candidate.name === alias)) {
+      declarations.push({ name: alias, declarationKind, node });
+    }
+    return declarations;
+  }
+  const name = typeTagName(input, node);
+  return name === null ? declarations : [{ name, declarationKind, node }];
+}
+
+function cTypeNamesInNode(input: CExtractFileFactsInput, node: CSyntaxNode): readonly string[] {
+  const names: string[] = [];
+  function visit(current: CSyntaxNode): void {
+    if (current.name === "Identifier" && current.parent?.name === "FunctionDeclarator") return;
+    const name = typeIdentifierText(input, current);
+    if (name !== null && !names.includes(name)) names.push(name);
+    for (const child of directChildren(current)) visit(child);
+  }
+  visit(node);
+  return names;
+}
+
 function staticPlainCString(input: CExtractFileFactsInput, node: CSyntaxNode): string | null {
   if (node.name !== "String") {
     return null;
@@ -144,6 +221,45 @@ function staticPlainCString(input: CExtractFileFactsInput, node: CSyntaxNode): s
     return null;
   }
   return value.slice(1, -1);
+}
+
+function staticCImportFacts(
+  input: CExtractFileFactsInput,
+  root: CSyntaxNode,
+  sourceId: string,
+  lineStarts: readonly number[]
+): readonly CImportFact[] {
+  const imports: CImportFact[] = [];
+  for (const node of directChildren(root)) {
+    if (node.name !== "PreprocDirective") continue;
+    const text = nodeText(input, node);
+    const match = /^\s*#\s*include\s*"([^"\r\n]+)"/u.exec(text);
+    const importedPath = match?.[1];
+    if (match === null || importedPath === undefined) continue;
+    const relativeOffset = match[0]?.indexOf(importedPath) ?? -1;
+    const offset = node.from + relativeOffset;
+    if (relativeOffset < 0 || offset < node.from) continue;
+    imports.push({
+      sourceId,
+      filePath: input.filePath,
+      importedPath,
+      range: rangeFor(lineStarts, offset, offset + importedPath.length)
+    });
+  }
+  return imports;
+}
+
+function cArgumentCount(text: string): number | undefined {
+  const compact = text.trim();
+  if (compact.length === 0) return 0;
+  let depth = 0;
+  let count = 1;
+  for (const character of compact) {
+    if ("([{".includes(character)) depth += 1;
+    else if (")] }".replaceAll(" ", "").includes(character)) depth = Math.max(0, depth - 1);
+    else if (character === "," && depth === 0) count += 1;
+  }
+  return compact.includes("...") ? undefined : count;
 }
 
 function staticCivetWebPath(input: CExtractFileFactsInput, node: CSyntaxNode): string | null {
@@ -251,6 +367,36 @@ function cFunctionContract(
     .replace(/\s+/gu, "");
   const parameters = cParameterContract(input, parameterList);
   return returnType.length === 0 || parameters === null ? null : { returnType, parameters };
+}
+
+function cParameterTypeNames(
+  input: CExtractFileFactsInput,
+  parameterList: CSyntaxNode
+): readonly string[] | undefined {
+  const names: string[] = [];
+  for (const parameter of directChildren(parameterList).filter(
+    (child) => child.name === "ParameterDeclaration"
+  )) {
+    for (const name of cTypeNamesInNode(input, parameter)) {
+      if (!names.includes(name)) names.push(name);
+    }
+  }
+  return names.length === 0 ? undefined : names;
+}
+
+function cReturnTypeName(
+  input: CExtractFileFactsInput,
+  node: CSyntaxNode
+): string | undefined {
+  const declarator = directChildren(node).find((child) => child.name === "FunctionDeclarator");
+  if (declarator === undefined) return undefined;
+  const names: string[] = [];
+  for (const child of directChildren(node).filter((candidate) => candidate.to <= declarator.from)) {
+    for (const name of cTypeNamesInNode(input, child)) {
+      if (!names.includes(name)) names.push(name);
+    }
+  }
+  return names.length === 0 ? undefined : names.at(-1);
 }
 
 function hasStorageClass(input: CExtractFileFactsInput, node: CSyntaxNode, storageClass: string): boolean {
@@ -583,6 +729,11 @@ export function extractCFileFacts(input: CExtractFileFactsInput): ArtifactFacts 
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
+  const cTypes: CTypeFact[] = [];
+  const cCallables: CCallableFact[] = [];
+  const cPrototypes: CPrototypeFact[] = [];
+  const cImports: CImportFact[] = [];
+  const cCalls: CCallFact[] = [];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -601,6 +752,9 @@ export function extractCFileFacts(input: CExtractFileFactsInput): ArtifactFacts 
     declarationOrdinal: 0
   };
   symbols.push(fileNode);
+  const parserRejected = hasSyntaxError(root);
+  if (!parserRejected) cImports.push(...staticCImportFacts(input, root, fileNode.id, lineStarts));
+  const preprocessor = cPreprocessorFacts(input);
 
   function nextOrdinal(qualifiedName: string, kind: SymbolNode["kind"]): number {
     const identity = `${qualifiedName}\u0000${kind}`;
@@ -656,6 +810,37 @@ export function extractCFileFacts(input: CExtractFileFactsInput): ArtifactFacts 
     };
     symbols.push(symbol);
     addContainment(fileNode, symbol, declaration.node);
+    return symbol;
+  }
+
+  function addType(declaration: StaticCTypeDeclaration): SymbolNode {
+    const qualifiedName = `${input.filePath}#${declaration.name}`;
+    const declarationOrdinal = nextOrdinal(qualifiedName, "type");
+    const symbol: SymbolNode = {
+      id: createSymbolId({
+        filePath: input.filePath,
+        qualifiedName,
+        kind: "type",
+        declarationOrdinal
+      }),
+      name: declaration.name,
+      qualifiedName,
+      kind: "type",
+      filePath: input.filePath,
+      range: rangeFor(lineStarts, declaration.node.from, declaration.node.to),
+      isExported: true,
+      declarationOrdinal
+    };
+    symbols.push(symbol);
+    addContainment(fileNode, symbol, declaration.node);
+    cTypes.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      declarationKind: declaration.declarationKind,
+      isExported: symbol.isExported,
+      range: symbol.range
+    });
     return symbol;
   }
 
@@ -772,14 +957,48 @@ export function extractCFileFacts(input: CExtractFileFactsInput): ArtifactFacts 
         symbol.id,
         cFunctionContract(input, functionDeclaration.node, functionDeclaration.parameterList)
       );
+      const parameterTypes = cParameterTypeNames(input, functionDeclaration.parameterList);
+      const returnType = cReturnTypeName(input, functionDeclaration.node);
+      const contract = functionContractsBySymbolId.get(symbol.id);
+      cCallables.push({
+        symbolId: symbol.id,
+        filePath: input.filePath,
+        name: functionDeclaration.name,
+        parameterCount: contract?.parameters.minimumArgumentCount ?? 0,
+        ...(contract?.parameters.variadic === true ? { variadic: true } : {}),
+        ...(parameterTypes === undefined ? {} : { parameterTypeNames: parameterTypes }),
+        ...(returnType === undefined ? {} : { returnTypeName: returnType }),
+        isExported: symbol.isExported,
+        range: symbol.range
+      });
       functionsByName.set(functionDeclaration.name, [
         ...(functionsByName.get(functionDeclaration.name) ?? []),
         symbol
       ]);
     }
 
-    const preprocessor = cPreprocessorFacts(input);
-    if (!preprocessor.hasInclude && !preprocessor.malformed) {
+    for (const declaration of declarations) {
+      const contract = cFunctionContract(input, declaration.node, declaration.parameterList);
+      if (contract === null) continue;
+      const parameterTypes = cParameterTypeNames(input, declaration.parameterList);
+      const returnType = cReturnTypeName(input, declaration.node);
+      cPrototypes.push({
+        name: declaration.name,
+        parameterCount: contract.parameters.minimumArgumentCount,
+        ...(contract.parameters.variadic ? { variadic: true } : {}),
+        ...(parameterTypes === undefined ? {} : { parameterTypeNames: parameterTypes }),
+        ...(returnType === undefined ? {} : { returnTypeName: returnType }),
+        range: rangeFor(lineStarts, declaration.node.from, declaration.node.to)
+      });
+    }
+
+    for (const node of directChildren(root)) {
+      for (const declaration of staticCTypeDeclarations(input, node)) {
+        addType(declaration);
+      }
+    }
+
+    if (!preprocessor.malformed) {
       for (const functionDeclaration of functions) {
         const caller = symbolsByFunction.get(functionDeclaration);
         if (
@@ -796,6 +1015,16 @@ export function extractCFileFacts(input: CExtractFileFactsInput): ArtifactFacts 
             preprocessor.conditionalDepthAt(call.node.from) !== 0
           ) {
             continue;
+          }
+          if (preprocessor.macroNames.size === 0) {
+            const range = rangeFor(lineStarts, call.node.from, call.node.to);
+            cCalls.push({
+              sourceId: caller.id,
+              filePath: input.filePath,
+              referenceName: call.name,
+              argumentCount: call.argumentCount,
+              range
+            });
           }
           const candidates = functionsByName.get(call.name) ?? [];
           const candidate = candidates.length === 1 ? candidates[0] : undefined;
@@ -832,7 +1061,7 @@ export function extractCFileFacts(input: CExtractFileFactsInput): ArtifactFacts 
             compatibleDeclarations &&
             acceptsCallArgumentCount(candidateContract, call.argumentCount)
           ) {
-            addCall(caller, candidate, call.node);
+            if (!preprocessor.hasInclude) addCall(caller, candidate, call.node);
           }
         }
       }
@@ -882,6 +1111,18 @@ export function extractCFileFacts(input: CExtractFileFactsInput): ArtifactFacts 
       routers: [],
       routes: [],
       importedRouterInclusions: []
+    },
+    cFacts: {
+      parserRejected,
+      unsafePreprocessor:
+        preprocessor.malformed ||
+        preprocessor.macroNames.size > 0 ||
+        /^\s*#\s*(?:if|ifdef|ifndef|elif|else|endif)\b/mu.test(input.sourceText),
+      types: cTypes,
+      callables: cCallables,
+      prototypes: cPrototypes,
+      imports: cImports,
+      calls: cCalls
     }
   };
 }

@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.473.0
+目前版本：v0.474.0
 
 ## 主要能力
 
@@ -102,6 +102,8 @@ v0.471.0 加深 Nim bounded project relations。固定 Nim compiler 2.2.4、Nimb
 v0.472.0 加深 Zig bounded project relations。固定 Zig 0.15.2、Ghostty v1.3.1、ZLS 0.16.0 與 TigerBeetle 固定 main commit 四個 production `.zig` scope，加入 literal `@import`、struct／enum／union／opaque identity、固定 arity typed function、唯一同檔／qualified call、`Type{}` construction 與 signature accepts／returns。300 個 synthetic 正向為 TP300／FP0／FN0／evidenceInvalid0，150 個 disposable 負向全數 fail-close；comptime、usingnamespace、generic／anytype、method／namespace dispatch、async／thread、FFI／reflection、build／package dependency、generated／conditional code 與 runtime dispatch 維持 unresolved 或 nonclaim。四個大型 corpus 的 parser-rejected files 與 unsupported breadth recall 另列，Windows 沒有 Zig compiler/ZLS toolchain，因此不宣稱完整 Zig 語意。
 
 v0.473.0 加深 C++ bounded project relations。固定 LLVM 21.1.1、OpenCV 4.12.0、nlohmann/json 3.12.0 與 Catch2 v3.11.0 四個 production C++ scope，加入 literal local include、struct／class identity、固定 arity callable signature、唯一同檔／include-visible direct call、`this->member` call、`new Type()` construction 與 signature accepts／returns。300 個 synthetic 正向為 TP300／FP0／FN0／evidenceInvalid0，150 個 disposable 負向全數 fail-close；template／macro／SFINAE／concept、overload／ADL／using、virtual dispatch、lambda／coroutine、FFI、CMake／ABI／dependency、generated／conditional code 與 malformed parser recovery 維持 unresolved 或 nonclaim。四個 corpus 的 parser-rejected files 與 unsupported breadth recall 另列，Windows 沒有 C++ compiler／linker／CMake target graph，因此不宣稱完整 C++ 語意。
+
+v0.474.0 加深 C bounded project relations。固定 curl 8.15.0、Git 2.51.0、libuv 1.51.0 與 SQLite 3.50.0 四個 production C scope，加入 source-proven `.h` discovery、literal local include、struct／union／enum／typedef identity、唯一同檔／included-header direct function call，以及 tagged function signature accepts／returns；300 個 synthetic 正向為 TP300／FP0／FN0／evidenceInvalid0，150 個 disposable 負向全數 fail-close。macro／conditional、conflicting prototype、function-pointer／indirect call、variadic dispatch、ABI／compiler／CMake dependency、generated code、external include 與 malformed parser recovery 維持 unresolved 或 nonclaim。四個 corpus 的 parser-admitted breadth 另列；Windows 沒有 C compiler／build-target validation，因此不宣稱完整 C 語意。
 
 v0.470.0 加深 Nix bounded project relations。保留既有 attrset／let／inherit／literal `import` 掃描，新增 function attribute facts、單一 identifier lambda 的唯一 local call，以及 `binding = import ./file.nix` 後唯一 `binding.attr` project-local call；所有 exact edge 都帶 singleton evidence。300 個 synthetic 正向為 TP300／FP0／FN0／evidenceInvalid0，150 個 disposable 負向全數 fail-close。`with`／`rec`／dynamic attr、derivation／`mkDerivation`／`callPackage`、flake inputs、fetcher／固定點、覆寫／merge、Nix evaluator、依賴／overlay／外部 package 與 generated／conditional code 維持 unresolved 或 nonclaim；四個大型 corpus 的 parser-rejected files 與 unsupported breadth recall 另列，Windows 沒有 Nix evaluator/toolchain，因此不宣稱完整 Nix 語意。
 

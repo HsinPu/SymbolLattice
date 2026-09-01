@@ -447,7 +447,7 @@ describe("source discovery", () => {
     expect(getSourceLanguage("src/legacy.ADA")).toBe("ada");
   });
 
-  it("discovers only source-proven Objective-C .h headers", async () => {
+  it("discovers source-proven Objective-C and C .h headers", async () => {
     const projectPath = await createProject();
     await mkdir(join(projectPath, "Headers"), { recursive: true });
     const header = [
@@ -523,6 +523,7 @@ describe("source discovery", () => {
 
     expect(getSourceLanguage("Headers/HealthController.h")).toBeNull();
     expect(getSourceLanguage("Headers/HealthController.h", header)).toBe("objc");
+    expect(getSourceLanguage("Headers/PlainC.h", "typedef struct { int status; } HealthStatus;\n")).toBe("c");
 
     const files = await discoverSourceFiles(projectPath);
 
@@ -532,6 +533,7 @@ describe("source discovery", () => {
       ["Headers/HealthChecking.h", "objc"],
       ["Headers/HealthController.h", "objc"],
       ["Headers/InertDirectiveText.h", "objc"],
+      ["Headers/PlainC.h", "c"],
       ["Headers/VerticalTabConditional.h", "objc"]
     ]);
   });

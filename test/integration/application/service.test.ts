@@ -22907,7 +22907,7 @@ describe("SymbolLatticeService", () => {
     ]);
   });
 
-  it("indexes source-proven Objective-C headers without admitting ordinary C headers", async () => {
+  it("indexes source-proven Objective-C and ordinary C headers", async () => {
     const projectPath = await createInlineProject({
       "Headers/HealthController.h": [
         "#import <Foundation/Foundation.h>",
@@ -22941,7 +22941,7 @@ describe("SymbolLatticeService", () => {
 
     expect(indexed).toMatchObject({
       stale: false,
-      counts: { files: 1, symbols: expect.any(Number), edges: expect.any(Number) }
+      counts: { files: 2, symbols: expect.any(Number), edges: expect.any(Number) }
     });
     expect(persistedFacts).toMatchObject({
       language: "objc",

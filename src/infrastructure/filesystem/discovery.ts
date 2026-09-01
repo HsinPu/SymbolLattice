@@ -127,6 +127,10 @@ const OBJECTIVE_C_HEADER_EXTENSION = ".h";
 const OBJECTIVE_C_HEADER_CONTAINER =
   /^[ \t]*@(interface|protocol)[ \t]+[A-Za-z_][A-Za-z0-9_]*/mu;
 const OBJECTIVE_C_HEADER_END = /^[ \t]*@end[ \t]*$/mu;
+const C_HEADER_MARKER =
+  /(^|\n)[ \t]*(?:#\s*include\b|typedef\b|struct\b|union\b|enum\b|extern\b|static\b|(?:void|char|short|int|long|float|double|unsigned|signed)\b)/mu;
+const CPP_HEADER_MARKER =
+  /(^|\n)[ \t]*(?:class\b|namespace\b|template\b|concept\b|using\b|#\s*include\s*[<"][^>"]+\.(?:hpp|hh|hxx)\b)|::/mu;
 
 export const SHELL_SHEBANG_ALLOWLIST = Object.freeze([
   "#!/bin/sh",
@@ -249,16 +253,24 @@ export function getSourceLanguage(
     return "blade";
   }
   const extension = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
-  const extensionLanguage = SUPPORTED_EXTENSIONS.get(extension);
-  if (extensionLanguage !== undefined) {
-    return extensionLanguage;
-  }
   if (extension === OBJECTIVE_C_HEADER_EXTENSION) {
     if (sourceText !== undefined && isProvenObjectiveCHeader(sourceText)) {
       return "objc";
     }
+    if (sourceText !== undefined && isProvenCHeader(sourceText)) {
+      return "c";
+    }
+    return null;
+  }
+  const extensionLanguage = SUPPORTED_EXTENSIONS.get(extension);
+  if (extensionLanguage !== undefined) {
+    return extensionLanguage;
   }
   return sourceText !== undefined && hasExactShellShebang(sourceText) ? "shell" : null;
+}
+
+function isProvenCHeader(sourceText: string): boolean {
+  return !CPP_HEADER_MARKER.test(sourceText) && C_HEADER_MARKER.test(sourceText);
 }
 
 export function hashSource(sourceText: string): string {
