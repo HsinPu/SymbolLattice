@@ -16,7 +16,7 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.476.0
+Current version: v0.477.0
 
 ## Highlights
 
@@ -80,6 +80,8 @@ v0.457.0 deepens bounded Go project relations. Four fixed large, clean checkouts
 v0.458.0 deepens bounded Rust crate relations. Four fixed large Rust source scopes (Tokio, Rust core, alloc, and std), plus one clean crate contract fixture, verify module/use/trait/impl identity, unique inherent methods and associated functions, struct/enum construction, and the existing `implements` edge. All 300 admitted positives and 150 disposable negatives pass. Trait-object dispatch, dereference or embedding ambiguity, cfg, complex generics, macro/proc-macro expansion, build scripts, FFI, generated code, and runtime dispatch remain unresolved or nonclaims; parser-rejected files and unsupported breadth are reported separately rather than presented as complete Rust compiler semantics.
 
 v0.476.0 deepens bounded Objective-C project relations. Exact edges are limited to literal local `#import`/`#include`, unique class/protocol heritage, source-proven object signatures, explicit class messages, and `[[Type alloc] init]`; `self`/`super`/variable receivers, categories, conditional compilation, framework/module-map resolution, macros, swizzling, forwarding, runtime dispatch, and ambiguous headers remain unresolved or nonclaims. This is source-only depth evidence, not complete Clang/Xcode semantics.
+
+v0.477.0 deepens bounded Ruby project relations. Exact edges are limited to literal `require_relative`, unique class superclasses, and explicit constant-receiver singleton method calls; bare/implicit calls, reopen, constant reassignment, include/extend/prepend, `send`/reflection, Rails autoload, DSLs, and metaprogramming remain unresolved or nonclaims. This is source-only relation depth, not complete Ruby runtime dispatch.
 
 v0.459.0 deepens bounded Kotlin/JVM relations. Three fixed large source scopes (Kotlin compiler, Ktor, and kotlinx.coroutines), plus one clean synthetic project, verify class/object/interface/enum/typealias identity, explicit imports, unique direct/member/extension calls, constructor instantiation, heritage, and explicit overrides. All 300 admitted positives and 150 disposable negatives pass. Overloads, default parameters, extension ambiguity, generic/reified types, delegation, sealed/interface dispatch, compiler plugins, coroutine runtime, generated/reflection behavior, Java interop, and external dependency linkage remain unresolved or nonclaims; unsupported breadth and parser-rejected files are reported separately rather than presented as complete Kotlin compiler support.
 

@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v382";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v383";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v187";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v188";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -2552,6 +2552,65 @@ export interface ObjcFacts {
   readonly instantiations: readonly ObjcInstantiationFact[];
 }
 
+/** Ruby declarations retained for conservative, syntax-only project relations. */
+export type RubyTypeDeclarationKind = "class" | "module";
+
+export interface RubyTypeFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly constantPath: string;
+  readonly declarationKind: RubyTypeDeclarationKind;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+}
+
+export interface RubyCallableFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly ownerTypePath?: string;
+  readonly isSingleton: boolean;
+  readonly parameterCount: number;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+}
+
+export interface RubyImportFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly importedPath: string;
+  readonly range: SourceRange;
+}
+
+export interface RubyHeritageFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly sourceTypePath: string;
+  readonly targetTypePath: string;
+  readonly range: SourceRange;
+}
+
+export interface RubyCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly receiverTypePath: string;
+  readonly referenceName: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only Ruby relation facts. Reopen, alias, mixin, reflection, and dynamic dispatch remain nonclaims. */
+export interface RubyFacts {
+  readonly parserRejected?: boolean;
+  readonly unsafeDynamicFeatures?: true;
+  readonly types: readonly RubyTypeFact[];
+  readonly callables: readonly RubyCallableFact[];
+  readonly imports: readonly RubyImportFact[];
+  readonly heritage: readonly RubyHeritageFact[];
+  readonly calls: readonly RubyCallFact[];
+}
+
 /** Syntax-only Java package facts retained for exact Play controller-action resolution. */
 export interface JavaFacts {
   readonly classes: readonly JavaClassFact[];
@@ -4300,6 +4359,8 @@ export interface ArtifactFacts {
   readonly phpFacts?: PhpFacts;
   /** Omitted only by artifact facts persisted before v0.476 Objective-C relation depth. */
   readonly objcFacts?: ObjcFacts;
+  /** Omitted only by artifact facts persisted before v0.477 Ruby relation depth. */
+  readonly rubyFacts?: RubyFacts;
   /** Omitted only by artifact facts persisted before v0.460 Swift relation depth. */
   readonly swiftFacts?: SwiftFacts;
   /** Omitted only by artifact facts persisted before v0.461 Dart relation depth. */

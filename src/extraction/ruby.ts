@@ -6,6 +6,12 @@ import {
   type ArtifactFacts,
   type GraphEdge,
   type PendingReference,
+  type RubyCallFact,
+  type RubyCallableFact,
+  type RubyFacts,
+  type RubyHeritageFact,
+  type RubyImportFact,
+  type RubyTypeFact,
   type RouteRegistration,
   type RouteMethod,
   type SourcePosition,
@@ -344,6 +350,98 @@ function staticRubySingletonMethod(node: RubySyntaxNode): StaticRubySingletonMet
   )
     ? null
     : { name, receiverPath: receiver.kind() === "self" ? null : receiverPath ?? null, node, body: bodies[0] ?? null };
+}
+
+function rubyMethodParameterCount(node: RubySyntaxNode): number {
+  const parameters = directChildren(node).find((child) => child.kind() === "method_parameters");
+  if (parameters === undefined) return 0;
+  return directChildren(parameters).filter(
+    (child) => child.kind() !== "(" && child.kind() !== ")" && child.kind() !== ","
+  ).length;
+}
+
+function staticRubySuperclass(node: RubySyntaxNode): { readonly path: string; readonly node: RubySyntaxNode } | null {
+  const superclass = directChildren(node).find((child) => child.kind() === "superclass");
+  if (superclass === undefined) return null;
+  const parent = directChildren(superclass).find(
+    (child) => child.kind() === "constant" || child.kind() === "scope_resolution"
+  );
+  const path = parent === undefined ? null : constantPath(parent)?.path ?? null;
+  return path === null || parent === undefined ? null : { path, node: parent };
+}
+
+function staticRubyRequireRelative(node: RubySyntaxNode): string | null {
+  if (node.kind() !== "call") return null;
+  const children = directChildren(node);
+  if (children[0]?.kind() !== "identifier" || nodeText(children[0]) !== "require_relative") return null;
+  const argumentList = children[1];
+  if (argumentList?.kind() !== "argument_list" || children.length !== 2) return null;
+  const arguments_ = directChildren(argumentList).filter(
+    (child) => child.kind() !== "(" && child.kind() !== ")" && child.kind() !== ","
+  );
+  return arguments_.length === 1 && arguments_[0] !== undefined
+    ? staticPlainRubyString(arguments_[0])
+    : null;
+}
+
+function staticRubyQualifiedCall(node: RubySyntaxNode): {
+  readonly receiverTypePath: string;
+  readonly name: string;
+  readonly argumentCount: number;
+} | null {
+  if (node.kind() !== "call") return null;
+  const children = directChildren(node);
+  const receiver = children[0];
+  const nameNode = children[2];
+  if (
+    receiver === undefined ||
+    (receiver.kind() !== "constant" && receiver.kind() !== "scope_resolution") ||
+    children[1]?.kind() !== "." ||
+    nameNode === undefined
+  ) return null;
+  const receiverPath = constantPath(receiver)?.path;
+  const name = rubyMethodName(nameNode);
+  if (receiverPath === undefined || name === null) return null;
+  const tail = children.slice(3);
+  const argumentLists = tail.filter((child) => child.kind() === "argument_list");
+  const nonArguments = tail.filter((child) => child.kind() !== "argument_list");
+  if (nonArguments.length !== 0 || argumentLists.length > 1) return null;
+  const argumentList = argumentLists[0];
+  if (argumentList === undefined) return { receiverTypePath: receiverPath, name, argumentCount: 0 };
+  const arguments_ = directChildren(argumentList).filter(
+    (child) => child.kind() !== "(" && child.kind() !== ")" && child.kind() !== ","
+  );
+  if (
+    arguments_.some((child) =>
+      child.kind() === "splat_argument" ||
+      child.kind() === "hash_splat_argument" ||
+      child.kind() === "block_argument"
+    )
+  ) return null;
+  return { receiverTypePath: receiverPath, name, argumentCount: arguments_.length };
+}
+
+const RUBY_RELATION_MUTATION_NAMES = new Set([
+  "alias_method", "class_eval", "class_exec", "const_get", "const_set", "define_method",
+  "define_singleton_method", "extend", "include", "instance_eval", "instance_exec",
+  "method_missing", "module_eval", "prepend", "public_send", "remove_const", "remove_method",
+  "remove_singleton_method", "send", "singleton_class", "undef_method", "using"
+]);
+
+function hasRubyRelationMutation(root: RubySyntaxNode): boolean {
+  const pending: RubySyntaxNode[] = [root];
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (node === undefined) continue;
+    if (node.kind() === "alias" || node.kind() === "undef") return true;
+    if (node.kind() === "assignment" && /^[A-Z][A-Za-z0-9_:]*\s*=/u.test(nodeText(node))) return true;
+    if (node.kind() === "call") {
+      const name = rubyCallName(node);
+      if (name !== null && RUBY_RELATION_MUTATION_NAMES.has(name)) return true;
+    }
+    pending.push(...directChildren(node));
+  }
+  return false;
 }
 
 /**
@@ -823,6 +921,13 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
   const pendingReferences: PendingReference[] = [];
+  const rubyTypes: RubyTypeFact[] = [];
+  const rubyCallables: RubyCallableFact[] = [];
+  const rubyImports: RubyImportFact[] = [];
+  const rubyHeritage: RubyHeritageFact[] = [];
+  const rubyCalls: RubyCallFact[] = [];
+  const typePathsBySymbolId = new Map<string, string>();
+  const callableRanges: Array<{ readonly sourceId: string; readonly start: number; readonly end: number }> = [];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -847,6 +952,12 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
     const ordinal = declarationOrdinals.get(identity) ?? 0;
     declarationOrdinals.set(identity, ordinal + 1);
     return ordinal;
+  }
+
+  function fullRubyTypePath(parent: SymbolNode, declaration: StaticRubyClass | StaticRubyModule): string {
+    if (declaration.constantPath.includes("::")) return declaration.constantPath;
+    const parentPath = typePathsBySymbolId.get(parent.id);
+    return parentPath === undefined ? declaration.name : `${parentPath}::${declaration.name}`;
   }
 
   function addContainment(
@@ -882,6 +993,7 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
   }
 
   function addClass(parent: SymbolNode, declaration: StaticRubyClass): SymbolNode {
+    const typePath = fullRubyTypePath(parent, declaration);
     const qualifiedName =
       declaration.constantPath.includes("::")
         ? input.filePath + "#" + declaration.constantPath
@@ -913,10 +1025,31 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
         ? "language.ruby.v1_6.direct-declaration.containment"
         : "language.ruby.v1_6.lexical-declaration.containment"
     );
+    typePathsBySymbolId.set(symbol.id, typePath);
+    rubyTypes.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      constantPath: typePath,
+      declarationKind: "class",
+      isExported: symbol.isExported,
+      range: symbol.range
+    });
+    const superclass = staticRubySuperclass(declaration.node);
+    if (superclass !== null) {
+      rubyHeritage.push({
+        sourceId: symbol.id,
+        filePath: input.filePath,
+        sourceTypePath: typePath,
+        targetTypePath: superclass.path,
+        range: rangeForNode(superclass.node)
+      });
+    }
     return symbol;
   }
 
   function addModule(parent: SymbolNode, declaration: StaticRubyModule): SymbolNode {
+    const typePath = fullRubyTypePath(parent, declaration);
     const qualifiedName =
       declaration.constantPath.includes("::")
         ? input.filePath + "#" + declaration.constantPath
@@ -948,6 +1081,16 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
         ? "language.ruby.v1_6.direct-declaration.containment"
         : "language.ruby.v1_6.lexical-declaration.containment"
     );
+    typePathsBySymbolId.set(symbol.id, typePath);
+    rubyTypes.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      constantPath: typePath,
+      declarationKind: "module",
+      isExported: symbol.isExported,
+      range: symbol.range
+    });
     return symbol;
   }
 
@@ -971,6 +1114,22 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
     };
     symbols.push(symbol);
     addContainment(parent, symbol, declaration.node);
+    const ownerTypePath = typePathsBySymbolId.get(parent.id);
+    rubyCallables.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      ...(ownerTypePath === undefined ? {} : { ownerTypePath }),
+      isSingleton: false,
+      parameterCount: rubyMethodParameterCount(declaration.node),
+      isExported: symbol.isExported,
+      range: symbol.range
+    });
+    callableRanges.push({
+      sourceId: symbol.id,
+      start: declaration.node.range().start.index,
+      end: declaration.node.range().end.index
+    });
     return symbol;
   }
 
@@ -1000,6 +1159,27 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
     };
     symbols.push(symbol);
     addContainment(parent, symbol, declaration.node);
+    const parentTypePath = typePathsBySymbolId.get(parent.id);
+    const ownerTypePath = declaration.receiverPath === null
+      ? parentTypePath
+      : parentTypePath === undefined
+        ? declaration.receiverPath
+        : `${parentTypePath}::${declaration.receiverPath}`;
+    rubyCallables.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      ...(ownerTypePath === undefined ? {} : { ownerTypePath }),
+      isSingleton: true,
+      parameterCount: rubyMethodParameterCount(declaration.node),
+      isExported: symbol.isExported,
+      range: symbol.range
+    });
+    callableRanges.push({
+      sourceId: symbol.id,
+      start: declaration.node.range().start.index,
+      end: declaration.node.range().end.index
+    });
     return symbol;
   }
 
@@ -1026,6 +1206,20 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
     };
     symbols.push(symbol);
     addContainment(parent, symbol, declaration.node);
+    rubyCallables.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      isSingleton: false,
+      parameterCount: rubyMethodParameterCount(declaration.node),
+      isExported: symbol.isExported,
+      range: symbol.range
+    });
+    callableRanges.push({
+      sourceId: symbol.id,
+      start: declaration.node.range().start.index,
+      end: declaration.node.range().end.index
+    });
     return symbol;
   }
 
@@ -1058,7 +1252,8 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
     );
   }
 
-  if (!hasSyntaxError(root)) {
+  const parserRejected = hasSyntaxError(root);
+  if (!parserRejected) {
     type RubyStructuralScope = "file" | "class" | "module" | "method";
     function visitStructural(
       node: RubySyntaxNode,
@@ -1161,6 +1356,39 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
     for (const { route } of routeDeclarations) {
       addRailsRoute(route);
     }
+
+    const relationNodes: RubySyntaxNode[] = [root];
+    while (relationNodes.length > 0) {
+      const node = relationNodes.pop();
+      if (node === undefined) continue;
+      const importedPath = staticRubyRequireRelative(node);
+      if (importedPath !== null) {
+        rubyImports.push({
+          sourceId: fileNode.id,
+          filePath: input.filePath,
+          importedPath,
+          range: rangeForNode(node)
+        });
+      }
+      const qualifiedCall = staticRubyQualifiedCall(node);
+      if (qualifiedCall !== null) {
+        const offset = node.range().start.index;
+        const owner = callableRanges
+          .filter((candidate) => candidate.start <= offset && offset <= candidate.end)
+          .sort((left, right) => right.start - left.start)[0];
+        if (owner !== undefined) {
+          rubyCalls.push({
+            sourceId: owner.sourceId,
+            filePath: input.filePath,
+            receiverTypePath: qualifiedCall.receiverTypePath,
+            referenceName: qualifiedCall.name,
+            argumentCount: qualifiedCall.argumentCount,
+            range: rangeForNode(node)
+          });
+        }
+      }
+      relationNodes.push(...directChildren(node));
+    }
   }
 
   return {
@@ -1172,6 +1400,15 @@ export function extractRubyFileFacts(input: RubyExtractFileFactsInput): Artifact
     importBindings: [],
     exportBindings: [],
     reExportBindings: [],
+    rubyFacts: {
+      parserRejected,
+      ...(parserRejected || !hasRubyRelationMutation(root) ? {} : { unsafeDynamicFeatures: true }),
+      types: rubyTypes,
+      callables: rubyCallables,
+      imports: rubyImports,
+      heritage: rubyHeritage,
+      calls: rubyCalls
+    } satisfies RubyFacts,
     nestRouteFacts: {
       routeControllers: [],
       moduleControllers: [],
