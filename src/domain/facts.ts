@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v380";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v381";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v185";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v186";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -2408,6 +2408,81 @@ export interface CFacts {
   readonly calls: readonly CCallFact[];
 }
 
+/** PHP declarations retained for bounded, syntax-only project relations. */
+export type PhpTypeDeclarationKind = "class" | "interface" | "trait" | "enum";
+
+export interface PhpTypeFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly namespaceName: string;
+  readonly declarationKind: PhpTypeDeclarationKind;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+}
+
+export interface PhpCallableFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly namespaceName: string;
+  readonly ownerTypeName?: string;
+  readonly parameterCount: number;
+  readonly variadic?: boolean;
+  readonly parameterTypeNames?: readonly string[];
+  readonly returnTypeName?: string;
+  readonly isStatic?: boolean;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+}
+
+export interface PhpImportFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly importedName: string;
+  readonly localName: string;
+  readonly importKind: "class" | "function" | "const";
+  readonly range: SourceRange;
+}
+
+export interface PhpCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly callKind: "direct" | "static";
+  readonly receiverTypeName?: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface PhpInstantiationFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly typeName: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface PhpHeritageFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly sourceTypeName: string;
+  readonly targetTypeName: string;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only PHP relation facts. Autoloading, traits, magic methods, and dynamic dispatch remain nonclaims. */
+export interface PhpFacts {
+  readonly parserRejected?: boolean;
+  readonly namespaceName?: string;
+  readonly types: readonly PhpTypeFact[];
+  readonly callables: readonly PhpCallableFact[];
+  readonly imports: readonly PhpImportFact[];
+  readonly calls: readonly PhpCallFact[];
+  readonly instantiations: readonly PhpInstantiationFact[];
+  readonly heritage: readonly PhpHeritageFact[];
+}
+
 /** Syntax-only Java package facts retained for exact Play controller-action resolution. */
 export interface JavaFacts {
   readonly classes: readonly JavaClassFact[];
@@ -4152,6 +4227,8 @@ export interface ArtifactFacts {
   readonly cppFacts?: CppFacts;
   /** Omitted only by artifact facts persisted before v0.474 C relation depth. */
   readonly cFacts?: CFacts;
+  /** Omitted only by artifact facts persisted before v0.475 PHP relation depth. */
+  readonly phpFacts?: PhpFacts;
   /** Omitted only by artifact facts persisted before v0.460 Swift relation depth. */
   readonly swiftFacts?: SwiftFacts;
   /** Omitted only by artifact facts persisted before v0.461 Dart relation depth. */

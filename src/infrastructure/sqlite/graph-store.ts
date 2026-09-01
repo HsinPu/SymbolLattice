@@ -867,6 +867,7 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
     ...(facts.zigFacts === undefined ? {} : { zigFacts: facts.zigFacts }),
     ...(facts.cppFacts === undefined ? {} : { cppFacts: facts.cppFacts }),
     ...(facts.cFacts === undefined ? {} : { cFacts: facts.cFacts }),
+    ...(facts.phpFacts === undefined ? {} : { phpFacts: facts.phpFacts }),
     ...(facts.javaFacts === undefined ? {} : { javaFacts: facts.javaFacts }),
     ...(facts.jvmFacts === undefined ? {} : { jvmFacts: facts.jvmFacts }),
     ...(facts.springBootPropertiesFacts === undefined

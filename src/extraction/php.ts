@@ -4,6 +4,12 @@ import {
   createEdgeId,
   createSymbolId,
   type ArtifactFacts,
+  type PhpCallFact,
+  type PhpCallableFact,
+  type PhpHeritageFact,
+  type PhpImportFact,
+  type PhpInstantiationFact,
+  type PhpTypeFact,
   type GraphEdge,
   type RouteMethod,
   type SourcePosition,
@@ -24,6 +30,7 @@ interface StaticPhpClass {
   readonly name: string;
   readonly node: PhpSyntaxNode;
   readonly body: PhpSyntaxNode;
+  readonly superclassName?: string;
 }
 
 interface StaticPhpMethod {
@@ -170,8 +177,13 @@ function staticPhpClass(input: PhpExtractFileFactsInput, node: PhpSyntaxNode): S
     .map((child) => identifierText(input, child))
     .filter((candidate): candidate is string => candidate !== null);
   const bodies = children.filter((child) => child.name === "DeclarationList");
+  const baseClause = children.find((child) => child.name === "BaseClause");
+  const superclassNode = baseClause === undefined
+    ? undefined
+    : directChildren(baseClause).find((child) => child.name === "Name" || child.name === "QualifiedName");
+  const superclassName: string | null = superclassNode === undefined ? null : canonicalClassName(input, superclassNode);
   return name.length === 1 && bodies.length === 1 && name[0] !== undefined && bodies[0] !== undefined
-    ? { name: name[0], node, body: bodies[0] }
+    ? { name: name[0], node, body: bodies[0], ...(superclassName === null ? {} : { superclassName }) }
     : null;
 }
 
@@ -265,6 +277,157 @@ function directPhpCalls(
   }
   visit(body);
   return calls;
+}
+
+function phpArgumentCount(input: PhpExtractFileFactsInput, node: PhpSyntaxNode): number | undefined {
+  const argumentList = directChildren(node).find((child) => child.name === "ArgList");
+  if (argumentList === undefined || directChildren(argumentList).some((child) => child.name === "SpreadArgument")) {
+    return undefined;
+  }
+  return directChildren(argumentList).filter((child) => !["(", ")", ","].includes(child.name)).length;
+}
+
+function phpParameterTypeNames(
+  input: PhpExtractFileFactsInput,
+  node: PhpSyntaxNode
+): readonly string[] | undefined {
+  const parameterList = directChildren(node).find((child) => child.name === "ParamList");
+  if (parameterList === undefined) return undefined;
+  const names: string[] = [];
+  for (const parameter of directChildren(parameterList).filter((child) => child.name === "Parameter")) {
+    const namedType = directChildren(parameter).find((child) => child.name === "NamedType");
+    const typeNode = namedType === undefined
+      ? undefined
+      : directChildren(namedType).find((child) => child.name === "Name" || child.name === "QualifiedName");
+    const name = typeNode === undefined ? undefined : canonicalClassName(input, typeNode);
+    if (name !== null && name !== undefined && !names.includes(name)) names.push(name);
+  }
+  return names.length === 0 ? undefined : names;
+}
+
+function phpReturnTypeName(input: PhpExtractFileFactsInput, node: PhpSyntaxNode): string | undefined {
+  const namedTypes = directChildren(node).filter((child) => child.name === "NamedType");
+  const namedType = namedTypes.at(-1);
+  if (namedType === undefined) return undefined;
+  const typeNode = directChildren(namedType).find((child) => child.name === "Name" || child.name === "QualifiedName");
+  const name = typeNode === undefined ? null : canonicalClassName(input, typeNode);
+  return name === null ? undefined : name;
+}
+
+function phpIsStatic(node: PhpSyntaxNode): boolean {
+  return directChildren(node).some((child) => child.name === "static");
+}
+
+function phpIsVariadic(node: PhpSyntaxNode): boolean {
+  const parameterList = directChildren(node).find((child) => child.name === "ParamList");
+  return parameterList !== undefined && directChildren(parameterList).some((child) => child.name === "VariadicParameter");
+}
+
+function phpNamespaceName(input: PhpExtractFileFactsInput, root: PhpSyntaxNode): string {
+  const namespaceNode = directChildren(root).find((child) => child.name === "NamespaceDefinition");
+  if (namespaceNode === undefined) return "";
+  const nameNode = directChildren(namespaceNode).find((child) => child.name === "Name" || child.name === "QualifiedName");
+  return nameNode === undefined ? "" : canonicalClassName(input, nameNode) ?? "";
+}
+
+function phpImports(
+  input: PhpExtractFileFactsInput,
+  root: PhpSyntaxNode,
+  sourceId: string,
+  lineStarts: readonly number[]
+): readonly PhpImportFact[] {
+  const imports: PhpImportFact[] = [];
+  for (const node of directChildren(root).filter((child) => child.name === "NamespaceUseDeclaration")) {
+    const text = nodeText(input, node);
+    const match = /^\s*use\s+(?:(function|const)\s+)?([A-Za-z_][A-Za-z0-9_\\]*)(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?\s*;/u.exec(text);
+    const importedName = match?.[2];
+    if (match === null || importedName === undefined) continue;
+    const importKind = match[1] === "function" ? "function" : match[1] === "const" ? "const" : "class";
+    const localName = match[3] ?? importedName.split("\\").at(-1);
+    if (localName === undefined) continue;
+    const relativeOffset = match[0]?.indexOf(importedName) ?? -1;
+    if (relativeOffset < 0) continue;
+    imports.push({
+      sourceId,
+      filePath: input.filePath,
+      importedName,
+      localName,
+      importKind,
+      range: rangeFor(lineStarts, node.from + relativeOffset, node.from + relativeOffset + importedName.length)
+    });
+  }
+  return imports;
+}
+
+function phpCallFacts(
+  input: PhpExtractFileFactsInput,
+  body: PhpSyntaxNode,
+  sourceId: string,
+  lineStarts: readonly number[]
+): readonly PhpCallFact[] {
+  const calls: PhpCallFact[] = [];
+  function visit(node: PhpSyntaxNode): void {
+    if (
+      node !== body &&
+      ["FunctionDefinition", "FunctionExpression", "ArrowFunction", "MethodDeclaration", "ClassDeclaration"].includes(node.name)
+    ) return;
+    if (node.name === "CallExpression") {
+      const children = directChildren(node);
+      const argumentCount = phpArgumentCount(input, node);
+      if (argumentCount === undefined || children.length < 2) return;
+      const callee = children[0];
+      if (callee?.name === "Name") {
+        const name = canonicalClassName(input, callee);
+        if (name !== null && name !== "call_user_func") {
+          calls.push({ sourceId, filePath: input.filePath, referenceName: name, callKind: "direct", argumentCount, range: rangeFor(lineStarts, node.from, node.to) });
+        }
+        return;
+      }
+      if (callee?.name === "ScopedExpression") {
+        const scoped = directChildren(callee);
+        const receiverNode = scoped[0];
+        const memberNode = scoped.find((child) => child.name === "ClassMemberName");
+        const receiverTypeName = receiverNode === undefined ? null : canonicalClassName(input, receiverNode);
+        const memberNameNode = memberNode === undefined ? undefined : directChildren(memberNode).find((child) => child.name === "Name");
+        const referenceName = memberNameNode === undefined ? null : identifierText(input, memberNameNode);
+        if (receiverTypeName !== null && referenceName !== null && receiverTypeName !== "self" && receiverTypeName !== "static" && receiverTypeName !== "parent") {
+          calls.push({ sourceId, filePath: input.filePath, referenceName, callKind: "static", receiverTypeName, argumentCount, range: rangeFor(lineStarts, node.from, node.to) });
+        }
+        return;
+      }
+    }
+    for (const child of directChildren(node)) visit(child);
+  }
+  visit(body);
+  return calls;
+}
+
+function phpInstantiationFacts(
+  input: PhpExtractFileFactsInput,
+  body: PhpSyntaxNode,
+  sourceId: string,
+  lineStarts: readonly number[]
+): readonly PhpInstantiationFact[] {
+  const instantiations: PhpInstantiationFact[] = [];
+  function visit(node: PhpSyntaxNode): void {
+    if (
+      node !== body &&
+      ["FunctionDefinition", "FunctionExpression", "ArrowFunction", "MethodDeclaration", "ClassDeclaration"].includes(node.name)
+    ) return;
+    if (node.name === "NewExpression") {
+      const children = directChildren(node);
+      const typeNode = children.find((child) => child.name === "Name" || child.name === "QualifiedName");
+      const typeName = typeNode === undefined ? null : canonicalClassName(input, typeNode);
+      const argumentCount = phpArgumentCount(input, node);
+      if (typeName !== null && argumentCount !== undefined && !["self", "static", "parent"].includes(typeName)) {
+        instantiations.push({ sourceId, filePath: input.filePath, typeName, argumentCount, range: rangeFor(lineStarts, node.from, node.to) });
+        return;
+      }
+    }
+    for (const child of directChildren(node)) visit(child);
+  }
+  visit(body);
+  return instantiations;
 }
 
 function staticLaravelFacadeAliases(
@@ -437,6 +600,12 @@ export function extractPhpFileFacts(input: PhpExtractFileFactsInput): ArtifactFa
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
+  const phpTypes: PhpTypeFact[] = [];
+  const phpCallables: PhpCallableFact[] = [];
+  const phpImportsFacts: PhpImportFact[] = [];
+  const phpCalls: PhpCallFact[] = [];
+  const phpInstantiations: PhpInstantiationFact[] = [];
+  const phpHeritage: PhpHeritageFact[] = [];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -455,6 +624,9 @@ export function extractPhpFileFacts(input: PhpExtractFileFactsInput): ArtifactFa
     declarationOrdinal: 0
   };
   symbols.push(fileNode);
+  const parserRejected = hasSyntaxError(root);
+  const namespaceName = parserRejected ? "" : phpNamespaceName(input, root);
+  if (!parserRejected) phpImportsFacts.push(...phpImports(input, root, fileNode.id, lineStarts));
 
   function nextOrdinal(qualifiedName: string, kind: SymbolNode["kind"]): number {
     const identity = `${qualifiedName}\u0000${kind}`;
@@ -510,6 +682,28 @@ export function extractPhpFileFacts(input: PhpExtractFileFactsInput): ArtifactFa
     };
     symbols.push(symbol);
     addContainment(fileNode, symbol, declaration.node);
+    phpTypes.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      namespaceName,
+      declarationKind: "class",
+      isExported: symbol.isExported,
+      range: symbol.range
+    });
+    if (declaration.superclassName !== undefined) {
+      const baseClause = directChildren(declaration.node).find((child) => child.name === "BaseClause");
+      const baseNameNode = baseClause === undefined ? undefined : directChildren(baseClause).find((child) => child.name === "Name" || child.name === "QualifiedName");
+      if (baseNameNode !== undefined) {
+        phpHeritage.push({
+          sourceId: symbol.id,
+          filePath: input.filePath,
+          sourceTypeName: declaration.name,
+          targetTypeName: declaration.superclassName,
+          range: rangeFor(lineStarts, baseNameNode.from, baseNameNode.to)
+        });
+      }
+    }
     return symbol;
   }
 
@@ -533,6 +727,25 @@ export function extractPhpFileFacts(input: PhpExtractFileFactsInput): ArtifactFa
     };
     symbols.push(symbol);
     addContainment(parent, symbol, declaration.node);
+    const parameterList = directChildren(declaration.node).find((child) => child.name === "ParamList");
+    const parameterTypeNames = phpParameterTypeNames(input, declaration.node);
+    const returnTypeName = phpReturnTypeName(input, declaration.node);
+    phpCallables.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      namespaceName,
+      ownerTypeName: parent.name,
+      parameterCount: parameterList === undefined ? 0 : directChildren(parameterList).filter((child) => child.name === "Parameter").length,
+      ...(phpIsVariadic(declaration.node) ? { variadic: true } : {}),
+      ...(parameterTypeNames === undefined ? {} : { parameterTypeNames }),
+      ...(returnTypeName === undefined ? {} : { returnTypeName }),
+      ...(phpIsStatic(declaration.node) ? { isStatic: true } : {}),
+      isExported: symbol.isExported,
+      range: symbol.range
+    });
+    phpCalls.push(...phpCallFacts(input, directChildren(declaration.node).find((child) => child.name === "Block") ?? declaration.node, symbol.id, lineStarts));
+    phpInstantiations.push(...phpInstantiationFacts(input, directChildren(declaration.node).find((child) => child.name === "Block") ?? declaration.node, symbol.id, lineStarts));
     return symbol;
   }
 
@@ -556,6 +769,23 @@ export function extractPhpFileFacts(input: PhpExtractFileFactsInput): ArtifactFa
     };
     symbols.push(symbol);
     addContainment(fileNode, symbol, declaration.node);
+    const parameterList = directChildren(declaration.node).find((child) => child.name === "ParamList");
+    const parameterTypeNames = phpParameterTypeNames(input, declaration.node);
+    const returnTypeName = phpReturnTypeName(input, declaration.node);
+    phpCallables.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      namespaceName,
+      parameterCount: parameterList === undefined ? 0 : directChildren(parameterList).filter((child) => child.name === "Parameter").length,
+      ...(phpIsVariadic(declaration.node) ? { variadic: true } : {}),
+      ...(parameterTypeNames === undefined ? {} : { parameterTypeNames }),
+      ...(returnTypeName === undefined ? {} : { returnTypeName }),
+      isExported: symbol.isExported,
+      range: symbol.range
+    });
+    phpCalls.push(...phpCallFacts(input, declaration.body, symbol.id, lineStarts));
+    phpInstantiations.push(...phpInstantiationFacts(input, declaration.body, symbol.id, lineStarts));
     return symbol;
   }
 
@@ -727,6 +957,16 @@ export function extractPhpFileFacts(input: PhpExtractFileFactsInput): ArtifactFa
       routers: [],
       routes: [],
       importedRouterInclusions: []
+    },
+    phpFacts: {
+      parserRejected,
+      ...(namespaceName === "" ? {} : { namespaceName }),
+      types: phpTypes,
+      callables: phpCallables,
+      imports: phpImportsFacts,
+      calls: phpCalls,
+      instantiations: phpInstantiations,
+      heritage: phpHeritage
     }
   };
 }
