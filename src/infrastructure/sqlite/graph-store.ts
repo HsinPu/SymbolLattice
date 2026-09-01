@@ -870,6 +870,7 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
     ...(facts.phpFacts === undefined ? {} : { phpFacts: facts.phpFacts }),
     ...(facts.objcFacts === undefined ? {} : { objcFacts: facts.objcFacts }),
     ...(facts.rubyFacts === undefined ? {} : { rubyFacts: facts.rubyFacts }),
+    ...(facts.sqlFacts === undefined ? {} : { sqlFacts: facts.sqlFacts }),
     ...(facts.javaFacts === undefined ? {} : { javaFacts: facts.javaFacts }),
     ...(facts.jvmFacts === undefined ? {} : { jvmFacts: facts.jvmFacts }),
     ...(facts.springBootPropertiesFacts === undefined

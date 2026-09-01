@@ -3,6 +3,9 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type GraphEdge,
+  type SqlFacts,
+  type SqlRelationFact,
+  type SqlTypeFact,
   type SourcePosition,
   type SourceRange,
   type SymbolNode
@@ -56,6 +59,14 @@ interface Declaration {
   readonly declarationEnd: number;
   readonly nameStart: number;
   readonly nameEnd: number;
+  readonly relations?: readonly SqlRelationSyntax[];
+}
+
+interface SqlRelationSyntax {
+  readonly targetName: string;
+  readonly relationKind: "references" | "extends";
+  readonly start: number;
+  readonly end: number;
 }
 type LexResult = { readonly ok: true; readonly statements: readonly Statement[] } | { readonly ok: false; readonly code: FileErrorCode; readonly offsetUtf16: number };
 
@@ -429,6 +440,7 @@ function lexTinyPostgresStructuralV2(sourceText: string): LexResult {
 
 class TinyStatementParser {
   private index = 0;
+  private readonly relations: SqlRelationSyntax[] = [];
   public constructor(private readonly tokens: readonly Token[]) {}
   public parse(): Declaration {
     const create = this.expect("create");
@@ -514,7 +526,7 @@ class TinyStatementParser {
     const closing = this.expect(")");
     const inherits = this.tableTails();
     if (tablePrimaryKey !== null && (new Set(tablePrimaryKey).size !== tablePrimaryKey.length || (!inherits && tablePrimaryKey.some((name) => !columns.includes(name))))) throw this.error("INVALID_PRIMARY_KEY_COLUMNS", closing.start);
-    return { kind: "table", name: names.map((name) => renderIdentifier(name.name, name.quoted)).join("."), qualified: names.length === 2, declarationStart: create.start, declarationEnd: this.tokens[this.index - 1]?.end ?? closing.end, nameStart: first.token.start, nameEnd: names.at(-1)?.token.end ?? first.token.end };
+    return { kind: "table", name: names.map((name) => renderIdentifier(name.name, name.quoted)).join("."), qualified: names.length === 2, declarationStart: create.start, declarationEnd: this.tokens[this.index - 1]?.end ?? closing.end, nameStart: first.token.start, nameEnd: names.at(-1)?.token.end ?? first.token.end, relations: this.relations };
   }
   private tableLike(): void {
     if (!this.psqlVariable()) this.qualifiedIdentifier();
@@ -581,8 +593,12 @@ class TinyStatementParser {
       else if (this.match("inherits") !== null) {
         inherits = true;
         this.expect("(");
-        this.qualifiedIdentifier();
-        while (this.match(",") !== null) this.qualifiedIdentifier();
+        const parent = this.qualifiedIdentifierValue();
+        this.relations.push({ targetName: parent.name, relationKind: "extends", start: parent.start, end: parent.end });
+        while (this.match(",") !== null) {
+          const nextParent = this.qualifiedIdentifierValue();
+          this.relations.push({ targetName: nextParent.name, relationKind: "extends", start: nextParent.start, end: nextParent.end });
+        }
         this.expect(")");
       } else if (this.match("partition") !== null) {
         this.expect("by");
@@ -644,7 +660,13 @@ class TinyStatementParser {
         else throw this.error("EXPECTED_TOKEN", this.current()?.start ?? this.tokens.at(-1)?.end ?? 0);
       }
       else if (this.match("references") !== null) {
-        this.qualifiedIdentifier();
+        const reference = this.qualifiedIdentifierValue();
+        this.relations.push({
+          targetName: reference.name,
+          relationKind: "references",
+          start: reference.start,
+          end: reference.end
+        });
         if (this.peek("(") !== undefined) this.identifierList();
         if (!this.atBoundary()) this.skipToBoundary();
         break;
@@ -685,7 +707,13 @@ class TinyStatementParser {
       this.expect("key");
       this.identifierList();
       this.expect("references");
-      this.qualifiedIdentifier();
+      const reference = this.qualifiedIdentifierValue();
+      this.relations.push({
+        targetName: reference.name,
+        relationKind: "references",
+        start: reference.start,
+        end: reference.end
+      });
       if (this.peek("(") !== undefined) this.identifierList();
       if (!this.atBoundary()) this.skipToBoundary();
       return null;
@@ -711,9 +739,18 @@ class TinyStatementParser {
     this.expect(")");
     return names;
   }
+  private qualifiedIdentifierValue(): { readonly name: string; readonly start: number; readonly end: number } {
+    const first = this.identifier();
+    const names = [first];
+    if (this.match(".") !== null) names.push(this.identifier());
+    return {
+      name: names.map((name) => renderIdentifier(name.name, name.quoted)).join("."),
+      start: first.token.start,
+      end: names.at(-1)?.token.end ?? first.token.end
+    };
+  }
   private qualifiedIdentifier(): void {
-    this.identifier();
-    if (this.match(".") !== null) this.identifier();
+    this.qualifiedIdentifierValue();
   }
   private psqlVariable(): boolean {
     if (this.current()?.value !== ":") return false;
@@ -751,9 +788,14 @@ class TinyStatementParser {
   private error(code: ParseErrorCode, offsetUtf16: number): TinySqlParseError { return new TinySqlParseError(code, offsetUtf16); }
 }
 
-function structuralDeclarations(sourceText: string): readonly Declaration[] {
+interface StructuralDeclarationsResult {
+  readonly declarations: readonly Declaration[];
+  readonly parserRejected: boolean;
+}
+
+function structuralDeclarations(sourceText: string): StructuralDeclarationsResult {
   const lexed = lexTinyPostgresStructuralV2(sourceText);
-  if (!lexed.ok) return [];
+  if (!lexed.ok) return { declarations: [], parserRejected: true };
   const declarations: Declaration[] = [];
   for (const statement of lexed.statements) {
     const values = statement.tokens.map((token) => token.value);
@@ -761,7 +803,7 @@ function structuralDeclarations(sourceText: string): readonly Declaration[] {
     try { declarations.push(new TinyStatementParser(statement.tokens).parse()); }
     catch (error) { if (!(error instanceof TinySqlParseError)) throw error; }
   }
-  return declarations;
+  return { declarations, parserRejected: false };
 }
 
 /** Emits only complete, source-proven PostgreSQL schema/table occurrences and file containment. */
@@ -772,13 +814,26 @@ export function extractSqlFileFacts(input: SqlExtractFileFactsInput): ArtifactFa
     name: fileName, qualifiedName: input.filePath, kind: "file", filePath: input.filePath,
     range: fileRangeFor(input.sourceText), isExported: true, declarationOrdinal: 0
   };
-  const declarations = structuralDeclarations(input.sourceText);
+  const parsed = structuralDeclarations(input.sourceText);
+  const declarations = parsed.declarations;
   if (declarations.length === 0) {
-    return { symbols: [fileNode], edges: [], pendingReferences: [], localBindings: [], referenceScopes: [], importBindings: [], exportBindings: [], reExportBindings: [] };
+    return {
+      symbols: [fileNode],
+      edges: [],
+      pendingReferences: [],
+      localBindings: [],
+      referenceScopes: [],
+      importBindings: [],
+      exportBindings: [],
+      reExportBindings: [],
+      sqlFacts: { parserRejected: parsed.parserRejected, types: [], relations: [] } satisfies SqlFacts
+    };
   }
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [fileNode];
   const edges: GraphEdge[] = [];
+  const sqlTypes: SqlTypeFact[] = [];
+  const sqlRelations: SqlRelationFact[] = [];
   const declarationOrdinals = new Map<string, number>();
   for (const declaration of declarations) {
     const qualifiedName = `${input.filePath}#sql-structural-v2:${declaration.kind}:${declaration.qualified ? "qualified" : "unqualified"}:${declaration.name}`;
@@ -791,6 +846,24 @@ export function extractSqlFileFacts(input: SqlExtractFileFactsInput): ArtifactFa
       name: declaration.name, qualifiedName, kind: "resource", filePath: input.filePath, range, isExported: true, declarationOrdinal
     };
     symbols.push(symbol);
+    sqlTypes.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      declarationKind: declaration.kind,
+      isExported: symbol.isExported,
+      range
+    });
+    for (const relation of declaration.relations ?? []) {
+      sqlRelations.push({
+        sourceId: symbol.id,
+        filePath: input.filePath,
+        sourceTableName: declaration.name,
+        targetTableName: relation.targetName,
+        relationKind: relation.relationKind,
+        range: rangeFor(lineStarts, relation.start, relation.end)
+      });
+    }
     edges.push({
       id: createEdgeId({ sourceId: fileNode.id, targetId: symbol.id, kind: "contains", line: range.start.line, column: range.start.column, referenceName: symbol.name }),
       sourceId: fileNode.id, targetId: symbol.id, kind: "contains", filePath: input.filePath, range,
@@ -798,5 +871,19 @@ export function extractSqlFileFacts(input: SqlExtractFileFactsInput): ArtifactFa
       evidence: { ruleId: `language.sql.structural-v2.create-${declaration.kind}`, stage: "syntax", candidateSymbolIds: [symbol.id] }
     });
   }
-  return { symbols, edges, pendingReferences: [], localBindings: [], referenceScopes: [], importBindings: [], exportBindings: [], reExportBindings: [] };
+  return {
+    symbols,
+    edges,
+    pendingReferences: [],
+    localBindings: [],
+    referenceScopes: [],
+    importBindings: [],
+    exportBindings: [],
+    reExportBindings: [],
+    sqlFacts: {
+      parserRejected: parsed.parserRejected,
+      types: sqlTypes,
+      relations: sqlRelations
+    } satisfies SqlFacts
+  };
 }

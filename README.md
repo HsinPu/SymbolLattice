@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.477.0
+目前版本：v0.478.0
 
 ## 主要能力
 
@@ -82,6 +82,8 @@ v0.458.0 加深 Rust 的 bounded crate relations。Tokio、Rust core／alloc／s
 v0.476.0 加深 Objective-C 的 bounded project relations。只對 literal local `#import`／`#include`、唯一 class／protocol heritage、可證明的 object signatures、明確 class message 與 `[[Type alloc] init]` 建立 exact edge；`self`／`super`／變數 receiver、categories、conditional compilation、framework／module-map、宏、swizzling、forwarding、runtime dispatch 與 ambiguous headers 維持 unresolved 或 nonclaim。這是 source-only 深度驗證，不代表完整 Clang／Xcode 語意。
 
 v0.477.0 加深 Ruby 的 bounded project relations。只對 literal `require_relative`、唯一 class superclass，以及明確 constant receiver 的 singleton method call 建立 exact edge；bare／implicit call、reopen、constant reassignment、include／extend／prepend、`send`／reflection、Rails autoload、DSL 與 metaprogramming 維持 unresolved 或 nonclaim。這是 source-only relation depth，不代表完整 Ruby runtime dispatch。
+
+v0.478.0 加深 PostgreSQL DDL 的 bounded schema relations。只對完整、可解析的 `CREATE TABLE` 中 literal foreign-key `REFERENCES` 與 `INHERITS` 建立唯一 table target exact edge；views、routines、search path、psql variables、COPY payload、dynamic SQL、外部資料庫與 ambiguous unqualified names 維持 unresolved 或 nonclaim。
 
 v0.459.0 加深 Kotlin 的 bounded JVM relations。固定 Kotlin compiler、Ktor、kotlinx.coroutines 三個大型 source scope，加上一個乾淨 synthetic project，驗證 class／object／interface／enum／typealias identity、explicit import、唯一 direct／member／extension call、constructor instantiation、heritage 與 explicit override；300 個核准正向與 150 個 disposable 負向均通過。Overload、default parameter、extension ambiguity、generic／reified、delegation、sealed/interface dispatch、compiler plugin、coroutine runtime、generated/reflection、Java interop 與 external dependency linkage 維持 unresolved 或 nonclaim；大型 corpus unsupported breadth 與 parser-rejected files 另列，不宣稱完整 Kotlin compiler 支援。
 

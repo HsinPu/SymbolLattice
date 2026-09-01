@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v383";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v384";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v188";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v189";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -2611,6 +2611,34 @@ export interface RubyFacts {
   readonly calls: readonly RubyCallFact[];
 }
 
+/** PostgreSQL DDL relations retained for bounded, source-only schema analysis. */
+export type SqlDeclarationKind = "schema" | "table";
+
+export interface SqlTypeFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly declarationKind: SqlDeclarationKind;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+}
+
+export interface SqlRelationFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly sourceTableName: string;
+  readonly targetTableName: string;
+  readonly relationKind: "references" | "extends";
+  readonly range: SourceRange;
+}
+
+/** Syntax-only SQL relation facts. Dialect execution, search_path, views, routines, and dynamic SQL remain nonclaims. */
+export interface SqlFacts {
+  readonly parserRejected?: boolean;
+  readonly types: readonly SqlTypeFact[];
+  readonly relations: readonly SqlRelationFact[];
+}
+
 /** Syntax-only Java package facts retained for exact Play controller-action resolution. */
 export interface JavaFacts {
   readonly classes: readonly JavaClassFact[];
@@ -4361,6 +4389,8 @@ export interface ArtifactFacts {
   readonly objcFacts?: ObjcFacts;
   /** Omitted only by artifact facts persisted before v0.477 Ruby relation depth. */
   readonly rubyFacts?: RubyFacts;
+  /** Omitted only by artifact facts persisted before v0.478 SQL relation depth. */
+  readonly sqlFacts?: SqlFacts;
   /** Omitted only by artifact facts persisted before v0.460 Swift relation depth. */
   readonly swiftFacts?: SwiftFacts;
   /** Omitted only by artifact facts persisted before v0.461 Dart relation depth. */
