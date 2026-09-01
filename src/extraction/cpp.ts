@@ -4,6 +4,12 @@ import {
   createEdgeId,
   createSymbolId,
   type ArtifactFacts,
+  type CppCallFact,
+  type CppCallableFact,
+  type CppFacts,
+  type CppImportFact,
+  type CppInstantiationFact,
+  type CppTypeFact,
   type GraphEdge,
   type RouteMethod,
   type SourcePosition,
@@ -365,7 +371,7 @@ function hasCppPreprocessing(root: CppSyntaxNode): boolean {
 }
 
 function staticCppClass(input: CppExtractFileFactsInput, node: CppSyntaxNode): StaticCppClass | null {
-  if (node.name !== "ClassSpecifier") {
+  if (node.name !== "ClassSpecifier" && node.name !== "StructSpecifier") {
     return null;
   }
   const names = directChildren(node)
@@ -384,6 +390,149 @@ function staticCppMethod(input: CppExtractFileFactsInput, node: CppSyntaxNode): 
   }
   const name = functionName(input, node, "FieldIdentifier");
   return name === null ? null : { name, node };
+}
+
+function cppParameterTypeNames(
+  input: CppExtractFileFactsInput,
+  parameterList: CppSyntaxNode
+): readonly string[] | undefined {
+  const parameters = directChildren(parameterList).filter((child) => child.name === "ParameterDeclaration");
+  if (parameters.some((parameter) => /\.\.\.|[=<]/u.test(nodeText(input, parameter)))) {
+    return undefined;
+  }
+  if (parameters.length === 1 && nodeText(input, parameters[0]!).trim() === "void") {
+    return [];
+  }
+  const names: string[] = [];
+  for (const parameter of parameters) {
+    const compact = nodeText(input, parameter)
+      .replace(/\b(?:const|volatile|mutable|register|static|typename)\b/gu, " ")
+      .replace(/[&*]/gu, " ")
+      .replace(/\s+/gu, " ")
+      .trim();
+    const tokens = compact.split(" ").filter((token) => token.length > 0);
+    const typeName = tokens.length <= 1 ? tokens[0] : tokens.at(-2);
+    if (typeName === undefined || !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(typeName)) {
+      return undefined;
+    }
+    names.push(typeName);
+  }
+  return names;
+}
+
+function cppReturnTypeName(input: CppExtractFileFactsInput, node: CppSyntaxNode): string | undefined {
+  const declarator = directChildren(node).find((child) => child.name === "FunctionDeclarator");
+  if (declarator === undefined) {
+    return undefined;
+  }
+  const prefix = input.sourceText.slice(node.from, declarator.from)
+    .replace(/\b(?:static|inline|virtual|constexpr|consteval|extern|friend|typename|auto|register)\b/gu, " ")
+    .replace(/[&*]/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+  const typeName = prefix.split(" ").filter((token) => token.length > 0).at(-1);
+  return typeName !== undefined && /^[A-Za-z_][A-Za-z0-9_]*$/u.test(typeName) && typeName !== "void"
+    ? typeName
+    : undefined;
+}
+
+function cppArgumentCount(text: string): number | undefined {
+  const compact = text.trim();
+  if (compact.length === 0) return 0;
+  let depth = 0;
+  let count = 1;
+  for (const character of compact) {
+    if ("([{<".includes(character)) depth += 1;
+    else if (")]}>".includes(character)) depth = Math.max(0, depth - 1);
+    else if (character === "," && depth === 0) count += 1;
+  }
+  return compact.includes("...") ? undefined : count;
+}
+
+function staticCppImportFacts(
+  input: CppExtractFileFactsInput,
+  root: CppSyntaxNode,
+  sourceId: string,
+  lineStarts: readonly number[]
+): readonly CppImportFact[] {
+  const imports: CppImportFact[] = [];
+  for (const node of directChildren(root)) {
+    if (node.name !== "PreprocDirective") continue;
+    const text = nodeText(input, node);
+    const match = /^\s*#\s*include\s*"([^"\r\n]+)"/u.exec(text);
+    const importedPath = match?.[1];
+    if (match === null || importedPath === undefined) continue;
+    const offset = node.from + (match[0]?.indexOf(importedPath) ?? -1);
+    if (offset < node.from) continue;
+    imports.push({
+      sourceId,
+      filePath: input.filePath,
+      importedPath,
+      range: rangeFor(lineStarts, offset, offset + importedPath.length)
+    });
+  }
+  return imports;
+}
+
+function staticCppMemberCallFacts(
+  input: CppExtractFileFactsInput,
+  method: StaticCppMethod,
+  ownerTypeName: string,
+  sourceId: string,
+  lineStarts: readonly number[]
+): readonly CppCallFact[] {
+  const calls: CppCallFact[] = [];
+  const text = nodeText(input, method.node);
+  const pattern = /\bthis\s*->\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(([^()]*)\)/gu;
+  for (const match of text.matchAll(pattern)) {
+    const referenceName = match[1];
+    const argumentsText = match[2];
+    if (referenceName === undefined || argumentsText === undefined) continue;
+    const count = cppArgumentCount(argumentsText);
+    if (count === undefined) continue;
+    const relative = (match.index ?? 0) + (match[0]?.indexOf(referenceName) ?? -1);
+    if (relative < 0) continue;
+    const start = method.node.from + relative;
+    calls.push({
+      sourceId,
+      filePath: input.filePath,
+      referenceName,
+      callKind: "member",
+      receiverTypeName: ownerTypeName,
+      argumentCount: count,
+      range: rangeFor(lineStarts, start, start + referenceName.length)
+    });
+  }
+  return calls;
+}
+
+function staticCppInstantiationFacts(
+  input: CppExtractFileFactsInput,
+  node: CppSyntaxNode,
+  sourceId: string,
+  lineStarts: readonly number[]
+): readonly CppInstantiationFact[] {
+  const instantiations: CppInstantiationFact[] = [];
+  const text = nodeText(input, node);
+  const pattern = /\bnew\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^()]*)\)/gu;
+  for (const match of text.matchAll(pattern)) {
+    const typeName = match[1];
+    const argumentsText = match[2];
+    if (typeName === undefined || argumentsText === undefined) continue;
+    const count = cppArgumentCount(argumentsText);
+    if (count === undefined) continue;
+    const relative = (match.index ?? 0) + (match[0]?.indexOf(typeName) ?? -1);
+    if (relative < 0) continue;
+    const start = node.from + relative;
+    instantiations.push({
+      sourceId,
+      filePath: input.filePath,
+      typeName,
+      argumentCount: count,
+      range: rangeFor(lineStarts, start, start + typeName.length)
+    });
+  }
+  return instantiations;
 }
 
 function includesHttplib(input: CppExtractFileFactsInput, root: CppSyntaxNode): boolean {
@@ -479,6 +628,11 @@ export function extractCppFileFacts(input: CppExtractFileFactsInput): ArtifactFa
   const lineStarts = lineStartsFor(input.sourceText);
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
+  const cppTypes: CppTypeFact[] = [];
+  const cppCallables: CppCallableFact[] = [];
+  const cppImports: CppImportFact[] = [];
+  const cppCalls: CppCallFact[] = [];
+  const cppInstantiations: CppInstantiationFact[] = [];
   const declarationOrdinals = new Map<string, number>();
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -497,6 +651,10 @@ export function extractCppFileFacts(input: CppExtractFileFactsInput): ArtifactFa
     declarationOrdinal: 0
   };
   symbols.push(fileNode);
+  const parserRejected = hasSyntaxError(root);
+  if (!parserRejected) {
+    cppImports.push(...staticCppImportFacts(input, root, fileNode.id, lineStarts));
+  }
 
   function nextOrdinal(qualifiedName: string, kind: SymbolNode["kind"]): number {
     const identity = `${qualifiedName}\u0000${kind}`;
@@ -703,10 +861,29 @@ export function extractCppFileFacts(input: CppExtractFileFactsInput): ArtifactFa
         ...(functionsByName.get(functionDeclaration.name) ?? []),
         symbol
       ]);
+      const parameterTypes = cppParameterTypeNames(input, functionDeclaration.parameterList);
+      const returnType = cppReturnTypeName(input, functionDeclaration.node);
+      cppCallables.push({
+        symbolId: symbol.id,
+        filePath: input.filePath,
+        name: functionDeclaration.name,
+        moduleName: input.filePath,
+        parameterCount: functionDeclaration.parameterCount,
+        ...(parameterTypes === undefined ? {} : { parameterTypeNames: parameterTypes }),
+        ...(returnType === undefined ? {} : { returnTypeName: returnType }),
+        isExported: symbol.isExported,
+        range: symbol.range
+      });
+      cppInstantiations.push(
+        ...staticCppInstantiationFacts(input, functionDeclaration.node, symbol.id, lineStarts)
+      );
     }
 
     const definedMacros = macroNames(input, root);
-    if (!hasCppPreprocessing(root)) for (const functionDeclaration of functions) {
+    const unsafePreprocessor = /#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef)\b/u.test(
+      input.sourceText
+    );
+    if (!unsafePreprocessor) for (const functionDeclaration of functions) {
       const caller = functionSymbols.get(functionDeclaration);
       if (caller === undefined) {
         continue;
@@ -715,6 +892,15 @@ export function extractCppFileFacts(input: CppExtractFileFactsInput): ArtifactFa
         if (definedMacros.has(call.name)) {
           continue;
         }
+        cppCalls.push({
+          sourceId: caller.id,
+          filePath: input.filePath,
+          referenceName: call.name,
+          callKind: "direct",
+          argumentCount: call.argumentCount,
+          range: rangeFor(lineStarts, call.node.from, call.node.to)
+        });
+        if (hasCppPreprocessing(root)) continue;
         const candidates = functionsByName.get(call.name) ?? [];
         if (
           candidates.length === 1 &&
@@ -731,10 +917,61 @@ export function extractCppFileFacts(input: CppExtractFileFactsInput): ArtifactFa
       .map((node) => staticCppClass(input, node))
       .filter((candidate): candidate is StaticCppClass => candidate !== null)) {
       const classSymbol = addClass(classDeclaration);
+      const declarationKind = /\b(struct|class|enum)\b/u.exec(nodeText(input, classDeclaration.node))?.[1] as
+        | "struct"
+        | "class"
+        | "enum"
+        | undefined;
+      cppTypes.push({
+        symbolId: classSymbol.id,
+        filePath: input.filePath,
+        name: classDeclaration.name,
+        moduleName: input.filePath,
+        declarationKind: declarationKind === "enum" ? "enum" : declarationKind === "struct" ? "struct" : "class",
+        isExported: classSymbol.isExported,
+        range: classSymbol.range
+      });
       for (const methodDeclaration of directChildren(classDeclaration.body)
         .map((node) => staticCppMethod(input, node))
         .filter((candidate): candidate is StaticCppMethod => candidate !== null)) {
-        addMethod(classSymbol, methodDeclaration);
+        const methodSymbol = addMethod(classSymbol, methodDeclaration);
+        const declarator = directChildren(methodDeclaration.node).find(
+          (child) => child.name === "FunctionDeclarator"
+        );
+        const parameterList = declarator === undefined
+          ? undefined
+          : directChildren(declarator).find((child) => child.name === "ParameterList");
+        const parameterCount = parameterList === undefined
+          ? undefined
+          : boundedCppParameterCount(input, parameterList);
+        if (parameterList !== undefined && parameterCount !== null && parameterCount !== undefined) {
+          const parameterTypes = cppParameterTypeNames(input, parameterList);
+          const returnType = cppReturnTypeName(input, methodDeclaration.node);
+          cppCallables.push({
+            symbolId: methodSymbol.id,
+            filePath: input.filePath,
+            name: methodDeclaration.name,
+            moduleName: input.filePath,
+            ownerTypeName: classDeclaration.name,
+            parameterCount,
+            ...(parameterTypes === undefined ? {} : { parameterTypeNames: parameterTypes }),
+            ...(returnType === undefined ? {} : { returnTypeName: returnType }),
+            isExported: methodSymbol.isExported,
+            range: methodSymbol.range
+          });
+          cppCalls.push(
+            ...staticCppMemberCallFacts(
+              input,
+              methodDeclaration,
+              classDeclaration.name,
+              methodSymbol.id,
+              lineStarts
+            )
+          );
+          cppInstantiations.push(
+            ...staticCppInstantiationFacts(input, methodDeclaration.node, methodSymbol.id, lineStarts)
+          );
+        }
       }
     }
 
@@ -779,6 +1016,14 @@ export function extractCppFileFacts(input: CppExtractFileFactsInput): ArtifactFa
     importBindings: [],
     exportBindings: [],
     reExportBindings: [],
+    cppFacts: {
+      parserRejected,
+      types: cppTypes,
+      callables: cppCallables,
+      imports: cppImports,
+      calls: cppCalls,
+      instantiations: cppInstantiations
+    } satisfies CppFacts,
     nestRouteFacts: {
       routeControllers: [],
       moduleControllers: [],

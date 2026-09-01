@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v377";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v379";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v182";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v184";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -2288,6 +2288,67 @@ export interface ZigFacts {
   readonly instantiations: readonly ZigInstantiationFact[];
 }
 
+/** C++ declarations retained for bounded, syntax-only project relations. */
+export type CppTypeDeclarationKind = "class" | "struct" | "enum";
+
+export interface CppTypeFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly moduleName: string;
+  readonly declarationKind: CppTypeDeclarationKind;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+}
+
+export interface CppCallableFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly moduleName: string;
+  readonly ownerTypeName?: string;
+  readonly parameterCount: number;
+  readonly parameterTypeNames?: readonly string[];
+  readonly returnTypeName?: string;
+  readonly isExported: boolean;
+  readonly range: SourceRange;
+}
+
+export interface CppImportFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly importedPath: string;
+  readonly range: SourceRange;
+}
+
+export interface CppCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly callKind: "direct" | "member";
+  readonly receiverTypeName?: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface CppInstantiationFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly typeName: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only C++ relation facts. Templates, ABI, and runtime dispatch remain nonclaims. */
+export interface CppFacts {
+  readonly parserRejected?: boolean;
+  readonly types: readonly CppTypeFact[];
+  readonly callables: readonly CppCallableFact[];
+  readonly imports: readonly CppImportFact[];
+  readonly calls: readonly CppCallFact[];
+  readonly instantiations: readonly CppInstantiationFact[];
+}
+
 /** Syntax-only Java package facts retained for exact Play controller-action resolution. */
 export interface JavaFacts {
   readonly classes: readonly JavaClassFact[];
@@ -4028,6 +4089,8 @@ export interface ArtifactFacts {
   readonly nimFacts?: NimFacts;
   /** Omitted only by artifact facts persisted before v0.472 Zig relation depth. */
   readonly zigFacts?: ZigFacts;
+  /** Omitted only by artifact facts persisted before v0.473 C++ relation depth. */
+  readonly cppFacts?: CppFacts;
   /** Omitted only by artifact facts persisted before v0.460 Swift relation depth. */
   readonly swiftFacts?: SwiftFacts;
   /** Omitted only by artifact facts persisted before v0.461 Dart relation depth. */
