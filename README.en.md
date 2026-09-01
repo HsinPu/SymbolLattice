@@ -16,7 +16,7 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.478.0
+Current version: v0.481.0
 
 ## Highlights
 
@@ -84,6 +84,8 @@ v0.476.0 deepens bounded Objective-C project relations. Exact edges are limited 
 v0.477.0 deepens bounded Ruby project relations. Exact edges are limited to literal `require_relative`, unique class superclasses, and explicit constant-receiver singleton method calls; bare/implicit calls, reopen, constant reassignment, include/extend/prepend, `send`/reflection, Rails autoload, DSLs, and metaprogramming remain unresolved or nonclaims. This is source-only relation depth, not complete Ruby runtime dispatch.
 
 v0.478.0 deepens bounded PostgreSQL DDL schema relations. Exact edges are limited to complete, parsed `CREATE TABLE` literal foreign-key `REFERENCES` and `INHERITS` targets; views, routines, search_path, psql variables, COPY payloads, dynamic SQL, external databases, and ambiguous unqualified names remain unresolved or nonclaims.
+
+v0.481.0 deepens bounded same-file R direct calls. An existing `calls` exact edge is emitted only for a unique top-level function in the same `.R` file with an explicit identifier call and no parameter, reassignment, loading, closure, or S3/S4 dispatch taint; `source`, `library`, `get`, `do.call`, namespace/member dispatch, duplicate bindings, cross-file package resolution, and evaluation remain unresolved or nonclaims. This is not complete R interpreter or S3/S4 runtime support.
 
 v0.459.0 deepens bounded Kotlin/JVM relations. Three fixed large source scopes (Kotlin compiler, Ktor, and kotlinx.coroutines), plus one clean synthetic project, verify class/object/interface/enum/typealias identity, explicit imports, unique direct/member/extension calls, constructor instantiation, heritage, and explicit overrides. All 300 admitted positives and 150 disposable negatives pass. Overloads, default parameters, extension ambiguity, generic/reified types, delegation, sealed/interface dispatch, compiler plugins, coroutine runtime, generated/reflection behavior, Java interop, and external dependency linkage remain unresolved or nonclaims; unsupported breadth and parser-rejected files are reported separately rather than presented as complete Kotlin compiler support.
 

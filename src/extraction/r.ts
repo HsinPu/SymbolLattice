@@ -3,6 +3,9 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type GraphEdge,
+  type RCallFact,
+  type RFacts,
+  type RFunctionFact,
   type SourcePosition,
   type SourceRange,
   type SymbolNode
@@ -41,6 +44,17 @@ interface RStructure {
 
 interface StaticRFunction {
   readonly name: string;
+  readonly start: number;
+  readonly end: number;
+  readonly bodyStart: number;
+  readonly bodyEnd: number;
+  readonly parameterCount: number;
+  readonly parameterNames: readonly string[];
+}
+
+interface StaticRCall {
+  readonly referenceName: string;
+  readonly argumentCount: number;
   readonly start: number;
   readonly end: number;
 }
@@ -424,6 +438,35 @@ function collectTopLevelRFunctions(
   sourceText: string,
   structure: RStructure
 ): readonly StaticRFunction[] {
+  const parameterFacts = (openingParenthesis: number, closingParenthesis: number): {
+    readonly count: number;
+    readonly names: readonly string[];
+  } => {
+    const openingDepth = structure.depthBefore[openingParenthesis];
+    if (openingDepth === undefined) return { count: 0, names: [] };
+    const parameterDepth = openingDepth + 1;
+    let count = 0;
+    let hasParameter = false;
+    let expectName = true;
+    const names: string[] = [];
+    for (let cursor = openingParenthesis + 1; cursor < closingParenthesis; cursor += 1) {
+      const token = structure.tokens[cursor];
+      if (token === undefined || structure.depthBefore[cursor] !== parameterDepth) continue;
+      if (token.text === ",") {
+        if (hasParameter) count += 1;
+        hasParameter = false;
+        expectName = true;
+        continue;
+      }
+      hasParameter = true;
+      if (expectName && token.kind === "identifier") {
+        names.push(token.text);
+        expectName = false;
+      }
+    }
+    if (hasParameter) count += 1;
+    return { count, names };
+  };
   const functions: StaticRFunction[] = [];
   for (let index = 0; index < structure.tokens.length; index += 1) {
     const nameToken = structure.tokens[index];
@@ -456,12 +499,22 @@ function collectTopLevelRFunctions(
       if (bodyEnd === undefined || bodyEndToken === undefined || !endsDirectStatement(sourceText, structure.tokens, bodyEnd)) {
         continue;
       }
-      functions.push({ name: nameToken.text, start: nameToken.start, end: bodyEndToken.end });
+      const parameters = parameterFacts(openingParenthesis, closingParenthesis);
+      functions.push({
+        name: nameToken.text,
+        start: nameToken.start,
+        end: bodyEndToken.end,
+        bodyStart,
+        bodyEnd,
+        parameterCount: parameters.count,
+        parameterNames: parameters.names
+      });
       continue;
     }
 
     let previousCodeIndex: number | null = null;
     let expressionEnd: RToken | undefined;
+    let expressionEndIndex: number | undefined;
     for (let cursor = bodyStart; cursor < structure.tokens.length; cursor += 1) {
       const token = structure.tokens[cursor];
       if (token === undefined || token.kind === "comment") continue;
@@ -480,9 +533,19 @@ function collectTopLevelRFunctions(
       }
       previousCodeIndex = cursor;
       expressionEnd = token;
+      expressionEndIndex = cursor;
     }
-    if (expressionEnd !== undefined) {
-      functions.push({ name: nameToken.text, start: nameToken.start, end: expressionEnd.end });
+    if (expressionEnd !== undefined && expressionEndIndex !== undefined) {
+      const parameters = parameterFacts(openingParenthesis, closingParenthesis);
+      functions.push({
+        name: nameToken.text,
+        start: nameToken.start,
+        end: expressionEnd.end,
+        bodyStart,
+        bodyEnd: expressionEndIndex,
+        parameterCount: parameters.count,
+        parameterNames: parameters.names
+      });
     }
   }
   const ordered = functions.sort((left, right) => left.start - right.start || left.end - right.end);
@@ -494,6 +557,114 @@ function collectTopLevelRFunctions(
     coveredUntil = declaration.end;
   }
   return direct;
+}
+
+const R_DYNAMIC_BINDING_CALLS = new Set(["source", "library", "load", "attach", "assign"]);
+const R_DYNAMIC_DISPATCH_NAMES = new Set(["UseMethod", "NextMethod", "setMethod", "setGeneric", "standardGeneric"]);
+const R_QUOTING_CALLS = new Set(["quote", "substitute", "bquote", "enquote"]);
+
+function callArgumentCount(
+  structure: RStructure,
+  openingParenthesis: number,
+  closingParenthesis: number
+): number {
+  const openingDepth = structure.depthBefore[openingParenthesis];
+  if (openingDepth === undefined) return 0;
+  const argumentDepth = openingDepth + 1;
+  let count = 0;
+  let hasArgument = false;
+  for (let cursor = openingParenthesis + 1; cursor < closingParenthesis; cursor += 1) {
+    const token = structure.tokens[cursor];
+    if (token === undefined || structure.depthBefore[cursor] !== argumentDepth) continue;
+    if (token.text === ",") {
+      if (hasArgument) count += 1;
+      hasArgument = false;
+      continue;
+    }
+    if (token.kind !== "comment") hasArgument = true;
+  }
+  if (hasArgument) count += 1;
+  return count;
+}
+
+function collectDirectRCalls(
+  structure: RStructure,
+  declaration: StaticRFunction,
+  declaredNames: ReadonlySet<string>,
+  dynamicDispatchNames: ReadonlySet<string>
+): readonly StaticRCall[] {
+  const openingBody = structure.tokens[declaration.bodyStart];
+  const closingBody = structure.tokens[declaration.bodyEnd];
+  const bracedBody = openingBody?.text === "{" && closingBody?.text === "}";
+  const firstToken = declaration.bodyStart + (bracedBody ? 1 : 0);
+  const lastToken = declaration.bodyEnd - (bracedBody ? 1 : 0);
+  const parameterNames = new Set(declaration.parameterNames);
+  const assignedNames = new Set<string>();
+  for (let cursor = firstToken; cursor <= lastToken; cursor += 1) {
+    const token = structure.tokens[cursor];
+    const next = structure.tokens[cursor + 1];
+    const previous = structure.tokens[cursor - 1];
+    if (token?.kind === "identifier" && ["<-", "=", "<<-"].includes(next?.text ?? "")) {
+      assignedNames.add(token.text);
+    }
+    if (token?.kind === "identifier" && ["->", "->>"].includes(previous?.text ?? "")) {
+      assignedNames.add(token.text);
+    }
+  }
+  for (let cursor = firstToken; cursor <= lastToken; cursor += 1) {
+    if (structure.tokens[cursor]?.text === "function") return [];
+  }
+
+  const calls: StaticRCall[] = [];
+  for (let cursor = firstToken; cursor <= lastToken; cursor += 1) {
+    const token = structure.tokens[cursor];
+    const openingParenthesis = structure.tokens[cursor + 1];
+    if (token?.kind !== "identifier" || openingParenthesis?.text !== "(") continue;
+    if (
+      !declaredNames.has(token.text) ||
+      dynamicDispatchNames.has(token.text) ||
+      parameterNames.has(token.text) ||
+      assignedNames.has(token.text)
+    ) continue;
+    const previous = structure.tokens[cursor - 1];
+    const beforePrevious = structure.tokens[cursor - 2];
+    if (["$", "@", ".", ":"].includes(previous?.text ?? "") || beforePrevious?.text === ":") continue;
+    if (beforePrevious?.kind === "identifier" && R_QUOTING_CALLS.has(beforePrevious.text)) continue;
+    const closingParenthesis = structure.pairedDelimiters.get(cursor + 1);
+    if (closingParenthesis === undefined || closingParenthesis > lastToken) continue;
+    calls.push({
+      referenceName: token.text,
+      argumentCount: callArgumentCount(structure, cursor + 1, closingParenthesis),
+      start: token.start,
+      end: (structure.tokens[closingParenthesis]?.end ?? openingParenthesis.end)
+    });
+  }
+  return calls;
+}
+
+function hasBindingTaint(structure: RStructure): boolean {
+  for (let index = 0; index < structure.tokens.length; index += 1) {
+    const token = structure.tokens[index];
+    const next = structure.tokens[index + 1];
+    if (
+      token?.kind === "identifier" &&
+      next?.text === "(" &&
+      R_DYNAMIC_BINDING_CALLS.has(token.text)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasDynamicDispatch(structure: RStructure, declaration: StaticRFunction): boolean {
+  const firstToken = declaration.bodyStart + (structure.tokens[declaration.bodyStart]?.text === "{" ? 1 : 0);
+  const lastToken = declaration.bodyEnd - (structure.tokens[declaration.bodyEnd]?.text === "}" ? 1 : 0);
+  for (let cursor = firstToken; cursor <= lastToken; cursor += 1) {
+    const token = structure.tokens[cursor];
+    if (token?.kind === "identifier" && R_DYNAMIC_DISPATCH_NAMES.has(token.text)) return true;
+  }
+  return false;
 }
 
 function collectTopLevelRClasses(
@@ -561,6 +732,11 @@ export function extractRFileFacts(input: RExtractFileFactsInput): ArtifactFacts 
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];
   const declarationOrdinals = new Map<string, number>();
+  const rFunctionFacts: RFunctionFact[] = [];
+  const rCallFacts: RCallFact[] = [];
+  const topLevelFunctions = structure.valid ? collectTopLevelRFunctions(input.sourceText, structure) : [];
+  const functionSymbolsByStart = new Map<number, SymbolNode>();
+  const bindingTainted = structure.valid && hasBindingTaint(structure);
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
     id: createSymbolId({
@@ -713,7 +889,7 @@ export function extractRFileFacts(input: RExtractFileFactsInput): ArtifactFacts 
 
   if (structure.valid) {
     const declarations = [
-      ...collectTopLevelRFunctions(input.sourceText, structure).map((declaration) => ({
+      ...topLevelFunctions.map((declaration) => ({
         kind: "function" as const,
         start: declaration.start,
         declaration
@@ -733,13 +909,23 @@ export function extractRFileFacts(input: RExtractFileFactsInput): ArtifactFacts 
     for (const declaration of declarations) {
       if (declaration.kind === "function") {
         const functionFact = declaration.declaration;
-        addFunction(
+        const functionSymbol = addFunction(
           functionFact.name,
           `${fileNode.qualifiedName}#${functionFact.name}`,
           functionFact.start,
           functionFact.end,
           true
         );
+        functionSymbolsByStart.set(functionFact.start, functionSymbol);
+        rFunctionFacts.push({
+          symbolId: functionSymbol.id,
+          filePath: input.filePath,
+          name: functionFact.name,
+          parameterCount: functionFact.parameterCount,
+          parameterNames: functionFact.parameterNames,
+          dynamicDispatch: hasDynamicDispatch(structure, functionFact),
+          range: functionSymbol.range
+        });
         continue;
       }
       if (declaration.kind === "class") {
@@ -758,6 +944,33 @@ export function extractRFileFacts(input: RExtractFileFactsInput): ArtifactFacts 
       );
       addPlumberRoute(routeFact, handler);
     }
+
+    if (!bindingTainted) {
+      const declaredNames = new Set(topLevelFunctions.map((declaration) => declaration.name));
+      const dynamicDispatchNames = new Set(
+        topLevelFunctions
+          .filter((declaration) => hasDynamicDispatch(structure, declaration))
+          .map((declaration) => declaration.name)
+      );
+      for (const functionFact of topLevelFunctions) {
+        const source = functionSymbolsByStart.get(functionFact.start);
+        if (source === undefined || hasDynamicDispatch(structure, functionFact)) continue;
+        for (const call of collectDirectRCalls(
+          structure,
+          functionFact,
+          declaredNames,
+          dynamicDispatchNames
+        )) {
+          rCallFacts.push({
+            sourceId: source.id,
+            filePath: input.filePath,
+            referenceName: call.referenceName,
+            argumentCount: call.argumentCount,
+            range: rangeFor(lineStarts, call.start, call.end)
+          });
+        }
+      }
+    }
   }
 
   return {
@@ -768,6 +981,12 @@ export function extractRFileFacts(input: RExtractFileFactsInput): ArtifactFacts 
     referenceScopes: [],
     importBindings: [],
     exportBindings: [],
-    reExportBindings: []
+    reExportBindings: [],
+    rFacts: {
+      parserRejected: !structure.valid,
+      bindingTainted,
+      functions: rFunctionFacts,
+      calls: rCallFacts
+    } satisfies RFacts
   };
 }

@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v384";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v385";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v189";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v190";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -3481,6 +3481,36 @@ export interface MarkdownFacts {
   readonly links: readonly MarkdownLinkFact[];
 }
 
+/** One top-level R function binding retained for same-file call resolution. */
+export interface RFunctionFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly parameterCount: number;
+  readonly parameterNames: readonly string[];
+  /** True when the body uses S3/S4 dispatch or another dynamic method surface. */
+  readonly dynamicDispatch: boolean;
+  readonly range: SourceRange;
+}
+
+/** One direct R function call occurrence retained for bounded local resolution. */
+export interface RCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only R facts; package loading, S3/S4 dispatch and evaluation remain nonclaims. */
+export interface RFacts {
+  readonly parserRejected?: boolean;
+  /** File-level binding mutation or loading makes all direct calls non-exact. */
+  readonly bindingTainted?: boolean;
+  readonly functions: readonly RFunctionFact[];
+  readonly calls: readonly RCallFact[];
+}
+
 /** Direct literal Laravel Blade view directive kinds retained for project-local resolution. */
 export type BladeTemplateReferenceKind = "extends" | "include" | "component" | "each";
 
@@ -4415,6 +4445,8 @@ export interface ArtifactFacts {
   readonly jspFacts?: JspFacts;
   /** Omitted only by artifact facts persisted before v0.449.0. */
   readonly markdownFacts?: MarkdownFacts;
+  /** Omitted only by artifact facts persisted before v0.481 R relation depth. */
+  readonly rFacts?: RFacts;
   /** Omitted only by artifact facts persisted before v0.72. */
   readonly bladeFacts?: BladeFacts;
   /** Omitted only by artifact facts persisted before v0.168. */

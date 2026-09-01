@@ -10,7 +10,7 @@ import { FileSystemSourceCatalog } from "../../../src/infrastructure/filesystem/
 const temporaryDirectories: string[] = [];
 
 async function createInlineProject(files: Readonly<Record<string, string>>): Promise<string> {
-  const projectPath = await mkdtemp(resolve(tmpdir(), "SymbolLattice-sql-project-"));
+  const projectPath = await mkdtemp(resolve(tmpdir(), "SymbolLattice-r-relations-project-"));
   temporaryDirectories.push(projectPath);
   await Promise.all(Object.entries(files).map(async ([relativePath, sourceText]) => {
     const absolutePath = resolve(projectPath, ...relativePath.split("/"));
@@ -24,47 +24,50 @@ afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((projectPath) => rm(projectPath, { recursive: true, force: true })));
 });
 
-describe("PostgreSQL project relations v0.478", () => {
-  it("resolves unique cross-file foreign-key and table inheritance targets", async () => {
+describe("R project relations v0.481", () => {
+  it("resolves a unique same-file direct call and never guesses a cross-file call", async () => {
     const projectPath = await createInlineProject({
-      "db/base.sql": "CREATE TABLE public.parent (id integer);\nCREATE TABLE public.audit (id integer);\n",
-      "db/child.sql": [
-        "CREATE TABLE public.child (",
-        "  parent_id integer REFERENCES public.parent(id),",
-        "  audit_id integer,",
-        "  CONSTRAINT child_audit_fk FOREIGN KEY (audit_id) REFERENCES public.audit(id)",
-        ") INHERITS (public.parent);",
+      "R/entry.R": [
+        "helper <- function(value) { value }",
+        "entry <- function(value) { helper(value) }",
         ""
-      ].join("\n")
+      ].join("\n"),
+      "R/foreign.R": "helper <- function(value) { value + 1 }\n"
     });
     const graphStore = new SqliteGraphStore();
     const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
     const indexed = await service.init({ projectPath });
     const snapshot = graphStore.getSnapshot(projectPath);
-    const child = snapshot.symbols.find((symbol) => symbol.name === "public.child");
-    const parent = snapshot.symbols.find((symbol) => symbol.name === "public.parent");
-    const audit = snapshot.symbols.find((symbol) => symbol.name === "public.audit");
+    const entry = snapshot.symbols.find((symbol) => symbol.qualifiedName === "R/entry.R#entry");
+    const helper = snapshot.symbols.find((symbol) => symbol.qualifiedName === "R/entry.R#helper");
     expect(indexed).toMatchObject({ stale: false });
     expect(graphStore.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v385");
     expect(graphStore.getActiveGraphBundle(projectPath).resolverVersion).toContain("project-resolver-v190");
-    expect(graphStore.getArtifactFacts(projectPath).find((facts) => facts.filePath === "db/child.sql")?.sqlFacts).toMatchObject({ parserRejected: false });
+    expect(graphStore.getArtifactFacts(projectPath).find((facts) => facts.filePath === "R/entry.R")?.rFacts).toMatchObject({ parserRejected: false });
     expect(snapshot.edges).toEqual(expect.arrayContaining([
-      expect.objectContaining({ sourceId: child?.id, targetId: parent?.id, kind: "references", resolution: "exact" }),
-      expect.objectContaining({ sourceId: child?.id, targetId: audit?.id, kind: "references", resolution: "exact" }),
-      expect.objectContaining({ sourceId: child?.id, targetId: parent?.id, kind: "extends", resolution: "exact" })
+      expect.objectContaining({ sourceId: entry?.id, targetId: helper?.id, kind: "calls", resolution: "exact", confidence: 1 })
     ]));
+    expect(snapshot.edges.filter((edge) => edge.kind === "calls")).toHaveLength(1);
   });
 
-  it("keeps unqualified duplicate table targets unresolved", async () => {
+  it("keeps duplicate same-file targets and dispatch-tainted targets unresolved", async () => {
     const projectPath = await createInlineProject({
-      "db/a.sql": "CREATE TABLE parent (id integer);\n",
-      "db/b.sql": "CREATE TABLE parent (id integer);\n",
-      "db/child.sql": "CREATE TABLE child (parent_id integer REFERENCES parent(id));\n"
+      "R/duplicate.R": [
+        "helper <- function(value) { value }",
+        "helper <- function(value) { value + 1 }",
+        "entry <- function(value) { helper(value) }",
+        ""
+      ].join("\n"),
+      "R/generic.R": [
+        "helper <- function(value) { UseMethod(\"helper\") }",
+        "entry <- function(value) { helper(value) }",
+        ""
+      ].join("\n")
     });
     const graphStore = new SqliteGraphStore();
     const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
     await service.init({ projectPath });
     const snapshot = graphStore.getSnapshot(projectPath);
-    expect(snapshot.edges.filter((edge) => edge.kind === "references" || edge.kind === "extends")).toEqual([]);
+    expect(snapshot.edges.filter((edge) => edge.kind === "calls")).toEqual([]);
   });
 });
