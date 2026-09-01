@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.471.0
+目前版本：v0.472.0
 
 ## 主要能力
 
@@ -98,6 +98,8 @@ v0.466.0 加深 Scala bounded project relations。固定 Scala 3.9.0、Scala 2.1
 v0.467.0 加深 Elixir bounded project relations。固定 Elixir v1.20.4、Phoenix v1.8.13、Ecto v3.14.2 與 Livebook v0.19.9 四個大型、乾淨 source scope，加入 module／protocol／struct／exception／type／behaviour identity、explicit alias／import、唯一 project-local direct／qualified module call、struct creation、behaviour／protocol implementation 與簡單 `@spec` accepts／returns。300 個 synthetic 正向為 TP300／FP0／FN0／evidenceInvalid0，150 個 disposable 負向全數 fail-close；macro／quote／unquote／sigil、pattern／guard／多 clause dispatch、protocol consolidation、OTP／GenServer／process runtime、NIF／FFI／Erlang interop、Mix／Hex／umbrella／external package、conditional compilation、reopened module、ambiguous alias 與 dynamic dispatch 維持 unresolved 或 nonclaim。四個大型 corpus 的 parser-rejected files 與 unsupported breadth recall 另列；Windows 沒有 Elixir／Erlang／OTP toolchain，因此不宣稱完整 Elixir compiler 語意。
 
 v0.471.0 加深 Nim bounded project relations。固定 Nim compiler 2.2.4、Nimble 0.16.2、Jester 0.6.0 與 Karax 1.3.5 四個 production source scope，加入 typed `proc`／`func`、literal `import`、唯一 project-local direct／qualified call、object／enum／distinct identity、constructor instantiation 與單一 object heritage。300 個 synthetic 正向為 TP300／FP0／FN0／evidenceInvalid0，150 個 disposable 負向全數 fail-close。template／macro／iterator／converter、泛型／UFCS／overload、multi-line control flow、concept／mixin、async／spawn、FFI／reflection、Nimble dependency／generated／conditional code 與 runtime dispatch 維持 unresolved 或 nonclaim；四個大型 corpus 的 parser-rejected files 與 unsupported breadth recall 另列，Windows 沒有 Nim compiler/Nimble toolchain，因此不宣稱完整 Nim 語意。
+
+v0.472.0 加深 Zig bounded project relations。固定 Zig 0.15.2、Ghostty v1.3.1、ZLS 0.16.0 與 TigerBeetle 固定 main commit 四個 production `.zig` scope，加入 literal `@import`、struct／enum／union／opaque identity、固定 arity typed function、唯一同檔／qualified call、`Type{}` construction 與 signature accepts／returns。300 個 synthetic 正向為 TP300／FP0／FN0／evidenceInvalid0，150 個 disposable 負向全數 fail-close；comptime、usingnamespace、generic／anytype、method／namespace dispatch、async／thread、FFI／reflection、build／package dependency、generated／conditional code 與 runtime dispatch 維持 unresolved 或 nonclaim。四個大型 corpus 的 parser-rejected files 與 unsupported breadth recall 另列，Windows 沒有 Zig compiler/ZLS toolchain，因此不宣稱完整 Zig 語意。
 
 v0.470.0 加深 Nix bounded project relations。保留既有 attrset／let／inherit／literal `import` 掃描，新增 function attribute facts、單一 identifier lambda 的唯一 local call，以及 `binding = import ./file.nix` 後唯一 `binding.attr` project-local call；所有 exact edge 都帶 singleton evidence。300 個 synthetic 正向為 TP300／FP0／FN0／evidenceInvalid0，150 個 disposable 負向全數 fail-close。`with`／`rec`／dynamic attr、derivation／`mkDerivation`／`callPackage`、flake inputs、fetcher／固定點、覆寫／merge、Nix evaluator、依賴／overlay／外部 package 與 generated／conditional code 維持 unresolved 或 nonclaim；四個大型 corpus 的 parser-rejected files 與 unsupported breadth recall 另列，Windows 沒有 Nix evaluator/toolchain，因此不宣稱完整 Nix 語意。
 
