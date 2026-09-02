@@ -16,7 +16,7 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.486.0
+Current version: v0.487.0
 
 ## Highlights
 
@@ -94,6 +94,8 @@ v0.483.0 deepens bounded cross-file Protocol Buffers RPC references. Existing `i
 v0.484.0 deepens bounded cross-file GraphQL schema heritage. An existing `extends` exact edge is emitted only for one unique top-level type/interface and one unique directly implemented interface; schema stitching, federation, multiple implements, extensions, directives, resolver linkage, query execution, and generated schemas remain unresolved or nonclaims.
 
 v0.486.0 deepens Java modern-parser heritage recovery. When the legacy Java parser loses a heritage header during modern-syntax recovery, a clean modern parser retains only top-level direct superclass/interface facts; existing unique project-local target and module evidence then gate exact `extends`/`implements` edges. Nested types, ambiguous imports, external classpaths, runtime dispatch, and unresolved modern syntax remain nonclaims.
+
+v0.487.0 deepens Java modern-parser object-creation recovery. For direct `new Type(...)` expressions that remain provable in a clean modern parse after legacy recovery noise, only the enclosing top-level method, outer type, and traceable source range are retained; existing project-local target/package/import evidence gates exact `instantiates` edges. Lambda/anonymous nested bodies, ambiguous targets, generic dispatch, and runtime semantics remain nonclaims.
 
 v0.459.0 deepens bounded Kotlin/JVM relations. Three fixed large source scopes (Kotlin compiler, Ktor, and kotlinx.coroutines), plus one clean synthetic project, verify class/object/interface/enum/typealias identity, explicit imports, unique direct/member/extension calls, constructor instantiation, heritage, and explicit overrides. All 300 admitted positives and 150 disposable negatives pass. Overloads, default parameters, extension ambiguity, generic/reified types, delegation, sealed/interface dispatch, compiler plugins, coroutine runtime, generated/reflection behavior, Java interop, and external dependency linkage remain unresolved or nonclaims; unsupported breadth and parser-rejected files are reported separately rather than presented as complete Kotlin compiler support.
 

@@ -7529,6 +7529,36 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
           });
         }
       }
+      if (declaration.kind === "method" && parent.kind !== "file") {
+        for (const reference of declaration.instantiationReferences ?? []) {
+          const range = rangeFor(lineStarts, reference.range.start, reference.range.end);
+          const importedTypePath = modernImportsByName.get(reference.referenceName);
+          if (importedTypePath === null) {
+            continue;
+          }
+          const alreadyRetained = javaInstantiationReferences.some(
+            (candidate) =>
+              candidate.sourceId === symbol.id &&
+              candidate.referenceName === reference.referenceName &&
+              candidate.range.start.line === range.start.line &&
+              candidate.range.start.column === range.start.column
+          );
+          if (alreadyRetained) {
+            continue;
+          }
+          javaInstantiationReferences.push({
+            sourceId: symbol.id,
+            declaringTypeId: parent.id,
+            filePath: input.filePath,
+            referenceName: reference.referenceName,
+            range,
+            ...(importedTypePath === undefined ? {} : { importedTypePath }),
+            ...(reference.qualifiedTypePath === undefined
+              ? {}
+              : { qualifiedTypePath: reference.qualifiedTypePath })
+          });
+        }
+      }
       projectedSymbols.set(index, symbol);
     }
   }

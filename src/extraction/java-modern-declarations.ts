@@ -25,6 +25,12 @@ export interface ModernJavaHeritageReference {
   readonly range: ModernJavaDeclarationRange;
 }
 
+export interface ModernJavaInstantiationReference {
+  readonly referenceName: string;
+  readonly qualifiedTypePath?: string;
+  readonly range: ModernJavaDeclarationRange;
+}
+
 export interface ModernJavaDeclaration {
   readonly name: string;
   readonly kind: "class" | "interface" | "method";
@@ -34,6 +40,7 @@ export interface ModernJavaDeclaration {
   readonly parentIndex: number | null;
   readonly callable?: ModernJavaCallableDeclaration;
   readonly heritageReferences?: readonly ModernJavaHeritageReference[];
+  readonly instantiationReferences?: readonly ModernJavaInstantiationReference[];
 }
 
 export interface ModernJavaImport {
@@ -288,6 +295,46 @@ function modernJavaHeritageReferences(
   return references;
 }
 
+function modernJavaInstantiationReferences(
+  node: SgNode
+): readonly ModernJavaInstantiationReference[] {
+  const references: ModernJavaInstantiationReference[] = [];
+  function visit(candidate: SgNode): void {
+    if (
+      candidate !== node &&
+      (candidate.kind() === "lambda_expression" ||
+        candidate.kind() === "class_declaration" ||
+        candidate.kind() === "interface_declaration" ||
+        candidate.kind() === "enum_declaration" ||
+        candidate.kind() === "record_declaration" ||
+        candidate.kind() === "method_declaration" ||
+        candidate.kind() === "constructor_declaration")
+    ) {
+      return;
+    }
+    if (candidate.kind() === "object_creation_expression") {
+      const typeNode = directChildren(candidate)
+        .map(directTypeNode)
+        .find((child): child is SgNode => child !== null);
+      const reference = typeNode === undefined ? null : typeReference(typeNode);
+      if (reference !== null) {
+        references.push(reference);
+      }
+      for (const child of directChildren(candidate)) {
+        if (child.kind() !== "class_body") {
+          visit(child);
+        }
+      }
+      return;
+    }
+    for (const child of directChildren(candidate)) {
+      visit(child);
+    }
+  }
+  visit(node);
+  return references;
+}
+
 function declarationName(node: SgNode): string | null {
   return directChildren(node)
     .filter((child) => child.kind() === "identifier")
@@ -378,6 +425,7 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
         }
         const range = node.range();
         const callable = callableShape(node, ownerTypeKind);
+        const instantiationReferences = modernJavaInstantiationReferences(node);
         const index = declarations.length;
         declarations.push({
           name,
@@ -387,7 +435,8 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
             isPublic(node) ||
             (ownerTypeKind === "interface" && !hasModifier(node, "private")),
           parentIndex,
-          ...(callable === null ? {} : { callable })
+          ...(callable === null ? {} : { callable }),
+          ...(instantiationReferences.length === 0 ? {} : { instantiationReferences })
         });
         for (const child of directChildren(node)) {
           visit(child, index, null, null);
