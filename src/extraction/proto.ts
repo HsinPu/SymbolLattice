@@ -3,6 +3,10 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type GraphEdge,
+  type ProtoImportFact,
+  type ProtoRpcFact,
+  type ProtoFacts,
+  type ProtoTypeFact,
   type SourcePosition,
   type SourceRange,
   type SymbolNode
@@ -35,6 +39,13 @@ interface ProtoDeclaration {
 interface ProtoScan {
   readonly declarations: readonly ProtoDeclaration[];
   readonly tokens: readonly ProtoToken[];
+}
+
+interface StaticProtoImport {
+  readonly importPath: string;
+  readonly importKind: "plain" | "public" | "weak";
+  readonly start: number;
+  readonly end: number;
 }
 
 interface ParsedProtoDeclaration {
@@ -206,6 +217,84 @@ function sanitizeProtoSource(sourceText: string): string | null {
     blankSourceSpan(characters, start, index);
   }
   return characters.join("");
+}
+
+/** Masks comments while preserving quoted import strings and their offsets. */
+function maskProtoComments(sourceText: string): string {
+  const characters = sourceText.split("");
+  let index = 0;
+  let blockComment = false;
+  while (index < sourceText.length) {
+    const character = sourceText[index];
+    const next = sourceText[index + 1];
+    if (blockComment) {
+      if (character === "*" && next === "/") {
+        characters[index] = " ";
+        characters[index + 1] = " ";
+        index += 2;
+        blockComment = false;
+        continue;
+      }
+      if (character !== "\r" && character !== "\n") characters[index] = " ";
+      index += 1;
+      continue;
+    }
+    if (character === "/" && next === "/") {
+      characters[index] = " ";
+      characters[index + 1] = " ";
+      index += 2;
+      while (index < sourceText.length && sourceText[index] !== "\n") {
+        if (sourceText[index] !== "\r") characters[index] = " ";
+        index += 1;
+      }
+      continue;
+    }
+    if (character === "/" && next === "*") {
+      characters[index] = " ";
+      characters[index + 1] = " ";
+      index += 2;
+      blockComment = true;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      const quote = character;
+      index += 1;
+      while (index < sourceText.length) {
+        if (sourceText[index] === "\\") {
+          index += 2;
+          continue;
+        }
+        if (sourceText[index] === quote) {
+          index += 1;
+          break;
+        }
+        index += 1;
+      }
+      continue;
+    }
+    index += 1;
+  }
+  return characters.join("");
+}
+
+function staticProtoImports(sourceText: string): readonly StaticProtoImport[] {
+  const masked = maskProtoComments(sourceText);
+  const imports: StaticProtoImport[] = [];
+  const pattern = /^[ \t]*import[ \t]+(?:(public|weak)[ \t]+)?(["'])([^"'\r\n]+)\2[ \t]*;[ \t]*$/gmu;
+  for (const match of masked.matchAll(pattern)) {
+    const full = match[0] ?? "";
+    const importPath = match[3] ?? "";
+    const matchIndex = match.index;
+    if (matchIndex === undefined || importPath.length === 0) continue;
+    const pathOffset = matchIndex + full.indexOf(importPath);
+    imports.push({
+      importPath,
+      importKind: match[1] === "public" ? "public" : match[1] === "weak" ? "weak" : "plain",
+      start: pathOffset,
+      end: pathOffset + importPath.length
+    });
+  }
+  return imports;
 }
 
 function delimitersAreBalanced(sourceText: string): boolean {
@@ -603,6 +692,10 @@ export function extractProtoFileFacts(input: ProtoExtractFileFactsInput): Artifa
   const symbols: SymbolNode[] = [fileNode];
   const edges: GraphEdge[] = [];
   const declarationOrdinals = new Map<string, number>();
+  const staticImports = staticProtoImports(input.sourceText);
+  const protoImports: ProtoImportFact[] = [];
+  const protoTypes: ProtoTypeFact[] = [];
+  const protoRpcs: ProtoRpcFact[] = [];
   const declarationSymbols: Array<{
     readonly declaration: ProtoDeclaration;
     readonly symbol: SymbolNode;
@@ -681,6 +774,13 @@ export function extractProtoFileFacts(input: ProtoExtractFileFactsInput): Artifa
       containmentRuleId: `language.proto.${declaration.kind}.direct-definition`
     });
     declarationSymbols.push({ declaration, symbol });
+    protoTypes.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: declaration.name,
+      declarationKind: declaration.kind,
+      range: symbol.range
+    });
     if (declaration.kind !== "service") {
       continue;
     }
@@ -695,10 +795,34 @@ export function extractProtoFileFacts(input: ProtoExtractFileFactsInput): Artifa
         containmentRuleId: "language.proto.rpc.direct-service-member"
       });
       rpcSymbols.push({ rpc, symbol: rpcSymbol, serviceId: symbol.id });
+      protoRpcs.push({
+        sourceId: rpcSymbol.id,
+        filePath: input.filePath,
+        name: rpc.name,
+        requestName: rpc.requestType.name,
+        responseName: rpc.responseType.name,
+        requestQualified: rpc.requestType.qualified,
+        responseQualified: rpc.responseType.qualified,
+        requestRange: rangeForSpan(lineStarts, rpc.requestType.start, rpc.requestType.end),
+        responseRange: rangeForSpan(lineStarts, rpc.responseType.start, rpc.responseType.end),
+        range: rangeForSpan(lineStarts, rpc.start, rpc.end)
+      });
     }
   }
 
-  const hasImport = tokens.some((token) => token.text === "import");
+  if (scan !== null) {
+    for (const importFact of staticImports) {
+      protoImports.push({
+        sourceId: fileNode.id,
+        filePath: input.filePath,
+        importPath: importFact.importPath,
+        importKind: importFact.importKind,
+        range: rangeForSpan(lineStarts, importFact.start, importFact.end)
+      });
+    }
+  }
+
+  const hasImport = protoImports.length > 0;
   if (!hasImport) {
     for (const source of rpcSymbols) {
       const duplicateRpc = rpcSymbols.filter(
@@ -767,6 +891,12 @@ export function extractProtoFileFacts(input: ProtoExtractFileFactsInput): Artifa
     referenceScopes: [],
     importBindings: [],
     exportBindings: [],
-    reExportBindings: []
+    reExportBindings: [],
+    protoFacts: {
+      parserRejected: scan === null,
+      imports: protoImports,
+      types: protoTypes,
+      rpcs: protoRpcs
+    } satisfies ProtoFacts
   };
 }

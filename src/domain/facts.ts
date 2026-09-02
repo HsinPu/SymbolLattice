@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v387";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v389";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v192";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v194";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -3483,6 +3483,46 @@ export interface MarkdownFacts {
   readonly links: readonly MarkdownLinkFact[];
 }
 
+/** One literal Protocol Buffers import retained for project-local resolution. */
+export interface ProtoImportFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly importPath: string;
+  readonly importKind: "plain" | "public" | "weak";
+  readonly range: SourceRange;
+}
+
+/** One Protocol Buffers declaration retained for imported RPC message proof. */
+export interface ProtoTypeFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly declarationKind: "message" | "enum" | "service";
+  readonly range: SourceRange;
+}
+
+/** One service RPC signature with source-ranged request and response names. */
+export interface ProtoRpcFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly requestName: string;
+  readonly responseName: string;
+  readonly requestQualified: boolean;
+  readonly responseQualified: boolean;
+  readonly requestRange: SourceRange;
+  readonly responseRange: SourceRange;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only Protocol Buffers facts; compiler plugins and gRPC runtime remain nonclaims. */
+export interface ProtoFacts {
+  readonly parserRejected?: boolean;
+  readonly imports: readonly ProtoImportFact[];
+  readonly types: readonly ProtoTypeFact[];
+  readonly rpcs: readonly ProtoRpcFact[];
+}
+
 /** One top-level R function binding retained for same-file call resolution. */
 export interface RFunctionFact {
   readonly symbolId: string;
@@ -4447,6 +4487,8 @@ export interface ArtifactFacts {
   readonly jspFacts?: JspFacts;
   /** Omitted only by artifact facts persisted before v0.449.0. */
   readonly markdownFacts?: MarkdownFacts;
+  /** Omitted only by artifact facts persisted before v0.483 Protocol Buffers relation depth. */
+  readonly protoFacts?: ProtoFacts;
   /** Omitted only by artifact facts persisted before v0.481 R relation depth. */
   readonly rFacts?: RFacts;
   /** Omitted only by artifact facts persisted before v0.72. */
