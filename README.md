@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.487.0
+目前版本：v0.488.0
 
 ## 主要能力
 
@@ -43,7 +43,7 @@ SymbolLattice 可在單次 `init` 或 `sync` 中處理多語言 repository。不
 | 資料、設定與 schema | SQL、GraphQL、Protocol Buffers、Terraform/OpenTofu、Nix、YAML、XML、Java Properties、Solidity |
 | Functional 與 BEAM | Erlang、Clojure、Haskell、OCaml |
 
-Java 深度包含唯一專案型別的明確 import、annotation、泛型 direct heritage／object creation，以及 `build.gradle(.kts)` 或 module-named Gradle build script 證據；重複 qualified type、wildcard／static import、lambda 內建立、anonymous interface 與外部 classpath 仍保守省略。
+Java 深度包含唯一專案型別的明確 import、annotation、泛型 direct heritage／object creation、parser-recovery callable signature，以及 `build.gradle(.kts)` 或 module-named Gradle build script 證據；重複 qualified type、wildcard／static import、lambda 內建立、array／wildcard signature、anonymous interface 與外部 classpath 仍保守省略。
 
 v0.448.0 預設略過所有名稱以 `.` 開頭的目錄，以及既有 cache 與 generated directories；因此 `.github`、`.devcontainer`、`.storybook`、`.codex-tmp` 等 hidden directories 不會被自動索引。明確 scope 可選入 default-excluded 路徑，hard exclusions 仍不可覆寫；root 與非隱藏目錄內的 nested `.gitignore` 依 Git parent re-inclusion 語意套用。若非排除路徑發生 `EACCES`／`EPERM`，index／sync 不會發布 partial generation，既有 generation 會保留並標示 stale。
 
@@ -96,6 +96,8 @@ v0.484.0 加深 GraphQL schema 的 bounded cross-file heritage。只有唯一的
 v0.486.0 加深 Java modern-parser heritage recovery。當 legacy Java parser 因 pattern／現代語法 recovery 無法保留整個 heritage header 時，改以乾淨的 modern parser 只保留 top-level direct superclass／interface facts，再沿既有唯一 project-local target 與 module evidence 建立 `extends`／`implements` exact edge；nested type、ambiguous import、external classpath、runtime dispatch 與 unresolved modern syntax 維持 nonclaim。
 
 v0.487.0 加深 Java modern-parser object creation recovery。對 legacy parser recovery 仍可由 modern parser 證明的 direct `new Type(...)`，只保留唯一 top-level method scope、outer type 與可回溯的 source range，再沿既有 project-local target／package／import evidence 建立 `instantiates` exact edge；lambda／anonymous nested body、ambiguous target、generic dispatch 與 runtime semantics 維持 nonclaim。
+
+v0.488.0 加深 Java modern-parser callable signature recovery。當 legacy parser 因同檔 modern syntax fail-close 時，clean modern parse 只恢復 method／constructor 的 direct imported 或 qualified parameter／return type；同 package 只在可取得 package 與唯一 project-local type 時建立既有 `accepts`／`returns` exact edge。type variable、array、wildcard、歧義 import、nested type、外部 classpath 與 runtime／overload dispatch 維持 nonclaim；固定 Netty、Quarkus core、Hibernate ORM relation selection 為 236 TP／64 FN、0 FP、0 evidenceInvalid，150／150 負向通過。
 
 v0.459.0 加深 Kotlin 的 bounded JVM relations。固定 Kotlin compiler、Ktor、kotlinx.coroutines 三個大型 source scope，加上一個乾淨 synthetic project，驗證 class／object／interface／enum／typealias identity、explicit import、唯一 direct／member／extension call、constructor instantiation、heritage 與 explicit override；300 個核准正向與 150 個 disposable 負向均通過。Overload、default parameter、extension ambiguity、generic／reified、delegation、sealed/interface dispatch、compiler plugin、coroutine runtime、generated/reflection、Java interop 與 external dependency linkage 維持 unresolved 或 nonclaim；大型 corpus unsupported breadth 與 parser-rejected files 另列，不宣稱完整 Kotlin compiler 支援。
 

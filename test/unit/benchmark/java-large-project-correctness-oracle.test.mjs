@@ -121,4 +121,37 @@ describe("Java large-project correctness oracle", () => {
 
     expect(result.scores).toEqual({ tp: 0, fp: 1, fn: 0, evidenceInvalid: 1, tn: 0 });
   });
+
+  it("treats repeated signature types as occurrence-sensitive", () => {
+    const fact = {
+      project: "fixture",
+      type: "positive",
+      stratum: "signature",
+      kind: "accepts",
+      source: endpoint("run", "method", 2),
+      target: endpoint("work", "method", 8),
+      occurrence: occurrence(5, 7)
+    };
+    const shared = {
+      sourceId: "caller",
+      targetId: "target",
+      kind: "accepts",
+      filePath: "src/App.java",
+      resolution: "exact",
+      confidence: 1,
+      evidence: { ruleId: "signature.java.fixture", candidateSymbolIds: ["target"] }
+    };
+    const result = scoreOracleSelection(
+      selection([fact], []),
+      new Map([[
+        "fixture",
+        snapshot([
+          { ...shared, id: "edge:first", range: { start: { line: 4, column: 5 } } },
+          { ...shared, id: "edge:second", range: { start: { line: 5, column: 7 } } }
+        ])
+      ]])
+    );
+
+    expect(result.scores).toEqual({ tp: 1, fp: 0, fn: 0, evidenceInvalid: 0, tn: 0 });
+  });
 });

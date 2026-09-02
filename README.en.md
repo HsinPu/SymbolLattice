@@ -16,7 +16,7 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.487.0
+Current version: v0.488.0
 
 ## Highlights
 
@@ -43,7 +43,7 @@ One `init` or `sync` can process a multi-language repository. Analysis depth var
 | Data, configuration, and schemas | SQL, GraphQL, Protocol Buffers, Terraform/OpenTofu, Nix, YAML, XML, Java Properties, Solidity |
 | Functional and BEAM | Erlang, Clojure, Haskell, OCaml |
 
-Java depth includes explicit imports, annotations, generic direct heritage and object creation, plus evidence from `build.gradle(.kts)` or module-named Gradle build scripts; duplicate qualified types, wildcard or static imports, lambda-contained construction, anonymous interfaces, and external classpaths remain conservatively omitted.
+Java depth includes explicit imports, annotations, generic direct heritage/object creation, parser-recovery callable signatures, and evidence from `build.gradle(.kts)` or module-named Gradle build scripts; duplicate qualified types, wildcard or static imports, lambda-contained construction, array/wildcard signatures, anonymous interfaces, and external classpaths remain conservatively omitted.
 
 v0.448.0 skips every directory whose name starts with `.`, in addition to the existing cache and generated-directory defaults. Hidden directories such as `.github`, `.devcontainer`, `.storybook`, and `.codex-tmp` are therefore not indexed automatically. Explicit scopes can opt into default-excluded paths, while hard exclusions remain non-overridable. Root and nested `.gitignore` files under non-hidden directories retain Git parent re-inclusion semantics. If a non-excluded path returns `EACCES` or `EPERM`, index and sync do not publish a partial generation; the previous generation is retained and reported as stale.
 
@@ -96,6 +96,8 @@ v0.484.0 deepens bounded cross-file GraphQL schema heritage. An existing `extend
 v0.486.0 deepens Java modern-parser heritage recovery. When the legacy Java parser loses a heritage header during modern-syntax recovery, a clean modern parser retains only top-level direct superclass/interface facts; existing unique project-local target and module evidence then gate exact `extends`/`implements` edges. Nested types, ambiguous imports, external classpaths, runtime dispatch, and unresolved modern syntax remain nonclaims.
 
 v0.487.0 deepens Java modern-parser object-creation recovery. For direct `new Type(...)` expressions that remain provable in a clean modern parse after legacy recovery noise, only the enclosing top-level method, outer type, and traceable source range are retained; existing project-local target/package/import evidence gates exact `instantiates` edges. Lambda/anonymous nested bodies, ambiguous targets, generic dispatch, and runtime semantics remain nonclaims.
+
+v0.488.0 deepens Java modern-parser callable signature recovery. When the legacy parser fails closed on modern syntax elsewhere in a file, a clean modern parse recovers only direct imported or qualified parameter/return types for methods and constructors; same-package exact edges require a recovered package and one unique project-local type. Type variables, arrays, wildcards, ambiguous imports, nested types, external classpaths, and runtime/overload dispatch remain nonclaims. The fixed Netty, Quarkus core, and Hibernate ORM relation selection is 236 TP / 64 FN with 0 FP, 0 evidence-invalid cases, and all 150 negatives passing.
 
 v0.459.0 deepens bounded Kotlin/JVM relations. Three fixed large source scopes (Kotlin compiler, Ktor, and kotlinx.coroutines), plus one clean synthetic project, verify class/object/interface/enum/typealias identity, explicit imports, unique direct/member/extension calls, constructor instantiation, heritage, and explicit overrides. All 300 admitted positives and 150 disposable negatives pass. Overloads, default parameters, extension ambiguity, generic/reified types, delegation, sealed/interface dispatch, compiler plugins, coroutine runtime, generated/reflection behavior, Java interop, and external dependency linkage remain unresolved or nonclaims; unsupported breadth and parser-rejected files are reported separately rather than presented as complete Kotlin compiler support.
 

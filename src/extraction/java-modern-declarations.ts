@@ -31,6 +31,14 @@ export interface ModernJavaInstantiationReference {
   readonly range: ModernJavaDeclarationRange;
 }
 
+export interface ModernJavaSignatureReference {
+  readonly relationKind: "accepts" | "returns";
+  readonly referenceName: string;
+  readonly qualifiedTypePath?: string;
+  readonly isTopLevelType: boolean;
+  readonly range: ModernJavaDeclarationRange;
+}
+
 export interface ModernJavaDeclaration {
   readonly name: string;
   readonly kind: "class" | "interface" | "method";
@@ -41,6 +49,7 @@ export interface ModernJavaDeclaration {
   readonly callable?: ModernJavaCallableDeclaration;
   readonly heritageReferences?: readonly ModernJavaHeritageReference[];
   readonly instantiationReferences?: readonly ModernJavaInstantiationReference[];
+  readonly signatureReferences?: readonly ModernJavaSignatureReference[];
 }
 
 export interface ModernJavaImport {
@@ -50,6 +59,7 @@ export interface ModernJavaImport {
 
 export interface ModernJavaDeclarationInspection {
   readonly isSyntaxClean: boolean;
+  readonly packageName: string | null;
   readonly declarations: readonly ModernJavaDeclaration[];
   readonly imports: readonly ModernJavaImport[];
 }
@@ -190,6 +200,25 @@ function callableShape(
   };
 }
 
+function directTypeParameterNames(node: SgNode): ReadonlySet<string> {
+  const typeParameters = directChildren(node).find(
+    (child) => child.kind() === "type_parameters"
+  );
+  if (typeParameters === undefined) {
+    return new Set();
+  }
+  const names = new Set<string>();
+  for (const parameter of directChildren(typeParameters).filter(
+    (child) => child.kind() === "type_parameter"
+  )) {
+    const name = directChildren(parameter).find((child) => child.kind() === "type_identifier");
+    if (name !== undefined && /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(name.text())) {
+      names.add(name.text());
+    }
+  }
+  return names;
+}
+
 function typeKind(node: SgNode): "class" | "interface" | null {
   const kind = node.kind();
   return kind === "class_declaration" || kind === "enum_declaration" || kind === "record_declaration"
@@ -257,6 +286,75 @@ function typeReference(node: SgNode): ModernJavaTypeReference | null {
     ...(segments.length > 1 ? { qualifiedTypePath: text } : {}),
     range: { start: range.start.index, end: range.end.index }
   };
+}
+
+function hasUnsupportedSignatureShape(node: SgNode): boolean {
+  if (node.kind() === "array_type" || node.kind() === "wildcard") {
+    return true;
+  }
+  return directChildren(node).some((child) => hasUnsupportedSignatureShape(child));
+}
+
+function signatureTypeReference(node: SgNode): ModernJavaTypeReference | null {
+  if (hasUnsupportedSignatureShape(node)) {
+    return null;
+  }
+  const typeNode = directTypeNode(node) ??
+    directChildren(node)
+      .map(directTypeNode)
+      .find((child): child is SgNode => child !== null) ??
+    null;
+  return typeNode === null ? null : typeReference(typeNode);
+}
+
+function modernJavaCallableSignatureReferences(
+  node: SgNode,
+  excludedNames: ReadonlySet<string>
+): readonly ModernJavaSignatureReference[] {
+  const references: ModernJavaSignatureReference[] = [];
+  const children = directChildren(node);
+  const methodNameIndex = children.findIndex((child) => child.kind() === "identifier");
+  if (node.kind() === "method_declaration" && methodNameIndex >= 0) {
+    const returnType = children
+      .slice(0, methodNameIndex)
+      .filter((child) => child.kind() !== "modifiers" && child.kind() !== "type_parameters")
+      .map(signatureTypeReference)
+      .find((candidate): candidate is ModernJavaTypeReference => candidate !== null);
+    if (returnType !== undefined && !excludedNames.has(returnType.referenceName)) {
+      references.push({ relationKind: "returns", isTopLevelType: true, ...returnType });
+    }
+  }
+
+  const parameterList = children.find((child) => child.kind() === "formal_parameters");
+  if (parameterList !== undefined) {
+    for (const parameter of directChildren(parameterList).filter(
+      (child) => child.kind() === "formal_parameter" || child.kind() === "spread_parameter"
+    )) {
+      const reference = signatureTypeReference(parameter);
+      if (reference === null || excludedNames.has(reference.referenceName)) {
+        continue;
+      }
+      references.push({ relationKind: "accepts", isTopLevelType: false, ...reference });
+    }
+  }
+  return references;
+}
+
+function modernJavaPackageName(root: SgNode): string | null {
+  const declarations = directChildren(root).filter((child) => child.kind() === "package_declaration");
+  if (declarations.length === 0) {
+    return "";
+  }
+  if (declarations.length !== 1 || declarations[0] === undefined) {
+    return null;
+  }
+  const nameNode = directChildren(declarations[0]).find(
+    (child) => child.kind() === "scoped_identifier" || child.kind() === "identifier"
+  );
+  const name = nameNode?.text();
+  return name !== undefined && /^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$/u.test(name)
+    ? name
+    : null;
 }
 
 function modernJavaHeritageReferences(
@@ -366,11 +464,11 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
   if (hasSyntaxError(root)) {
     const compatibilitySource = recordPatternCompatibilitySource(sourceText, root);
     if (compatibilitySource === null) {
-      return { isSyntaxClean: false, declarations: [], imports };
+      return { isSyntaxClean: false, packageName: null, declarations: [], imports };
     }
     root = parse("java", compatibilitySource).root();
     if (hasSyntaxError(root)) {
-      return { isSyntaxClean: false, declarations: [], imports };
+      return { isSyntaxClean: false, packageName: null, declarations: [], imports };
     }
   }
 
@@ -381,12 +479,13 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
     node: SgNode,
     parentIndex: number | null,
     ownerTypeName: string | null,
-    ownerTypeKind: "class" | "interface" | null
+    ownerTypeKind: "class" | "interface" | null,
+    ownerTypeParameters: ReadonlySet<string>
   ): void {
     if (isAnonymousBodyContainer(node)) {
       for (const body of directChildren(node).filter((child) => child.kind() === "class_body")) {
         for (const child of directChildren(body)) {
-          visit(child, parentIndex, null, null);
+          visit(child, parentIndex, null, null, ownerTypeParameters);
         }
       }
       return;
@@ -401,6 +500,10 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
       const range = node.range();
       const index = declarations.length;
       const heritageReferences = modernJavaHeritageReferences(node);
+      const typeParameters = new Set([
+        ...ownerTypeParameters,
+        ...directTypeParameterNames(node)
+      ]);
       declarations.push({
         name,
         kind: staticTypeKind,
@@ -411,7 +514,7 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
         ...(heritageReferences.length === 0 ? {} : { heritageReferences })
       });
       for (const child of directChildren(node)) {
-        visit(child, index, name, staticTypeKind);
+        visit(child, index, name, staticTypeKind, typeParameters);
       }
       return;
     }
@@ -426,6 +529,10 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
         const range = node.range();
         const callable = callableShape(node, ownerTypeKind);
         const instantiationReferences = modernJavaInstantiationReferences(node);
+        const signatureReferences = modernJavaCallableSignatureReferences(
+          node,
+          new Set([...ownerTypeParameters, ...directTypeParameterNames(node)])
+        );
         const index = declarations.length;
         declarations.push({
           name,
@@ -436,22 +543,23 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
             (ownerTypeKind === "interface" && !hasModifier(node, "private")),
           parentIndex,
           ...(callable === null ? {} : { callable }),
-          ...(instantiationReferences.length === 0 ? {} : { instantiationReferences })
+          ...(instantiationReferences.length === 0 ? {} : { instantiationReferences }),
+          ...(signatureReferences.length === 0 ? {} : { signatureReferences })
         });
         for (const child of directChildren(node)) {
-          visit(child, index, null, null);
+          visit(child, index, null, null, ownerTypeParameters);
         }
         return;
       }
     }
 
     for (const child of directChildren(node)) {
-      visit(child, parentIndex, ownerTypeName, ownerTypeKind);
+      visit(child, parentIndex, ownerTypeName, ownerTypeKind, ownerTypeParameters);
     }
   }
 
-  visit(root, null, null, null);
+  visit(root, null, null, null, new Set());
   return semanticError
-    ? { isSyntaxClean: false, declarations: [], imports }
-    : { isSyntaxClean: true, declarations, imports };
+    ? { isSyntaxClean: false, packageName: null, declarations: [], imports }
+    : { isSyntaxClean: true, packageName: modernJavaPackageName(root), declarations, imports };
 }

@@ -6921,7 +6921,11 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
   const canUseLegacyJavaRoot =
     !hasSyntaxError(input, root, instanceofAndPatternInspection.legacyRecoveryOffsets) ||
     recordInspection.isSyntaxClean;
-  const packageName = canUseLegacyJavaRoot ? staticJavaPackage(input, root) : null;
+  const packageName = canUseLegacyJavaRoot
+    ? staticJavaPackage(input, root)
+    : modernDeclarationInspection.isSyntaxClean
+      ? modernDeclarationInspection.packageName
+      : null;
   const overlapsRecord = (node: JavaSyntaxNode): boolean =>
     recordInspection.recordRanges.some(
       (recordRange) => node.from < recordRange.end && recordRange.start < node.to
@@ -7530,6 +7534,39 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         }
       }
       if (declaration.kind === "method" && parent.kind !== "file") {
+        for (const reference of declaration.signatureReferences ?? []) {
+          const range = rangeFor(lineStarts, reference.range.start, reference.range.end);
+          const importedTypePath = reference.qualifiedTypePath === undefined
+            ? modernImportsByName.get(reference.referenceName)
+            : undefined;
+          if (importedTypePath === null) {
+            continue;
+          }
+          const alreadyRetained = jvmCallableSignatureReferences.some(
+            (candidate) =>
+              candidate.sourceId === symbol.id &&
+              candidate.relationKind === reference.relationKind &&
+              candidate.referenceName === reference.referenceName &&
+              candidate.range.start.line === range.start.line &&
+              candidate.range.start.column === range.start.column
+          );
+          if (alreadyRetained) {
+            continue;
+          }
+          jvmCallableSignatureReferences.push({
+            sourceId: symbol.id,
+            declaringTypeId: parent.id,
+            filePath: input.filePath,
+            referenceName: reference.referenceName,
+            relationKind: reference.relationKind,
+            isTopLevelType: reference.isTopLevelType,
+            range,
+            ...(importedTypePath === undefined ? {} : { importedTypePath }),
+            ...(reference.qualifiedTypePath === undefined
+              ? {}
+              : { qualifiedTypePath: reference.qualifiedTypePath })
+          });
+        }
         for (const reference of declaration.instantiationReferences ?? []) {
           const range = rangeFor(lineStarts, reference.range.start, reference.range.end);
           const importedTypePath = modernImportsByName.get(reference.referenceName);

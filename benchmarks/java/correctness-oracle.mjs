@@ -222,7 +222,11 @@ function scorePositive(snapshot, fact) {
   if (sources.length !== 1 || targets.length !== 1) {
     return { outcome: "fn", reason: `endpoint-candidates:${sources.length}/${targets.length}` };
   }
-  const occurrenceSensitive = fact.kind === "calls" || fact.kind === "instantiates";
+  // Signature relations can occur more than once in one callable (for example
+  // two parameters of the same project type), so their source range is part of
+  // the independent truth identity just like calls and object creation.
+  const occurrenceSensitive =
+    fact.kind === "calls" || fact.kind === "instantiates" || fact.stratum === "signature";
   const candidates = snapshot.edges.filter(
     (edge) =>
       edge.sourceId === sources[0].id &&
