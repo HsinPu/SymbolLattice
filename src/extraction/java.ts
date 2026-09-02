@@ -7536,6 +7536,14 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
       if (declaration.kind === "method" && parent.kind !== "file") {
         for (const reference of declaration.callReferences ?? []) {
           const range = rangeFor(lineStarts, reference.range.start, reference.range.end);
+          const parameterReference = reference.receiverKind === "parameter";
+          const parameterImportedTypePath = parameterReference &&
+            reference.receiverType.qualifiedTypePath === undefined
+            ? modernImportsByName.get(reference.receiverType.referenceName)
+            : undefined;
+          if (parameterImportedTypePath === null) {
+            continue;
+          }
           const alreadyRetained = javaMemberCallReferences.some(
             (candidate) =>
               candidate.sourceId === symbol.id &&
@@ -7547,16 +7555,55 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
           if (alreadyRetained) {
             continue;
           }
-          javaMemberCallReferences.push({
-            sourceId: symbol.id,
-            declaringTypeId: parent.id,
-            filePath: input.filePath,
-            receiverKind: reference.receiverKind,
-            methodName: reference.methodName,
-            argumentCount: reference.argumentCount,
-            argumentTypes: Array.from({ length: reference.argumentCount }, () => null),
-            range
-          });
+          if (parameterReference) {
+            javaMemberCallReferences.push({
+              sourceId: symbol.id,
+              declaringTypeId: parent.id,
+              filePath: input.filePath,
+              receiverKind: "parameter",
+              receiverName: reference.receiverName,
+              receiverType: {
+                kind: "reference" as const,
+                referenceName: reference.receiverType.referenceName,
+                syntax: "declaration" as const,
+                range: rangeFor(
+                  lineStarts,
+                  reference.receiverType.range.start,
+                  reference.receiverType.range.end
+                ),
+                ...(reference.receiverType.qualifiedTypePath === undefined
+                  ? parameterImportedTypePath === undefined
+                    ? {}
+                    : { importedTypePath: parameterImportedTypePath }
+                  : { qualifiedTypePath: reference.receiverType.qualifiedTypePath })
+              },
+              receiverBindingRange: rangeFor(
+                lineStarts,
+                reference.receiverBindingRange.start,
+                reference.receiverBindingRange.end
+              ),
+              receiverScopeRange: rangeFor(
+                lineStarts,
+                reference.receiverScopeRange.start,
+                reference.receiverScopeRange.end
+              ),
+              methodName: reference.methodName,
+              argumentCount: reference.argumentCount,
+              argumentTypes: Array.from({ length: reference.argumentCount }, () => null),
+              range
+            });
+          } else {
+            javaMemberCallReferences.push({
+              sourceId: symbol.id,
+              declaringTypeId: parent.id,
+              filePath: input.filePath,
+              receiverKind: reference.receiverKind,
+              methodName: reference.methodName,
+              argumentCount: reference.argumentCount,
+              argumentTypes: Array.from({ length: reference.argumentCount }, () => null),
+              range
+            });
+          }
         }
         for (const reference of declaration.signatureReferences ?? []) {
           const range = rangeFor(lineStarts, reference.range.start, reference.range.end);

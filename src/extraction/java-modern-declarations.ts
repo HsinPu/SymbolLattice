@@ -46,6 +46,21 @@ export interface ModernJavaCallReference {
   readonly range: ModernJavaDeclarationRange;
 }
 
+export interface ModernJavaParameterCallReference {
+  readonly receiverKind: "parameter";
+  readonly receiverName: string;
+  readonly receiverType: {
+    readonly referenceName: string;
+    readonly qualifiedTypePath?: string;
+    readonly range: ModernJavaDeclarationRange;
+  };
+  readonly receiverBindingRange: ModernJavaDeclarationRange;
+  readonly receiverScopeRange: ModernJavaDeclarationRange;
+  readonly methodName: string;
+  readonly argumentCount: number;
+  readonly range: ModernJavaDeclarationRange;
+}
+
 export interface ModernJavaDeclaration {
   readonly name: string;
   readonly kind: "class" | "interface" | "method";
@@ -57,7 +72,7 @@ export interface ModernJavaDeclaration {
   readonly heritageReferences?: readonly ModernJavaHeritageReference[];
   readonly instantiationReferences?: readonly ModernJavaInstantiationReference[];
   readonly signatureReferences?: readonly ModernJavaSignatureReference[];
-  readonly callReferences?: readonly ModernJavaCallReference[];
+  readonly callReferences?: readonly (ModernJavaCallReference | ModernJavaParameterCallReference)[];
 }
 
 export interface ModernJavaImport {
@@ -415,6 +430,204 @@ function modernJavaCallableCallReferences(
   return references;
 }
 
+function modernJavaParameterCallReferences(
+  node: SgNode
+): readonly ModernJavaParameterCallReference[] {
+  const body = directChildren(node).find(
+    (child) => child.kind() === "block" || child.kind() === "constructor_body"
+  );
+  const parameterList = directChildren(node).find((child) => child.kind() === "formal_parameters");
+  if (body === undefined || parameterList === undefined) {
+    return [];
+  }
+  const bodyNode = body;
+  const parameters = new Map<string, {
+    readonly name: string;
+    readonly type: ModernJavaTypeReference;
+    readonly bindingRange: ModernJavaDeclarationRange;
+  }>();
+  for (const parameter of directChildren(parameterList).filter(
+    (child) => child.kind() === "formal_parameter"
+  )) {
+    const type = signatureTypeReference(parameter);
+    const nameNode = directChildren(parameter).find((child) => child.kind() === "identifier") ??
+      directChildren(parameter)
+        .find((child) => child.kind() === "variable_declarator")
+        ?.children()
+        .find((child) => child.kind() === "identifier");
+    if (type === null || nameNode === undefined) {
+      continue;
+    }
+    const name = nameNode.text();
+    if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(name)) {
+      continue;
+    }
+    const range = nameNode.range();
+    parameters.set(name, {
+      name,
+      type,
+      bindingRange: { start: range.start.index, end: range.end.index }
+    });
+  }
+  if (parameters.size === 0) {
+    return [];
+  }
+
+  const escapedName = (name: string): string => name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const nestedCallable = new Set([
+    "lambda_expression",
+    "class_declaration",
+    "interface_declaration",
+    "enum_declaration",
+    "record_declaration",
+    "method_declaration",
+    "constructor_declaration"
+  ]);
+  const containsUnsafeArgumentUse = (candidate: SgNode, name: string): boolean => {
+    if (candidate.kind() === "lambda_expression") {
+      return candidate.text().match(new RegExp(`\\b${escapedName(name)}\\b`, "u")) !== null;
+    }
+    if (candidate.kind() === "method_invocation") {
+      const children = directChildren(candidate);
+      const argumentList = children.find((child) => child.kind() === "argument_list");
+      const methodName = children.find((child) => child.kind() === "identifier");
+      if (argumentList !== undefined && containsUnsafeArgumentUse(argumentList, name)) {
+        return true;
+      }
+      const methodNameIndex = methodName === undefined ? -1 : children.indexOf(methodName);
+      for (const child of children.slice(0, Math.max(0, methodNameIndex))) {
+        if (child.kind() === "identifier" && child.text() === name) {
+          continue;
+        }
+        if (containsUnsafeArgumentUse(child, name)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    if (candidate.kind() === "identifier" && candidate.text() === name) {
+      return true;
+    }
+    return directChildren(candidate).some((child) => containsUnsafeArgumentUse(child, name));
+  };
+  const parameterIsTainted = (name: string): boolean => {
+    let tainted = false;
+    function visit(candidate: SgNode): void {
+      if (tainted) {
+        return;
+      }
+      if (candidate !== node && nestedCallable.has(String(candidate.kind()))) {
+        if (
+          candidate.kind() === "lambda_expression" &&
+          new RegExp(`\\b${escapedName(name)}\\b`, "u").test(candidate.text())
+        ) {
+          tainted = true;
+        }
+        return;
+      }
+      const text = candidate.text();
+      if (
+        (candidate.kind() === "assignment_expression" || candidate.kind() === "update_expression") &&
+        new RegExp(
+          `(?:^|[^A-Za-z0-9_$])${escapedName(name)}\\s*(?:[+\\-*/%&|^]?=|\\+\\+|--)|(?:^|[^A-Za-z0-9_$])${escapedName(name)}\\s*\\.(?:[A-Za-z_$][A-Za-z0-9_$]*\\s*)?=`,
+          "u"
+        ).test(text)
+      ) {
+        tainted = true;
+        return;
+      }
+      if (
+        (candidate.kind() === "return_statement" || candidate.kind() === "throw_statement") &&
+        new RegExp(`\\b${escapedName(name)}\\b`, "u").test(text)
+      ) {
+        tainted = true;
+        return;
+      }
+      if (candidate.kind() === "instanceof_expression") {
+        const patternBinding = directChildren(candidate)
+          .filter((child) => child.kind() === "identifier")
+          .at(-1);
+        if (patternBinding?.text() === name) {
+          tainted = true;
+          return;
+        }
+      }
+      if (candidate.kind() === "variable_declarator") {
+        const declaredName = directChildren(candidate)
+          .find((child) => child.kind() === "identifier");
+        if (declaredName?.text() === name) {
+          tainted = true;
+          return;
+        }
+      }
+      if (
+        candidate.kind() === "variable_declarator" &&
+        new RegExp(`=\\s*${escapedName(name)}\\b`, "u").test(text)
+      ) {
+        tainted = true;
+        return;
+      }
+      if (candidate.kind() === "method_invocation") {
+        const argumentList = directChildren(candidate).find((child) => child.kind() === "argument_list");
+        if (argumentList !== undefined && containsUnsafeArgumentUse(argumentList, name)) {
+          tainted = true;
+          return;
+        }
+      }
+      for (const child of directChildren(candidate)) {
+        visit(child);
+      }
+    }
+    visit(bodyNode);
+    return tainted;
+  };
+  const taintedParameters = new Set(
+    [...parameters.keys()].filter((name) => parameterIsTainted(name))
+  );
+  const references: ModernJavaParameterCallReference[] = [];
+  function visit(candidate: SgNode): void {
+    if (candidate !== node && nestedCallable.has(String(candidate.kind()))) {
+      return;
+    }
+    if (candidate.kind() === "method_invocation") {
+      const children = directChildren(candidate);
+      const receiver = children[0];
+      const dot = children[1];
+      const methodName = children[2];
+      const argumentList = children.find((child) => child.kind() === "argument_list");
+      if (
+        receiver?.kind() === "identifier" &&
+        dot?.kind() === "." &&
+        methodName?.kind() === "identifier" &&
+        argumentList !== undefined
+      ) {
+        const parameter = parameters.get(receiver.text());
+        if (parameter !== undefined && !taintedParameters.has(parameter.name)) {
+          const methodRange = methodName.range();
+          const bodyRange = bodyNode.range();
+          references.push({
+            receiverKind: "parameter",
+            receiverName: parameter.name,
+            receiverType: parameter.type,
+            receiverBindingRange: parameter.bindingRange,
+            receiverScopeRange: { start: bodyRange.start.index, end: bodyRange.end.index },
+            methodName: methodName.text(),
+            argumentCount: directChildren(argumentList).filter(
+              (child) => child.kind() !== "(" && child.kind() !== ")" && child.kind() !== ","
+            ).length,
+            range: { start: methodRange.start.index, end: methodRange.end.index }
+          });
+        }
+      }
+    }
+    for (const child of directChildren(candidate)) {
+      visit(child);
+    }
+  }
+  visit(bodyNode);
+  return references;
+}
+
 function modernJavaPackageName(root: SgNode): string | null {
   const declarations = directChildren(root).filter((child) => child.kind() === "package_declaration");
   if (declarations.length === 0) {
@@ -611,11 +824,14 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
         );
         const callReferences = callable === null
           ? []
-          : modernJavaCallableCallReferences(
-              node,
-              callable.isStatic,
-              new Set(staticImportNames)
-            );
+          : [
+              ...modernJavaCallableCallReferences(
+                node,
+                callable.isStatic,
+                new Set(staticImportNames)
+              ),
+              ...modernJavaParameterCallReferences(node)
+            ];
         const index = declarations.length;
         declarations.push({
           name,

@@ -19,19 +19,20 @@ afterEach(async () => {
   );
 });
 
-describe("Java modern heritage relations v0.486", () => {
-  it("projects direct cross-file superclass and interface edges from a legacy-recovery file", async () => {
-    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-java-modern-heritage-"));
+describe("Java modern parameter receiver call relations v0.490", () => {
+  it("projects a unique imported parameter receiver call", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-java-modern-parameter-"));
     temporaryDirectories.push(projectPath);
-    await writeFile(join(projectPath, "Base.java"), "package app; public class Base {}\n", "utf8");
-    await writeFile(join(projectPath, "Contract.java"), "package app; public interface Contract {}\n", "utf8");
+    await writeFile(join(projectPath, "Worker.java"), "package api; public class Worker { public void handle() {} }\n", "utf8");
     await writeFile(
-      join(projectPath, "Child.java"),
+      join(projectPath, "Runner.java"),
       [
         "package app;",
-        "public class Child extends Base implements Contract {",
-        "  void run(Object value) {",
+        "import api.Worker;",
+        "public class Runner {",
+        "  void run(Worker worker, Object value) {",
         "    if (value instanceof String text) { System.out.println(text); }",
+        "    worker.handle();",
         "  }",
         "}"
       ].join("\n"),
@@ -42,51 +43,41 @@ describe("Java modern heritage relations v0.486", () => {
     const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
     const indexed = await service.init({ projectPath });
     const snapshot = store.getSnapshot(projectPath);
-    const child = snapshot.symbols.find((symbol) => symbol.name === "Child");
-    const base = snapshot.symbols.find((symbol) => symbol.name === "Base");
-    const contract = snapshot.symbols.find((symbol) => symbol.name === "Contract");
+    const run = snapshot.symbols.find((symbol) => symbol.name === "run");
+    const handle = snapshot.symbols.find((symbol) => symbol.name === "handle");
 
     expect(indexed).toMatchObject({ initialized: true, stale: false });
     expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v397");
     expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v197");
     expect(snapshot.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        sourceId: child?.id,
-        targetId: base?.id,
-        kind: "extends",
+        sourceId: run?.id,
+        targetId: handle?.id,
+        kind: "calls",
         resolution: "exact",
         confidence: 1,
         evidence: expect.objectContaining({
-          ruleId: "syntax.jvm.cross-file.same-package.direct-superclass",
-          candidateSymbolIds: [base?.id]
-        })
-      }),
-      expect.objectContaining({
-        sourceId: child?.id,
-        targetId: contract?.id,
-        kind: "implements",
-        resolution: "exact",
-        confidence: 1,
-        evidence: expect.objectContaining({
-          ruleId: "syntax.jvm.cross-file.same-package.direct-implements",
-          candidateSymbolIds: [contract?.id]
+          ruleId: "call.java.member.parameter.arity.direct-dispatch",
+          candidateSymbolIds: [handle?.id]
         })
       })
     ]));
   });
 
-  it("does not resolve duplicate same-package interface names from modern heritage facts", async () => {
-    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-java-modern-ambiguous-"));
+  it("does not project a parameter receiver after reassignment", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-java-modern-parameter-taint-"));
     temporaryDirectories.push(projectPath);
-    await writeFile(join(projectPath, "ContractA.java"), "package app; interface Contract {}\n", "utf8");
-    await writeFile(join(projectPath, "ContractB.java"), "package app; interface Contract {}\n", "utf8");
+    await writeFile(join(projectPath, "Worker.java"), "package api; public class Worker { public void handle() {} }\n", "utf8");
     await writeFile(
-      join(projectPath, "Child.java"),
+      join(projectPath, "Runner.java"),
       [
         "package app;",
-        "public class Child implements Contract {",
-        "  void run(Object value) {",
+        "import api.Worker;",
+        "public class Runner {",
+        "  void run(Worker worker, Object value) {",
         "    if (value instanceof String text) { System.out.println(text); }",
+        "    worker = new Worker();",
+        "    worker.handle();",
         "  }",
         "}"
       ].join("\n"),
@@ -99,7 +90,7 @@ describe("Java modern heritage relations v0.486", () => {
 
     expect(
       store.getSnapshot(projectPath).edges.filter((edge) =>
-        edge.kind === "implements" && edge.evidence?.ruleId?.startsWith("syntax.jvm.cross-file.")
+        edge.kind === "calls" && edge.referenceName === "handle"
       )
     ).toEqual([]);
   });
