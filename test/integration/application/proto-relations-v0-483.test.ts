@@ -42,8 +42,8 @@ describe("Protocol Buffers project relations v0.483", () => {
     const response = snapshot.symbols.find((symbol) => symbol.name === "HelloResponse");
 
     expect(indexed).toMatchObject({ initialized: true, stale: false });
-    expect(store.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v389");
-    expect(store.getActiveGraphBundle(projectPath).resolverVersion).toContain("project-resolver-v194");
+    expect(store.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v392");
+    expect(store.getActiveGraphBundle(projectPath).resolverVersion).toContain("project-resolver-v197");
     expect(snapshot.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: "imports", referenceName: "messages.proto", resolution: "exact" }),
       expect.objectContaining({ sourceId: rpc?.id, targetId: request?.id, kind: "references", resolution: "exact", evidence: expect.objectContaining({ ruleId: "module.proto.unique-imported-rpc-request-message-reference" }) }),

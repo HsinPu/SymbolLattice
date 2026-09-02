@@ -882,6 +882,7 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
     ...(facts.jspFacts === undefined ? {} : { jspFacts: facts.jspFacts }),
     ...(facts.markdownFacts === undefined ? {} : { markdownFacts: facts.markdownFacts }),
     ...(facts.protoFacts === undefined ? {} : { protoFacts: facts.protoFacts }),
+    ...(facts.graphqlFacts === undefined ? {} : { graphqlFacts: facts.graphqlFacts }),
     ...(facts.rFacts === undefined ? {} : { rFacts: facts.rFacts }),
     ...(facts.bladeFacts === undefined ? {} : { bladeFacts: facts.bladeFacts }),
     ...(facts.reactNativeFacts === undefined ? {} : { reactNativeFacts: facts.reactNativeFacts }),

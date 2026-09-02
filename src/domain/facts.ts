@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v389";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v392";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v194";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v197";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -3523,6 +3523,31 @@ export interface ProtoFacts {
   readonly rpcs: readonly ProtoRpcFact[];
 }
 
+/** One GraphQL schema type or interface declaration retained for project proof. */
+export interface GraphqlTypeFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly declarationKind: "type" | "interface" | "enum";
+  readonly range: SourceRange;
+}
+
+/** One direct GraphQL `implements Interface` occurrence. */
+export interface GraphqlHeritageFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly sourceName: string;
+  readonly targetName: string;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only GraphQL facts; schema stitching, resolver linkage and execution remain nonclaims. */
+export interface GraphqlFacts {
+  readonly parserRejected?: boolean;
+  readonly types: readonly GraphqlTypeFact[];
+  readonly heritage: readonly GraphqlHeritageFact[];
+}
+
 /** One top-level R function binding retained for same-file call resolution. */
 export interface RFunctionFact {
   readonly symbolId: string;
@@ -4489,6 +4514,8 @@ export interface ArtifactFacts {
   readonly markdownFacts?: MarkdownFacts;
   /** Omitted only by artifact facts persisted before v0.483 Protocol Buffers relation depth. */
   readonly protoFacts?: ProtoFacts;
+  /** Omitted only by artifact facts persisted before v0.484 GraphQL relation depth. */
+  readonly graphqlFacts?: GraphqlFacts;
   /** Omitted only by artifact facts persisted before v0.481 R relation depth. */
   readonly rFacts?: RFacts;
   /** Omitted only by artifact facts persisted before v0.72. */

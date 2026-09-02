@@ -3,6 +3,9 @@ import {
   createSymbolId,
   type ArtifactFacts,
   type GraphEdge,
+  type GraphqlFacts,
+  type GraphqlHeritageFact,
+  type GraphqlTypeFact,
   type SourcePosition,
   type SourceRange,
   type SymbolNode
@@ -43,6 +46,11 @@ interface SanitizedGraphqlSource {
 interface ParsedGraphqlDeclaration {
   readonly declaration: GraphqlDeclaration;
   readonly endTokenIndex: number;
+}
+
+interface GraphqlScan {
+  readonly declarations: readonly GraphqlDeclaration[];
+  readonly parserRejected: boolean;
 }
 
 const GRAPHQL_DEFINITION_KEYWORDS: ReadonlySet<GraphqlDeclarationKind> = new Set([
@@ -477,14 +485,14 @@ function directGraphqlDeclaration(
  * definitions become symbols; operations, extensions, fields, directives,
  * type references, execution, and schema validation remain out of scope.
  */
-function staticGraphqlDeclarations(sourceText: string): readonly GraphqlDeclaration[] {
+function staticGraphqlDeclarations(sourceText: string): GraphqlScan {
   const sanitized = sanitizeGraphqlSource(sourceText);
   if (!sanitized.valid) {
-    return [];
+    return { declarations: [], parserRejected: true };
   }
   const tokens = graphqlTokens(sanitized.text);
   if (tokens === null) {
-    return [];
+    return { declarations: [], parserRejected: true };
   }
 
   const declarations: GraphqlDeclaration[] = [];
@@ -524,7 +532,7 @@ function staticGraphqlDeclarations(sourceText: string): readonly GraphqlDeclarat
       continue;
     }
     if (token.text === "extend") {
-      return [];
+      return { declarations: [], parserRejected: true };
     }
     if (!GRAPHQL_DEFINITION_KEYWORDS.has(token.text as GraphqlDeclarationKind)) {
       continue;
@@ -536,7 +544,7 @@ function staticGraphqlDeclarations(sourceText: string): readonly GraphqlDeclarat
     declarations.push(parsed.declaration);
     index = parsed.endTokenIndex;
   }
-  return declarations;
+  return { declarations, parserRejected: false };
 }
 
 function symbolKindFor(
@@ -557,7 +565,8 @@ function symbolKindFor(
  * runtime service behavior.
  */
 export function extractGraphqlFileFacts(input: GraphqlExtractFileFactsInput): ArtifactFacts {
-  const declarations = staticGraphqlDeclarations(input.sourceText);
+  const scan = staticGraphqlDeclarations(input.sourceText);
+  const declarations = scan.declarations;
   const lineStarts = lineStartsFor(input.sourceText);
   const fileName = input.filePath.split(/[\\/]/u).at(-1) ?? input.filePath;
   const fileNode: SymbolNode = {
@@ -578,6 +587,8 @@ export function extractGraphqlFileFacts(input: GraphqlExtractFileFactsInput): Ar
   const symbols: SymbolNode[] = [fileNode];
   const edges: GraphEdge[] = [];
   const declarationOrdinals = new Map<string, number>();
+  const graphqlTypes: GraphqlTypeFact[] = [];
+  const graphqlHeritage: GraphqlHeritageFact[] = [];
   const declarationSymbols: Array<{
     readonly declaration: GraphqlDeclaration;
     readonly symbol: SymbolNode;
@@ -607,6 +618,24 @@ export function extractGraphqlFileFacts(input: GraphqlExtractFileFactsInput): Ar
     };
     symbols.push(symbol);
     declarationSymbols.push({ declaration, symbol });
+    if (declaration.kind === "type" || declaration.kind === "interface" || declaration.kind === "enum") {
+      graphqlTypes.push({
+        symbolId: symbol.id,
+        filePath: input.filePath,
+        name: declaration.name,
+        declarationKind: declaration.kind,
+        range: symbol.range
+      });
+    }
+    if (declaration.implementedInterface !== undefined && (declaration.kind === "type" || declaration.kind === "interface")) {
+      graphqlHeritage.push({
+        sourceId: symbol.id,
+        filePath: input.filePath,
+        sourceName: declaration.name,
+        targetName: declaration.implementedInterface.name,
+        range: rangeFor(lineStarts, declaration.implementedInterface.start, declaration.implementedInterface.end)
+      });
+    }
     edges.push({
       id: createEdgeId({
         sourceId: fileNode.id,
@@ -685,6 +714,11 @@ export function extractGraphqlFileFacts(input: GraphqlExtractFileFactsInput): Ar
     referenceScopes: [],
     importBindings: [],
     exportBindings: [],
-    reExportBindings: []
+    reExportBindings: [],
+    graphqlFacts: {
+      parserRejected: scan.parserRejected,
+      types: graphqlTypes,
+      heritage: graphqlHeritage
+    } satisfies GraphqlFacts
   };
 }

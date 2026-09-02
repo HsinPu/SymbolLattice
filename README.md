@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.483.0
+目前版本：v0.484.0
 
 ## 主要能力
 
@@ -90,6 +90,8 @@ v0.481.0 加深 R 的 bounded same-file direct calls。只有同一 `.R` 檔、�
 v0.482.0 加深 Markdown 的 bounded reference-style links。只有唯一的 reference definition、可解析的 local project-relative 檔案目的地與已索引 target file，才建立既有 `references` exact edge；duplicate／external／opaque／malformed／unsafe definitions、shortcut links、heading-fragment symbols、MDX execution 與 generated-site routing 維持 unresolved 或 nonclaim。
 
 v0.483.0 加深 Protocol Buffers 的 bounded cross-file RPC references。只有 literal local import、唯一 tracked target file，以及未 qualified、未歧義的 RPC request／response message，才建立既有 `imports`／`references` exact edge；package-qualified types、nested declarations、duplicate message names、compiler plugin、generated code、gRPC runtime 與 external well-known types 維持 unresolved 或 nonclaim。
+
+v0.484.0 加深 GraphQL schema 的 bounded cross-file heritage。只有唯一的 top-level type/interface 與唯一直接實作的 interface，才建立既有 `extends` exact edge；schema stitching、federation、multiple implements、extension、directive、resolver linkage、query execution 與 generated schema 維持 unresolved 或 nonclaim。
 
 v0.459.0 加深 Kotlin 的 bounded JVM relations。固定 Kotlin compiler、Ktor、kotlinx.coroutines 三個大型 source scope，加上一個乾淨 synthetic project，驗證 class／object／interface／enum／typealias identity、explicit import、唯一 direct／member／extension call、constructor instantiation、heritage 與 explicit override；300 個核准正向與 150 個 disposable 負向均通過。Overload、default parameter、extension ambiguity、generic／reified、delegation、sealed/interface dispatch、compiler plugin、coroutine runtime、generated/reflection、Java interop 與 external dependency linkage 維持 unresolved 或 nonclaim；大型 corpus unsupported breadth 與 parser-rejected files 另列，不宣稱完整 Kotlin compiler 支援。
 
