@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v385";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v387";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v190";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v192";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -3474,6 +3474,8 @@ export interface MarkdownLinkFact {
   readonly targetFilePath: string;
   readonly referenceName: string;
   readonly range: SourceRange;
+  /** Distinguishes an inline destination from a resolved reference definition. */
+  readonly sourceKind?: "inline" | "reference";
 }
 
 /** Syntax-only Markdown facts resolved after the complete indexed file catalog is available. */

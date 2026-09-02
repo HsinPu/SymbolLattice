@@ -1465,8 +1465,11 @@ function jspTemplateReferenceRuleId(
   return `syntax.jsp.${kind}.literal-project-file.${suffix}`;
 }
 
-function markdownLinkRuleId(suffix: "exact-target" | "unresolved-target"): string {
-  return `syntax.markdown.inline-link.literal-project-file.${suffix}`;
+function markdownLinkRuleId(
+  sourceKind: "inline" | "reference",
+  suffix: "exact-target" | "unresolved-target"
+): string {
+  return `syntax.markdown.${sourceKind}-link.literal-project-file.${suffix}`;
 }
 
 /** Resolves only one exact indexed project-relative path retained by the Markdown syntax pass. */
@@ -1506,7 +1509,10 @@ function projectMarkdownFileReferences(input: {
         confidence: candidate === undefined ? 0 : 1,
         referenceName: link.referenceName,
         evidence: referenceEvidence(
-          markdownLinkRuleId(candidate === undefined ? "unresolved-target" : "exact-target"),
+          markdownLinkRuleId(
+            link.sourceKind === "reference" ? "reference" : "inline",
+            candidate === undefined ? "unresolved-target" : "exact-target"
+          ),
           "module",
           candidateSymbolIds(candidates)
         )

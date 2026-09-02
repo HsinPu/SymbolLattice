@@ -286,12 +286,53 @@ function localTargetPath(filePath: string, destination: string): string | null {
   return normalized;
 }
 
-/** Extracts bounded Markdown headings and direct project-local inline links. */
+interface MarkdownReferenceDefinition {
+  readonly destination: string;
+}
+
+function normalizeReferenceLabel(label: string): string {
+  return label.trim().replace(/\s+/gu, " ").toLowerCase();
+}
+
+function markdownReferenceDefinitions(
+  lines: readonly MarkdownLine[],
+  opaque: readonly boolean[]
+): {
+  readonly definitions: ReadonlyMap<string, MarkdownReferenceDefinition>;
+  readonly ambiguous: ReadonlySet<string>;
+} {
+  const definitions = new Map<string, MarkdownReferenceDefinition>();
+  const ambiguous = new Set<string>();
+  const pattern = /^ {0,3}\[([^\]\r\n]+)\]:[ \t]*(<[^>\r\n]+>|[^ \t\r\n]+)(?:[ \t]+(?:"[^"\r\n]*"|'[^'\r\n]*'|\([^)]*\)))?[ \t]*$/u;
+  for (const line of lines) {
+    if (opaque[line.number] === true) continue;
+    const masked = maskInlineCode(line.text);
+    if (masked === null) continue;
+    const match = pattern.exec(masked);
+    if (match === null) continue;
+    const label = normalizeReferenceLabel(match[1] ?? "");
+    const rawDestination = match[2] ?? "";
+    const destination = rawDestination.startsWith("<") && rawDestination.endsWith(">")
+      ? rawDestination.slice(1, -1)
+      : rawDestination;
+    if (label.length === 0 || destination.length === 0 || ambiguous.has(label)) continue;
+    if (definitions.has(label)) {
+      definitions.delete(label);
+      ambiguous.add(label);
+      continue;
+    }
+    definitions.set(label, { destination });
+  }
+  return { definitions, ambiguous };
+}
+
+/** Extracts bounded Markdown headings and direct project-local inline/reference links. */
 export function extractMarkdownFileFacts(input: MarkdownExtractFileFactsInput): ArtifactFacts {
   const lines = linesFor(input.sourceText);
   const file = fileSymbol(input, lines);
   if (input.sourceText.length > MAXIMUM_MARKDOWN_SOURCE_LENGTH) return fileOnlyFacts(file);
   const opaque = opaqueMarkdownLines(lines);
+  const referenceDefinitions = markdownReferenceDefinitions(lines, opaque);
   const headings: HeadingRecord[] = [];
   for (let index = 0; index < lines.length; index += 1) {
     if (exceedsHeadingLengthLimit(lines, opaque, index)) return fileOnlyFacts(file);
@@ -387,7 +428,37 @@ export function extractMarkdownFileFacts(input: MarkdownExtractFileFactsInput): 
         filePath: input.filePath,
         targetFilePath,
         referenceName: destination,
-        range: rangeFor(lines, line.start + startColumn, line.start + startColumn + match[0].length)
+        range: rangeFor(lines, line.start + startColumn, line.start + startColumn + match[0].length),
+        sourceKind: "inline"
+      });
+      if (headings.length + links.length > MAXIMUM_MARKDOWN_RESOURCES) return fileOnlyFacts(file);
+    }
+
+    const referencePattern = /(?<!!)\[([^\[\]\r\n]+)\]\[([^\]\r\n]*)\]/gu;
+    for (const match of masked.matchAll(referencePattern)) {
+      const startColumn = match.index;
+      if (
+        startColumn === undefined ||
+        isEscaped(masked, startColumn) ||
+        hasUnclosedLabelBefore(masked, startColumn) ||
+        masked[startColumn + match[0].length] === "("
+      ) continue;
+      const textLabel = match[1] ?? "";
+      const explicitLabel = match[2] ?? "";
+      const label = normalizeReferenceLabel(explicitLabel.length === 0 ? textLabel : explicitLabel);
+      if (referenceDefinitions.ambiguous.has(label)) continue;
+      const definition = referenceDefinitions.definitions.get(label);
+      if (definition === undefined) continue;
+      const targetFilePath = localTargetPath(input.filePath, definition.destination);
+      if (targetFilePath === null) continue;
+      const source = activeHeadings.at(-1)?.symbol ?? file;
+      links.push({
+        sourceId: source.id,
+        filePath: input.filePath,
+        targetFilePath,
+        referenceName: definition.destination,
+        range: rangeFor(lines, line.start + startColumn, line.start + startColumn + match[0].length),
+        sourceKind: "reference"
       });
       if (headings.length + links.length > MAXIMUM_MARKDOWN_RESOURCES) return fileOnlyFacts(file);
     }

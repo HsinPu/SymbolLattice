@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.481.0
+目前版本：v0.482.0
 
 ## 主要能力
 
@@ -86,6 +86,8 @@ v0.477.0 加深 Ruby 的 bounded project relations。只對 literal `require_rel
 v0.478.0 加深 PostgreSQL DDL 的 bounded schema relations。只對完整、可解析的 `CREATE TABLE` 中 literal foreign-key `REFERENCES` 與 `INHERITS` 建立唯一 table target exact edge；views、routines、search path、psql variables、COPY payload、dynamic SQL、外部資料庫與 ambiguous unqualified names 維持 unresolved 或 nonclaim。
 
 v0.481.0 加深 R 的 bounded same-file direct calls。只有同一 `.R` 檔、唯一 top-level function、明確 identifier call 且未被 parameter／reassignment／loading／closure／S3/S4 dispatch 污染時，才建立既有 `calls` exact edge；`source`、`library`、`get`、`do.call`、namespace/member dispatch、duplicate binding、跨檔 package resolution 與 evaluation 維持 unresolved 或 nonclaim。這不是完整 R interpreter 或 S3/S4 runtime 支援。
+
+v0.482.0 加深 Markdown 的 bounded reference-style links。只有唯一的 reference definition、可解析的 local project-relative 檔案目的地與已索引 target file，才建立既有 `references` exact edge；duplicate／external／opaque／malformed／unsafe definitions、shortcut links、heading-fragment symbols、MDX execution 與 generated-site routing 維持 unresolved 或 nonclaim。
 
 v0.459.0 加深 Kotlin 的 bounded JVM relations。固定 Kotlin compiler、Ktor、kotlinx.coroutines 三個大型 source scope，加上一個乾淨 synthetic project，驗證 class／object／interface／enum／typealias identity、explicit import、唯一 direct／member／extension call、constructor instantiation、heritage 與 explicit override；300 個核准正向與 150 個 disposable 負向均通過。Overload、default parameter、extension ambiguity、generic／reified、delegation、sealed/interface dispatch、compiler plugin、coroutine runtime、generated/reflection、Java interop 與 external dependency linkage 維持 unresolved 或 nonclaim；大型 corpus unsupported breadth 與 parser-rejected files 另列，不宣稱完整 Kotlin compiler 支援。
 

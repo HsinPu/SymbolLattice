@@ -90,8 +90,9 @@ describe("Markdown project file references", () => {
     ]);
     const references = graph.edges.filter((edge) => edge.kind === "references");
 
-    expect(references).toHaveLength(1);
-    expect(references[0]).toMatchObject({
+    expect(references).toHaveLength(2);
+    expect(references).toEqual(expect.arrayContaining([
+      expect.objectContaining({
       targetId: null,
       resolution: "unresolved",
       confidence: 0,
@@ -101,6 +102,18 @@ describe("Markdown project file references", () => {
         stage: "module",
         candidateSymbolIds: []
       }
-    });
+      }),
+      expect.objectContaining({
+        targetId: null,
+        resolution: "unresolved",
+        confidence: 0,
+        referenceName: "other.md",
+        evidence: {
+          ruleId: "syntax.markdown.reference-link.literal-project-file.unresolved-target",
+          stage: "module",
+          candidateSymbolIds: []
+        }
+      })
+    ]));
   });
 });
