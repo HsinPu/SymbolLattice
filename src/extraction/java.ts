@@ -7534,6 +7534,30 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         }
       }
       if (declaration.kind === "method" && parent.kind !== "file") {
+        for (const reference of declaration.callReferences ?? []) {
+          const range = rangeFor(lineStarts, reference.range.start, reference.range.end);
+          const alreadyRetained = javaMemberCallReferences.some(
+            (candidate) =>
+              candidate.sourceId === symbol.id &&
+              candidate.receiverKind === reference.receiverKind &&
+              candidate.methodName === reference.methodName &&
+              candidate.range.start.line === range.start.line &&
+              candidate.range.start.column === range.start.column
+          );
+          if (alreadyRetained) {
+            continue;
+          }
+          javaMemberCallReferences.push({
+            sourceId: symbol.id,
+            declaringTypeId: parent.id,
+            filePath: input.filePath,
+            receiverKind: reference.receiverKind,
+            methodName: reference.methodName,
+            argumentCount: reference.argumentCount,
+            argumentTypes: Array.from({ length: reference.argumentCount }, () => null),
+            range
+          });
+        }
         for (const reference of declaration.signatureReferences ?? []) {
           const range = rangeFor(lineStarts, reference.range.start, reference.range.end);
           const importedTypePath = reference.qualifiedTypePath === undefined

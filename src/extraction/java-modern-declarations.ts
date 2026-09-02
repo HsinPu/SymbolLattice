@@ -39,6 +39,13 @@ export interface ModernJavaSignatureReference {
   readonly range: ModernJavaDeclarationRange;
 }
 
+export interface ModernJavaCallReference {
+  readonly receiverKind: "implicit-static" | "implicit-instance";
+  readonly methodName: string;
+  readonly argumentCount: number;
+  readonly range: ModernJavaDeclarationRange;
+}
+
 export interface ModernJavaDeclaration {
   readonly name: string;
   readonly kind: "class" | "interface" | "method";
@@ -50,6 +57,7 @@ export interface ModernJavaDeclaration {
   readonly heritageReferences?: readonly ModernJavaHeritageReference[];
   readonly instantiationReferences?: readonly ModernJavaInstantiationReference[];
   readonly signatureReferences?: readonly ModernJavaSignatureReference[];
+  readonly callReferences?: readonly ModernJavaCallReference[];
 }
 
 export interface ModernJavaImport {
@@ -60,6 +68,7 @@ export interface ModernJavaImport {
 export interface ModernJavaDeclarationInspection {
   readonly isSyntaxClean: boolean;
   readonly packageName: string | null;
+  readonly staticImportNames: readonly string[];
   readonly declarations: readonly ModernJavaDeclaration[];
   readonly imports: readonly ModernJavaImport[];
 }
@@ -244,6 +253,18 @@ function modernJavaImports(sourceText: string): readonly ModernJavaImport[] {
   return imports;
 }
 
+function modernJavaStaticImportNames(sourceText: string): readonly string[] {
+  const names = new Set<string>();
+  const pattern = /^\s*import\s+static\s+[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*\.(\*|[A-Za-z_$][A-Za-z0-9_$]*)\s*;/gmu;
+  for (const match of sourceText.matchAll(pattern)) {
+    const name = match[1];
+    if (name !== undefined) {
+      names.add(name);
+    }
+  }
+  return [...names].sort();
+}
+
 function directTypeNode(node: SgNode): SgNode | null {
   if (node.kind() === "type_identifier" || node.kind() === "scoped_type_identifier") {
     return node;
@@ -337,6 +358,60 @@ function modernJavaCallableSignatureReferences(
       references.push({ relationKind: "accepts", isTopLevelType: false, ...reference });
     }
   }
+  return references;
+}
+
+function modernJavaCallableCallReferences(
+  node: SgNode,
+  isStatic: boolean,
+  staticImportNames: ReadonlySet<string>
+): readonly ModernJavaCallReference[] {
+  const references: ModernJavaCallReference[] = [];
+  function argumentCount(argumentList: SgNode): number {
+    return directChildren(argumentList).filter(
+      (child) => child.kind() !== "(" && child.kind() !== ")" && child.kind() !== ","
+    ).length;
+  }
+  function visit(candidate: SgNode): void {
+    if (
+      candidate !== node &&
+      (candidate.kind() === "lambda_expression" ||
+        candidate.kind() === "class_declaration" ||
+        candidate.kind() === "interface_declaration" ||
+        candidate.kind() === "enum_declaration" ||
+        candidate.kind() === "record_declaration" ||
+        candidate.kind() === "method_declaration" ||
+        candidate.kind() === "constructor_declaration")
+    ) {
+      return;
+    }
+    if (candidate.kind() === "method_invocation") {
+      const children = directChildren(candidate);
+      const name = children.find((child) => child.kind() === "identifier");
+      const argumentList = children.find((child) => child.kind() === "argument_list");
+      const hasReceiver = children.some((child) => child.kind() === ".");
+      if (name !== undefined && argumentList !== undefined && !hasReceiver) {
+        const nameText = name.text();
+        if (
+          /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(nameText) &&
+          !staticImportNames.has("*") &&
+          !staticImportNames.has(nameText)
+        ) {
+          const range = name.range();
+          references.push({
+            receiverKind: isStatic ? "implicit-static" : "implicit-instance",
+            methodName: nameText,
+            argumentCount: argumentCount(argumentList),
+            range: { start: range.start.index, end: range.end.index }
+          });
+        }
+      }
+    }
+    for (const child of directChildren(candidate)) {
+      visit(child);
+    }
+  }
+  visit(node);
   return references;
 }
 
@@ -460,15 +535,16 @@ function isAnonymousBodyContainer(node: SgNode): boolean {
 
 export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDeclarationInspection {
   const imports = modernJavaImports(sourceText);
+  const staticImportNames = modernJavaStaticImportNames(sourceText);
   let root = parse("java", sourceText).root();
   if (hasSyntaxError(root)) {
     const compatibilitySource = recordPatternCompatibilitySource(sourceText, root);
     if (compatibilitySource === null) {
-      return { isSyntaxClean: false, packageName: null, declarations: [], imports };
+      return { isSyntaxClean: false, packageName: null, staticImportNames, declarations: [], imports };
     }
     root = parse("java", compatibilitySource).root();
     if (hasSyntaxError(root)) {
-      return { isSyntaxClean: false, packageName: null, declarations: [], imports };
+      return { isSyntaxClean: false, packageName: null, staticImportNames, declarations: [], imports };
     }
   }
 
@@ -533,6 +609,13 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
           node,
           new Set([...ownerTypeParameters, ...directTypeParameterNames(node)])
         );
+        const callReferences = callable === null
+          ? []
+          : modernJavaCallableCallReferences(
+              node,
+              callable.isStatic,
+              new Set(staticImportNames)
+            );
         const index = declarations.length;
         declarations.push({
           name,
@@ -544,7 +627,8 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
           parentIndex,
           ...(callable === null ? {} : { callable }),
           ...(instantiationReferences.length === 0 ? {} : { instantiationReferences }),
-          ...(signatureReferences.length === 0 ? {} : { signatureReferences })
+          ...(signatureReferences.length === 0 ? {} : { signatureReferences }),
+          ...(callReferences.length === 0 ? {} : { callReferences })
         });
         for (const child of directChildren(node)) {
           visit(child, index, null, null, ownerTypeParameters);
@@ -560,6 +644,12 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
 
   visit(root, null, null, null, new Set());
   return semanticError
-    ? { isSyntaxClean: false, packageName: null, declarations: [], imports }
-    : { isSyntaxClean: true, packageName: modernJavaPackageName(root), declarations, imports };
+    ? { isSyntaxClean: false, packageName: null, staticImportNames, declarations: [], imports }
+    : {
+        isSyntaxClean: true,
+        packageName: modernJavaPackageName(root),
+        staticImportNames,
+        declarations,
+        imports
+      };
 }

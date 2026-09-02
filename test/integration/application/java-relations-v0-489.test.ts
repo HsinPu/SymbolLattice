@@ -19,19 +19,24 @@ afterEach(async () => {
   );
 });
 
-describe("Java modern object creation relations v0.487", () => {
-  it("projects a direct generic object creation from a parser-recovery method", async () => {
-    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-java-modern-new-"));
+describe("Java modern callable call relations v0.489", () => {
+  it("projects private bare calls from a parser-recovery file", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-java-modern-call-"));
     temporaryDirectories.push(projectPath);
-    await writeFile(join(projectPath, "Service.java"), "package app; public class Service<T> {}\n", "utf8");
     await writeFile(
       join(projectPath, "Runner.java"),
       [
         "package app;",
         "public class Runner {",
-        "  void run(Object value) {",
-        "    Service<String> created = new Service<>();",
+        "  private static void staticHelper() {}",
+        "  private void instanceHelper() {}",
+        "  static void entry(Object value) {",
         "    if (value instanceof String text) { System.out.println(text); }",
+        "    staticHelper();",
+        "  }",
+        "  void run(Object value) {",
+        "    if (value instanceof String text) { System.out.println(text); }",
+        "    instanceHelper();",
         "  }",
         "}"
       ].join("\n"),
@@ -42,40 +47,53 @@ describe("Java modern object creation relations v0.487", () => {
     const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
     const indexed = await service.init({ projectPath });
     const snapshot = store.getSnapshot(projectPath);
+    const entry = snapshot.symbols.find((symbol) => symbol.name === "entry");
     const run = snapshot.symbols.find((symbol) => symbol.name === "run");
-    const target = snapshot.symbols.find((symbol) => symbol.name === "Service");
+    const staticHelper = snapshot.symbols.find((symbol) => symbol.name === "staticHelper");
+    const instanceHelper = snapshot.symbols.find((symbol) => symbol.name === "instanceHelper");
 
     expect(indexed).toMatchObject({ initialized: true, stale: false });
     expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v396");
     expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v197");
     expect(snapshot.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        sourceId: run?.id,
-        targetId: target?.id,
-        kind: "instantiates",
+        sourceId: entry?.id,
+        targetId: staticHelper?.id,
+        kind: "calls",
         resolution: "exact",
         confidence: 1,
         evidence: expect.objectContaining({
-          ruleId: "syntax.java.object-creation.same-package",
-          candidateSymbolIds: [target?.id]
+          ruleId: "call.java.member.implicit-static.arity.direct-dispatch",
+          candidateSymbolIds: [staticHelper?.id]
+        })
+      }),
+      expect.objectContaining({
+        sourceId: run?.id,
+        targetId: instanceHelper?.id,
+        kind: "calls",
+        resolution: "exact",
+        confidence: 1,
+        evidence: expect.objectContaining({
+          ruleId: "call.java.member.implicit-instance.private-binding.arity.direct-dispatch",
+          candidateSymbolIds: [instanceHelper?.id]
         })
       })
     ]));
   });
 
-  it("does not resolve an ambiguous object-creation target from a parser-recovery method", async () => {
-    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-java-modern-new-ambiguous-"));
+  it("keeps same-owner overloads unresolved without argument type proof", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-java-modern-call-ambiguous-"));
     temporaryDirectories.push(projectPath);
-    await writeFile(join(projectPath, "ServiceA.java"), "package app; class Service {}\n", "utf8");
-    await writeFile(join(projectPath, "ServiceB.java"), "package app; class Service {}\n", "utf8");
     await writeFile(
-      join(projectPath, "Runner.java"),
+      join(projectPath, "Ambiguous.java"),
       [
         "package app;",
-        "public class Runner {",
-        "  void run(Object value) {",
-        "    new Service<>();",
+        "public class Ambiguous {",
+        "  private static void helper(int value) {}",
+        "  private static void helper(long value) {}",
+        "  static void entry(Object value) {",
         "    if (value instanceof String text) { System.out.println(text); }",
+        "    helper(1);",
         "  }",
         "}"
       ].join("\n"),
@@ -88,7 +106,7 @@ describe("Java modern object creation relations v0.487", () => {
 
     expect(
       store.getSnapshot(projectPath).edges.filter((edge) =>
-        edge.kind === "instantiates" && edge.evidence?.ruleId?.startsWith("syntax.java.object-creation.")
+        edge.kind === "calls" && edge.referenceName === "helper"
       )
     ).toEqual([]);
   });

@@ -42,7 +42,7 @@ describe("Protocol Buffers project relations v0.483", () => {
     const response = snapshot.symbols.find((symbol) => symbol.name === "HelloResponse");
 
     expect(indexed).toMatchObject({ initialized: true, stale: false });
-    expect(store.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v395");
+    expect(store.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v396");
     expect(store.getActiveGraphBundle(projectPath).resolverVersion).toContain("project-resolver-v197");
     expect(snapshot.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: "imports", referenceName: "messages.proto", resolution: "exact" }),
