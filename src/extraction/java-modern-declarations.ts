@@ -15,6 +15,16 @@ export interface ModernJavaCallableDeclaration {
   readonly parameterCount: number;
 }
 
+export interface ModernJavaHeritageReference {
+  readonly relationKind:
+    | "java-class-superclass"
+    | "java-class-interface"
+    | "java-interface-superinterface";
+  readonly referenceName: string;
+  readonly qualifiedTypePath?: string;
+  readonly range: ModernJavaDeclarationRange;
+}
+
 export interface ModernJavaDeclaration {
   readonly name: string;
   readonly kind: "class" | "interface" | "method";
@@ -23,11 +33,18 @@ export interface ModernJavaDeclaration {
   readonly isExported: boolean;
   readonly parentIndex: number | null;
   readonly callable?: ModernJavaCallableDeclaration;
+  readonly heritageReferences?: readonly ModernJavaHeritageReference[];
+}
+
+export interface ModernJavaImport {
+  readonly localName: string;
+  readonly importedPath: string;
 }
 
 export interface ModernJavaDeclarationInspection {
   readonly isSyntaxClean: boolean;
   readonly declarations: readonly ModernJavaDeclaration[];
+  readonly imports: readonly ModernJavaImport[];
 }
 
 function directChildren(node: SgNode): readonly SgNode[] {
@@ -175,6 +192,102 @@ function typeKind(node: SgNode): "class" | "interface" | null {
       : null;
 }
 
+function modernJavaImports(sourceText: string): readonly ModernJavaImport[] {
+  const imports: ModernJavaImport[] = [];
+  const pattern = /^\s*import\s+(?!static\s)([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)\s*;/gmu;
+  for (const match of sourceText.matchAll(pattern)) {
+    const importedPath = match[1];
+    if (importedPath === undefined || importedPath.endsWith(".*")) {
+      continue;
+    }
+    const localName = importedPath.split(".").at(-1);
+    if (localName !== undefined) {
+      imports.push({ localName, importedPath });
+    }
+  }
+  return imports;
+}
+
+function directTypeNode(node: SgNode): SgNode | null {
+  if (node.kind() === "type_identifier" || node.kind() === "scoped_type_identifier") {
+    return node;
+  }
+  if (node.kind() !== "generic_type") {
+    return null;
+  }
+  return directChildren(node).find(
+    (child) => child.kind() === "type_identifier" || child.kind() === "scoped_type_identifier"
+  ) ?? null;
+}
+
+interface ModernJavaTypeReference {
+  readonly referenceName: string;
+  readonly qualifiedTypePath?: string;
+  readonly range: ModernJavaDeclarationRange;
+}
+
+function typeReference(node: SgNode): ModernJavaTypeReference | null {
+  const base = directTypeNode(node);
+  if (base === null) {
+    return null;
+  }
+  const text = base.text();
+  const segments = text.split(".");
+  if (
+    segments.length === 0 ||
+    segments.some((segment) => !/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(segment)) ||
+    (segments.length > 1 && !segments.slice(0, -1).every((segment) => /^[a-z_$][A-Za-z0-9_$]*$/u.test(segment)))
+  ) {
+    return null;
+  }
+  const referenceName = segments.at(-1);
+  if (referenceName === undefined) {
+    return null;
+  }
+  const range = base.range();
+  return {
+    referenceName,
+    ...(segments.length > 1 ? { qualifiedTypePath: text } : {}),
+    range: { start: range.start.index, end: range.end.index }
+  };
+}
+
+function modernJavaHeritageReferences(
+  node: SgNode
+): readonly ModernJavaHeritageReference[] {
+  const nodeKind = node.kind();
+  const relationGroups: Array<{
+    readonly relationKind: ModernJavaHeritageReference["relationKind"];
+    readonly groupKind: "superclass" | "super_interfaces" | "extends_interfaces";
+  }> = nodeKind === "class_declaration"
+    ? [
+        { relationKind: "java-class-superclass", groupKind: "superclass" },
+        { relationKind: "java-class-interface", groupKind: "super_interfaces" }
+      ]
+    : nodeKind === "interface_declaration"
+      ? [{ relationKind: "java-interface-superinterface", groupKind: "extends_interfaces" }]
+      : [];
+  const references: ModernJavaHeritageReference[] = [];
+  for (const { relationKind, groupKind } of relationGroups) {
+    const group = directChildren(node).find((child) => child.kind() === groupKind);
+    if (group === undefined) {
+      continue;
+    }
+    const typeNodes = groupKind === "superclass"
+      ? directChildren(group).filter((child) => child.kind() !== "extends")
+      : directChildren(group)
+          .find((child) => child.kind() === "type_list")
+          ?.children() ?? [];
+    for (const typeNode of typeNodes) {
+      const reference = typeReference(typeNode);
+      if (reference !== null) {
+        references.push({ relationKind, ...reference });
+      }
+    }
+  }
+  return references;
+}
+
 function declarationName(node: SgNode): string | null {
   return directChildren(node)
     .filter((child) => child.kind() === "identifier")
@@ -201,15 +314,16 @@ function isAnonymousBodyContainer(node: SgNode): boolean {
 }
 
 export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDeclarationInspection {
+  const imports = modernJavaImports(sourceText);
   let root = parse("java", sourceText).root();
   if (hasSyntaxError(root)) {
     const compatibilitySource = recordPatternCompatibilitySource(sourceText, root);
     if (compatibilitySource === null) {
-      return { isSyntaxClean: false, declarations: [] };
+      return { isSyntaxClean: false, declarations: [], imports };
     }
     root = parse("java", compatibilitySource).root();
     if (hasSyntaxError(root)) {
-      return { isSyntaxClean: false, declarations: [] };
+      return { isSyntaxClean: false, declarations: [], imports };
     }
   }
 
@@ -239,13 +353,15 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
       }
       const range = node.range();
       const index = declarations.length;
+      const heritageReferences = modernJavaHeritageReferences(node);
       declarations.push({
         name,
         kind: staticTypeKind,
         ...(node.kind() === "annotation_type_declaration" ? { isAnnotation: true as const } : {}),
         range: { start: range.start.index, end: range.end.index },
         isExported: isPublic(node),
-        parentIndex
+        parentIndex,
+        ...(heritageReferences.length === 0 ? {} : { heritageReferences })
       });
       for (const child of directChildren(node)) {
         visit(child, index, name, staticTypeKind);
@@ -287,6 +403,6 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
 
   visit(root, null, null, null);
   return semanticError
-    ? { isSyntaxClean: false, declarations: [] }
-    : { isSyntaxClean: true, declarations };
+    ? { isSyntaxClean: false, declarations: [], imports }
+    : { isSyntaxClean: true, declarations, imports };
 }

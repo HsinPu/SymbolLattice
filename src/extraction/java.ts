@@ -7423,6 +7423,18 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
 
   if (modernDeclarationInspection.isSyntaxClean) {
     const projectedSymbols = new Map<number, SymbolNode>();
+    const modernImportsByName = new Map<string, string | null>();
+    for (const imported of modernDeclarationInspection.imports) {
+      const previous = modernImportsByName.get(imported.localName);
+      modernImportsByName.set(
+        imported.localName,
+        previous === undefined
+          ? imported.importedPath
+          : previous === imported.importedPath
+            ? previous
+            : null
+      );
+    }
     for (const [index, declaration] of modernDeclarationInspection.declarations.entries()) {
       const parent = declaration.parentIndex === null
         ? fileNode
@@ -7491,6 +7503,31 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
             () => null
           )
         });
+      }
+      if (parent.kind === "file") {
+        for (const reference of declaration.heritageReferences ?? []) {
+          const range = rangeFor(lineStarts, reference.range.start, reference.range.end);
+          const importedTypePath = modernImportsByName.get(reference.referenceName);
+          const alreadyRetained = jvmHeritageReferences.some(
+            (candidate) =>
+              candidate.sourceId === symbol.id &&
+              candidate.syntax === reference.relationKind &&
+              candidate.referenceName === reference.referenceName &&
+              candidate.range.start.line === range.start.line &&
+              candidate.range.start.column === range.start.column
+          );
+          if (alreadyRetained || importedTypePath === null) {
+            continue;
+          }
+          jvmHeritageReferences.push({
+            sourceId: symbol.id,
+            filePath: input.filePath,
+            referenceName: reference.referenceName,
+            syntax: reference.relationKind,
+            range,
+            ...(importedTypePath === undefined ? {} : { importedTypePath })
+          });
+        }
       }
       projectedSymbols.set(index, symbol);
     }
