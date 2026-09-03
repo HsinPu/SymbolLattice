@@ -61,6 +61,25 @@ export interface ModernJavaParameterCallReference {
   readonly range: ModernJavaDeclarationRange;
 }
 
+export interface ModernJavaFieldDeclaration {
+  readonly name: string;
+  readonly type: ModernJavaTypeReference;
+  readonly isStatic: boolean;
+  readonly isFinal: boolean;
+  readonly visibility: "public" | "protected" | "package" | "private";
+  readonly modifierProof: "declared";
+  readonly declarationRange: ModernJavaDeclarationRange;
+  readonly scopeRange: ModernJavaDeclarationRange;
+}
+
+export interface ModernJavaFieldCallReference {
+  readonly receiverKind: "field";
+  readonly receiverName: string;
+  readonly methodName: string;
+  readonly argumentCount: number;
+  readonly range: ModernJavaDeclarationRange;
+}
+
 export interface ModernJavaDeclaration {
   readonly name: string;
   readonly kind: "class" | "interface" | "method";
@@ -68,11 +87,16 @@ export interface ModernJavaDeclaration {
   readonly range: ModernJavaDeclarationRange;
   readonly isExported: boolean;
   readonly parentIndex: number | null;
+  readonly fieldDeclarations?: readonly ModernJavaFieldDeclaration[];
   readonly callable?: ModernJavaCallableDeclaration;
   readonly heritageReferences?: readonly ModernJavaHeritageReference[];
   readonly instantiationReferences?: readonly ModernJavaInstantiationReference[];
   readonly signatureReferences?: readonly ModernJavaSignatureReference[];
-  readonly callReferences?: readonly (ModernJavaCallReference | ModernJavaParameterCallReference)[];
+  readonly callReferences?: readonly (
+    | ModernJavaCallReference
+    | ModernJavaParameterCallReference
+    | ModernJavaFieldCallReference
+  )[];
 }
 
 export interface ModernJavaImport {
@@ -183,6 +207,19 @@ function callableVisibility(
     return "protected";
   }
   if (hasModifier(node, "public") || ownerTypeKind === "interface") {
+    return "public";
+  }
+  return "package";
+}
+
+function fieldVisibility(node: SgNode): "public" | "protected" | "package" | "private" {
+  if (hasModifier(node, "private")) {
+    return "private";
+  }
+  if (hasModifier(node, "protected")) {
+    return "protected";
+  }
+  if (hasModifier(node, "public")) {
     return "public";
   }
   return "package";
@@ -628,6 +665,298 @@ function modernJavaParameterCallReferences(
   return references;
 }
 
+function modernJavaFieldDeclarations(
+  node: SgNode
+): readonly ModernJavaFieldDeclaration[] {
+  const body = directChildren(node).find(
+    (child) => child.kind() === "class_body" || child.kind() === "interface_body"
+  );
+  if (body === undefined || node.kind() !== "class_declaration" &&
+      node.kind() !== "enum_declaration" && node.kind() !== "record_declaration") {
+    return [];
+  }
+  const ownerRange = node.range();
+  const scopeRange = { start: ownerRange.start.index, end: ownerRange.end.index };
+  const fields: ModernJavaFieldDeclaration[] = [];
+  for (const field of directChildren(body).filter((child) => child.kind() === "field_declaration")) {
+    if (!hasModifier(field, "final")) {
+      continue;
+    }
+    const type = signatureTypeReference(field);
+    if (type === null) {
+      continue;
+    }
+    for (const declarator of directChildren(field).filter(
+      (child) => child.kind() === "variable_declarator"
+    )) {
+      const nameNode = directChildren(declarator).find(
+        (child) => child.kind() === "identifier"
+      );
+      const name = nameNode === undefined ? null : identifier(nameNode);
+      if (name === null || nameNode === undefined) {
+        continue;
+      }
+      const nameRange = nameNode.range();
+      fields.push({
+        name,
+        type,
+        isStatic: hasModifier(field, "static"),
+        isFinal: true,
+        visibility: fieldVisibility(field),
+        modifierProof: "declared",
+        declarationRange: { start: nameRange.start.index, end: nameRange.end.index },
+        scopeRange
+      });
+    }
+  }
+  return fields;
+}
+
+function modernJavaFieldIdentifierNames(
+  node: SgNode,
+  fieldNames: ReadonlySet<string>,
+  excludedNames: ReadonlySet<string> = new Set()
+): readonly string[] {
+  const names = new Set<string>();
+  function visit(candidate: SgNode): void {
+    if (candidate.kind() === "identifier") {
+      const name = identifier(candidate);
+      if (name !== null && fieldNames.has(name) && !excludedNames.has(name)) {
+        names.add(name);
+      }
+    }
+    for (const child of directChildren(candidate)) {
+      visit(child);
+    }
+  }
+  visit(node);
+  return [...names];
+}
+
+function modernJavaFieldShadowedNames(
+  node: SgNode,
+  fieldNames: ReadonlySet<string>
+): ReadonlySet<string> {
+  const shadowed = new Set<string>();
+  const nestedCallable = new Set([
+    "lambda_expression",
+    "class_declaration",
+    "interface_declaration",
+    "enum_declaration",
+    "record_declaration",
+    "method_declaration",
+    "constructor_declaration"
+  ]);
+  function addDirectName(candidate: SgNode): void {
+    const nameNode = directChildren(candidate).find((child) => child.kind() === "identifier") ??
+      directChildren(candidate)
+        .find((child) => child.kind() === "variable_declarator")
+        ?.children()
+        .find((child) => child.kind() === "identifier");
+    const name = nameNode === undefined ? null : identifier(nameNode);
+    if (name !== null && fieldNames.has(name)) {
+      shadowed.add(name);
+    }
+  }
+  function visit(candidate: SgNode): void {
+    if (candidate !== node && nestedCallable.has(String(candidate.kind()))) {
+      return;
+    }
+    if (
+      candidate.kind() === "formal_parameter" ||
+      candidate.kind() === "spread_parameter" ||
+      candidate.kind() === "catch_formal_parameter"
+    ) {
+      addDirectName(candidate);
+    }
+    if (candidate.kind() === "variable_declarator") {
+      addDirectName(candidate);
+    }
+    if (candidate.kind() === "instanceof_expression") {
+      const patternBinding = directChildren(candidate)
+        .filter((child) => child.kind() === "identifier")
+        .at(-1);
+      const name = patternBinding === undefined ? null : identifier(patternBinding);
+      if (name !== null && fieldNames.has(name)) {
+        shadowed.add(name);
+      }
+    }
+    for (const child of directChildren(candidate)) {
+      visit(child);
+    }
+  }
+  visit(node);
+  return shadowed;
+}
+
+function modernJavaFieldEscapeNames(
+  ownerNode: SgNode,
+  fields: ReadonlyMap<string, ModernJavaFieldDeclaration>
+): ReadonlySet<string> {
+  if (fields.size === 0) {
+    return new Set();
+  }
+  const fieldNames = new Set(fields.keys());
+  const escaped = new Set<string>();
+  const nestedCallable = new Set([
+    "lambda_expression",
+    "class_declaration",
+    "interface_declaration",
+    "enum_declaration",
+    "record_declaration",
+    "method_declaration",
+    "constructor_declaration"
+  ]);
+  const escapedName = (name: string): string => name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const mark = (candidate: SgNode, excludedNames: ReadonlySet<string>): void => {
+    for (const name of modernJavaFieldIdentifierNames(candidate, fieldNames, excludedNames)) {
+      escaped.add(name);
+    }
+  };
+  const markWrites = (candidate: SgNode, excludedNames: ReadonlySet<string>): void => {
+    const text = candidate.text();
+    for (const name of fieldNames) {
+      if (
+        excludedNames.has(name) ||
+        !new RegExp(
+          `(?:^|[^A-Za-z0-9_$])(?:this\\s*\\.\\s*)?${escapedName(name)}\\s*(?:[+\\-*/%&|^]?=|\\+\\+|--)`,
+          "u"
+        ).test(text)
+      ) {
+        continue;
+      }
+      escaped.add(name);
+    }
+  };
+  function scanCallable(callable: SgNode): void {
+    const body = directChildren(callable).find(
+      (child) => child.kind() === "block" || child.kind() === "constructor_body"
+    );
+    if (body === undefined) {
+      return;
+    }
+    const shadowed = modernJavaFieldShadowedNames(callable, fieldNames);
+    const isConstructor = callable.kind() === "constructor_declaration";
+    function visit(candidate: SgNode): void {
+      if (candidate !== body && nestedCallable.has(String(candidate.kind()))) {
+        if (candidate.kind() === "lambda_expression") {
+          mark(candidate, shadowed);
+        }
+        return;
+      }
+      if (candidate.kind() === "method_invocation") {
+        const argumentList = directChildren(candidate).find(
+          (child) => child.kind() === "argument_list"
+        );
+        if (argumentList !== undefined) {
+          mark(argumentList, shadowed);
+        }
+      }
+      if (candidate.kind() === "return_statement" || candidate.kind() === "throw_statement") {
+        mark(candidate, shadowed);
+      }
+      if (candidate.kind() === "variable_declarator") {
+        const equalsIndex = directChildren(candidate).findIndex((child) => child.kind() === "=");
+        if (equalsIndex >= 0) {
+          for (const child of directChildren(candidate).slice(equalsIndex + 1)) {
+            mark(child, shadowed);
+          }
+        }
+      }
+      if (!isConstructor && (
+        candidate.kind() === "assignment_expression" || candidate.kind() === "update_expression"
+      )) {
+        markWrites(candidate, shadowed);
+      }
+      for (const child of directChildren(candidate)) {
+        visit(child);
+      }
+    }
+    visit(body);
+  }
+  function visit(candidate: SgNode): void {
+    if (candidate !== ownerNode && (
+      candidate.kind() === "class_declaration" ||
+      candidate.kind() === "interface_declaration" ||
+      candidate.kind() === "enum_declaration" ||
+      candidate.kind() === "record_declaration"
+    )) {
+      return;
+    }
+    if (candidate.kind() === "method_declaration" || candidate.kind() === "constructor_declaration") {
+      scanCallable(candidate);
+      return;
+    }
+    for (const child of directChildren(candidate)) {
+      visit(child);
+    }
+  }
+  visit(ownerNode);
+  return escaped;
+}
+
+function modernJavaFieldCallReferences(
+  node: SgNode,
+  fields: ReadonlyMap<string, ModernJavaFieldDeclaration>,
+  escapedFields: ReadonlySet<string>
+): readonly ModernJavaFieldCallReference[] {
+  const body = directChildren(node).find(
+    (child) => child.kind() === "block" || child.kind() === "constructor_body"
+  );
+  if (body === undefined || fields.size === 0) {
+    return [];
+  }
+  const fieldNames = new Set(fields.keys());
+  const shadowedFields = modernJavaFieldShadowedNames(node, fieldNames);
+  const nestedCallable = new Set([
+    "lambda_expression",
+    "class_declaration",
+    "interface_declaration",
+    "enum_declaration",
+    "record_declaration",
+    "method_declaration",
+    "constructor_declaration"
+  ]);
+  const references: ModernJavaFieldCallReference[] = [];
+  function visit(candidate: SgNode): void {
+    if (candidate !== node && nestedCallable.has(String(candidate.kind()))) {
+      return;
+    }
+    if (candidate.kind() === "method_invocation") {
+      const children = directChildren(candidate);
+      const receiver = children[0];
+      const dot = children[1];
+      const methodName = children[2];
+      const argumentList = children.find((child) => child.kind() === "argument_list");
+      if (
+        receiver?.kind() === "identifier" &&
+        dot?.kind() === "." &&
+        methodName?.kind() === "identifier" &&
+        argumentList !== undefined &&
+        fieldNames.has(receiver.text()) &&
+        !escapedFields.has(receiver.text()) &&
+        !shadowedFields.has(receiver.text())
+      ) {
+        const methodRange = methodName.range();
+        references.push({
+          receiverKind: "field",
+          receiverName: receiver.text(),
+          methodName: methodName.text(),
+          argumentCount: directChildren(argumentList).filter(
+            (child) => child.kind() !== "(" && child.kind() !== ")" && child.kind() !== ","
+          ).length,
+          range: { start: methodRange.start.index, end: methodRange.end.index }
+        });
+      }
+    }
+    for (const child of directChildren(candidate)) {
+      visit(child);
+    }
+  }
+  visit(body);
+  return references;
+}
+
 function modernJavaPackageName(root: SgNode): string | null {
   const declarations = directChildren(root).filter((child) => child.kind() === "package_declaration");
   if (declarations.length === 0) {
@@ -769,7 +1098,9 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
     parentIndex: number | null,
     ownerTypeName: string | null,
     ownerTypeKind: "class" | "interface" | null,
-    ownerTypeParameters: ReadonlySet<string>
+    ownerTypeParameters: ReadonlySet<string>,
+    ownerFields: ReadonlyMap<string, ModernJavaFieldDeclaration> = new Map(),
+    escapedOwnerFields: ReadonlySet<string> = new Set()
   ): void {
     if (isAnonymousBodyContainer(node)) {
       for (const body of directChildren(node).filter((child) => child.kind() === "class_body")) {
@@ -793,6 +1124,9 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
         ...ownerTypeParameters,
         ...directTypeParameterNames(node)
       ]);
+      const fieldDeclarations = modernJavaFieldDeclarations(node);
+      const fieldsByName = new Map(fieldDeclarations.map((field) => [field.name, field]));
+      const escapedFields = modernJavaFieldEscapeNames(node, fieldsByName);
       declarations.push({
         name,
         kind: staticTypeKind,
@@ -800,10 +1134,11 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
         range: { start: range.start.index, end: range.end.index },
         isExported: isPublic(node),
         parentIndex,
+        ...(fieldDeclarations.length === 0 ? {} : { fieldDeclarations }),
         ...(heritageReferences.length === 0 ? {} : { heritageReferences })
       });
       for (const child of directChildren(node)) {
-        visit(child, index, name, staticTypeKind, typeParameters);
+        visit(child, index, name, staticTypeKind, typeParameters, fieldsByName, escapedFields);
       }
       return;
     }
@@ -830,7 +1165,8 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
                 callable.isStatic,
                 new Set(staticImportNames)
               ),
-              ...modernJavaParameterCallReferences(node)
+              ...modernJavaParameterCallReferences(node),
+              ...modernJavaFieldCallReferences(node, ownerFields, escapedOwnerFields)
             ];
         const index = declarations.length;
         declarations.push({
@@ -854,7 +1190,15 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
     }
 
     for (const child of directChildren(node)) {
-      visit(child, parentIndex, ownerTypeName, ownerTypeKind, ownerTypeParameters);
+      visit(
+        child,
+        parentIndex,
+        ownerTypeName,
+        ownerTypeKind,
+        ownerTypeParameters,
+        ownerFields,
+        escapedOwnerFields
+      );
     }
   }
 

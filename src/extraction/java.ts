@@ -32,7 +32,10 @@ import {
 } from "../domain/index.js";
 import { parse as parseAstGrep, type SgNode } from "./ast-grep-languages.js";
 import { frameworkCapability } from "./framework-capabilities.js";
-import { inspectModernJavaDeclarations } from "./java-modern-declarations.js";
+import {
+  inspectModernJavaDeclarations,
+  type ModernJavaFieldDeclaration
+} from "./java-modern-declarations.js";
 import { inspectJavaRecords, type StaticJavaRecord } from "./java-records.js";
 
 export interface JavaExtractFileFactsInput {
@@ -7439,6 +7442,26 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
             : null
       );
     }
+    const modernFieldTypeReference = (
+      field: ModernJavaFieldDeclaration
+    ): JavaCallTypeReferenceFact | null => {
+      const importedTypePath = field.type.qualifiedTypePath === undefined
+        ? modernImportsByName.get(field.type.referenceName)
+        : undefined;
+      if (importedTypePath === null) {
+        return null;
+      }
+      return {
+        kind: "reference",
+        referenceName: field.type.referenceName,
+        syntax: "declaration",
+        range: rangeFor(lineStarts, field.type.range.start, field.type.range.end),
+        ...(importedTypePath === undefined ? {} : { importedTypePath }),
+        ...(field.type.qualifiedTypePath === undefined
+          ? {}
+          : { qualifiedTypePath: field.type.qualifiedTypePath })
+      };
+    };
     for (const [index, declaration] of modernDeclarationInspection.declarations.entries()) {
       const parent = declaration.parentIndex === null
         ? fileNode
@@ -7507,6 +7530,42 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
             () => null
           )
         });
+      }
+      if (
+        (declaration.kind === "class" || declaration.kind === "interface") &&
+        declaration.fieldDeclarations !== undefined
+      ) {
+        for (const field of declaration.fieldDeclarations) {
+          const type = modernFieldTypeReference(field);
+          if (type === null) {
+            continue;
+          }
+          const fieldFact: JavaFieldDeclarationFact = {
+            declaringTypeId: symbol.id,
+            name: field.name,
+            declarationKind: "class-field",
+            type,
+            isStatic: field.isStatic,
+            isFinal: field.isFinal,
+            visibility: field.visibility,
+            modifierProof: field.modifierProof,
+            declarationRange: rangeFor(
+              lineStarts,
+              field.declarationRange.start,
+              field.declarationRange.end
+            ),
+            scopeRange: rangeFor(lineStarts, field.scopeRange.start, field.scopeRange.end)
+          };
+          const existingIndex = javaFieldDeclarations.findIndex(
+            (candidate) =>
+              candidate.declaringTypeId === symbol.id && candidate.name === field.name
+          );
+          if (existingIndex < 0) {
+            javaFieldDeclarations.push(fieldFact);
+          } else if (javaFieldDeclarations[existingIndex]?.type === null) {
+            javaFieldDeclarations[existingIndex] = fieldFact;
+          }
+        }
       }
       if (parent.kind === "file") {
         for (const reference of declaration.heritageReferences ?? []) {
@@ -7587,6 +7646,18 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
                 reference.receiverScopeRange.start,
                 reference.receiverScopeRange.end
               ),
+              methodName: reference.methodName,
+              argumentCount: reference.argumentCount,
+              argumentTypes: Array.from({ length: reference.argumentCount }, () => null),
+              range
+            });
+          } else if (reference.receiverKind === "field") {
+            javaMemberCallReferences.push({
+              sourceId: symbol.id,
+              declaringTypeId: parent.id,
+              filePath: input.filePath,
+              receiverKind: "field",
+              receiverName: reference.receiverName,
               methodName: reference.methodName,
               argumentCount: reference.argumentCount,
               argumentTypes: Array.from({ length: reference.argumentCount }, () => null),
