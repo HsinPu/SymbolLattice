@@ -80,6 +80,22 @@ export interface ModernJavaFieldCallReference {
   readonly range: ModernJavaDeclarationRange;
 }
 
+export interface ModernJavaLocalCallReference {
+  readonly receiverKind: "local";
+  readonly receiverName: string;
+  readonly receiverType: {
+    readonly referenceName: string;
+    readonly qualifiedTypePath?: string;
+    readonly range: ModernJavaDeclarationRange;
+  };
+  readonly receiverBindingRange: ModernJavaDeclarationRange;
+  readonly receiverScopeRange: ModernJavaDeclarationRange;
+  readonly receiverInitializerRange?: ModernJavaDeclarationRange;
+  readonly methodName: string;
+  readonly argumentCount: number;
+  readonly range: ModernJavaDeclarationRange;
+}
+
 export interface ModernJavaDeclaration {
   readonly name: string;
   readonly kind: "class" | "interface" | "method";
@@ -96,6 +112,7 @@ export interface ModernJavaDeclaration {
     | ModernJavaCallReference
     | ModernJavaParameterCallReference
     | ModernJavaFieldCallReference
+    | ModernJavaLocalCallReference
   )[];
 }
 
@@ -957,6 +974,319 @@ function modernJavaFieldCallReferences(
   return references;
 }
 
+function modernJavaLocalCallReferences(
+  node: SgNode
+): readonly ModernJavaLocalCallReference[] {
+  const body = directChildren(node).find(
+    (child) => child.kind() === "block" || child.kind() === "constructor_body"
+  );
+  if (body === undefined) {
+    return [];
+  }
+  type LocalBinding = {
+    readonly name: string;
+    readonly type: ModernJavaTypeReference;
+    readonly bindingRange: ModernJavaDeclarationRange;
+    readonly scopeRange: ModernJavaDeclarationRange;
+    readonly initializerRange?: ModernJavaDeclarationRange;
+  };
+  const nestedCallable = new Set([
+    "lambda_expression",
+    "class_declaration",
+    "interface_declaration",
+    "enum_declaration",
+    "record_declaration",
+    "method_declaration",
+    "constructor_declaration"
+  ]);
+  const containsKind = (candidate: SgNode, expected: string): boolean =>
+    candidate.kind() === expected || directChildren(candidate).some((child) => containsKind(child, expected));
+  const nodeKey = (candidate: SgNode): string => {
+    const range = candidate.range();
+    return `${candidate.kind()}:${range.start.index}:${range.end.index}`;
+  };
+  const declarationBindings = new Map<string, LocalBinding | null>();
+  const declarationNames = new Map<string, readonly string[]>();
+  const localNames = new Set<string>();
+  const localNameCounts = new Map<string, number>();
+  const bodyRange = body.range();
+  const identifierNames = (candidate: SgNode): readonly string[] => {
+    const names = new Set<string>();
+    function visit(candidateNode: SgNode): void {
+      if (candidateNode.kind() === "identifier") {
+        const name = identifier(candidateNode);
+        if (name !== null) {
+          names.add(name);
+        }
+      }
+      for (const child of directChildren(candidateNode)) {
+        visit(child);
+      }
+    }
+    visit(candidate);
+    return [...names];
+  };
+  const localDeclarationBinding = (
+    declaration: SgNode,
+    scopeRange: ModernJavaDeclarationRange
+  ): LocalBinding | null => {
+    const declarators = directChildren(declaration).filter(
+      (child) => child.kind() === "variable_declarator"
+    );
+    if (declarators.length !== 1 || declarators[0] === undefined) {
+      return null;
+    }
+    const declarator = declarators[0];
+    const nameNode = directChildren(declarator).find((child) => child.kind() === "identifier");
+    const name = nameNode === undefined ? null : identifier(nameNode);
+    if (name === null || nameNode === undefined) {
+      return null;
+    }
+    const typeNode = directChildren(declaration).find(
+      (child) =>
+        child.kind() === "type_identifier" ||
+        child.kind() === "scoped_type_identifier" ||
+        child.kind() === "generic_type"
+    );
+    const isVar = typeNode?.kind() === "type_identifier" && typeNode.text() === "var";
+    const declaredType = isVar ? null : signatureTypeReference(declaration);
+    const equalsIndex = directChildren(declarator).findIndex((child) => child.kind() === "=");
+    const initializerCandidates = directChildren(declarator).filter(
+      (child) => child.kind() === "object_creation_expression"
+    );
+    const initializer = initializerCandidates[0];
+    if (
+      equalsIndex < 0 ||
+      initializerCandidates.length !== 1 ||
+      initializer === undefined ||
+      containsKind(declaration, "type_arguments") ||
+      containsKind(initializer, "class_body") ||
+      containsKind(initializer, "type_arguments")
+    ) {
+      return null;
+    }
+    const initializerTypeNode = directChildren(initializer)
+      .map(directTypeNode)
+      .find((child): child is SgNode => child !== null);
+    const initializerType = initializerTypeNode === undefined
+      ? null
+      : typeReference(initializerTypeNode);
+    if (initializerType === null || (declaredType !== null &&
+        declaredType.referenceName !== initializerType.referenceName)) {
+      return null;
+    }
+    const type = declaredType ?? initializerType;
+    const nameRange = nameNode.range();
+    const initializerRange = initializer.range();
+    return {
+      name,
+      type,
+      bindingRange: { start: nameRange.start.index, end: nameRange.end.index },
+      scopeRange,
+      ...(isVar
+        ? { initializerRange: { start: initializerRange.start.index, end: initializerRange.end.index } }
+        : {})
+    };
+  };
+
+  function collectDeclarations(
+    candidate: SgNode,
+    enclosingScopeRange: ModernJavaDeclarationRange = {
+      start: bodyRange.start.index,
+      end: bodyRange.end.index
+    }
+  ): void {
+    if (candidate !== node && nestedCallable.has(String(candidate.kind()))) {
+      return;
+    }
+    if (candidate.kind() === "block" || candidate.kind() === "constructor_body") {
+      const range = candidate.range();
+      const scopeRange = { start: range.start.index, end: range.end.index };
+      for (const child of directChildren(candidate)) {
+        collectDeclarations(child, scopeRange);
+      }
+      return;
+    }
+    if (candidate.kind() === "local_variable_declaration") {
+      const names = directChildren(candidate)
+        .filter((child) => child.kind() === "variable_declarator")
+        .flatMap((declarator) =>
+          directChildren(declarator)
+            .filter((child) => child.kind() === "identifier")
+            .map((child) => identifier(child))
+            .filter((name): name is string => name !== null)
+        );
+      declarationNames.set(nodeKey(candidate), names);
+      const binding = localDeclarationBinding(candidate, enclosingScopeRange);
+      declarationBindings.set(nodeKey(candidate), binding);
+      for (const name of names) {
+        localNames.add(name);
+        localNameCounts.set(name, (localNameCounts.get(name) ?? 0) + 1);
+      }
+    }
+    for (const child of directChildren(candidate)) {
+      collectDeclarations(child, enclosingScopeRange);
+    }
+  }
+  collectDeclarations(body);
+  if (localNames.size === 0) {
+    return [];
+  }
+
+  const taintedNames = new Set<string>(
+    [...localNameCounts.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([name]) => name)
+  );
+  const escapedName = (name: string): string => name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const markIdentifiers = (candidate: SgNode): void => {
+    for (const name of identifierNames(candidate)) {
+      if (localNames.has(name)) {
+        taintedNames.add(name);
+      }
+    }
+  };
+  const formalParameters = directChildren(node).find(
+    (child) => child.kind() === "formal_parameters"
+  );
+  if (formalParameters !== undefined) {
+    for (const name of identifierNames(formalParameters)) {
+      if (localNames.has(name)) {
+        taintedNames.add(name);
+      }
+    }
+  }
+  function scanTaint(candidate: SgNode): void {
+    if (candidate !== node && nestedCallable.has(String(candidate.kind()))) {
+      if (candidate.kind() === "lambda_expression") {
+        markIdentifiers(candidate);
+      }
+      return;
+    }
+    if (candidate.kind() === "method_invocation") {
+      const argumentList = directChildren(candidate).find(
+        (child) => child.kind() === "argument_list"
+      );
+      if (argumentList !== undefined) {
+        markIdentifiers(argumentList);
+      }
+    }
+    if (candidate.kind() === "return_statement" || candidate.kind() === "throw_statement") {
+      markIdentifiers(candidate);
+    }
+    if (candidate.kind() === "variable_declarator") {
+      const equalsIndex = directChildren(candidate).findIndex((child) => child.kind() === "=");
+      if (equalsIndex >= 0) {
+        for (const child of directChildren(candidate).slice(equalsIndex + 1)) {
+          markIdentifiers(child);
+        }
+      }
+    }
+    if (candidate.kind() === "instanceof_expression") {
+      const patternBinding = directChildren(candidate)
+        .filter((child) => child.kind() === "identifier")
+        .at(-1);
+      const name = patternBinding === undefined ? null : identifier(patternBinding);
+      if (name !== null && localNames.has(name)) {
+        taintedNames.add(name);
+      }
+    }
+    if (candidate.kind() === "assignment_expression" || candidate.kind() === "update_expression") {
+      const text = candidate.text();
+      for (const name of localNames) {
+        if (new RegExp(
+          `(?:^|[^A-Za-z0-9_$])${escapedName(name)}\\s*(?:\\.[A-Za-z_$][A-Za-z0-9_$]*\\s*)?(?:[+\\-*/%&|^]?=|\\+\\+|--)`,
+          "u"
+        ).test(text)) {
+          taintedNames.add(name);
+        }
+      }
+    }
+    for (const child of directChildren(candidate)) {
+      scanTaint(child);
+    }
+  }
+  scanTaint(body);
+
+  const scopes: Array<Map<string, LocalBinding | null>> = [];
+  const visibleBinding = (name: string): LocalBinding | null | undefined => {
+    for (let index = scopes.length - 1; index >= 0; index -= 1) {
+      const scope = scopes[index]!;
+      if (scope.has(name)) {
+        return scope.get(name) ?? null;
+      }
+    }
+    return undefined;
+  };
+  const references: ModernJavaLocalCallReference[] = [];
+  function visit(candidate: SgNode): void {
+    if (candidate !== node && nestedCallable.has(String(candidate.kind()))) {
+      return;
+    }
+    if (candidate.kind() === "block" || candidate.kind() === "constructor_body") {
+      const scope = new Map<string, LocalBinding | null>();
+      scopes.push(scope);
+      for (const child of directChildren(candidate)) {
+        if (child.kind() === "local_variable_declaration") {
+          for (const nested of directChildren(child)) {
+            visit(nested);
+          }
+          const names = declarationNames.get(nodeKey(child)) ?? [];
+          const binding = declarationBindings.get(nodeKey(child)) ?? null;
+          for (const name of names) {
+            const entry = binding !== null && binding.name === name && names.length === 1
+              ? binding
+              : null;
+            scope.set(name, scope.has(name) ? null : entry);
+          }
+        } else {
+          visit(child);
+        }
+      }
+      scopes.pop();
+      return;
+    }
+    if (candidate.kind() === "method_invocation") {
+      const children = directChildren(candidate);
+      const receiver = children[0];
+      const dot = children[1];
+      const methodName = children[2];
+      const argumentList = children.find((child) => child.kind() === "argument_list");
+      if (
+        receiver?.kind() === "identifier" &&
+        dot?.kind() === "." &&
+        methodName?.kind() === "identifier" &&
+        argumentList !== undefined
+      ) {
+        const binding = visibleBinding(receiver.text());
+        if (binding !== undefined && binding !== null && !taintedNames.has(binding.name)) {
+          const methodRange = methodName.range();
+          references.push({
+            receiverKind: "local",
+            receiverName: binding.name,
+            receiverType: binding.type,
+            receiverBindingRange: binding.bindingRange,
+            receiverScopeRange: binding.scopeRange,
+            ...(binding.initializerRange === undefined
+              ? {}
+              : { receiverInitializerRange: binding.initializerRange }),
+            methodName: methodName.text(),
+            argumentCount: directChildren(argumentList).filter(
+              (child) => child.kind() !== "(" && child.kind() !== ")" && child.kind() !== ","
+            ).length,
+            range: { start: methodRange.start.index, end: methodRange.end.index }
+          });
+        }
+      }
+    }
+    for (const child of directChildren(candidate)) {
+      visit(child);
+    }
+  }
+  visit(body);
+  return references;
+}
+
 function modernJavaPackageName(root: SgNode): string | null {
   const declarations = directChildren(root).filter((child) => child.kind() === "package_declaration");
   if (declarations.length === 0) {
@@ -1166,7 +1496,8 @@ export function inspectModernJavaDeclarations(sourceText: string): ModernJavaDec
                 new Set(staticImportNames)
               ),
               ...modernJavaParameterCallReferences(node),
-              ...modernJavaFieldCallReferences(node, ownerFields, escapedOwnerFields)
+              ...modernJavaFieldCallReferences(node, ownerFields, escapedOwnerFields),
+              ...modernJavaLocalCallReferences(node)
             ];
         const index = declarations.length;
         declarations.push({

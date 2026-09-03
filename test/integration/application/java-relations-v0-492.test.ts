@@ -19,9 +19,9 @@ afterEach(async () => {
   );
 });
 
-describe("Java modern field receiver call relations v0.491", () => {
-  it("projects a unique final imported field receiver from a parser-recovery file", async () => {
-    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-java-modern-field-"));
+describe("Java modern local initializer receiver call relations v0.492", () => {
+  it("projects a unique local object-creation receiver from a parser-recovery file", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-java-modern-local-"));
     temporaryDirectories.push(projectPath);
     await writeFile(
       join(projectPath, "Worker.java"),
@@ -34,11 +34,12 @@ describe("Java modern field receiver call relations v0.491", () => {
         "package app;",
         "import api.Worker;",
         "public class Runner {",
-        "  private final Worker worker;",
-        "  public Runner(Worker worker) { this.worker = worker; }",
         "  void run(Object value) {",
         "    switch (value) {",
-        "      case String text -> worker.handle();",
+        "      case String text -> {",
+        "        final Worker worker = new Worker();",
+        "        worker.handle();",
+        "      }",
         "      default -> {}",
         "    }",
         "  }",
@@ -65,15 +66,15 @@ describe("Java modern field receiver call relations v0.491", () => {
         resolution: "exact",
         confidence: 1,
         evidence: expect.objectContaining({
-          ruleId: "call.java.member.field.arity.direct-dispatch",
+          ruleId: "call.java.member.local.arity.direct-dispatch",
           candidateSymbolIds: [handle?.id]
         })
       })
     ]));
   });
 
-  it("does not project a field receiver after an argument escape", async () => {
-    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-java-modern-field-taint-"));
+  it("does not project a local receiver after an argument escape", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-java-modern-local-taint-"));
     temporaryDirectories.push(projectPath);
     await writeFile(
       join(projectPath, "Worker.java"),
@@ -86,12 +87,14 @@ describe("Java modern field receiver call relations v0.491", () => {
         "package app;",
         "import api.Worker;",
         "public class Runner {",
-        "  private final Worker worker;",
-        "  public Runner(Worker worker) { this.worker = worker; }",
         "  void consume(Worker value) {}",
         "  void run(Object value) {",
         "    switch (value) {",
-        "      case String text -> { consume(worker); worker.handle(); }",
+        "      case String text -> {",
+        "        var worker = new Worker();",
+        "        consume(worker);",
+        "        worker.handle();",
+        "      }",
         "      default -> {}",
         "    }",
         "  }",

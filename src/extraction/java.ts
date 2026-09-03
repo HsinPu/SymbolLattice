@@ -7596,11 +7596,16 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
         for (const reference of declaration.callReferences ?? []) {
           const range = rangeFor(lineStarts, reference.range.start, reference.range.end);
           const parameterReference = reference.receiverKind === "parameter";
+          const localReference = reference.receiverKind === "local";
           const parameterImportedTypePath = parameterReference &&
             reference.receiverType.qualifiedTypePath === undefined
             ? modernImportsByName.get(reference.receiverType.referenceName)
             : undefined;
-          if (parameterImportedTypePath === null) {
+          const localImportedTypePath = localReference &&
+            reference.receiverType.qualifiedTypePath === undefined
+            ? modernImportsByName.get(reference.receiverType.referenceName)
+            : undefined;
+          if (parameterImportedTypePath === null || localImportedTypePath === null) {
             continue;
           }
           const alreadyRetained = javaMemberCallReferences.some(
@@ -7646,6 +7651,52 @@ export function extractJavaFileFacts(input: JavaExtractFileFactsInput): Artifact
                 reference.receiverScopeRange.start,
                 reference.receiverScopeRange.end
               ),
+              methodName: reference.methodName,
+              argumentCount: reference.argumentCount,
+              argumentTypes: Array.from({ length: reference.argumentCount }, () => null),
+              range
+            });
+          } else if (reference.receiverKind === "local") {
+            javaMemberCallReferences.push({
+              sourceId: symbol.id,
+              declaringTypeId: parent.id,
+              filePath: input.filePath,
+              receiverKind: "local",
+              receiverName: reference.receiverName,
+              receiverType: {
+                kind: "reference" as const,
+                referenceName: reference.receiverType.referenceName,
+                syntax: "declaration" as const,
+                range: rangeFor(
+                  lineStarts,
+                  reference.receiverType.range.start,
+                  reference.receiverType.range.end
+                ),
+                ...(reference.receiverType.qualifiedTypePath === undefined
+                  ? localImportedTypePath === undefined
+                    ? {}
+                    : { importedTypePath: localImportedTypePath }
+                  : { qualifiedTypePath: reference.receiverType.qualifiedTypePath })
+              },
+              receiverBindingRange: rangeFor(
+                lineStarts,
+                reference.receiverBindingRange.start,
+                reference.receiverBindingRange.end
+              ),
+              receiverScopeRange: rangeFor(
+                lineStarts,
+                reference.receiverScopeRange.start,
+                reference.receiverScopeRange.end
+              ),
+              ...(reference.receiverInitializerRange === undefined
+                ? {}
+                : {
+                    receiverInitializerRange: rangeFor(
+                      lineStarts,
+                      reference.receiverInitializerRange.start,
+                      reference.receiverInitializerRange.end
+                    )
+                  }),
               methodName: reference.methodName,
               argumentCount: reference.argumentCount,
               argumentTypes: Array.from({ length: reference.argumentCount }, () => null),
