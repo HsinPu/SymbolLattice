@@ -19,6 +19,7 @@ export type LanguageTruthKind =
   | "shell-mvdan-ast"
   | "lua-tree-sitter-ast"
   | "solc-ast"
+  | "roslyn-vb-ast"
   | "javac-oracle"
   | "groovy-compiler-ast"
   | "source-occurrence-oracle"
@@ -43,7 +44,7 @@ const BOUNDED_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
   "go", "rust", "kotlin", "swift", "dart", "csharp", "fsharp", "ocaml", "haskell",
   "scala", "elixir", "erlang", "clojure", "nix", "nim", "zig", "cpp", "c", "php",
   "objc", "ruby", "sql", "r", "markdown", "proto", "graphql", "groovy", "javascript", "python",
-  "vue", "svelte", "astro", "shell", "lua", "solidity"
+  "vue", "svelte", "astro", "shell", "lua", "solidity", "vbnet"
 ]);
 
 const LARGE_PROJECT_STRUCTURAL_LANGUAGES = new Set<ArtifactLanguage>([
@@ -72,7 +73,7 @@ const STRUCTURAL_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
 
 const LARGE_PROJECT_VALIDATED_LANGUAGES = new Set<ArtifactLanguage>([
   "typescript", "javascript", "python", "java", "lua", "luau", "objc", "r", "elixir", "perl",
-  "julia", "ruby", "html", "jsp", "css", "shell", "markdown", "groovy", "vue", "svelte", "astro", "solidity"
+  "julia", "ruby", "html", "jsp", "css", "shell", "markdown", "groovy", "vue", "svelte", "astro", "solidity", "vbnet"
 ]);
 
 const EVIDENCE_VERSION: Readonly<Partial<Record<ArtifactLanguage, string>>> = Object.freeze({
@@ -88,6 +89,7 @@ const EVIDENCE_VERSION: Readonly<Partial<Record<ArtifactLanguage, string>>> = Ob
   groovy: "0.499.0",
   lua: "0.504.0",
   solidity: "0.505.0",
+  vbnet: "0.506.0",
   luau: "0.434.0",
   objc: "0.476.0",
   r: "0.481.0",
@@ -133,6 +135,7 @@ const LANGUAGE_LIMITATIONS: Readonly<Partial<Record<ArtifactLanguage, readonly s
     shell: ["300-positive/150-negative mvdan ABI v2 truth covers unique same-file direct function calls; eval, source, alias, unset, nested functions, substitutions, dynamic commands, external dispatch, and cross-file loading remain nonclaims"],
     lua: ["300-positive/150-negative tree-sitter truth covers unique earlier local-function and self-recursive bare calls; global/dotted/colon dispatch, shadow, rebind, nested functions, debug, dynamic load, require/module resolution, metatables, and runtime dispatch remain nonclaims"],
     solidity: ["300-positive/150-negative solc AST truth covers same-contract unique private fixed-arity bare calls; internal/public/external targets, overloads, shadows, function values, inline assembly, qualified calls, libraries, package resolution, and runtime dispatch remain nonclaims"],
+    vbnet: ["300-positive/150-negative Roslyn AST truth covers non-partial same-file Class/Module unique private fixed-arity bare calls; public/friend/protected targets, overloads, Optional/ParamArray, shadows, lambdas, XML, partial/cross-file types, late binding, and member dispatch remain nonclaims"],
     html: ["HTML relations are structural resources and containment, not runtime navigation"],
     css: ["CSS relations are structural selectors and containment"],
     sql: ["views, routines, search path, and dynamic SQL remain nonclaims"],
@@ -173,6 +176,7 @@ function truthKind(language: ArtifactLanguage): LanguageTruthKind {
   if (language === "shell") return "shell-mvdan-ast";
   if (language === "lua") return "lua-tree-sitter-ast";
   if (language === "solidity") return "solc-ast";
+  if (language === "vbnet") return "roslyn-vb-ast";
   if (language === "java") return "javac-oracle";
   if (language === "groovy") return "groovy-compiler-ast";
   if (BOUNDED_RELATION_LANGUAGES.has(language)) return "source-occurrence-oracle";

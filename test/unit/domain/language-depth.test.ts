@@ -18,9 +18,9 @@ describe("language depth matrix", () => {
       tiers: {
         "external-tier-a": 1,
         "external-partial": 1,
-        "bounded-relation": 35,
+        "bounded-relation": 36,
         "large-project-structural": 6,
-        targeted: 15
+        targeted: 14
       },
       relationDepth: {
         project: 41,
@@ -28,8 +28,8 @@ describe("language depth matrix", () => {
         framework: 4,
         structural: 2
       },
-      largeProjectValidated: 22,
-      relationReleaseValidated: 37
+      largeProjectValidated: 23,
+      relationReleaseValidated: 38
     });
   });
 
@@ -91,6 +91,14 @@ describe("language depth matrix", () => {
       relationDepth: "same-file",
       truthKind: "solc-ast",
       evidenceVersion: "0.505.0",
+      largeProjectValidated: true,
+      relationReleaseValidated: true
+    });
+    expect(byLanguage.get("vbnet")).toMatchObject({
+      evidenceTier: "bounded-relation",
+      relationDepth: "same-file",
+      truthKind: "roslyn-vb-ast",
+      evidenceVersion: "0.506.0",
       largeProjectValidated: true,
       relationReleaseValidated: true
     });

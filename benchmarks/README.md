@@ -17,6 +17,7 @@ These tools generate or validate large-project evidence outside the published np
 | `sfc/` | `correctness-oracle.mjs` | manual Vue/Svelte/Astro component relation oracle |
 | `shell/` | `correctness-oracle.mjs` | manual mvdan ABI v2 direct-call oracle |
 | `solidity/` | `correctness-oracle.mjs` | automatic solc AST private fixed-arity call oracle |
+| `vbnet/` | `correctness-oracle.mjs`, `VbOracle.cs` | automatic scorer with manual Roslyn compiler oracle |
 | `jsp/` | `correctness-oracle.mjs` | automatic |
 | `julia/` | `correctness-oracle.mjs`, `negative-matrix.mjs` | automatic |
 | `julia/` | `lifecycle.mjs` | manual |

@@ -60,9 +60,9 @@ describe("Objective-C project relations v0.476", () => {
     const factoryFile = snapshot.symbols.find((symbol) => symbol.qualifiedName === "src/Factory.h");
 
     expect(indexed).toMatchObject({ stale: false });
-    expect(graphStore.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v411");
+    expect(graphStore.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v412");
     expect(graphStore.getActiveGraphBundle(projectPath).resolverVersion).toContain(PROJECT_RESOLVER_VERSION);
-    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v411");
+    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v412");
     expect(consumer).toBeDefined();
     expect(factory).toBeDefined();
     expect(ping).toBeDefined();

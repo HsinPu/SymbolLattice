@@ -40,9 +40,15 @@ interface VbEntry {
   readonly name: string;
   readonly start: number;
   end: number;
+  readonly declarationStart: number;
+  readonly bodyStart: number | null;
   readonly parent: VbEntry | null;
   readonly ruleId: string;
   readonly isExported: boolean;
+  readonly isPartial: boolean;
+  readonly isPrivate: boolean;
+  readonly isShared: boolean;
+  readonly parameterCount: number | null;
 }
 
 interface VbImport {
@@ -53,11 +59,6 @@ interface VbImport {
 
 const FILE_SCOPE_ID = "vbnet:file";
 
-/**
- * A complete module with exactly two ordinary zero-argument Functions is the
- * first sound call slice. The full-file shape excludes Imports, Partial,
- * overloads, defaults, local shadowing, qualifiers, and cross-file members.
- */
 const CANONICAL_VBNET_MODULE_CALL =
   /^\s*module\s+([A-Za-z_][A-Za-z0-9_]*)\s*\r?\n\s*function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)\s+as\s+integer\s*\r?\n\s*return\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)\s*\r?\n\s*end\s+function\s*\r?\n\s*function\s+\3\s*\(\s*\)\s+as\s+integer\s*\r?\n\s*return\s+(?:0|[1-9][0-9]*)\s*\r?\n\s*end\s+function\s*\r?\n\s*end\s+module\s*$/iu;
 
@@ -112,8 +113,7 @@ function rangeForSpan(
   };
 }
 
-/** Existing VB.NET declaration ranges retain their established offsets. */
-function callRangeForSpan(
+function legacyCallRangeForSpan(
   lineStarts: readonly number[],
   start: number,
   end: number
@@ -159,6 +159,7 @@ function vbnetCodeMask(sourceText: string): string | null {
     }
     if (character === "\"") {
       blank(characters, index);
+      characters[index] = "0";
       inString = true;
       continue;
     }
@@ -227,6 +228,58 @@ function vbLines(masked: string): readonly VbLine[] {
   return lines;
 }
 
+function matchingParenthesis(sourceText: string, start: number, end = sourceText.length): number | null {
+  if (sourceText[start] !== "(") return null;
+  let depth = 0;
+  for (let cursor = start; cursor < end; cursor += 1) {
+    if (sourceText[cursor] === "(") depth += 1;
+    else if (sourceText[cursor] === ")") {
+      depth -= 1;
+      if (depth === 0) return cursor;
+      if (depth < 0) return null;
+    }
+  }
+  return null;
+}
+
+function topLevelArgumentCount(sourceText: string, start: number, end: number): number | null {
+  if (sourceText.slice(start, end).trim() === "") return 0;
+  let parentheses = 0;
+  let braces = 0;
+  let count = 1;
+  for (let cursor = start; cursor < end; cursor += 1) {
+    const character = sourceText[cursor];
+    if (character === "(") parentheses += 1;
+    else if (character === ")") {
+      if (parentheses === 0) return null;
+      parentheses -= 1;
+    } else if (character === "{") braces += 1;
+    else if (character === "}") {
+      if (braces === 0) return null;
+      braces -= 1;
+    } else if (character === "," && parentheses === 0 && braces === 0) count += 1;
+  }
+  return parentheses === 0 && braces === 0 ? count : null;
+}
+
+function methodParameterCount(lineText: string, nameEnd: number): number | null {
+  let open = nameEnd;
+  while (open < lineText.length && /\s/u.test(lineText[open] ?? "")) open += 1;
+  if (lineText[open] !== "(") return null;
+  const close = matchingParenthesis(lineText, open);
+  if (close === null || /\b(?:optional|paramarray)\b/iu.test(lineText.slice(open, close + 1))) return null;
+  const parameters = lineText.slice(open + 1, close).split("");
+  let attributeDepth = 0;
+  for (let index = 0; index < parameters.length; index += 1) {
+    if (parameters[index] === "<") attributeDepth += 1;
+    if (attributeDepth > 0) parameters[index] = " ";
+    if (lineText[open + index + 1] === ">" && attributeDepth > 0) attributeDepth -= 1;
+  }
+  return attributeDepth === 0
+    ? topLevelArgumentCount(parameters.join(""), 0, parameters.length)
+    : null;
+}
+
 function activeMemberContainer(entry: VbEntry | undefined): boolean {
   return (
     entry?.blockKind === "class" ||
@@ -275,6 +328,7 @@ function symbolKindForBlock(
 function completeVbnetFacts(sourceText: string): {
   readonly entries: readonly VbEntry[];
   readonly imports: readonly VbImport[];
+  readonly masked: string;
 } | null {
   const masked = vbnetCodeMask(sourceText);
   if (masked === null) {
@@ -337,9 +391,15 @@ function completeVbnetFacts(sourceText: string): {
         name: namespaceName,
         start: line.start + Math.max(0, localOffset),
         end: line.contentEnd,
+        declarationStart: line.start,
+        bodyStart: null,
         parent,
         ruleId: "language.vbnet.namespace.complete-block",
-        isExported: true
+        isExported: true,
+        isPartial: false,
+        isPrivate: false,
+        isShared: false,
+        parameterCount: null
       });
       stack.push(entries.at(-1) as VbEntry);
       continue;
@@ -362,9 +422,15 @@ function completeVbnetFacts(sourceText: string): {
         name: containerName,
         start: line.start + Math.max(0, localOffset),
         end: line.contentEnd,
+        declarationStart: line.start,
+        bodyStart: null,
         parent,
         ruleId: "language.vbnet." + containerKind + ".complete-block",
-        isExported: true
+        isExported: true,
+        isPartial: /\bpartial\b/iu.test(line.text),
+        isPrivate: false,
+        isShared: false,
+        parameterCount: null
       });
       stack.push(entries.at(-1) as VbEntry);
       continue;
@@ -390,12 +456,18 @@ function completeVbnetFacts(sourceText: string): {
         name: callableName,
         start: line.start + Math.max(0, localOffset),
         end: line.contentEnd,
+        declarationStart: line.start,
+        bodyStart: isBodyless ? null : line.end,
         parent,
         ruleId:
           "language.vbnet." +
           (isMethod ? "method" : "function") +
           (isBodyless ? ".bodyless-signature" : ".complete-block"),
-        isExported: !isMethod
+        isExported: !isMethod,
+        isPartial: false,
+        isPrivate: /\bprivate\b/iu.test(line.text),
+        isShared: /\bshared\b/iu.test(line.text),
+        parameterCount: methodParameterCount(line.text, localOffset + callableName.length)
       });
       if (!isBodyless) {
         stack.push(entries.at(-1) as VbEntry);
@@ -403,14 +475,53 @@ function completeVbnetFacts(sourceText: string): {
     }
   }
 
-  return stack.length === 0 ? { entries, imports } : null;
+  return stack.length === 0 ? { entries, imports, masked } : null;
+}
+
+function directPrivateFixedArityCalls(
+  masked: string,
+  caller: VbEntry,
+  target: VbEntry
+): readonly { readonly start: number; readonly end: number }[] {
+  if (
+    caller.bodyStart === null ||
+    target.parameterCount === null ||
+    !target.isPrivate ||
+    caller.parent === null ||
+    caller.parent !== target.parent ||
+    caller.parent.isPartial ||
+    (caller.parent.blockKind !== "class" && caller.parent.blockKind !== "module") ||
+    (caller.parent.blockKind === "class" && caller.isShared && !target.isShared)
+  ) return [];
+  const headerTail = masked.slice(caller.start + caller.name.length, caller.bodyStart);
+  const escapedName = target.name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  if (new RegExp(`\\b${escapedName}\\b`, "iu").test(headerTail)) return [];
+  const body = masked.slice(caller.bodyStart, caller.end);
+  if (/\b(?:function|sub)\s*\(/iu.test(body) || /<\/?[A-Za-z_][A-Za-z0-9_.:-]*(?:\s|>|\/)/u.test(body)) return [];
+  const calls: Array<{ readonly start: number; readonly end: number }> = [];
+  for (const occurrence of body.matchAll(/[A-Za-z_][A-Za-z0-9_]*/gu)) {
+    if (occurrence[0].toLocaleLowerCase() !== target.name.toLocaleLowerCase() || occurrence.index === undefined) continue;
+    const start = caller.bodyStart + occurrence.index;
+    let previous = start - 1;
+    while (previous >= caller.bodyStart && /\s/u.test(masked[previous] ?? "")) previous -= 1;
+    if (masked[previous] === "." || masked[previous] === "!") continue;
+    let open = start + occurrence[0].length;
+    while (open < caller.end && /\s/u.test(masked[open] ?? "")) open += 1;
+    if (masked[open] !== "(") return [];
+    const close = matchingParenthesis(masked, open, caller.end);
+    if (close === null || /^\s*of\b/iu.test(masked.slice(open + 1, close))) return [];
+    if (topLevelArgumentCount(masked, open + 1, close) !== target.parameterCount) return [];
+    calls.push({ start, end: close + 1 });
+  }
+  return calls;
 }
 
 /**
  * Extracts syntax-proven VB.NET namespaces, containers, direct Sub/Function
  * members, bodyless interface/MustOverride signatures, and simple Imports
- * statements. Properties, events, P/Invoke, generic semantics, calls, and
- * cross-file/.NET assembly resolution intentionally remain out of scope.
+ * statements, plus a bounded same-container private-call surface. Properties,
+ * events, P/Invoke, late binding, member dispatch, and cross-file/.NET assembly
+ * resolution intentionally remain out of scope.
  */
 export function extractVbnetFileFacts(input: VbnetExtractFileFactsInput): ArtifactFacts {
   const lineStarts = lineStartsFor(input.sourceText);
@@ -515,62 +626,100 @@ export function extractVbnetFileFacts(input: VbnetExtractFileFactsInput): Artifa
       }
     });
   }
+  const methodEntries = parsed.entries.filter(
+    (entry) => entry.kind === "method" && entry.parent !== null
+  );
+  for (const caller of methodEntries) {
+    const callerSymbol = symbolsByEntry.get(caller);
+    if (callerSymbol === undefined) continue;
+    const targets = methodEntries.filter(
+      (target) =>
+        target.parent === caller.parent &&
+        target.isPrivate &&
+        target.parameterCount !== null &&
+        methodEntries.filter(
+          (candidate) =>
+            candidate.parent === caller.parent &&
+            candidate.name.toLocaleLowerCase() === target.name.toLocaleLowerCase()
+        ).length === 1
+    );
+    for (const target of targets) {
+      const targetSymbol = symbolsByEntry.get(target);
+      if (targetSymbol === undefined) continue;
+      for (const call of directPrivateFixedArityCalls(parsed.masked, caller, target)) {
+        const range = rangeForSpan(lineStarts, call.start, call.end);
+        edges.push({
+          id: createEdgeId({
+            sourceId: callerSymbol.id,
+            targetId: targetSymbol.id,
+            kind: "calls",
+            line: range.start.line,
+            column: range.start.column,
+            referenceName: targetSymbol.name
+          }),
+          sourceId: callerSymbol.id,
+          targetId: targetSymbol.id,
+          kind: "calls",
+          filePath: input.filePath,
+          range,
+          resolution: "exact",
+          confidence: 1,
+          referenceName: targetSymbol.name,
+          evidence: {
+            ruleId: "syntax.vbnet.same-container.unique-private-fixed-arity-method-call",
+            stage: "syntax",
+            candidateSymbolIds: [targetSymbol.id]
+          }
+        });
+      }
+    }
+  }
   const canonicalCall = CANONICAL_VBNET_MODULE_CALL.exec(input.sourceText);
   const moduleName = canonicalCall?.[1];
   const callerName = canonicalCall?.[2];
   const calleeName = canonicalCall?.[3];
-  if (
-    moduleName !== undefined &&
-    callerName !== undefined &&
-    calleeName !== undefined &&
-    callerName.toLocaleLowerCase() !== calleeName.toLocaleLowerCase()
-  ) {
-    const modules = symbols.filter(
-      (symbol) => symbol.kind === "module" && symbol.name.toLocaleLowerCase() === moduleName.toLocaleLowerCase()
+  if (moduleName !== undefined && callerName !== undefined && calleeName !== undefined) {
+    const moduleEntries = parsed.entries.filter(
+      (entry) => entry.blockKind === "module" && entry.name.toLocaleLowerCase() === moduleName.toLocaleLowerCase()
     );
-    const module = modules.length === 1 ? modules[0] : undefined;
-    const memberMethods =
-      module === undefined
-        ? []
-        : symbols.filter(
-            (symbol) => symbol.kind === "method" && symbol.qualifiedName.startsWith(module.qualifiedName + "::")
-          );
-    const callers = memberMethods.filter(
-      (symbol) => symbol.name.toLocaleLowerCase() === callerName.toLocaleLowerCase()
+    const moduleEntry = moduleEntries.length === 1 ? moduleEntries[0] : undefined;
+    const callers = methodEntries.filter(
+      (entry) => entry.parent === moduleEntry && entry.name.toLocaleLowerCase() === callerName.toLocaleLowerCase()
     );
-    const callees = memberMethods.filter(
-      (symbol) => symbol.name.toLocaleLowerCase() === calleeName.toLocaleLowerCase()
+    const callees = methodEntries.filter(
+      (entry) => entry.parent === moduleEntry && entry.name.toLocaleLowerCase() === calleeName.toLocaleLowerCase()
     );
     const caller = callers.length === 1 ? callers[0] : undefined;
     const callee = callees.length === 1 ? callees[0] : undefined;
+    const callerSymbol = caller === undefined ? undefined : symbolsByEntry.get(caller);
+    const calleeSymbol = callee === undefined ? undefined : symbolsByEntry.get(callee);
     const returnCall = /\breturn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)/iu.exec(input.sourceText);
-    const callStart =
-      returnCall?.index === undefined || returnCall[1] === undefined
-        ? -1
-        : returnCall.index + returnCall[0].lastIndexOf(returnCall[1]);
-    if (caller !== undefined && callee !== undefined && callStart >= 0) {
-      const range = callRangeForSpan(lineStarts, callStart, callStart + calleeName.length + 2);
+    const callStart = returnCall?.index === undefined || returnCall[1] === undefined
+      ? -1
+      : returnCall.index + returnCall[0].lastIndexOf(returnCall[1]);
+    if (callerSymbol !== undefined && calleeSymbol !== undefined && callStart >= 0) {
+      const range = legacyCallRangeForSpan(lineStarts, callStart, callStart + calleeName.length + 2);
       edges.push({
         id: createEdgeId({
-          sourceId: caller.id,
-          targetId: callee.id,
+          sourceId: callerSymbol.id,
+          targetId: calleeSymbol.id,
           kind: "calls",
           line: range.start.line,
           column: range.start.column,
-          referenceName: callee.name
+          referenceName: calleeSymbol.name
         }),
-        sourceId: caller.id,
-        targetId: callee.id,
+        sourceId: callerSymbol.id,
+        targetId: calleeSymbol.id,
         kind: "calls",
         filePath: input.filePath,
         range,
         resolution: "exact",
         confidence: 1,
-        referenceName: callee.name,
+        referenceName: calleeSymbol.name,
         evidence: {
           ruleId: "syntax.vbnet.canonical-module.unique-zero-argument-method-call",
           stage: "syntax",
-          candidateSymbolIds: [callee.id]
+          candidateSymbolIds: [calleeSymbol.id]
         }
       });
     }

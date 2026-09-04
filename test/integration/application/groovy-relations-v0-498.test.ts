@@ -38,7 +38,7 @@ describe("Groovy relations v0.498", () => {
     const entry = snapshot.symbols.find((symbol) => symbol.name === "entry");
 
     expect(status.stale).toBe(false);
-    expect(store.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v411");
+    expect(store.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v412");
     expect(snapshot.edges.filter((edge) => edge.kind === "calls")).toEqual([
       expect.objectContaining({
         sourceId: entry?.id,
