@@ -18,9 +18,9 @@ describe("language depth matrix", () => {
       tiers: {
         "external-tier-a": 1,
         "external-partial": 1,
-        "bounded-relation": 34,
+        "bounded-relation": 35,
         "large-project-structural": 6,
-        targeted: 16
+        targeted: 15
       },
       relationDepth: {
         project: 41,
@@ -28,8 +28,8 @@ describe("language depth matrix", () => {
         framework: 4,
         structural: 2
       },
-      largeProjectValidated: 21,
-      relationReleaseValidated: 36
+      largeProjectValidated: 22,
+      relationReleaseValidated: 37
     });
   });
 
@@ -84,6 +84,14 @@ describe("language depth matrix", () => {
       relationDepth: "same-file",
       truthKind: "lua-tree-sitter-ast",
       evidenceVersion: "0.504.0",
+      relationReleaseValidated: true
+    });
+    expect(byLanguage.get("solidity")).toMatchObject({
+      evidenceTier: "bounded-relation",
+      relationDepth: "same-file",
+      truthKind: "solc-ast",
+      evidenceVersion: "0.505.0",
+      largeProjectValidated: true,
       relationReleaseValidated: true
     });
     expect(byLanguage.get("r")).toMatchObject({

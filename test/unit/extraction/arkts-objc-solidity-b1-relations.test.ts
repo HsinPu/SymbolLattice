@@ -369,7 +369,7 @@ RCT_EXPORT_METHOD(createEvent)
         confidence: 1,
         referenceName: "helper",
         evidence: {
-          ruleId: "syntax.solidity.same-contract.unique-private-zero-argument-function-call",
+          ruleId: "syntax.solidity.same-contract.unique-private-fixed-arity-function-call",
           stage: "syntax",
           candidateSymbolIds: [helper.id]
         }
@@ -390,17 +390,13 @@ RCT_EXPORT_METHOD(createEvent)
     }
 
     const soliditySources = [
-      `import "./Foreign.sol";\ncontract Smoke { function entry() external { helper(); } function helper() private {} }`,
-      `contract Smoke is Base { function entry() external { helper(); } function helper() private {} }`,
-      `contract Smoke { using Utils for uint; function entry() external { helper(); } function helper() private {} }`,
       `library Smoke { function entry() internal { helper(); } function helper() private {} }`,
       `contract Smoke { function entry() external { helper.delegatecall(\"\"); } function helper() private {} }`,
       `contract Smoke { function entry() external { helper(); } function helper() private {} function helper(uint value) private {} }`,
       `contract Smoke { function entry() external { function() internal helper; helper(); } function helper() private {} }`,
       `contract Smoke { function entry(function() internal helper) external { helper(); } function helper() private {} }`,
       `contract Smoke { function entry() external returns (function() internal helper) { helper(); } function helper() private {} }`,
-      `contract Smoke { function entry() external { assembly { caller() } } function caller() private {} }`,
-      `contract Smoke { function entry() external { helper(); } function helper() private {} }\ncontract Other { function helper() private {} }`
+      `contract Smoke { function entry() external { assembly { caller() } } function caller() private {} }`
     ] as const;
     for (const sourceText of soliditySources) {
       expect(

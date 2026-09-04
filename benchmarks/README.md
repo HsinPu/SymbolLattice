@@ -16,6 +16,7 @@ These tools generate or validate large-project evidence outside the published np
 | `python/` | `correctness-oracle.mjs`, `PythonOracle.py` | manual CPython stdlib AST oracle |
 | `sfc/` | `correctness-oracle.mjs` | manual Vue/Svelte/Astro component relation oracle |
 | `shell/` | `correctness-oracle.mjs` | manual mvdan ABI v2 direct-call oracle |
+| `solidity/` | `correctness-oracle.mjs` | automatic solc AST private fixed-arity call oracle |
 | `jsp/` | `correctness-oracle.mjs` | automatic |
 | `julia/` | `correctness-oracle.mjs`, `negative-matrix.mjs` | automatic |
 | `julia/` | `lifecycle.mjs` | manual |

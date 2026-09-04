@@ -46,7 +46,7 @@ interface SolidityMember {
   readonly end: number;
   readonly bodyStart: number | null;
   readonly bodyEnd: number | null;
-  readonly hasNoParameters: boolean;
+  readonly parameterCount: number;
   readonly isPrivate: boolean;
 }
 
@@ -169,6 +169,7 @@ function solidityCodeMask(sourceText: string): string | null {
         return null;
       }
       blankRange(characters, start, cursor);
+      characters[start] = "0";
       continue;
     }
     cursor += 1;
@@ -255,6 +256,35 @@ function matchingParenthesis(sourceText: string, start: number): number | null {
     }
   }
   return null;
+}
+
+function topLevelCommaSeparatedCount(sourceText: string, start: number, end: number): number | null {
+  if (sourceText.slice(start, end).trim() === "") {
+    return 0;
+  }
+  let parentheses = 0;
+  let brackets = 0;
+  let braces = 0;
+  let count = 1;
+  for (let cursor = start; cursor < end; cursor += 1) {
+    const character = sourceText[cursor];
+    if (character === "(") parentheses += 1;
+    else if (character === ")") {
+      if (parentheses === 0) return null;
+      parentheses -= 1;
+    } else if (character === "[") brackets += 1;
+    else if (character === "]") {
+      if (brackets === 0) return null;
+      brackets -= 1;
+    } else if (character === "{") braces += 1;
+    else if (character === "}") {
+      if (braces === 0) return null;
+      braces -= 1;
+    } else if (character === "," && parentheses === 0 && brackets === 0 && braces === 0) {
+      count += 1;
+    }
+  }
+  return parentheses === 0 && brackets === 0 && braces === 0 ? count : null;
 }
 
 function declarationBodyStart(sourceText: string, start: number): number | null {
@@ -490,7 +520,7 @@ function completeMemberAt(
     end,
     bodyStart,
     bodyEnd,
-    hasNoParameters: sourceText.slice(next + 1, parameterEnd).trim() === "",
+    parameterCount: topLevelCommaSeparatedCount(sourceText, next + 1, parameterEnd) ?? -1,
     isPrivate: /\bprivate\b/u.test(sourceText.slice(parameterEnd + 1, headerEnd))
   };
 }
@@ -538,68 +568,67 @@ function memberRuleId(keyword: SolidityMemberKeyword): string {
   return "language.solidity." + keyword + ".direct-member";
 }
 
-function hasAmbiguousPrivateCallContext(sourceText: string, source: SolidityMember): boolean {
+function hasAmbiguousPrivateCallContext(
+  sourceText: string,
+  source: SolidityMember,
+  targetName: string
+): boolean {
   if (source.bodyStart === null || source.bodyEnd === null) {
     return true;
   }
   const header = sourceText.slice(source.name.end, source.bodyStart);
   const body = sourceText.slice(source.bodyStart + 1, source.bodyEnd);
-  return /\b(?:function|returns)\b/u.test(header) || /\bassembly\b/u.test(body);
+  const escapedTargetName = targetName.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return (
+    /\bfunction\b/u.test(header) ||
+    new RegExp(`\\b${escapedTargetName}\\b`, "u").test(header) ||
+    /\bassembly\b/u.test(body)
+  );
 }
 
-function onlyDirectPrivateZeroArgumentCall(
+function directPrivateFixedArityCalls(
   sourceText: string,
   source: SolidityMember,
   target: SolidityMember
-): SolidityIdentifier | null {
+): readonly SolidityIdentifier[] {
   if (
     source.bodyStart === null ||
     source.bodyEnd === null ||
     target.keyword !== "function" ||
     !target.isPrivate ||
-    !target.hasNoParameters ||
-    hasAmbiguousPrivateCallContext(sourceText, source)
+    target.parameterCount < 0 ||
+    hasAmbiguousPrivateCallContext(sourceText, source, target.name.name)
   ) {
-    return null;
+    return [];
   }
   const bodyStart = source.bodyStart + 1;
   const body = sourceText.slice(bodyStart, source.bodyEnd);
   const occurrences = [...body.matchAll(/[A-Za-z_][A-Za-z0-9_]*/gu)].filter(
     (occurrence) => occurrence[0] === target.name.name
   );
-  const occurrence = occurrences[0];
-  if (occurrences.length !== 1 || occurrence?.index === undefined) {
-    return null;
+  const calls: SolidityIdentifier[] = [];
+  for (const occurrence of occurrences) {
+    if (occurrence.index === undefined) return [];
+    const start = bodyStart + occurrence.index;
+    let previous = start - 1;
+    while (previous >= bodyStart && /\s/u.test(sourceText[previous] ?? "")) previous -= 1;
+    if (sourceText[previous] === ".") continue;
+    let cursor = skipWhitespace(sourceText, start + target.name.name.length, source.bodyEnd);
+    if (sourceText[cursor] !== "(") return [];
+    const end = matchingParenthesis(sourceText, cursor);
+    if (end === null || end >= source.bodyEnd) return [];
+    const argumentCount = topLevelCommaSeparatedCount(sourceText, cursor + 1, end);
+    if (argumentCount !== target.parameterCount) return [];
+    calls.push({ name: target.name.name, start, end: end + 1 });
   }
-  const start = bodyStart + occurrence.index;
-  let previous = start - 1;
-  while (previous >= bodyStart && /\s/u.test(sourceText[previous] ?? "")) {
-    previous -= 1;
-  }
-  if (sourceText[previous] === ".") {
-    return null;
-  }
-  let cursor = start + target.name.name.length;
-  cursor = skipWhitespace(sourceText, cursor, source.bodyEnd);
-  if (sourceText[cursor] !== "(") {
-    return null;
-  }
-  const end = matchingParenthesis(sourceText, cursor);
-  if (
-    end === null ||
-    end >= source.bodyEnd ||
-    sourceText.slice(cursor + 1, end).trim() !== ""
-  ) {
-    return null;
-  }
-  return { name: target.name.name, start, end: end + 1 };
+  return calls;
 }
 
 /**
  * Extracts complete top-level Solidity containers and their complete direct
- * callable members. It intentionally keeps only simple `is Base, Other`
- * clauses for later same-file relation projection; imports, constructor
- * arguments, calls, events, and dynamic runtime semantics stay out of scope.
+ * callable members. It keeps simple `is Base, Other` clauses and one bounded
+ * same-contract private-call surface. Import resolution, constructor calls,
+ * events, inherited dispatch, and dynamic runtime semantics stay out of scope.
  */
 export function extractSolidityFileFacts(input: SolidityExtractFileFactsInput): ArtifactFacts {
   const lineStarts = lineStartsFor(input.sourceText);
@@ -702,12 +731,6 @@ export function extractSolidityFileFacts(input: SolidityExtractFileFactsInput): 
     return facts();
   }
 
-  const canProjectDirectPrivateCalls =
-    containers.length === 1 &&
-    containers[0]?.keyword === "contract" &&
-    containers[0]?.inheritanceReferences.length === 0 &&
-    !/\b(?:import|using)\b/u.test(code);
-
   for (const container of containers) {
     const containerRange = rangeForSpan(lineStarts, container.start, container.end);
     const containerKind = containerSymbolKind(container);
@@ -745,7 +768,7 @@ export function extractSolidityFileFacts(input: SolidityExtractFileFactsInput): 
       memberSymbols.push({ member, symbol });
     }
 
-    if (!canProjectDirectPrivateCalls) {
+    if (container.keyword !== "contract") {
       continue;
     }
     for (const source of memberSymbols) {
@@ -756,7 +779,7 @@ export function extractSolidityFileFacts(input: SolidityExtractFileFactsInput): 
         (candidate) =>
           candidate.member.keyword === "function" &&
           candidate.member.isPrivate &&
-          candidate.member.hasNoParameters &&
+          candidate.member.parameterCount >= 0 &&
           candidate.member.bodyStart !== null
       );
       for (const target of targets) {
@@ -766,34 +789,32 @@ export function extractSolidityFileFacts(input: SolidityExtractFileFactsInput): 
         ) {
           continue;
         }
-        const call = onlyDirectPrivateZeroArgumentCall(code, source.member, target.member);
-        if (call === null) {
-          continue;
-        }
-        const range = rangeForSpan(lineStarts, call.start, call.end);
-        edges.push({
-          id: createEdgeId({
+        for (const call of directPrivateFixedArityCalls(code, source.member, target.member)) {
+          const range = rangeForSpan(lineStarts, call.start, call.end);
+          edges.push({
+            id: createEdgeId({
+              sourceId: source.symbol.id,
+              targetId: target.symbol.id,
+              kind: "calls",
+              line: range.start.line,
+              column: range.start.column,
+              referenceName: target.member.name.name
+            }),
             sourceId: source.symbol.id,
             targetId: target.symbol.id,
             kind: "calls",
-            line: range.start.line,
-            column: range.start.column,
-            referenceName: target.member.name.name
-          }),
-          sourceId: source.symbol.id,
-          targetId: target.symbol.id,
-          kind: "calls",
-          filePath: input.filePath,
-          range,
-          resolution: "exact",
-          confidence: 1,
-          referenceName: target.member.name.name,
-          evidence: {
-            ruleId: "syntax.solidity.same-contract.unique-private-zero-argument-function-call",
-            stage: "syntax",
-            candidateSymbolIds: [target.symbol.id]
-          }
-        });
+            filePath: input.filePath,
+            range,
+            resolution: "exact",
+            confidence: 1,
+            referenceName: target.member.name.name,
+            evidence: {
+              ruleId: "syntax.solidity.same-contract.unique-private-fixed-arity-function-call",
+              stage: "syntax",
+              candidateSymbolIds: [target.symbol.id]
+            }
+          });
+        }
       }
     }
   }
