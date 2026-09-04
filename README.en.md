@@ -16,7 +16,7 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.494.0
+Current version: v0.496.0
 
 ## Highlights
 
@@ -42,6 +42,8 @@ One `init` or `sync` can process a multi-language repository. Analysis depth var
 | Systems and native | C, C++, Objective-C, Rust, Go, Swift, Zig, Nim, Fortran, Ada, Pascal, COBOL |
 | Data, configuration, and schemas | SQL, GraphQL, Protocol Buffers, Terraform/OpenTofu, Nix, YAML, XML, Java Properties, Solidity |
 | Functional and BEAM | Erlang, Clojure, Haskell, OCaml |
+
+v0.496.0 adds a repository-native 58-language depth-matrix gate. It checks the language registry, discovery, file identity, targeted test evidence, framework capabilities, relation depth, real-corpus evidence, and truth tier, then scans a disposable multilingual project to verify all 58 files. The matrix explicitly separates project, same-file, framework, and structural evidence instead of presenting basic scanning as equal semantic depth. This is internal release evidence and adds no CLI command, MCP tool, GraphEdge kind, or public schema.
 
 Java depth includes explicit imports, annotations, generic direct heritage/object creation, parser-recovery callable signatures/bare calls/parameter/final-field receivers, and evidence from `build.gradle(.kts)` or module-named Gradle build scripts; duplicate qualified types, wildcard or static imports, lambda-contained construction, array/wildcard signatures, mutation/escape, shadowing, anonymous interfaces, and external classpaths remain conservatively omitted.
 

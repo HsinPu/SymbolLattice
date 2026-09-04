@@ -9,6 +9,7 @@ These tools generate or validate large-project evidence outside the published np
 | `css/` | `correctness-oracle.mjs`, `lifecycle.mjs` | automatic |
 | `html/` | `correctness-oracle.mjs` | automatic |
 | `java/` | `correctness-oracle.mjs`, `JavaOracle.java` | automatic helper contract |
+| `languages/` | `depth-matrix.mjs` | manual |
 | `java/` | `lifecycle.mjs` | manual |
 | `javascript/` | `correctness-oracle.mjs` | automatic |
 | `jsp/` | `correctness-oracle.mjs` | automatic |

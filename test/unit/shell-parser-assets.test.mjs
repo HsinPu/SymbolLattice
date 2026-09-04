@@ -220,6 +220,6 @@ describe("Shell parser asset closure", () => {
     const packageJson = JSON.parse(await readFile(join(repositoryRoot, "package.json"), "utf8"));
 
     expect(packageJson.scripts.build).toContain("scripts/build/copy-shell-parser-assets.mjs");
-    expect(packageJson.scripts.prepack).toBe("npm run build");
+    expect(packageJson.scripts.prepack).toBe("npm run build && npm run verify:language-depth");
   });
 });
