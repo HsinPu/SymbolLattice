@@ -80,8 +80,8 @@ export interface LuaWorkerRuntimeOptions {
 
 const LUA_ASSET_SPECS = Object.freeze({
   "THIRD_PARTY_NOTICES.md": [754, "ca44d053260ee861a2853700aa28122e31b2df06d025b1d43f2cb31d6dc17363"],
-  "asset-manifest.json": [1_234, "29cf0d0c82cdc532da04d3ea0ce1d5a385cc71820d75d194b4d4576842ffd9d0"],
-  "provenance.json": [2_426, "b01bdefa7c519fd7da00c90d1dfa6a33dd2513e8d3293f155d26303b48889993"],
+  "asset-manifest.json": [1_234, "7bd06e26f9da2b60cf1fdbd8abfe58e4bf09f5fc37e120fd92b044e09e8c98dc"],
+  "provenance.json": [3_036, "20cb965555cb980d263e63e41d58404fee4a7ad262a16a4295638d80dbb2de80"],
   "sbom.cdx.json": [2_085, "410d5e42efbb9192f54a732263d6bfc36492645ccc31d738d07f8fffe6731cad"],
   "tree-sitter-lua-MIT.txt": [1_079, "9a32b02e4c917b1ce6b5e79d8ea81e25cefd7f27d89c7235f2afb262c06cf32e"],
   "tree-sitter-lua-v0.5.0.wasm": [LUA_GRAMMAR_BYTE_LENGTH, LUA_GRAMMAR_SHA256],
@@ -499,7 +499,8 @@ function fileOnlyResponse(
     grammarSha256: LUA_GRAMMAR_SHA256,
     decision: { kind: "file-only", code },
     metrics: emptyMetrics(sourceBytes),
-    declarations: []
+    declarations: [],
+    calls: []
   };
 }
 

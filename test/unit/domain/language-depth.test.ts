@@ -18,18 +18,18 @@ describe("language depth matrix", () => {
       tiers: {
         "external-tier-a": 1,
         "external-partial": 1,
-        "bounded-relation": 33,
-        "large-project-structural": 7,
+        "bounded-relation": 34,
+        "large-project-structural": 6,
         targeted: 16
       },
       relationDepth: {
         project: 41,
-        "same-file": 10,
+        "same-file": 11,
         framework: 4,
-        structural: 3
+        structural: 2
       },
       largeProjectValidated: 21,
-      relationReleaseValidated: 35
+      relationReleaseValidated: 36
     });
   });
 
@@ -80,8 +80,11 @@ describe("language depth matrix", () => {
       relationReleaseValidated: true
     });
     expect(byLanguage.get("lua")).toMatchObject({
-      relationDepth: "structural",
-      relationReleaseValidated: false
+      evidenceTier: "bounded-relation",
+      relationDepth: "same-file",
+      truthKind: "lua-tree-sitter-ast",
+      evidenceVersion: "0.504.0",
+      relationReleaseValidated: true
     });
     expect(byLanguage.get("r")).toMatchObject({
       evidenceTier: "bounded-relation",

@@ -17,6 +17,7 @@ export type LanguageTruthKind =
   | "python-stdlib-ast"
   | "sfc-compiler-api"
   | "shell-mvdan-ast"
+  | "lua-tree-sitter-ast"
   | "javac-oracle"
   | "groovy-compiler-ast"
   | "source-occurrence-oracle"
@@ -41,11 +42,11 @@ const BOUNDED_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
   "go", "rust", "kotlin", "swift", "dart", "csharp", "fsharp", "ocaml", "haskell",
   "scala", "elixir", "erlang", "clojure", "nix", "nim", "zig", "cpp", "c", "php",
   "objc", "ruby", "sql", "r", "markdown", "proto", "graphql", "groovy", "javascript", "python",
-  "vue", "svelte", "astro", "shell"
+  "vue", "svelte", "astro", "shell", "lua"
 ]);
 
 const LARGE_PROJECT_STRUCTURAL_LANGUAGES = new Set<ArtifactLanguage>([
-  "html", "css", "jsp", "lua", "luau", "julia", "perl"
+  "html", "css", "jsp", "luau", "julia", "perl"
 ]);
 
 const PROJECT_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
@@ -57,7 +58,7 @@ const PROJECT_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
 ]);
 
 const SAME_FILE_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
-  "groovy", "fortran", "luau", "pascal", "r", "julia", "solidity", "cfml", "vbnet", "shell"
+  "groovy", "fortran", "luau", "pascal", "r", "julia", "solidity", "cfml", "vbnet", "shell", "lua"
 ]);
 
 const FRAMEWORK_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
@@ -65,7 +66,7 @@ const FRAMEWORK_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
 ]);
 
 const STRUCTURAL_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
-  "lua", "html", "css"
+  "html", "css"
 ]);
 
 const LARGE_PROJECT_VALIDATED_LANGUAGES = new Set<ArtifactLanguage>([
@@ -84,7 +85,7 @@ const EVIDENCE_VERSION: Readonly<Partial<Record<ArtifactLanguage, string>>> = Ob
   rust: "0.458.0",
   java: "0.494.0",
   groovy: "0.499.0",
-  lua: "0.433.0",
+  lua: "0.504.0",
   luau: "0.434.0",
   objc: "0.476.0",
   r: "0.481.0",
@@ -128,7 +129,7 @@ const LANGUAGE_LIMITATIONS: Readonly<Partial<Record<ArtifactLanguage, readonly s
     java: ["external classpath, compiler-only inference, and wider inherited dispatch remain nonclaims"],
     groovy: ["compiler-confirmed unique top-level def self-recursion and all 14 current inter-function candidates are exact; division, non-assignment slashy forms, closures, delegates, metaclass, class methods, and wider dynamic dispatch remain nonclaims"],
     shell: ["300-positive/150-negative mvdan ABI v2 truth covers unique same-file direct function calls; eval, source, alias, unset, nested functions, substitutions, dynamic commands, external dispatch, and cross-file loading remain nonclaims"],
-    lua: ["product indexing retains parser-proven function structure without general call edges"],
+    lua: ["300-positive/150-negative tree-sitter truth covers unique earlier local-function and self-recursive bare calls; global/dotted/colon dispatch, shadow, rebind, nested functions, debug, dynamic load, require/module resolution, metatables, and runtime dispatch remain nonclaims"],
     html: ["HTML relations are structural resources and containment, not runtime navigation"],
     css: ["CSS relations are structural selectors and containment"],
     sql: ["views, routines, search path, and dynamic SQL remain nonclaims"],
@@ -167,6 +168,7 @@ function truthKind(language: ArtifactLanguage): LanguageTruthKind {
   if (language === "python") return "python-stdlib-ast";
   if (language === "vue" || language === "svelte" || language === "astro") return "sfc-compiler-api";
   if (language === "shell") return "shell-mvdan-ast";
+  if (language === "lua") return "lua-tree-sitter-ast";
   if (language === "java") return "javac-oracle";
   if (language === "groovy") return "groovy-compiler-ast";
   if (BOUNDED_RELATION_LANGUAGES.has(language)) return "source-occurrence-oracle";

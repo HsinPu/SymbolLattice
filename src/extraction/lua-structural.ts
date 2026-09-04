@@ -32,6 +32,7 @@ export function projectLuaStructuralFacts(input: ProjectLuaStructuralFactsInput)
   const fileNode = fileSymbol(input.filePath, rangeFor(lineStarts, 0, sourceText.length));
   const symbols: SymbolNode[] = [fileNode];
   const edges: GraphEdge[] = [];
+  const functionSymbols: SymbolNode[] = [];
   const ordinals = new Map<string, number>();
   for (const declaration of input.response.declarations) {
     const declarationStart = requiredUtf16Offset(offsets.byByte, declaration.declarationStartByte);
@@ -60,6 +61,7 @@ export function projectLuaStructuralFacts(input: ProjectLuaStructuralFactsInput)
       declarationOrdinal
     };
     symbols.push(symbol);
+    functionSymbols.push(symbol);
     edges.push({
       id: createEdgeId({
         sourceId: fileNode.id,
@@ -81,6 +83,39 @@ export function projectLuaStructuralFacts(input: ProjectLuaStructuralFactsInput)
         ruleId: LUA_STRUCTURAL_RULE_ID,
         stage: "syntax",
         candidateSymbolIds: [symbol.id]
+      }
+    });
+  }
+  for (const call of input.response.calls) {
+    const source = functionSymbols[call.sourceDeclarationIndex];
+    const target = functionSymbols[call.targetDeclarationIndex];
+    if (source === undefined || target === undefined) {
+      throw new Error("Validated Lua call indexes do not match projected declarations.");
+    }
+    const start = requiredUtf16Offset(offsets.byByte, call.startByte);
+    const end = requiredUtf16Offset(offsets.byByte, call.endByte);
+    const range = rangeFor(lineStarts, start, end);
+    edges.push({
+      id: createEdgeId({
+        sourceId: source.id,
+        targetId: target.id,
+        kind: "calls",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: call.name
+      }),
+      sourceId: source.id,
+      targetId: target.id,
+      kind: "calls",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: call.name,
+      evidence: {
+        ruleId: "language.lua.call.direct-local-function.singleton-parser-proof",
+        stage: "syntax",
+        candidateSymbolIds: [target.id]
       }
     });
   }

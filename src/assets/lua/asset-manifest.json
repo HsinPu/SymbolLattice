@@ -2,7 +2,7 @@
   "schemaVersion": "symbol-lattice-lua-asset-manifest-v1",
   "algorithm": "sha256 of UTF-8 concatenated sorted lines: <sha256> <bytes> <path> LF",
   "entryCount": 6,
-  "aggregateSha256": "1b66cc5ea785a48916af57fb3b5afc9aa90be1acc02bb79cc2f8c6c03d31aa51",
+  "aggregateSha256": "b0e8c510770c9b0abf153572f01a38a38e651fe8553cd425f443e5810ea59809",
   "selfExcluded": true,
   "entries": [
     {
@@ -12,8 +12,8 @@
     },
     {
       "path": "provenance.json",
-      "bytes": 2426,
-      "sha256": "b01bdefa7c519fd7da00c90d1dfa6a33dd2513e8d3293f155d26303b48889993"
+      "bytes": 3036,
+      "sha256": "20cb965555cb980d263e63e41d58404fee4a7ad262a16a4295638d80dbb2de80"
     },
     {
       "path": "sbom.cdx.json",

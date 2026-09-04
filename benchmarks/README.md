@@ -21,6 +21,7 @@ These tools generate or validate large-project evidence outside the published np
 | `julia/` | `lifecycle.mjs` | manual |
 | `luau/` | `correctness-oracle.mjs`, `lifecycle.mjs`, `negative-matrix.mjs` | automatic |
 | `luau/` | `approved-subset.mjs` | manual |
+| `lua/` | `correctness-oracle.mjs` | manual tree-sitter worker call oracle |
 | `perl/` | `correctness-oracle.mjs`, `negative-matrix.mjs` | automatic |
 | `perl/` | `lifecycle.mjs` | manual |
 | `r/` | `correctness-oracle.mjs`, `negative-matrix.mjs` | automatic |

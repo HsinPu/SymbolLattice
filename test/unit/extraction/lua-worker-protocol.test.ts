@@ -13,7 +13,7 @@ const fileSha256 = createHash("sha256").update(sourceBytes).digest("hex");
 
 function response() {
   return {
-    schema: "symbol-lattice-lua-worker-response-v1",
+    schema: "symbol-lattice-lua-worker-response-v2",
     requestId: "request-1",
     fileSha256,
     grammarSha256: LUA_GRAMMAR_SHA256,
@@ -31,8 +31,11 @@ function response() {
       declarationStartByte: 0,
       declarationEndByte: 20,
       nameStartByte: 9,
-      nameEndByte: 14
-    }]
+      nameEndByte: 14,
+      bodyStartByte: 16,
+      bodyEndByte: 20
+    }],
+    calls: []
   };
 }
 
@@ -91,6 +94,49 @@ describe("Lua worker DTO boundary", () => {
         fileSha256: unicodeHash,
         sourceBytes: unicodeBytes
       })).toThrow(LuaWorkerResponseError);
+    }
+  });
+
+  it("accepts one singleton call and rejects call identity or candidate drift", () => {
+    const text = "local function alpha() alpha() end";
+    const bytes = new TextEncoder().encode(text);
+    const hash = createHash("sha256").update(bytes).digest("hex");
+    const callStart = text.lastIndexOf("alpha");
+    const value = {
+      schema: "symbol-lattice-lua-worker-response-v2",
+      requestId: "request-call",
+      fileSha256: hash,
+      grammarSha256: LUA_GRAMMAR_SHA256,
+      decision: { kind: "emit" },
+      metrics: { sourceBytes: bytes.length, physicalLines: 1, functionCandidates: 1, namedFunctions: 1, maxDepth: 4 },
+      declarations: [{
+        name: "alpha",
+        form: "local-function",
+        declarationStartByte: 0,
+        declarationEndByte: bytes.length,
+        nameStartByte: 15,
+        nameEndByte: 20,
+        bodyStartByte: 23,
+        bodyEndByte: bytes.length - 4
+      }],
+      calls: [{
+        sourceDeclarationIndex: 0,
+        targetDeclarationIndex: 0,
+        name: "alpha",
+        startByte: callStart,
+        endByte: callStart + 5,
+        candidateDeclarationIndexes: [0],
+        parserProvenance: "tree-sitter-lua-v0.5.0.function_call.bare-identifier"
+      }]
+    };
+    expect(validateLuaWorkerResponse(value, { requestId: "request-call", fileSha256: hash, sourceBytes: bytes })).toEqual(value);
+    for (const calls of [
+      [{ ...value.calls[0], candidateDeclarationIndexes: [] }],
+      [{ ...value.calls[0], name: "other" }],
+      [{ ...value.calls[0], startByte: 1 }],
+      [{ ...value.calls[0], parserProvenance: "untrusted" }]
+    ]) {
+      expect(() => validateLuaWorkerResponse({ ...value, calls }, { requestId: "request-call", fileSha256: hash, sourceBytes: bytes })).toThrow(LuaWorkerResponseError);
     }
   });
 });

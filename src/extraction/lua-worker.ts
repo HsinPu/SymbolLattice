@@ -7,6 +7,7 @@ import {
   LUA_WORKER_RESPONSE_SCHEMA,
   type LuaFileFailureCode,
   type LuaWorkerDeclaration,
+  type LuaWorkerCall,
   type LuaWorkerMetrics,
   type LuaWorkerResponse
 } from "./lua-worker-protocol.js";
@@ -56,7 +57,7 @@ parentPort?.on("message", (message: LuaWorkerMessage) => {
     const result = inspectLuaTree(tree.rootNode, sourceBytes, parserSourceText);
     parentPort?.postMessage(
       result.code === null
-        ? response(message, { kind: "emit" }, result.metrics, result.declarations)
+        ? response(message, { kind: "emit" }, result.metrics, result.declarations, result.calls)
         : fileOnly(message, result.code, result.metrics)
     );
   } finally {
@@ -69,7 +70,8 @@ function response(
   message: LuaWorkerMessage,
   decision: LuaWorkerResponse["decision"],
   metrics: LuaWorkerMetrics,
-  declarations: readonly LuaWorkerDeclaration[]
+  declarations: readonly LuaWorkerDeclaration[],
+  calls: readonly LuaWorkerCall[]
 ): LuaWorkerResponse {
   return {
     schema: LUA_WORKER_RESPONSE_SCHEMA,
@@ -78,7 +80,8 @@ function response(
     grammarSha256: LUA_GRAMMAR_SHA256,
     decision,
     metrics,
-    declarations
+    declarations,
+    calls
   };
 }
 
@@ -87,5 +90,5 @@ function fileOnly(
   code: LuaFileFailureCode,
   metrics: LuaWorkerMetrics
 ): LuaWorkerResponse {
-  return response(message, { kind: "file-only", code }, metrics, []);
+  return response(message, { kind: "file-only", code }, metrics, [], []);
 }

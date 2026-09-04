@@ -62,6 +62,29 @@ app:get("/health", function() end)
     tree!.delete();
   });
 
+  it("retains one parser-proven direct call to an earlier unique local function", () => {
+    const sourceText = [
+      "local function target(value)",
+      "  return value",
+      "end",
+      "local function caller()",
+      "  return target(1)",
+      "end"
+    ].join("\n");
+    const sourceBytes = encoder.encode(sourceText);
+    const tree = parser.parse(sourceText);
+    expect(tree).not.toBeNull();
+
+    const result = inspectLuaTree(tree!.rootNode, sourceBytes) as unknown as {
+      readonly calls: readonly { readonly name: string; readonly sourceDeclarationIndex: number; readonly targetDeclarationIndex: number }[];
+    };
+
+    expect(result.calls).toEqual([
+      expect.objectContaining({ name: "target", sourceDeclarationIndex: 1, targetDeclarationIndex: 0 })
+    ]);
+    tree!.delete();
+  });
+
   it("converts web-tree-sitter UTF-16 indexes to exact UTF-8 byte boundaries", () => {
     const sourceText = "local emoji = \"😀\"\r\nfunction café() end\r\n";
     const sourceBytes = encoder.encode(sourceText);

@@ -16,7 +16,7 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.503.0
+Current version: v0.504.0
 
 ## Highlights
 
@@ -58,6 +58,8 @@ v0.501.0 promotes Python to bounded relation evidence. Fixed CPython 3.13.11, Dj
 v0.502.0 promotes Vue, Svelte, and Astro to bounded relation evidence. Fixed Element Plus 2.14.3, Svelte 5.57.0, and Astro 7.3.1 corpora provide 300 component-reference truths and 150 negatives through an independent TypeScript Compiler API and markup scanner. An exact `references` edge requires a direct PascalCase template/markup tag, one unmutated explicit relative default component import visible to that SFC template, and one tracked target. Vue is limited to `<script setup>`, Svelte to the instance script, and Astro to parse-clean frontmatter. Dynamic components, kebab-case, namespace/member tags, Options API registration, module scripts, template expressions, aliases, macros, hydration, and runtime rendering remain nonclaims.
 
 v0.503.0 promotes Shell to bounded same-file relation evidence. The bundled mvdan.cc/sh v3.13.1 WASM now uses ABI 2, and fixed Git, nvm, Kubernetes, asdf, RVM, and SDKMAN corpora verify 300 parser-proven direct function calls plus 150 negatives. An exact `calls` edge requires a literal command inside a direct top-level function body, one unique direct top-level target in the same file, stable UTF-8 byte ranges, and parser provenance. Duplicate targets, nested functions, command/process substitutions, `eval`, `source`/`.`, alias/unalias/unset, dynamic commands, and external dispatch remain nonclaims.
+
+v0.504.0 promotes Lua to bounded same-file relation evidence. Fixed LuaRocks 3.13.0, Kong 3.9.3, and Lua 5.5.1 corpora verify 300 tree-sitter-proven direct calls plus 150 negatives. An exact `calls` edge requires a bare identifier inside a direct-root function body, one unique earlier or self-recursive local-function target in the same file, no parameter/local/assignment shadow, and stable UTF-8 byte ranges. Global, dotted, and colon dispatch, nested functions, `debug`, dynamic loading, `require` module resolution, metatables, and runtime dispatch remain nonclaims.
 
 Java depth includes explicit imports, annotations, generic direct heritage/object creation, parser-recovery callable signatures/bare calls/parameter/final-field receivers, and evidence from `build.gradle(.kts)` or module-named Gradle build scripts; duplicate qualified types, wildcard or static imports, lambda-contained construction, array/wildcard signatures, mutation/escape, shadowing, anonymous interfaces, and external classpaths remain conservatively omitted.
 

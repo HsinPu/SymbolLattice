@@ -6,7 +6,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const LUA_ASSET_MANIFEST_SHA256 =
-  "29cf0d0c82cdc532da04d3ea0ce1d5a385cc71820d75d194b4d4576842ffd9d0";
+  "7bd06e26f9da2b60cf1fdbd8abfe58e4bf09f5fc37e120fd92b044e09e8c98dc";
 
 const MANIFEST_FILENAME = "asset-manifest.json";
 const MANIFEST_SCHEMA = "symbol-lattice-lua-asset-manifest-v1";

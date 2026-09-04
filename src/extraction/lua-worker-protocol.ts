@@ -1,4 +1,4 @@
-export const LUA_WORKER_RESPONSE_SCHEMA = "symbol-lattice-lua-worker-response-v1" as const;
+export const LUA_WORKER_RESPONSE_SCHEMA = "symbol-lattice-lua-worker-response-v2" as const;
 export const LUA_GRAMMAR_SHA256 =
   "609f25f03773c8eaa3e94c504f360e770c49009ba9383b65be581b2d51774b71" as const;
 export const LUA_MAXIMUM_SOURCE_BYTES = 1_048_576 as const;
@@ -33,6 +33,18 @@ export interface LuaWorkerDeclaration {
   readonly declarationEndByte: number;
   readonly nameStartByte: number;
   readonly nameEndByte: number;
+  readonly bodyStartByte: number;
+  readonly bodyEndByte: number;
+}
+
+export interface LuaWorkerCall {
+  readonly sourceDeclarationIndex: number;
+  readonly targetDeclarationIndex: number;
+  readonly name: string;
+  readonly startByte: number;
+  readonly endByte: number;
+  readonly candidateDeclarationIndexes: readonly number[];
+  readonly parserProvenance: "tree-sitter-lua-v0.5.0.function_call.bare-identifier";
 }
 
 export interface LuaWorkerMetrics {
@@ -53,6 +65,7 @@ export interface LuaWorkerResponse {
     | { readonly kind: "file-only"; readonly code: LuaFileFailureCode };
   readonly metrics: LuaWorkerMetrics;
   readonly declarations: readonly LuaWorkerDeclaration[];
+  readonly calls: readonly LuaWorkerCall[];
 }
 
 export interface LuaWorkerResponseContext {
@@ -72,7 +85,8 @@ const RESPONSE_KEYS = new Set([
   "grammarSha256",
   "decision",
   "metrics",
-  "declarations"
+  "declarations",
+  "calls"
 ]);
 const DECISION_EMIT_KEYS = new Set(["kind"]);
 const DECISION_FILE_ONLY_KEYS = new Set(["kind", "code"]);
@@ -89,7 +103,18 @@ const DECLARATION_KEYS = new Set([
   "declarationStartByte",
   "declarationEndByte",
   "nameStartByte",
-  "nameEndByte"
+  "nameEndByte",
+  "bodyStartByte",
+  "bodyEndByte"
+]);
+const CALL_KEYS = new Set([
+  "sourceDeclarationIndex",
+  "targetDeclarationIndex",
+  "name",
+  "startByte",
+  "endByte",
+  "candidateDeclarationIndexes",
+  "parserProvenance"
 ]);
 const FORMS = new Set<LuaFunctionForm>([
   "plain-function",
@@ -136,8 +161,11 @@ export function validateLuaWorkerResponse(
   if (!Array.isArray(value.declarations)) {
     throw invalid("Lua worker declarations must be an array.");
   }
-  if (decision.kind === "file-only" && value.declarations.length !== 0) {
-    throw invalid("Lua worker file-only response must not contain partial declarations.");
+  if (!Array.isArray(value.calls)) {
+    throw invalid("Lua worker calls must be an array.");
+  }
+  if (decision.kind === "file-only" && (value.declarations.length !== 0 || value.calls.length !== 0)) {
+    throw invalid("Lua worker file-only response must not contain partial facts.");
   }
   if (value.declarations.length > LUA_MAXIMUM_FUNCTIONS) {
     throw invalid("Lua worker response exceeded the declaration limit.");
@@ -150,7 +178,7 @@ export function validateLuaWorkerResponse(
     if (!isRecord(candidate) || !hasExactKeys(candidate, DECLARATION_KEYS)) {
       throw invalid(`Lua worker declaration ${index} has an invalid shape.`);
     }
-    const { name, form, declarationStartByte, declarationEndByte, nameStartByte, nameEndByte } = candidate;
+    const { name, form, declarationStartByte, declarationEndByte, nameStartByte, nameEndByte, bodyStartByte, bodyEndByte } = candidate;
     if (
       typeof name !== "string" ||
       name.length === 0 ||
@@ -162,12 +190,17 @@ export function validateLuaWorkerResponse(
       !validOffset(declarationEndByte) ||
       !validOffset(nameStartByte) ||
       !validOffset(nameEndByte) ||
+      !validOffset(bodyStartByte) ||
+      !validOffset(bodyEndByte) ||
       declarationStartByte < previousStart ||
       declarationStartByte < previousEnd ||
       declarationStartByte >= declarationEndByte ||
       nameStartByte < declarationStartByte ||
       nameStartByte >= nameEndByte ||
       nameEndByte > declarationEndByte ||
+      bodyStartByte < declarationStartByte ||
+      bodyStartByte > bodyEndByte ||
+      bodyEndByte > declarationEndByte ||
       declarationEndByte > context.sourceBytes.byteLength
     ) {
       throw invalid(`Lua worker declaration ${index} has invalid or unordered boundaries.`);
@@ -188,13 +221,49 @@ export function validateLuaWorkerResponse(
       declarationStartByte,
       declarationEndByte,
       nameStartByte,
-      nameEndByte
+      nameEndByte,
+      bodyStartByte,
+      bodyEndByte
     });
     previousStart = declarationStartByte;
     previousEnd = declarationEndByte;
   }
   if (metrics.namedFunctions < declarations.length) {
     throw invalid("Lua worker metrics undercount named declarations.");
+  }
+  const calls: LuaWorkerCall[] = [];
+  let previousCallKey = "";
+  for (const [index, candidate] of value.calls.entries()) {
+    if (!isRecord(candidate) || !hasExactKeys(candidate, CALL_KEYS)) {
+      throw invalid(`Lua worker call ${index} has an invalid shape.`);
+    }
+    const { sourceDeclarationIndex, targetDeclarationIndex, name, startByte, endByte, candidateDeclarationIndexes, parserProvenance } = candidate;
+    const source = declarations[sourceDeclarationIndex as number];
+    const target = declarations[targetDeclarationIndex as number];
+    if (
+      !validOffset(sourceDeclarationIndex) ||
+      !validOffset(targetDeclarationIndex) ||
+      typeof name !== "string" ||
+      !validOffset(startByte) ||
+      !validOffset(endByte) ||
+      !Array.isArray(candidateDeclarationIndexes) ||
+      candidateDeclarationIndexes.length !== 1 ||
+      candidateDeclarationIndexes[0] !== targetDeclarationIndex ||
+      parserProvenance !== "tree-sitter-lua-v0.5.0.function_call.bare-identifier" ||
+      source === undefined ||
+      target === undefined ||
+      target.name !== name ||
+      startByte < source.bodyStartByte ||
+      startByte >= endByte ||
+      endByte > source.bodyEndByte ||
+      decodeSlice(context.sourceBytes, startByte, endByte) !== name
+    ) {
+      throw invalid(`Lua worker call ${index} has invalid identity or boundaries.`);
+    }
+    const key = `${String(sourceDeclarationIndex).padStart(8, "0")}:${String(startByte).padStart(12, "0")}`;
+    if (key <= previousCallKey) throw invalid(`Lua worker call ${index} is duplicated or unordered.`);
+    previousCallKey = key;
+    calls.push({ sourceDeclarationIndex, targetDeclarationIndex, name, startByte, endByte, candidateDeclarationIndexes: [targetDeclarationIndex], parserProvenance });
   }
   return {
     schema: LUA_WORKER_RESPONSE_SCHEMA,
@@ -203,8 +272,17 @@ export function validateLuaWorkerResponse(
     grammarSha256: LUA_GRAMMAR_SHA256,
     decision,
     metrics,
-    declarations
+    declarations,
+    calls
   };
+}
+
+function decodeSlice(bytes: Uint8Array, start: number, end: number): string {
+  try {
+    return decoder.decode(bytes.subarray(start, end));
+  } catch {
+    return "";
+  }
 }
 
 function validateDecision(value: unknown): LuaWorkerResponse["decision"] {

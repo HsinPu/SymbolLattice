@@ -40,7 +40,9 @@ function declaration(
     declarationStartByte,
     declarationEndByte,
     nameStartByte,
-    nameEndByte: nameStartByte + nameBytes.byteLength
+    nameEndByte: nameStartByte + nameBytes.byteLength,
+    bodyStartByte: declarationStartByte,
+    bodyEndByte: declarationEndByte
   };
 }
 
@@ -58,7 +60,8 @@ function response(sourceBytes: Uint8Array, declarations: readonly LuaWorkerDecla
       namedFunctions: declarations.length,
       maxDepth: 3
     },
-    declarations
+    declarations,
+    calls: []
   };
 }
 

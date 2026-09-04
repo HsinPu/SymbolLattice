@@ -55,7 +55,7 @@ describe("Lua structural v1.2 application composition", () => {
             const name = "pkg.next";
             const nameStartByte = new TextEncoder().encode(sourceText.slice(0, sourceText.indexOf(name))).byteLength;
             return {
-              schema: "symbol-lattice-lua-worker-response-v1",
+              schema: "symbol-lattice-lua-worker-response-v2",
               requestId: input.requestId,
               fileSha256: input.fileSha256,
               grammarSha256: LUA_GRAMMAR_SHA256,
@@ -73,8 +73,11 @@ describe("Lua structural v1.2 application composition", () => {
                 declarationStartByte: 0,
                 declarationEndByte: input.sourceBytes.byteLength - 1,
                 nameStartByte,
-                nameEndByte: nameStartByte + name.length
-              }]
+                nameEndByte: nameStartByte + name.length,
+                bodyStartByte: 0,
+                bodyEndByte: input.sourceBytes.byteLength - 1
+              }],
+              calls: []
             };
           },
           terminate

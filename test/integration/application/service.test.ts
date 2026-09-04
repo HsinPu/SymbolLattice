@@ -22557,11 +22557,13 @@ describe("SymbolLatticeService", () => {
                 declarationStartByte: encoder.encode(sourceText.slice(0, declarationStart)).byteLength,
                 declarationEndByte: encoder.encode(sourceText.slice(0, declarationEnd)).byteLength,
                 nameStartByte: encoder.encode(sourceText.slice(0, nameStart)).byteLength,
-                nameEndByte: encoder.encode(sourceText.slice(0, nameStart + name.length)).byteLength
+                nameEndByte: encoder.encode(sourceText.slice(0, nameStart + name.length)).byteLength,
+                bodyStartByte: encoder.encode(sourceText.slice(0, declarationStart)).byteLength,
+                bodyEndByte: encoder.encode(sourceText.slice(0, declarationEnd)).byteLength
               };
             });
             return {
-              schema: "symbol-lattice-lua-worker-response-v1",
+              schema: "symbol-lattice-lua-worker-response-v2",
               requestId: input.requestId,
               fileSha256: input.fileSha256,
               grammarSha256: LUA_GRAMMAR_SHA256,
@@ -22573,7 +22575,8 @@ describe("SymbolLatticeService", () => {
                 namedFunctions: declarations.length,
                 maxDepth: 2
               },
-              declarations
+              declarations,
+              calls: []
             };
           },
           async terminate() {}

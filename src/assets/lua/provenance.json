@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "symbol-lattice-lua-parser-provenance-v1",
+  "schemaVersion": "symbol-lattice-lua-parser-provenance-v2",
   "contract": {
     "id": "SL-LUA-STRUCTURAL-v1.2",
     "sha256": "09fe77359e177e99d8b06c769834857b79bfbefa19717a36f6fde92db965c6e6"
@@ -64,5 +64,20 @@
     "networkCallsInsideWorker": 0,
     "sourceFailurePolicy": "file-only-fresh-worker-recovery",
     "packagingFailurePolicy": "abort-generation-no-fallback"
+  },
+  "relationContract": {
+    "id": "SL-LUA-RELATION-v2",
+    "workerSchema": "symbol-lattice-lua-worker-response-v2",
+    "parserProvenance": "tree-sitter-lua-v0.5.0.function_call.bare-identifier",
+    "exactBoundary": "direct-root caller to one unique earlier or self-recursive local function through a bare identifier",
+    "failClosed": [
+      "global function target",
+      "dotted or colon dispatch",
+      "duplicate target",
+      "parameter, local, or assignment shadow",
+      "nested function or anonymous callback",
+      "debug table access",
+      "load, loadfile, dofile, or setfenv"
+    ]
   }
 }

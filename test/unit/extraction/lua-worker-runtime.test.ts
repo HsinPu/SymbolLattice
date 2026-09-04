@@ -14,7 +14,7 @@ const encoder = new TextEncoder();
 
 function successfulResponse(requestId: string, sourceBytes: Uint8Array) {
   return {
-    schema: "symbol-lattice-lua-worker-response-v1",
+    schema: "symbol-lattice-lua-worker-response-v2",
     requestId,
     fileSha256: createHash("sha256").update(sourceBytes).digest("hex"),
     grammarSha256: LUA_GRAMMAR_SHA256,
@@ -26,7 +26,8 @@ function successfulResponse(requestId: string, sourceBytes: Uint8Array) {
       namedFunctions: 0,
       maxDepth: 1
     },
-    declarations: []
+    declarations: [],
+    calls: []
   };
 }
 
