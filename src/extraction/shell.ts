@@ -221,6 +221,7 @@ export function extractShellFileFacts(
   const byteBoundaries = utf8BoundaryMap(input.sourceText);
   const symbols: SymbolNode[] = [fileNode];
   const edges: GraphEdge[] = [];
+  const functionSymbols: SymbolNode[] = [];
   const declarationOrdinals = new Map<string, number>();
 
   for (const functionFact of parsed.functions) {
@@ -249,6 +250,7 @@ export function extractShellFileFacts(
       declarationOrdinal
     };
     symbols.push(symbol);
+    functionSymbols.push(symbol);
     edges.push({
       id: createEdgeId({
         sourceId: fileNode.id,
@@ -270,6 +272,42 @@ export function extractShellFileFacts(
         ruleId: "language.shell.function.direct-top-level",
         stage: "syntax",
         candidateSymbolIds: [symbol.id]
+      }
+    });
+  }
+
+  for (const call of parsed.calls) {
+    const source = functionSymbols[call.sourceFunctionIndex];
+    const target = functionSymbols[call.targetFunctionIndex];
+    if (source === undefined || target === undefined) {
+      throw new Error("Validated Shell call indexes do not match extracted function symbols.");
+    }
+    const range = rangeFor(
+      lineStarts,
+      utf16OffsetFor(byteBoundaries, call.start),
+      utf16OffsetFor(byteBoundaries, call.end)
+    );
+    edges.push({
+      id: createEdgeId({
+        sourceId: source.id,
+        targetId: target.id,
+        kind: "calls",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: call.name
+      }),
+      sourceId: source.id,
+      targetId: target.id,
+      kind: "calls",
+      filePath: input.filePath,
+      range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: call.name,
+      evidence: {
+        ruleId: "language.shell.call.direct-top-level-function.singleton-parser-proof",
+        stage: "syntax",
+        candidateSymbolIds: [target.id]
       }
     });
   }

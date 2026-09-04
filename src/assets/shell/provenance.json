@@ -1,17 +1,17 @@
 {
-  "schemaVersion": "symbol-lattice-shell-parser-provenance-v2",
+  "schemaVersion": "symbol-lattice-shell-parser-provenance-v3",
   "asset": {
     "path": "mvdan-sh-v3.13.1-tinygo-v0.41.1.wasm",
-    "bytes": 319617,
-    "sha256": "e2133afeda7a69abd8af28d64138f5f7fff7dc42e836b382e80b0ffb9cadcf45",
-    "abiVersion": 1,
+    "bytes": 328085,
+    "sha256": "bd5e39ab438a2b99e68f560c28eab899de3502dee794eb2d9859a274b3854915",
+    "abiVersion": 2,
     "imports": [],
     "nativeAbi": false,
     "networkRequiredAtRuntime": false
   },
   "product": {
     "package": "@hsinpu/symbollattice",
-    "version": "0.432.0",
+    "version": "0.503.0",
     "distributionState": "product-runtime",
     "runtimeArchitecture": "synchronous-in-process"
   },
@@ -26,7 +26,7 @@
       "goModSum": "h1:lXJ8SexMvEVcHCoDvAGLZgFJ9Wsm2sulmoNEXGhYZD0="
     },
     "adapter": {
-      "main.go": "111471306178d5deee4b4cd1318505504c99c2203ffde50b64863d0ac4b538a7",
+      "main.go": "e8a639f1cd3eb063bc22c9f92a362fa3a4c6bbcd4c62fc923fd3803a2ca3b112",
       "go.mod": "571ba9785a7bf72318db5456747ef9a90dc9cdcf0e3a230ca8145542551dd7a1",
       "go.sum": "4f8dae710f8ba10a64cf141ef7ed11664d1eaa49257e76383f0c556812cd7f3f",
       "target.json": "092b63575064a94b09316f926d92a6f07594ed44241eb028102485d73f713f1d"
@@ -34,24 +34,24 @@
   },
   "toolchain": {
     "go": {
-      "version": "go1.25.13 windows/amd64",
-      "archiveSha256": "54a6bbffada82938ac4ae66e354b2e9c04ebdceff96f8d0455406c723b5ed1fc"
+      "version": "go1.26.5 windows/amd64",
+      "archiveSha256": "97e6b2a833b6d89f9ff17d25419ac0a7e3b482a044e9ab18cdef834bd834fd38"
     },
     "tinygo": {
-      "version": "tinygo 0.41.1 windows/amd64 using go1.25.13 and LLVM 20.1.1",
+      "version": "tinygo 0.41.1 windows/amd64 using go1.26.5 and LLVM 20.1.1",
       "tagCommit": "a4f9c9d1b6703211d20dca57d92c42afa44493cd",
       "archiveSha256": "56b8ccf2c705b6a5da14b319ecffc73db2850cd5d09681d65022e604311276b5"
     },
     "binaryen": {
-      "version": "wasm-opt version 132",
-      "commit": "79dfe6b412a3c22bfdb190ed6a4d79adf734db5d",
-      "archiveSha256": "2089428ec98c899b45ee5d00636ddd6e2da8636cc473ef50b165cc25793ef7cb",
-      "wasmOptExeSha256": "3d6f77c666cd540f2defb59c1d7dd6ed19090b1d72c239efeb960847077c9976"
+      "version": "wasm-opt version 131",
+      "tag": "version_131",
+      "archiveSha256": "2f4edac1703a2f695254d6ff52ede03481e67db1f094915763d863158c17d9bc",
+      "wasmOptExeSha256": "a3e857e565f18773e24cb3d81d00baa70cee9be24efe775e1960565fea5e65b3"
     },
     "containerUsed": false
   },
   "build": {
-    "command": "tinygo build -o OUTPUT -target ./target.json --no-debug -panic=trap -scheduler=none -gc=leaking -opt=z .",
+    "command": "GOFLAGS=-buildvcs=false tinygo build -no-debug -opt z -target target.json -o OUTPUT .",
     "target": "wasm-unknown",
     "initialMemoryBytes": 8388608,
     "maximumMemoryBytes": 67108864,
@@ -59,14 +59,14 @@
     "independentSourcePath": true,
     "independentCaches": true,
     "buildA": {
-      "retainedPath": "artifacts/build-a.wasm",
-      "bytes": 319617,
-      "sha256": "e2133afeda7a69abd8af28d64138f5f7fff7dc42e836b382e80b0ffb9cadcf45"
+      "retainedPath": "tooling/shell-v0.503.0/mvdan-sh-v3.13.1-tinygo-v0.41.1-abi2.wasm",
+      "bytes": 328085,
+      "sha256": "bd5e39ab438a2b99e68f560c28eab899de3502dee794eb2d9859a274b3854915"
     },
     "buildB": {
-      "retainedPath": "artifacts/build-b.wasm",
-      "bytes": 319617,
-      "sha256": "e2133afeda7a69abd8af28d64138f5f7fff7dc42e836b382e80b0ffb9cadcf45"
+      "retainedPath": "tooling/shell-v0.503.0/mvdan-sh-v3.13.1-tinygo-v0.41.1-abi2-b.wasm",
+      "bytes": 328085,
+      "sha256": "bd5e39ab438a2b99e68f560c28eab899de3502dee794eb2d9859a274b3854915"
     },
     "byteIdentical": true
   },
@@ -87,6 +87,22 @@
     "commonjs": "pass",
     "structuralCasesPassed": 11,
     "structuralFailures": 0
+  },
+  "relationContract": {
+    "responseVersion": "shell-body-facts-v2",
+    "parserProvenance": "mvdan.cc/sh/v3@v3.13.1.CallExpr.literal-command",
+    "exactBoundary": "one literal command word inside one direct top-level function body and one unique direct top-level target function",
+    "failClosed": [
+      "duplicate target function",
+      "nested function declaration",
+      "command substitution",
+      "process substitution",
+      "eval",
+      "source or dot command",
+      "alias or unalias",
+      "unset",
+      "dynamic command word"
+    ]
   },
   "contractRepair": {
     "supersededFeasibilityContract": "SL-SHELL-STRUCTURAL-v1.2.1",

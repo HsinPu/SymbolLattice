@@ -25,7 +25,7 @@ const (
 )
 
 const (
-	abiVersionValue  = 1
+	abiVersionValue  = 2
 	maxSourceBytes   = 65_536
 	maxPhysicalLines = 4_096
 	maxRootFunctions = 512
@@ -39,11 +39,24 @@ type functionFact struct {
 	DeclEnd   uint32 `json:"declEnd"`
 	NameStart uint32 `json:"nameStart"`
 	NameEnd   uint32 `json:"nameEnd"`
+	BodyStart uint32 `json:"bodyStart"`
+	BodyEnd   uint32 `json:"bodyEnd"`
+}
+
+type callFact struct {
+	SourceFunctionIndex uint32   `json:"sourceFunctionIndex"`
+	TargetFunctionIndex uint32   `json:"targetFunctionIndex"`
+	Name                string   `json:"name"`
+	Start               uint32   `json:"start"`
+	End                 uint32   `json:"end"`
+	CandidateIndexes    []uint32 `json:"candidateFunctionIndexes"`
+	ParserProvenance    string   `json:"parserProvenance"`
 }
 
 type response struct {
 	Code      errorCode      `json:"code"`
 	Functions []functionFact `json:"functions"`
+	Calls     []callFact     `json:"calls"`
 }
 
 var (
@@ -74,23 +87,23 @@ func resultSize() uint32 {
 //export process
 func process(size uint32, dialect uint32) *byte {
 	if uint64(size) > uint64(len(inputBuffer)) {
-		return encodeResponse(codeInternal, nil)
+		return encodeResponse(codeInternal, nil, nil)
 	}
 	source := inputBuffer[:int(size):int(size)]
 	if dialect != 1 && dialect != 2 {
-		return encodeResponse(codeInvalidDialect, nil)
+		return encodeResponse(codeInvalidDialect, nil, nil)
 	}
 	if len(source) > maxSourceBytes {
-		return encodeResponse(codeSourceLimit, nil)
+		return encodeResponse(codeSourceLimit, nil, nil)
 	}
 	if !utf8.Valid(source) {
-		return encodeResponse(codeInvalidUTF8, nil)
+		return encodeResponse(codeInvalidUTF8, nil, nil)
 	}
 	if bytes.IndexByte(source, 0) >= 0 {
-		return encodeResponse(codeNUL, nil)
+		return encodeResponse(codeNUL, nil, nil)
 	}
 	if physicalLineCount(source) > maxPhysicalLines {
-		return encodeResponse(codeLineLimit, nil)
+		return encodeResponse(codeLineLimit, nil, nil)
 	}
 
 	variant := syntax.LangPOSIX
@@ -101,10 +114,10 @@ func process(size uint32, dialect uint32) *byte {
 	// this ABI: one whole-file parse either succeeds or returns codeParseError.
 	file, err := syntax.NewParser(syntax.Variant(variant)).Parse(bytes.NewReader(source), "")
 	if err != nil {
-		return encodeResponse(codeParseError, nil)
+		return encodeResponse(codeParseError, nil, nil)
 	}
 	if exceedsNestingLimit(file) {
-		return encodeResponse(codeNestingLimit, nil)
+		return encodeResponse(codeNestingLimit, nil, nil)
 	}
 
 	functions := make([]functionFact, 0)
@@ -114,7 +127,7 @@ func process(size uint32, dialect uint32) *byte {
 			continue
 		}
 		if decl.Name == nil || len(decl.Names) != 0 || (!decl.RsrvWord && !decl.Parens) {
-			return encodeResponse(codeUnexpectedAST, nil)
+			return encodeResponse(codeUnexpectedAST, nil, nil)
 		}
 		form := "posix-parens"
 		if decl.RsrvWord && decl.Parens {
@@ -129,12 +142,105 @@ func process(size uint32, dialect uint32) *byte {
 			DeclEnd:   uint32(decl.End().Offset()),
 			NameStart: uint32(decl.Name.Pos().Offset()),
 			NameEnd:   uint32(decl.Name.End().Offset()),
+			BodyStart: uint32(decl.Body.Pos().Offset()),
+			BodyEnd:   uint32(decl.Body.End().Offset()),
 		})
 		if len(functions) > maxRootFunctions {
-			return encodeResponse(codeFunctionLimit, nil)
+			return encodeResponse(codeFunctionLimit, nil, nil)
 		}
 	}
-	return encodeResponse(codeOK, functions)
+	calls, safe := directFunctionCalls(file, functions, source)
+	if !safe {
+		calls = nil
+	}
+	return encodeResponse(codeOK, functions, calls)
+}
+
+func directFunctionCalls(file *syntax.File, functions []functionFact, source []byte) ([]callFact, bool) {
+	indexes := make(map[string][]uint32)
+	for index, function := range functions {
+		indexes[function.Name] = append(indexes[function.Name], uint32(index))
+	}
+	safe := true
+	syntax.Walk(file, func(node syntax.Node) bool {
+		if node == nil || !safe {
+			return safe
+		}
+		if declaration, ok := node.(*syntax.FuncDecl); ok {
+			isRoot := false
+			for _, statement := range file.Stmts {
+				if statement.Cmd == declaration {
+					isRoot = true
+					break
+				}
+			}
+			if !isRoot {
+				safe = false
+				return false
+			}
+		}
+		if call, ok := node.(*syntax.CallExpr); ok && len(call.Args) > 0 {
+			name := call.Args[0].Lit()
+			if name == "eval" || name == "source" || name == "." || name == "alias" || name == "unalias" || name == "unset" {
+				safe = false
+				return false
+			}
+		}
+		return true
+	})
+	if !safe {
+		return nil, false
+	}
+	calls := make([]callFact, 0)
+	functionIndex := uint32(0)
+	for _, statement := range file.Stmts {
+		declaration, ok := statement.Cmd.(*syntax.FuncDecl)
+		if !ok {
+			continue
+		}
+		sourceIndex := functionIndex
+		functionIndex++
+		syntax.Walk(declaration.Body, func(node syntax.Node) bool {
+			if node == nil {
+				return true
+			}
+			if _, nested := node.(*syntax.FuncDecl); nested {
+				return false
+			}
+			switch node.(type) {
+			case *syntax.CmdSubst, *syntax.ProcSubst:
+				return false
+			}
+			call, ok := node.(*syntax.CallExpr)
+			if !ok || len(call.Args) == 0 || len(call.Args[0].Parts) != 1 {
+				return true
+			}
+			literal, ok := call.Args[0].Parts[0].(*syntax.Lit)
+			if !ok {
+				return true
+			}
+			start := literal.Pos().Offset()
+			end := literal.End().Offset()
+			if end < start || end > uint(len(source)) || !bytes.Equal(source[int(start):int(end)], []byte(literal.Value)) {
+				return true
+			}
+			candidates := indexes[literal.Value]
+			if len(candidates) != 1 {
+				return true
+			}
+			calls = append(calls, callFact{
+				SourceFunctionIndex: uint32(sourceIndex),
+				TargetFunctionIndex: candidates[0],
+				Name:                literal.Value,
+				Start:               uint32(start),
+				End:                 uint32(end),
+				CandidateIndexes:    []uint32{candidates[0]},
+				ParserProvenance:    "mvdan.cc/sh/v3@v3.13.1.CallExpr.literal-command",
+			})
+			return true
+		})
+	}
+	return calls, true
 }
 
 func physicalLineCount(source []byte) int {
@@ -196,13 +302,16 @@ func isNestingNode(node syntax.Node) bool {
 	}
 }
 
-func encodeResponse(code errorCode, functions []functionFact) *byte {
+func encodeResponse(code errorCode, functions []functionFact, calls []callFact) *byte {
 	if functions == nil {
 		functions = make([]functionFact, 0)
 	}
-	encoded, err := json.Marshal(response{Code: code, Functions: functions})
+	if calls == nil {
+		calls = make([]callFact, 0)
+	}
+	encoded, err := json.Marshal(response{Code: code, Functions: functions, Calls: calls})
 	if err != nil {
-		encoded = []byte(`{"code":10,"functions":[]}`)
+		encoded = []byte(`{"code":10,"functions":[],"calls":[]}`)
 	}
 	resultBuffer = encoded
 	if len(resultBuffer) == 0 {

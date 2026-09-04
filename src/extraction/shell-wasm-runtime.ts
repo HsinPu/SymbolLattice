@@ -3,9 +3,9 @@ import { readFileSync } from "node:fs";
 
 export const SHELL_WASM_ASSET_FILENAME = "mvdan-sh-v3.13.1-tinygo-v0.41.1.wasm" as const;
 export const SHELL_WASM_SHA256 =
-  "e2133afeda7a69abd8af28d64138f5f7fff7dc42e836b382e80b0ffb9cadcf45" as const;
-export const SHELL_WASM_BYTE_LENGTH = 319_617 as const;
-export const SHELL_WASM_ABI_VERSION = 1 as const;
+  "bd5e39ab438a2b99e68f560c28eab899de3502dee794eb2d9859a274b3854915" as const;
+export const SHELL_WASM_BYTE_LENGTH = 328_085 as const;
+export const SHELL_WASM_ABI_VERSION = 2 as const;
 
 export type ShellDialect = "posix" | "bash";
 export type ShellFunctionForm = "posix-parens" | "bash-function" | "bash-function-parens";
@@ -18,10 +18,22 @@ export interface ShellParserFunction {
   readonly declEnd: number;
   readonly nameStart: number;
   readonly nameEnd: number;
+  readonly bodyStart: number;
+  readonly bodyEnd: number;
+}
+
+export interface ShellParserCall {
+  readonly sourceFunctionIndex: number;
+  readonly targetFunctionIndex: number;
+  readonly name: string;
+  readonly start: number;
+  readonly end: number;
+  readonly candidateFunctionIndexes: readonly number[];
+  readonly parserProvenance: "mvdan.cc/sh/v3@v3.13.1.CallExpr.literal-command";
 }
 
 export type ShellParserResult =
-  | { readonly ok: true; readonly functions: readonly ShellParserFunction[] }
+  | { readonly ok: true; readonly functions: readonly ShellParserFunction[]; readonly calls: readonly ShellParserCall[] }
   | { readonly ok: false; readonly code: ShellParserErrorCode };
 
 export type ShellParser = (
@@ -128,9 +140,20 @@ const FUNCTION_RESPONSE_KEYS = new Set([
   "declStart",
   "declEnd",
   "nameStart",
-  "nameEnd"
+  "nameEnd",
+  "bodyStart",
+  "bodyEnd"
 ]);
-const RESPONSE_KEYS = new Set(["code", "functions"]);
+const CALL_RESPONSE_KEYS = new Set([
+  "sourceFunctionIndex",
+  "targetFunctionIndex",
+  "name",
+  "start",
+  "end",
+  "candidateFunctionIndexes",
+  "parserProvenance"
+]);
+const RESPONSE_KEYS = new Set(["code", "functions", "calls"]);
 
 export function createShellWasmRuntime(
   options: ShellWasmRuntimeOptions = {}
@@ -317,7 +340,7 @@ function validateExports(exports: Readonly<Record<string, unknown>>): ShellWasmE
   ) {
     throw new ShellParserPackagingError(
       "abi-invalid",
-      "Shell parser WASM exports do not match ABI 1"
+      "Shell parser WASM exports do not match the required ABI"
     );
   }
   return candidate as ShellWasmExports;
@@ -353,17 +376,18 @@ function validateResponse(
     !isRecord(value) ||
     !hasExactKeys(value, RESPONSE_KEYS) ||
     !Number.isInteger(value.code) ||
-    !Array.isArray(value.functions)
+    !Array.isArray(value.functions) ||
+    !Array.isArray(value.calls)
   ) {
-    throw invalidResponse("Shell parser response must contain exactly integer code and functions array");
+    throw invalidResponse("Shell parser response must contain exactly integer code, functions, and calls arrays");
   }
   const code = value.code as number;
   if (code < 0 || code > 10) {
     throw invalidResponse(`Shell parser returned unsupported response code ${code}`);
   }
   if (code !== 0) {
-    if (value.functions.length !== 0) {
-      throw invalidResponse("Shell parser error response unexpectedly contained functions");
+    if (value.functions.length !== 0 || value.calls.length !== 0) {
+      throw invalidResponse("Shell parser error response unexpectedly contained facts");
     }
     return { ok: false, code: code as ShellParserErrorCode };
   }
@@ -374,7 +398,7 @@ function validateResponse(
     if (!isRecord(rawFunction) || !hasExactKeys(rawFunction, FUNCTION_RESPONSE_KEYS)) {
       throw invalidResponse(`Shell parser function ${index} does not match the ABI object shape`);
     }
-    const { name, form, declStart, declEnd, nameStart, nameEnd } = rawFunction;
+    const { name, form, declStart, declEnd, nameStart, nameEnd, bodyStart, bodyEnd } = rawFunction;
     if (
       !validFunctionName(name, sourceBytes.byteLength) ||
       typeof form !== "string" ||
@@ -382,7 +406,9 @@ function validateResponse(
       !validOffset(declStart) ||
       !validOffset(declEnd) ||
       !validOffset(nameStart) ||
-      !validOffset(nameEnd)
+      !validOffset(nameEnd) ||
+      !validOffset(bodyStart) ||
+      !validOffset(bodyEnd)
     ) {
       throw invalidResponse(`Shell parser function ${index} has an invalid shape`);
     }
@@ -392,6 +418,9 @@ function validateResponse(
       nameStart < declStart ||
       nameStart >= nameEnd ||
       nameEnd > declEnd ||
+      bodyStart < declStart ||
+      bodyStart >= bodyEnd ||
+      bodyEnd > declEnd ||
       declEnd > sourceBytes.byteLength
     ) {
       throw invalidResponse(`Shell parser function ${index} has invalid or unordered boundaries`);
@@ -414,12 +443,71 @@ function validateResponse(
       declStart,
       declEnd,
       nameStart,
-      nameEnd
+      nameEnd,
+      bodyStart,
+      bodyEnd
     });
     previousEnd = declEnd;
   }
 
-  return { ok: true, functions };
+  const calls: ShellParserCall[] = [];
+  let previousCallKey = "";
+  for (const [index, rawCall] of value.calls.entries()) {
+    if (!isRecord(rawCall) || !hasExactKeys(rawCall, CALL_RESPONSE_KEYS)) {
+      throw invalidResponse(`Shell parser call ${index} does not match the ABI object shape`);
+    }
+    const {
+      sourceFunctionIndex,
+      targetFunctionIndex,
+      name,
+      start,
+      end,
+      candidateFunctionIndexes,
+      parserProvenance
+    } = rawCall;
+    if (
+      !validOffset(sourceFunctionIndex) ||
+      !validOffset(targetFunctionIndex) ||
+      typeof name !== "string" ||
+      !validOffset(start) ||
+      !validOffset(end) ||
+      !Array.isArray(candidateFunctionIndexes) ||
+      candidateFunctionIndexes.length !== 1 ||
+      candidateFunctionIndexes[0] !== targetFunctionIndex ||
+      parserProvenance !== "mvdan.cc/sh/v3@v3.13.1.CallExpr.literal-command"
+    ) {
+      throw invalidResponse(`Shell parser call ${index} has an invalid shape`);
+    }
+    const source = functions[sourceFunctionIndex];
+    const target = functions[targetFunctionIndex];
+    if (
+      source === undefined ||
+      target === undefined ||
+      target.name !== name ||
+      start < source.bodyStart ||
+      start >= end ||
+      end > source.bodyEnd ||
+      end > sourceBytes.byteLength ||
+      decoder.decode(sourceBytes.subarray(start, end)) !== name
+    ) {
+      throw invalidResponse(`Shell parser call ${index} has invalid identity or boundaries`);
+    }
+    const key = `${String(sourceFunctionIndex).padStart(10, "0")}:${String(start).padStart(10, "0")}`;
+    if (key <= previousCallKey) {
+      throw invalidResponse(`Shell parser call ${index} is duplicated or unordered`);
+    }
+    previousCallKey = key;
+    calls.push({
+      sourceFunctionIndex,
+      targetFunctionIndex,
+      name,
+      start,
+      end,
+      candidateFunctionIndexes: [targetFunctionIndex],
+      parserProvenance
+    });
+  }
+  return { ok: true, functions, calls };
 }
 
 function validOffset(value: unknown): value is number {

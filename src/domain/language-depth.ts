@@ -16,6 +16,7 @@ export type LanguageTruthKind =
   | "javascript-estree"
   | "python-stdlib-ast"
   | "sfc-compiler-api"
+  | "shell-mvdan-ast"
   | "javac-oracle"
   | "groovy-compiler-ast"
   | "source-occurrence-oracle"
@@ -40,11 +41,11 @@ const BOUNDED_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
   "go", "rust", "kotlin", "swift", "dart", "csharp", "fsharp", "ocaml", "haskell",
   "scala", "elixir", "erlang", "clojure", "nix", "nim", "zig", "cpp", "c", "php",
   "objc", "ruby", "sql", "r", "markdown", "proto", "graphql", "groovy", "javascript", "python",
-  "vue", "svelte", "astro"
+  "vue", "svelte", "astro", "shell"
 ]);
 
 const LARGE_PROJECT_STRUCTURAL_LANGUAGES = new Set<ArtifactLanguage>([
-  "html", "css", "jsp", "shell", "lua", "luau", "julia", "perl"
+  "html", "css", "jsp", "lua", "luau", "julia", "perl"
 ]);
 
 const PROJECT_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
@@ -56,7 +57,7 @@ const PROJECT_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
 ]);
 
 const SAME_FILE_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
-  "groovy", "fortran", "luau", "pascal", "r", "julia", "solidity", "cfml", "vbnet"
+  "groovy", "fortran", "luau", "pascal", "r", "julia", "solidity", "cfml", "vbnet", "shell"
 ]);
 
 const FRAMEWORK_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
@@ -64,7 +65,7 @@ const FRAMEWORK_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
 ]);
 
 const STRUCTURAL_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
-  "lua", "html", "css", "shell"
+  "lua", "html", "css"
 ]);
 
 const LARGE_PROJECT_VALIDATED_LANGUAGES = new Set<ArtifactLanguage>([
@@ -113,7 +114,7 @@ const EVIDENCE_VERSION: Readonly<Partial<Record<ArtifactLanguage, string>>> = Ob
   html: "0.425.0",
   jsp: "0.428.0",
   css: "0.426.0",
-  shell: "0.485.0"
+  shell: "0.503.0"
 });
 
 const LANGUAGE_LIMITATIONS: Readonly<Partial<Record<ArtifactLanguage, readonly string[]>>> =
@@ -126,7 +127,7 @@ const LANGUAGE_LIMITATIONS: Readonly<Partial<Record<ArtifactLanguage, readonly s
     astro: ["direct PascalCase markup tags resolve only through one unmutated explicit relative default component import in parse-clean frontmatter; expression components, framework hydration, slots, aliases, content collections, and runtime rendering remain nonclaims"],
     java: ["external classpath, compiler-only inference, and wider inherited dispatch remain nonclaims"],
     groovy: ["compiler-confirmed unique top-level def self-recursion and all 14 current inter-function candidates are exact; division, non-assignment slashy forms, closures, delegates, metaclass, class methods, and wider dynamic dispatch remain nonclaims"],
-    shell: ["function body calls require parser response ABI v2"],
+    shell: ["300-positive/150-negative mvdan ABI v2 truth covers unique same-file direct function calls; eval, source, alias, unset, nested functions, substitutions, dynamic commands, external dispatch, and cross-file loading remain nonclaims"],
     lua: ["product indexing retains parser-proven function structure without general call edges"],
     html: ["HTML relations are structural resources and containment, not runtime navigation"],
     css: ["CSS relations are structural selectors and containment"],
@@ -165,6 +166,7 @@ function truthKind(language: ArtifactLanguage): LanguageTruthKind {
   if (language === "javascript") return "javascript-estree";
   if (language === "python") return "python-stdlib-ast";
   if (language === "vue" || language === "svelte" || language === "astro") return "sfc-compiler-api";
+  if (language === "shell") return "shell-mvdan-ast";
   if (language === "java") return "javac-oracle";
   if (language === "groovy") return "groovy-compiler-ast";
   if (BOUNDED_RELATION_LANGUAGES.has(language)) return "source-occurrence-oracle";

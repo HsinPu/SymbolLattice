@@ -13,7 +13,7 @@ import {
 const COMMIT = "0123456789abcdef0123456789abcdef01234567";
 const VERSION = "0.421.0";
 const OFFICIAL_REPOSITORY = "https://github.com/HsinPu/SymbolLattice.git";
-const SHELL_ASSET_MANIFEST_SHA256 = "25b76ced19fc8154bc4d80ae32162b1da7dbe75655d50251421c31c9bc55cc0a";
+const SHELL_ASSET_MANIFEST_SHA256 = "7f3ce86cbebf22479e072a609a555bac6ba1e7187c4f5b2e83bd60ddd10b29b5";
 const LUA_ASSET_MANIFEST_SHA256 = "29cf0d0c82cdc532da04d3ea0ce1d5a385cc71820d75d194b4d4576842ffd9d0";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const shellAssetSource = join(repositoryRoot, "src", "assets", "shell");

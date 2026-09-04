@@ -31,7 +31,7 @@ function fakeInstance(
     exports: {
       memory,
       _initialize: overrides._initialize ?? (() => undefined),
-      abiVersion: overrides.abiVersion ?? (() => 1),
+      abiVersion: overrides.abiVersion ?? (() => 2),
       wasmAlloc: overrides.wasmAlloc ?? (() => 0),
       process: overrides.process ?? (() => {
         new Uint8Array(memory.buffer, resultPointer, bytes.length).set(bytes);
@@ -85,8 +85,11 @@ describe("retained mvdan Shell WASM runtime", () => {
         declStart: 8,
         declEnd: 20,
         nameStart: 8,
-        nameEnd: 11
-      }]
+        nameEnd: 11,
+        bodyStart: 14,
+        bodyEnd: 20
+      }],
+      calls: []
     });
   });
 
@@ -297,31 +300,31 @@ describe("retained mvdan Shell WASM runtime", () => {
     };
     const mismatch = createShellWasmRuntime({
       ...common,
-      instantiateModule: () => fakeInstance({ code: 0, functions: [] }, { abiVersion: () => 2 })
+      instantiateModule: () => fakeInstance({ code: 0, functions: [], calls: [] }, { abiVersion: () => 3 })
     });
     const importful = createShellWasmRuntime({
       ...common,
       moduleImports: () => [{ module: "host", name: "unexpected", kind: "function" }],
-      instantiateModule: () => fakeInstance({ code: 0, functions: [] })
+      instantiateModule: () => fakeInstance({ code: 0, functions: [], calls: [] })
     });
     const initializationTrap = createShellWasmRuntime({
       ...common,
       instantiateModule: () => fakeInstance(
-        { code: 0, functions: [] },
+        { code: 0, functions: [], calls: [] },
         { _initialize: () => { throw new nativeWebAssembly.RuntimeError("init"); } }
       )
     });
     const allocationTrap = createShellWasmRuntime({
       ...common,
       instantiateModule: () => fakeInstance(
-        { code: 0, functions: [] },
+        { code: 0, functions: [], calls: [] },
         { wasmAlloc: () => { throw new nativeWebAssembly.RuntimeError("alloc"); } }
       )
     });
     const invalidResultRange = createShellWasmRuntime({
       ...common,
       instantiateModule: () => fakeInstance(
-        { code: 0, functions: [] },
+        { code: 0, functions: [], calls: [] },
         { resultSize: () => Number.MAX_SAFE_INTEGER }
       )
     });
@@ -332,7 +335,7 @@ describe("retained mvdan Shell WASM runtime", () => {
     const trap = createShellWasmRuntime({
       ...common,
       instantiateModule: () => fakeInstance(
-        { code: 0, functions: [] },
+        { code: 0, functions: [], calls: [] },
         { process: () => { throw new nativeWebAssembly.RuntimeError("trap"); } }
       )
     });
@@ -358,11 +361,11 @@ describe("retained mvdan Shell WASM runtime", () => {
   });
 
   for (const [label, response] of [
-    ["success extra key", { code: 0, functions: [], unexpected: true }],
-    ["error extra key", { code: 6, functions: [], unexpected: true }],
+    ["success extra key", { code: 0, functions: [], calls: [], unexpected: true }],
+    ["error extra key", { code: 6, functions: [], calls: [], unexpected: true }],
     ["success missing functions", { code: 0 }],
     ["error missing functions", { code: 6 }],
-    ["missing code", { functions: [] }]
+    ["missing code", { functions: [], calls: [] }]
   ] as const) {
     it(`rejects top-level response envelope drift: ${label}`, () => {
       expect(() => runtimeForResponse(response).parse("f() { :; }\n", "posix")).toThrowError(
@@ -386,8 +389,11 @@ describe("retained mvdan Shell WASM runtime", () => {
         declEnd: 11,
         nameStart,
         nameEnd,
+        bodyStart: 4,
+        bodyEnd: 11,
         ...extras
-      }]
+      }],
+      calls: []
     });
 
     for (const response of [
@@ -409,7 +415,7 @@ describe("retained mvdan Shell WASM runtime", () => {
   it("compiles once and creates one fresh instance for every file", () => {
     const module = {} as ShellWasmCompiledModule;
     const compileModule = vi.fn(() => module);
-    const instantiateModule = vi.fn(() => fakeInstance({ code: 0, functions: [] }));
+    const instantiateModule = vi.fn(() => fakeInstance({ code: 0, functions: [], calls: [] }));
     const runtime = createShellWasmRuntime({
       readAsset: retainedBytes,
       compileModule,
@@ -417,8 +423,8 @@ describe("retained mvdan Shell WASM runtime", () => {
       instantiateModule
     });
 
-    expect(runtime.parse("a() { :; }\n", "posix")).toEqual({ ok: true, functions: [] });
-    expect(runtime.parse("b() { :; }\n", "posix")).toEqual({ ok: true, functions: [] });
+    expect(runtime.parse("a() { :; }\n", "posix")).toEqual({ ok: true, functions: [], calls: [] });
+    expect(runtime.parse("b() { :; }\n", "posix")).toEqual({ ok: true, functions: [], calls: [] });
     expect(compileModule).toHaveBeenCalledOnce();
     expect(instantiateModule).toHaveBeenCalledTimes(2);
   });

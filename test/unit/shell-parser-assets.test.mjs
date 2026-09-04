@@ -42,8 +42,8 @@ describe("Shell parser asset closure", () => {
       "sbom.cdx.json"
     ]);
     expect(result.entries.find(({ path }) => path.endsWith(".wasm"))).toMatchObject({
-      bytes: 319_617,
-      sha256: "e2133afeda7a69abd8af28d64138f5f7fff7dc42e836b382e80b0ffb9cadcf45"
+      bytes: 328_085,
+      sha256: "bd5e39ab438a2b99e68f560c28eab899de3502dee794eb2d9859a274b3854915"
     });
   });
 
@@ -123,7 +123,7 @@ describe("Shell parser asset closure", () => {
     expect(notice).not.toMatch(/raw[- ]identical/u);
   });
 
-  it("describes the distributed v0.432 product runtime and preserves spike lineage separately", async () => {
+  it("describes the distributed v0.503 product runtime and preserves spike lineage separately", async () => {
     const sbom = JSON.parse(await readFile(join(sourceDirectory, "sbom.cdx.json"), "utf8"));
     const provenance = JSON.parse(
       await readFile(join(sourceDirectory, "provenance.json"), "utf8")
@@ -133,8 +133,8 @@ describe("Shell parser asset closure", () => {
     );
 
     expect(sbom.metadata.component).toMatchObject({
-      "bom-ref": "symbollattice-shell-wasm-runtime-v0.432.0",
-      version: "0.432.0"
+      "bom-ref": "symbollattice-shell-wasm-runtime-v0.503.0",
+      version: "0.503.0"
     });
     expect(componentProperties["symbollattice:distribution-state"]).toBe("product-runtime");
     expect(provenance.runtimeEvidence).toMatchObject({
@@ -175,7 +175,7 @@ describe("Shell parser asset closure", () => {
     const expected = new Map([
       ["go.mod", "571ba9785a7bf72318db5456747ef9a90dc9cdcf0e3a230ca8145542551dd7a1"],
       ["go.sum", "4f8dae710f8ba10a64cf141ef7ed11664d1eaa49257e76383f0c556812cd7f3f"],
-      ["main.go", "111471306178d5deee4b4cd1318505504c99c2203ffde50b64863d0ac4b538a7"],
+      ["main.go", "e8a639f1cd3eb063bc22c9f92a362fa3a4c6bbcd4c62fc923fd3803a2ca3b112"],
       ["target.json", "092b63575064a94b09316f926d92a6f07594ed44241eb028102485d73f713f1d"]
     ]);
     const { createHash } = await import("node:crypto");

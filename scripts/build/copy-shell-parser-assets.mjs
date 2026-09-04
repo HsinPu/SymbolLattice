@@ -6,7 +6,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const SHELL_ASSET_MANIFEST_SHA256 =
-  "25b76ced19fc8154bc4d80ae32162b1da7dbe75655d50251421c31c9bc55cc0a";
+  "7f3ce86cbebf22479e072a609a555bac6ba1e7187c4f5b2e83bd60ddd10b29b5";
 
 const MANIFEST_FILENAME = "asset-manifest.json";
 const MANIFEST_SCHEMA = "symbol-lattice-shell-asset-manifest-v1";
