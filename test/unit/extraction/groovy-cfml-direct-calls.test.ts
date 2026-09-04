@@ -56,14 +56,21 @@ describe("Groovy and CFML direct-call soundness boundaries", () => {
     ]);
   });
 
-  it("keeps Groovy top-level def symbols without claiming a direct call", () => {
+  it("keeps Groovy top-level def symbols and links their unique direct call", () => {
     const sourceText = [
       "def groovyHelper() { 1 }",
       "def groovyEntry() { return groovyHelper() }"
     ].join("\n");
     expect(functionId("groovy", sourceText, "groovyHelper")).toBeDefined();
     expect(functionId("groovy", sourceText, "groovyEntry")).toBeDefined();
-    expect(callsFor("groovy", sourceText)).toEqual([]);
+    expect(callsFor("groovy", sourceText)).toEqual([
+      expect.objectContaining({
+        referenceName: "groovyHelper",
+        evidence: expect.objectContaining({
+          ruleId: "syntax.groovy.same-file.unique-direct-function-call.arity"
+        })
+      })
+    ]);
   });
 
   it("accepts a self-recursive call separated from a return keyword by whitespace", () => {
@@ -72,6 +79,31 @@ describe("Groovy and CFML direct-call soundness boundaries", () => {
       expect.objectContaining({
         referenceName: "recurse",
         range: { start: { line: 1, column: 29 }, end: { line: 1, column: 36 } }
+      })
+    ]);
+  });
+
+  it("links a unique top-level Groovy inter-function call with matching arity", () => {
+    const sourceText = [
+      "def helper(value) { value }",
+      "def entry() { return helper(1) }"
+    ].join("\n");
+    const sourceId = functionId("groovy", sourceText, "entry");
+    const targetId = functionId("groovy", sourceText, "helper");
+
+    expect(callsFor("groovy", sourceText)).toEqual([
+      expect.objectContaining({
+        sourceId,
+        targetId,
+        referenceName: "helper",
+        range: { start: { line: 2, column: 22 }, end: { line: 2, column: 28 } },
+        resolution: "exact",
+        confidence: 1,
+        evidence: {
+          ruleId: "syntax.groovy.same-file.unique-direct-function-call.arity",
+          stage: "syntax",
+          candidateSymbolIds: [targetId]
+        }
       })
     ]);
   });

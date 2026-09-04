@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.497.0
+目前版本：v0.498.0
 
 ## 主要能力
 
@@ -46,6 +46,8 @@ SymbolLattice 可在單次 `init` 或 `sync` 中處理多語言 repository。不
 v0.496.0 新增 repository-native 58 語言深度矩陣 Gate。它會核對 language registry、discovery、file identity、targeted test evidence、framework capability、relation depth、real-corpus 與 truth tier，並用暫存多語言 project 實際驗證58／58檔案可被掃描；矩陣明確區分 project、same-file、framework 與 structural，不把「可掃描」包裝成相同語意深度。這是內部 release evidence，不新增 CLI、MCP tool、GraphEdge kind 或公開 schema。
 
 v0.497.0 以 Groovy 5.0.3 compiler AST 驗證大型專案中的唯一頂層 `def` 自遞迴呼叫，只有 arity 相符且沒有 closure、nested block、shadow、assignment、static import 或 metaclass taint 時才建立 exact `calls`；class method、delegate、methodMissing 與一般動態 dispatch 維持 unresolved。
+
+v0.498.0 將同一 compiler-backed 契約延伸到唯一頂層 `def` 之間的 direct call；source／target declaration identity、arity與無動態污染都必須可證明。14個compiler candidates中只有1個通過產品parser admission，另外13個完整列為unsupported breadth，不宣稱已覆蓋。
 
 Java 深度包含唯一專案型別的明確 import、annotation、泛型 direct heritage／object creation、parser-recovery callable signature／bare call／parameter／final field receiver，以及 `build.gradle(.kts)` 或 module-named Gradle build script 證據；重複 qualified type、wildcard／static import、lambda 內建立、array／wildcard signature、mutation／escape、shadow、anonymous interface 與外部 classpath 仍保守省略。
 

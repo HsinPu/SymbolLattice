@@ -872,31 +872,35 @@ export function extractGroovyFileFacts(input: GroovyExtractFileFactsInput): Arti
       matches.push(candidate);
       functionsByName.set(candidate.declaration.name, matches);
     }
-    for (const candidates of functionsByName.values()) {
-      const source = candidates.length === 1 ? candidates[0] : undefined;
-      const shape = source?.declaration.functionShape;
-      if (
-        source === undefined ||
-        shape === undefined ||
-        shape.parameterNames.includes(source.declaration.name) ||
-        preamble.importTerminals.includes(source.declaration.name) ||
-        hasDirectNameAssignment(sanitized, source.declaration.name)
-      ) {
-        continue;
-      }
-      const body = sanitized.slice(shape.bodyStart, shape.bodyEnd);
+    const hasDynamicDispatchHook = [
+      "methodMissing", "propertyMissing", "invokeMethod", "getProperty", "setProperty"
+    ].some((name) => functionsByName.has(name));
+    const uniqueFunctions = new Map(
+      [...functionsByName].flatMap(([name, candidates]) =>
+        candidates.length === 1 && candidates[0]?.declaration.functionShape !== undefined
+          ? [[name, candidates[0]] as const]
+          : []
+      )
+    );
+    for (const source of declarationSymbols) {
+      const sourceShape = source.declaration.kind === "function"
+        ? source.declaration.functionShape
+        : undefined;
+      if (sourceShape === undefined) continue;
+      const body = sanitized.slice(sourceShape.bodyStart, sourceShape.bodyEnd);
       if (body.includes("{") || body.includes("}")) {
         continue;
       }
-      for (let index = shape.bodyStart; index < shape.bodyEnd; ) {
+      for (let index = sourceShape.bodyStart; index < sourceShape.bodyEnd; ) {
         const identifier = readIdentifier(sanitized, index);
         if (identifier === null) {
           index += 1;
           continue;
         }
         index = identifier.end;
+        const target = uniqueFunctions.get(identifier.name);
         if (
-          identifier.name !== source.declaration.name ||
+          target === undefined ||
           isIdentifierPart(sanitized[index - identifier.name.length - 1]) ||
           hasUnsafeDirectCallPrefix(
             previousNonWhitespace(sanitized, index - identifier.name.length)
@@ -909,31 +913,48 @@ export function extractGroovyFileFacts(input: GroovyExtractFileFactsInput): Arti
           continue;
         }
         const call = directCallArity(sanitized, openingParenthesis);
-        if (call === null || call.arity !== shape.parameterNames.length || call.end > shape.bodyEnd) {
+        const targetShape = target.declaration.functionShape;
+        const selfCall = target.symbol.id === source.symbol.id;
+        if (
+          targetShape === undefined ||
+          call === null ||
+          call.arity !== targetShape.parameterNames.length ||
+          call.end > sourceShape.bodyEnd ||
+          sourceShape.parameterNames.includes(target.declaration.name) ||
+          preamble.importTerminals.includes(target.declaration.name) ||
+          hasDirectNameAssignment(sanitized, target.declaration.name) ||
+          (!selfCall && (
+            hasDynamicDispatchHook ||
+            sanitized.slice(targetShape.bodyStart, targetShape.bodyEnd).includes("{") ||
+            sanitized.slice(targetShape.bodyStart, targetShape.bodyEnd).includes("}")
+          ))
+        ) {
           continue;
         }
         const range = rangeForSpan(lineStarts, index - identifier.name.length, identifier.end);
         edges.push({
           id: createEdgeId({
             sourceId: source.symbol.id,
-            targetId: source.symbol.id,
+            targetId: target.symbol.id,
             kind: "calls",
             line: range.start.line,
             column: range.start.column,
-            referenceName: source.declaration.name
+            referenceName: target.declaration.name
           }),
           sourceId: source.symbol.id,
-          targetId: source.symbol.id,
+          targetId: target.symbol.id,
           kind: "calls",
           filePath: input.filePath,
           range,
           resolution: "exact",
           confidence: 1,
-          referenceName: source.declaration.name,
+          referenceName: target.declaration.name,
           evidence: {
-            ruleId: "syntax.groovy.same-file.unique-direct-self-call.arity",
+            ruleId: selfCall
+              ? "syntax.groovy.same-file.unique-direct-self-call.arity"
+              : "syntax.groovy.same-file.unique-direct-function-call.arity",
             stage: "syntax",
-            candidateSymbolIds: [source.symbol.id]
+            candidateSymbolIds: [target.symbol.id]
           }
         });
       }

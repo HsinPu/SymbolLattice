@@ -75,7 +75,7 @@ const EVIDENCE_VERSION: Readonly<Partial<Record<ArtifactLanguage, string>>> = Ob
   go: "0.457.0",
   rust: "0.458.0",
   java: "0.494.0",
-  groovy: "0.497.0",
+  groovy: "0.498.0",
   lua: "0.433.0",
   luau: "0.434.0",
   objc: "0.476.0",
@@ -113,7 +113,7 @@ const LANGUAGE_LIMITATIONS: Readonly<Partial<Record<ArtifactLanguage, readonly s
   Object.freeze({
     typescript: ["parse-rejected, overload, conditional export, and runtime dispatch remain nonclaims"],
     java: ["external classpath, compiler-only inference, and wider inherited dispatch remain nonclaims"],
-    groovy: ["only compiler-confirmed unique top-level def self-recursion is exact; dynamic dispatch, closures, delegates, metaclass, and class methods remain nonclaims"],
+    groovy: ["only compiler-confirmed unique top-level def self-recursion and identity-admitted inter-function calls are exact; 13 wider compiler candidates plus dynamic dispatch, closures, delegates, metaclass, and class methods remain nonclaims"],
     shell: ["function body calls require parser response ABI v2"],
     lua: ["product indexing retains parser-proven function structure without general call edges"],
     html: ["HTML relations are structural resources and containment, not runtime navigation"],

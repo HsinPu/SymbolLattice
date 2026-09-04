@@ -16,7 +16,7 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.497.0
+Current version: v0.498.0
 
 ## Highlights
 
@@ -46,6 +46,8 @@ One `init` or `sync` can process a multi-language repository. Analysis depth var
 v0.496.0 adds a repository-native 58-language depth-matrix gate. It checks the language registry, discovery, file identity, targeted test evidence, framework capabilities, relation depth, real-corpus evidence, and truth tier, then scans a disposable multilingual project to verify all 58 files. The matrix explicitly separates project, same-file, framework, and structural evidence instead of presenting basic scanning as equal semantic depth. This is internal release evidence and adds no CLI command, MCP tool, GraphEdge kind, or public schema.
 
 v0.497.0 uses the Groovy 5.0.3 compiler AST to verify unique top-level `def` self-recursion in large projects. An exact `calls` edge is retained only when arity matches and closure, nested-block, shadow, assignment, static-import, and metaclass taint are absent; class methods, delegates, `methodMissing`, and general dynamic dispatch remain unresolved.
+
+v0.498.0 extends the same compiler-backed contract to direct calls between unique top-level `def` functions. Source and target declaration identity, arity, and absence of dynamic taint must all be proven. Only one of 14 compiler candidates passes product-parser admission; the other 13 remain explicitly reported as unsupported breadth.
 
 Java depth includes explicit imports, annotations, generic direct heritage/object creation, parser-recovery callable signatures/bare calls/parameter/final-field receivers, and evidence from `build.gradle(.kts)` or module-named Gradle build scripts; duplicate qualified types, wildcard or static imports, lambda-contained construction, array/wildcard signatures, mutation/escape, shadowing, anonymous interfaces, and external classpaths remain conservatively omitted.
 

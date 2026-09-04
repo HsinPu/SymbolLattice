@@ -62,7 +62,7 @@ describe("language depth matrix", () => {
       evidenceTier: "bounded-relation",
       relationDepth: "same-file",
       truthKind: "groovy-compiler-ast",
-      evidenceVersion: "0.497.0",
+      evidenceVersion: "0.498.0",
       largeProjectValidated: true,
       relationReleaseValidated: true
     });

@@ -12,12 +12,13 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
 
-if (args.length != 1) {
-  System.err.println('usage: GroovyOracle.groovy <root>')
+if (args.length < 1 || args.length > 2 || (args.length == 2 && !(args[1] in ['self', 'inter']))) {
+  System.err.println('usage: GroovyOracle.groovy <root> [self|inter]')
   System.exit(2)
 }
 
 def root = Path.of(args[0]).toAbsolutePath().normalize()
+def mode = args.length == 2 ? args[1] : 'self'
 def facts = []
 def rejected = []
 
@@ -51,8 +52,28 @@ Files.walk(root).withCloseable { stream ->
             declarationLine.substring(Math.max(0, method.columnNumber - 1)).startsWith('def ') &&
             methodText.count('{') == 1
         }
+        def dynamicHookNames = ['methodMissing', 'propertyMissing', 'invokeMethod', 'getProperty', 'setProperty'] as Set
+        if (mode == 'inter' && methods.any { dynamicHookNames.contains(it.name) }) return
         def uniqueByName = methods.groupBy { it.name }.findAll { name, matches -> matches.size() == 1 }
         def staticImportNames = (module.staticImports?.keySet() ?: []) as Set
+        def directImportNames = (module.imports?.collect { it.alias ?: it.type?.nameWithoutPackage } ?: []) as Set
+        def bindingAssignments = [] as Set
+        module.statementBlock?.visit(new CodeVisitorSupport() {
+          @Override
+          void visitDeclarationExpression(DeclarationExpression expression) {
+            if (expression.variableExpression != null) bindingAssignments << expression.variableExpression.name
+            super.visitDeclarationExpression(expression)
+          }
+
+          @Override
+          void visitBinaryExpression(BinaryExpression expression) {
+            if (expression.operation?.text in ['=', '+=', '-=', '*=', '/=', '%='] &&
+              expression.leftExpression instanceof VariableExpression) {
+              bindingAssignments << expression.leftExpression.name
+            }
+            super.visitBinaryExpression(expression)
+          }
+        })
         methods.each { caller ->
           def shadows = (caller.parameters*.name ?: []) as Set
           def calls = []
@@ -89,9 +110,11 @@ Files.walk(root).withCloseable { stream ->
                 call.implicitThis &&
                 name != null &&
                 arguments != null &&
-                name == caller.name &&
+                (mode == 'self' ? name == caller.name : name != caller.name) &&
                 uniqueByName.containsKey(name) &&
                 !staticImportNames.contains(name) &&
+                !directImportNames.contains(name) &&
+                !bindingAssignments.contains(name) &&
                 call.lineNumber > 0 &&
                 call.columnNumber > 0
               ) {
@@ -139,6 +162,7 @@ facts.sort { left, right ->
 
 println JsonOutput.toJson([
   schemaVersion: 1,
+  mode: mode,
   root: root.toString(),
   candidates: facts,
   rejected: rejected,
