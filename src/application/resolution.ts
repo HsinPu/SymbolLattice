@@ -4775,6 +4775,19 @@ function sameSourceRange(left: SourceRange, right: SourceRange): boolean {
     left.end.column === right.end.column;
 }
 
+function sourcePositionLessOrEqual(
+  left: SourceRange["start"],
+  right: SourceRange["start"]
+): boolean {
+  return left.line < right.line ||
+    (left.line === right.line && left.column <= right.column);
+}
+
+function sourceRangeContains(outer: SourceRange, inner: SourceRange): boolean {
+  return sourcePositionLessOrEqual(outer.start, inner.start) &&
+    sourcePositionLessOrEqual(inner.end, outer.end);
+}
+
 function projectAdaProjectFacts(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
   readonly symbolsById: ReadonlyMap<string, SymbolNode>;
@@ -15617,6 +15630,7 @@ function projectJavaCallReferences(input: {
   const signatureReferences: JvmCallableSignatureReferenceFact[] = [];
   const chainedReferences: JavaChainedCallReferenceFact[] = [];
   const memberReferences: JavaMemberCallReferenceFact[] = [];
+  const instantiationReferencesBySourceId = new Map<string, JavaInstantiationReferenceFact[]>();
   const fieldsByOwnerId = new Map<string, JavaFieldDeclarationFact[]>();
   const heritageReferenceCountsBySourceId = new Map<string, JavaHeritageReferenceCounts>();
 
@@ -15640,6 +15654,11 @@ function projectJavaCallReferences(input: {
     signatureReferences.push(...(facts.jvmFacts?.callableSignatureReferences ?? []));
     chainedReferences.push(...(facts.jvmFacts?.javaChainedCallReferences ?? []));
     memberReferences.push(...(facts.jvmFacts?.javaMemberCallReferences ?? []));
+    for (const reference of facts.jvmFacts?.javaInstantiationReferences ?? []) {
+      const entries = instantiationReferencesBySourceId.get(reference.sourceId) ?? [];
+      entries.push(reference);
+      instantiationReferencesBySourceId.set(reference.sourceId, entries);
+    }
     for (const reference of facts.jvmFacts?.heritageReferences ?? []) {
       const previous = heritageReferenceCountsBySourceId.get(reference.sourceId) ?? {
         classSuperclass: 0,
@@ -15814,6 +15833,68 @@ function projectJavaCallReferences(input: {
             projectEvidence: input.jvmProjectModuleEvidence
           })
         : null;
+    const localInitializerRange =
+      reference.receiverKind === "local" ? reference.receiverInitializerRange : undefined;
+    const localInitializerRequiresWideningProof =
+      reference.receiverKind === "local" &&
+      localInitializerRange !== undefined &&
+      !sourceRangeContains(localInitializerRange, reference.receiverType.range);
+    const localInitializerCandidates =
+      localInitializerRange === undefined
+        ? []
+        : (instantiationReferencesBySourceId.get(reference.sourceId) ?? []).filter(
+            (candidate) =>
+              candidate.filePath === reference.filePath &&
+              candidate.declaringTypeId === reference.declaringTypeId &&
+              sourceRangeContains(localInitializerRange, candidate.range)
+          );
+    const localInitializerReference =
+      localInitializerCandidates.length === 1 ? localInitializerCandidates[0] : undefined;
+    const resolvedLocalInitializerType =
+      localInitializerReference === undefined
+        ? null
+        : resolveJavaCallType({
+            reference: {
+              kind: "reference",
+              referenceName: localInitializerReference.referenceName,
+              syntax: "object-creation",
+              range: localInitializerReference.range,
+              ...(localInitializerReference.importedTypePath === undefined
+                ? {}
+                : { importedTypePath: localInitializerReference.importedTypePath }),
+              ...(localInitializerReference.qualifiedTypePath === undefined
+                ? {}
+                : { qualifiedTypePath: localInitializerReference.qualifiedTypePath })
+            },
+            declaringType,
+            sourceFilePath: reference.filePath,
+            types,
+            membershipsByFile,
+            projectEvidence: input.jvmProjectModuleEvidence
+          });
+    const localInitializerWidening =
+      resolvedLocalInitializerType?.evidence.targetSymbolId === undefined ||
+      resolvedBindingType?.evidence.targetSymbolId === undefined
+        ? null
+        : javaReferenceWideningPath({
+            sourceSymbolId: resolvedLocalInitializerType.evidence.targetSymbolId,
+            targetSymbolId: resolvedBindingType.evidence.targetSymbolId,
+            heritageEdgesBySourceId
+          });
+    // A declared local may name a supertype, but the initializer must still be
+    // one uniquely retained direct object creation.  Require an indexed
+    // assignability proof here instead of treating the declared type as a
+    // compiler/checker guess; the bounded slice accepts identity or one direct
+    // heritage edge only.
+    if (
+      localInitializerRequiresWideningProof &&
+      (localInitializerReference === undefined ||
+        resolvedLocalInitializerType === null ||
+        localInitializerWidening?.state !== "matched" ||
+        localInitializerWidening.edges.length > 1)
+    ) {
+      continue;
+    }
     const assignmentTypeReference =
       reference.receiverKind === "local" ? reference.receiverAssignmentType : undefined;
     const assignmentRange =

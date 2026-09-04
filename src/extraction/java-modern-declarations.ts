@@ -1091,11 +1091,31 @@ function modernJavaLocalCallReferences(
     const initializerTypeNode = directChildren(initializer)
       .map(directTypeNode)
       .find((child): child is SgNode => child !== null);
+    const initializerTypeOwnerNode = directChildren(initializer).find(
+      (child) =>
+        child.kind() === "type_identifier" ||
+        child.kind() === "scoped_type_identifier" ||
+        child.kind() === "generic_type"
+    );
     const initializerType = initializerTypeNode === undefined
       ? null
       : typeReference(initializerTypeNode);
-    if (initializerType === null || (declaredType !== null &&
-        declaredType.referenceName !== initializerType.referenceName)) {
+    const declaredTypeMatchesInitializer = declaredType === null ||
+      declaredType.referenceName === initializerType?.referenceName;
+    const directDeclaredType = typeNode !== undefined &&
+      (typeNode.kind() === "type_identifier" || typeNode.kind() === "scoped_type_identifier");
+    const directInitializerType = initializerTypeOwnerNode !== undefined &&
+      (initializerTypeOwnerNode.kind() === "type_identifier" ||
+        initializerTypeOwnerNode.kind() === "scoped_type_identifier");
+    const boundedReferenceWidening = declaredType !== null &&
+      initializerType !== null &&
+      !declaredTypeMatchesInitializer &&
+      directDeclaredType &&
+      directInitializerType;
+    // Keep only the syntax-side candidate.  Resolution later proves that the
+    // concrete initializer is assignable to the declared type through one
+    // tracked heritage edge; generic inference and deeper chains stay closed.
+    if (initializerType === null || (!declaredTypeMatchesInitializer && !boundedReferenceWidening)) {
       return null;
     }
     const type = declaredType ?? initializerType;
@@ -1106,7 +1126,7 @@ function modernJavaLocalCallReferences(
       type,
       bindingRange: { start: nameRange.start.index, end: nameRange.end.index },
       scopeRange,
-      ...(isVar
+      ...(isVar || boundedReferenceWidening
         ? { initializerRange: { start: initializerRange.start.index, end: initializerRange.end.index } }
         : {})
     };

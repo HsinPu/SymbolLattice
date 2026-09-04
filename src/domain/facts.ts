@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v400";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v401";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v197";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v198";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -2962,7 +2962,7 @@ export type JavaMemberCallReferenceFact =
       readonly receiverType: JavaCallTypeReferenceFact;
       readonly receiverBindingRange: SourceRange;
       readonly receiverScopeRange: SourceRange;
-      /** Present only when Java `var` derives its type from one direct object creation. */
+      /** Present for `var` or one bounded declared-supertype object-creation initializer. */
       readonly receiverInitializerRange?: SourceRange;
       /** Present only after one direct same-block assignment activates an uninitialized local. */
       readonly receiverAssignmentType?: JavaCallTypeReferenceFact;
