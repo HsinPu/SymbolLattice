@@ -108,6 +108,41 @@ describe("Groovy and CFML direct-call soundness boundaries", () => {
     ]);
   });
 
+  it("admits one assignment-position same-line slashy literal before direct functions", () => {
+    const sourceText = [
+      "regex = /(?ms)foo\\/bar/",
+      "def helper(value) { value }",
+      "def entry() { return helper(\"value\") }"
+    ].join("\n");
+
+    expect(callsFor("groovy", sourceText)).toEqual([
+      expect.objectContaining({
+        referenceName: "helper",
+        evidence: expect.objectContaining({
+          ruleId: "syntax.groovy.same-file.unique-direct-function-call.arity"
+        })
+      })
+    ]);
+  });
+
+  it("keeps division, non-assignment, dollar-slashy, multiline, and unterminated slashy surfaces closed", () => {
+    const suffix = [
+      "def helper(value) { value }",
+      "def entry() { return helper(1) }"
+    ].join("\n");
+    const cases = [
+      `value = total / count\n${suffix}`,
+      `assert value ==~ /pattern/\n${suffix}`,
+      `regex = $/pattern/$\n${suffix}`,
+      `regex = /first\nsecond/\n${suffix}`,
+      `regex = /unterminated\n${suffix}`
+    ];
+
+    for (const sourceText of cases) {
+      expect(callsFor("groovy", sourceText), sourceText).toEqual([]);
+    }
+  });
+
   it("keeps CFScript function symbols without claiming a direct call", () => {
     const sourceText = [
       "function cfmlHelper() { return 1; }",

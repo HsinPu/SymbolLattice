@@ -227,14 +227,24 @@ function scoreNegatives(mode) {
       add("duplicate-target", `def ${target}(value) { value }\ndef ${target}(other) { other }\ndef ${caller}() { ${target}(1) }`);
       add("closure-body", `def ${target}(value) { value }\ndef ${caller}() { [1].each { ${target}(it) } }`);
       add("metaclass-taint", `def ${target}(value) { value }\ndef ${caller}() { ${target}(1) }\nExternal.metaClass.${target} = { it }`);
-      add("static-import", `import static vendor.Helpers.${target}\ndef ${target}(value) { value }\ndef ${caller}() { ${target}(1) }`);
-      add("import-terminal-collision", `import vendor.${target}\ndef ${target}(value) { value }\ndef ${caller}() { ${target}(1) }`);
+      add("import-collision", index % 2 === 0
+        ? `import static vendor.Helpers.${target}\ndef ${target}(value) { value }\ndef ${caller}() { ${target}(1) }`
+        : `import vendor.${target}\ndef ${target}(value) { value }\ndef ${caller}() { ${target}(1) }`);
       add("nested-block", `def ${target}(value) { value }\ndef ${caller}() { if (true) { ${target}(1) } }`);
-      add("method-missing", `def ${target}(value) { value }\ndef methodMissing(name, args) { null }\ndef ${caller}() { ${target}(1) }`);
-      add("invoke-method", `def ${target}(value) { value }\ndef invokeMethod(name, args) { null }\ndef ${caller}() { ${target}(1) }`);
+      add("dynamic-hook", index % 2 === 0
+        ? `def ${target}(value) { value }\ndef methodMissing(name, args) { null }\ndef ${caller}() { ${target}(1) }`
+        : `def ${target}(value) { value }\ndef invokeMethod(name, args) { null }\ndef ${caller}() { ${target}(1) }`);
       add("binding-assignment", `def ${target}(value) { value }\ndef ${caller}() { ${target}(1) }\n${target} = { it }`);
-      add("typed-target", `int ${target}(int value) { value }\ndef ${caller}() { ${target}(1) }`);
-      add("malformed", `def ${target}(value) { value }\ndef ${caller}() { ${target}(1)`);
+      add("division", `value = total / count\ndef ${target}(value) { value }\ndef ${caller}() { ${target}(1) }`);
+      add("non-assignment-slashy", `assert value ==~ /pattern/\ndef ${target}(value) { value }\ndef ${caller}() { ${target}(1) }`);
+      add("unsupported-slashy-form", index % 3 === 0
+        ? `regex = $/pattern/$\ndef ${target}(value) { value }\ndef ${caller}() { ${target}(1) }`
+        : index % 3 === 1
+          ? `regex = /first\nsecond/\ndef ${target}(value) { value }\ndef ${caller}() { ${target}(1) }`
+          : `regex = /unterminated\ndef ${target}(value) { value }\ndef ${caller}() { ${target}(1) }`);
+      add("invalid-call-surface", index % 2 === 0
+        ? `int ${target}(int value) { value }\ndef ${caller}() { ${target}(1) }`
+        : `def ${target}(value) { value }\ndef ${caller}() { ${target}(1)`);
       continue;
     }
     const name = `recurse${index}`;

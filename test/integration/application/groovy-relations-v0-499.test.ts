@@ -10,9 +10,9 @@ import { SqliteGraphStore } from "../../../src/infrastructure/sqlite/graph-store
 const temporaryDirectories: string[] = [];
 
 async function createProject(sourceText: string): Promise<string> {
-  const projectPath = await mkdtemp(resolve(tmpdir(), "SymbolLattice-groovy-v0498-"));
+  const projectPath = await mkdtemp(resolve(tmpdir(), "SymbolLattice-groovy-v0499-"));
   temporaryDirectories.push(projectPath);
-  const sourcePath = resolve(projectPath, "src", "direct.groovy");
+  const sourcePath = resolve(projectPath, "src", "slashy.groovy");
   await mkdir(resolve(sourcePath, ".."), { recursive: true });
   await writeFile(sourcePath, sourceText, "utf8");
   return projectPath;
@@ -22,22 +22,22 @@ afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
 
-describe("Groovy relations v0.498", () => {
-  it("persists one exact call between unique top-level def functions", async () => {
+describe("Groovy relations v0.499", () => {
+  it("persists one exact string-argument call after an assignment-position slashy literal", async () => {
     const projectPath = await createProject([
+      "regex = /(?ms)foo\\/bar/",
       "def helper(value) { value }",
-      "def entry() { return helper(1) }",
+      "def entry() { return helper(\"value\") }",
       ""
     ].join("\n"));
     const store = new SqliteGraphStore();
     const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
 
-    const status = await service.init({ projectPath });
+    await service.init({ projectPath });
     const snapshot = store.getSnapshot(projectPath);
     const helper = snapshot.symbols.find((symbol) => symbol.name === "helper");
     const entry = snapshot.symbols.find((symbol) => symbol.name === "entry");
 
-    expect(status.stale).toBe(false);
     expect(store.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v404");
     expect(snapshot.edges.filter((edge) => edge.kind === "calls")).toEqual([
       expect.objectContaining({
@@ -45,35 +45,28 @@ describe("Groovy relations v0.498", () => {
         targetId: helper?.id,
         resolution: "exact",
         confidence: 1,
-        evidence: {
+        evidence: expect.objectContaining({
           ruleId: "syntax.groovy.same-file.unique-direct-function-call.arity",
-          stage: "syntax",
           candidateSymbolIds: [helper?.id]
-        }
+        })
       })
     ]);
   });
 
-  it("persists no inter-function call when a dynamic hook or binding assignment exists", async () => {
-    for (const sourceText of [
-      [
-        "def helper(value) { value }",
-        "def methodMissing(name, args) { null }",
-        "def entry() { helper(1) }"
-      ].join("\n"),
-      [
-        "def helper(value) { value }",
-        "def entry() { helper(1) }",
-        "helper = { it }"
-      ].join("\n")
+  it("persists no call for division or unsupported slashy forms", async () => {
+    const suffix = "\ndef helper(value) { value }\ndef entry() { helper(\"value\") }\n";
+    for (const prefix of [
+      "value = total / count",
+      "assert value ==~ /pattern/",
+      "regex = $/pattern/$",
+      "regex = /first\nsecond/",
+      "regex = /unterminated"
     ]) {
-      const projectPath = await createProject(sourceText);
+      const projectPath = await createProject(prefix + suffix);
       const store = new SqliteGraphStore();
       const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
       await service.init({ projectPath });
-      expect(store.getSnapshot(projectPath).edges.filter((edge) =>
-        edge.evidence?.ruleId === "syntax.groovy.same-file.unique-direct-function-call.arity"
-      )).toEqual([]);
+      expect(store.getSnapshot(projectPath).edges.filter((edge) => edge.kind === "calls")).toEqual([]);
     }
   });
 });

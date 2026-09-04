@@ -20972,7 +20972,7 @@ describe("source extraction", () => {
     ]);
   });
 
-  it("rejects malformed and slashy Groovy script-scope input", () => {
+  it("admits plain assignment slashy literals while rejecting malformed and division surfaces", () => {
     const unbalanced = extractFileFacts({
       filePath: "src/unbalanced.groovy",
       language: "groovy",
@@ -20994,11 +20994,24 @@ describe("source extraction", () => {
       sourceText: ["def ratio = 6 / 3", "class Visible {}"].join("\n")
     });
 
-    for (const facts of [unbalanced, unclosedComment, slashy, scriptDivision]) {
+    for (const facts of [unbalanced, unclosedComment, scriptDivision]) {
       expect(facts.symbols).toHaveLength(1);
       expect(facts.symbols[0]?.kind).toBe("file");
       expect(facts.edges).toEqual([]);
     }
+    expect(slashy.symbols.map((symbol) => [symbol.kind, symbol.name])).toEqual([
+      ["file", "slashy.groovy"],
+      ["class", "Visible"]
+    ]);
+    expect(slashy.symbols.some((symbol) => symbol.name === "Hidden")).toBe(false);
+    expect(slashy.edges).toEqual([
+      expect.objectContaining({
+        kind: "contains",
+        referenceName: "Visible",
+        resolution: "exact",
+        confidence: 1
+      })
+    ]);
   });
 
   it("extracts complete direct Fortran program units with source ranges", () => {

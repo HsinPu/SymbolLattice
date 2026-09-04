@@ -97,12 +97,30 @@ function blankSourceSpan(characters: string[], start: number, end: number): void
   }
 }
 
+function followsPlainSameLineAssignment(sourceText: string, slash: number): boolean {
+  let equals = slash - 1;
+  while (sourceText[equals] === " " || sourceText[equals] === "\t" || sourceText[equals] === "\f") {
+    equals -= 1;
+  }
+  if (sourceText[equals] !== "=") return false;
+  let before = equals - 1;
+  while (sourceText[before] === " " || sourceText[before] === "\t" || sourceText[before] === "\f") {
+    before -= 1;
+  }
+  return !["=", "!", "<", ">", "~", "+", "-", "*", "/", "%", "&", "|", "^"].includes(
+    sourceText[before] ?? ""
+  );
+}
+
 /**
  * Blanks regular and triple-quoted strings plus comments without moving source
  * offsets. Slashy and dollar-slashy strings are deliberately handled by the
  * top-level scanner as unsupported because their lexical context is ambiguous.
  */
-function sanitizeGroovySource(sourceText: string): string | null {
+function sanitizeGroovySource(
+  sourceText: string,
+  preserveStringPresence = false
+): string | null {
   const characters = sourceText.split("");
   let index = 0;
   while (index < sourceText.length) {
@@ -131,6 +149,29 @@ function sanitizeGroovySource(sourceText: string): string | null {
       }
       index += 2;
       blankSourceSpan(characters, start, index);
+      continue;
+    }
+    if (character === "/" && followsPlainSameLineAssignment(sourceText, index)) {
+      const start = index;
+      index += 1;
+      let closed = false;
+      while (index < sourceText.length) {
+        if (sourceText[index] === "\r" || sourceText[index] === "\n") return null;
+        if (sourceText[index] === "\\") {
+          if (index + 1 >= sourceText.length) return null;
+          index += 2;
+          continue;
+        }
+        if (sourceText[index] === "/") {
+          index += 1;
+          closed = true;
+          break;
+        }
+        index += 1;
+      }
+      if (!closed) return null;
+      blankSourceSpan(characters, start, index);
+      if (preserveStringPresence) characters[start] = "x";
       continue;
     }
     if (
@@ -189,6 +230,7 @@ function sanitizeGroovySource(sourceText: string): string | null {
       return null;
     }
     blankSourceSpan(characters, start, index);
+    if (preserveStringPresence) characters[start] = "x";
   }
   return characters.join("");
 }
@@ -864,7 +906,13 @@ export function extractGroovyFileFacts(input: GroovyExtractFileFactsInput): Arti
   }
 
   const sanitized = sanitizeGroovySource(input.sourceText);
-  if (preamble !== null && sanitized !== null && !sanitized.includes(".metaClass")) {
+  const callAritySource = sanitizeGroovySource(input.sourceText, true);
+  if (
+    preamble !== null &&
+    sanitized !== null &&
+    callAritySource !== null &&
+    !sanitized.includes(".metaClass")
+  ) {
     const functionsByName = new Map<string, typeof declarationSymbols>();
     for (const candidate of declarationSymbols) {
       if (candidate.declaration.kind !== "function") continue;
@@ -912,7 +960,7 @@ export function extractGroovyFileFacts(input: GroovyExtractFileFactsInput): Arti
         if (sanitized[openingParenthesis] !== "(") {
           continue;
         }
-        const call = directCallArity(sanitized, openingParenthesis);
+        const call = directCallArity(callAritySource, openingParenthesis);
         const targetShape = target.declaration.functionShape;
         const selfCall = target.symbol.id === source.symbol.id;
         if (
