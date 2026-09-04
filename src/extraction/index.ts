@@ -426,37 +426,50 @@ function hasUseStrictDirective(sourceFile: ts.SourceFile): boolean {
   return false;
 }
 
-function hasOnlyDirectCommonJsRequireUses(sourceFile: ts.SourceFile): boolean {
-  let valid = true;
-  function visit(node: ts.Node): void {
-    if (ts.isIdentifier(node) && node.text === "require") {
-      const call = node.parent;
-      const argument = ts.isCallExpression(call) ? call.arguments[0] : undefined;
-      const declaration = ts.isCallExpression(call) && call.expression === node ? call.parent : undefined;
-      const declarationList =
-        declaration !== undefined && ts.isVariableDeclaration(declaration)
-          ? declaration.parent
-          : undefined;
-      const statement =
-        declarationList !== undefined && ts.isVariableDeclarationList(declarationList)
-          ? declarationList.parent
-          : undefined;
-      if (
-        !ts.isCallExpression(call) ||
-        call.arguments.length !== 1 ||
-        argument === undefined ||
-        !ts.isStringLiteral(argument) ||
-        statement === undefined ||
-        !ts.isVariableStatement(statement) ||
-        statement.parent !== sourceFile
-      ) {
-        valid = false;
-      }
+function hasUnsafeCommonJsRequireBindingOrMutation(sourceFile: ts.SourceFile): boolean {
+  let unsafe = false;
+  function isRequireAssignmentTarget(node: ts.Node): boolean {
+    if (ts.isParenthesizedExpression(node)) return isRequireAssignmentTarget(node.expression);
+    if (ts.isIdentifier(node)) return node.text === "require";
+    if (ts.isArrayLiteralExpression(node)) {
+      return node.elements.some((element) => isRequireAssignmentTarget(element));
     }
-    ts.forEachChild(node, visit);
+    if (ts.isObjectLiteralExpression(node)) {
+      return node.properties.some((property) => {
+        if (ts.isShorthandPropertyAssignment(property)) return property.name.text === "require";
+        if (ts.isPropertyAssignment(property)) return isRequireAssignmentTarget(property.initializer);
+        return ts.isSpreadAssignment(property) && isRequireAssignmentTarget(property.expression);
+      });
+    }
+    return false;
+  }
+  function visit(node: ts.Node): void {
+    if (
+      ts.isVariableDeclaration(node) &&
+      bindingNameIncludes(node.name, "require") &&
+      ts.isVariableDeclarationList(node.parent) &&
+      (node.parent.flags & ts.NodeFlags.BlockScoped) === 0
+    ) {
+      unsafe = true;
+    } else if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
+      isRequireAssignmentTarget(node.left)
+    ) {
+      unsafe = true;
+    } else if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      (node.operator === ts.SyntaxKind.PlusPlusToken || node.operator === ts.SyntaxKind.MinusMinusToken) &&
+      ts.isIdentifier(node.operand) &&
+      node.operand.text === "require"
+    ) {
+      unsafe = true;
+    }
+    if (!unsafe) ts.forEachChild(node, visit);
   }
   visit(sourceFile);
-  return valid;
+  return unsafe;
 }
 
 function hasOnlyDirectCommonJsModuleUses(sourceFile: ts.SourceFile): boolean {
@@ -8221,8 +8234,8 @@ export function extractFileFacts(
   const commonJsRequires =
     commonJsSyntaxEnabled &&
     !hasDirectSourceBinding(sourceFile, "require") &&
-    hasOnlyDirectCommonJsRequireUses(sourceFile)
-    ? directCommonJsRequires(sourceFile)
+    !hasUnsafeCommonJsRequireBindingOrMutation(sourceFile)
+      ? directCommonJsRequires(sourceFile)
     : new Map<ts.VariableDeclaration, ts.StringLiteral>();
   const symbols: SymbolNode[] = [];
   const edges: GraphEdge[] = [];

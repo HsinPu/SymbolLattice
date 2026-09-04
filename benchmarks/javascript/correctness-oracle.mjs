@@ -1,11 +1,13 @@
 import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
-import { extname, relative, resolve } from "node:path";
+import { extname, posix, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parse } from "espree";
 
 import { SqliteGraphStore } from "../../dist/infrastructure/sqlite/index.js";
+import { resolveProjectFacts } from "../../dist/application/resolution.js";
+import { extractFileFacts } from "../../dist/extraction/index.js";
 import {
   ARTIFACT_FACTS_EXTRACTOR_VERSION,
   PROJECT_RESOLVER_VERSION
@@ -13,15 +15,21 @@ import {
 import { SYMBOL_LATTICE_VERSION } from "../../dist/version.js";
 
 export const JAVASCRIPT_POSITIVE_QUOTAS = Object.freeze({
-  identity: 80,
-  containment: 80,
+  identity: 40,
+  containment: 40,
   call: 60,
-  instantiation: 20,
-  heritage: 5
+  instantiation: 24,
+  heritage: 5,
+  esmImport: 65,
+  commonJsImport: 66
 });
 
 const JAVASCRIPT_EXTENSIONS = new Set([".js", ".mjs", ".jsx", ".cjs"]);
 const IGNORED_DIRECTORIES = new Set([".git", ".SymbolLattice", "node_modules"]);
+
+export function isJavaScriptOracleIgnoredDirectory(name) {
+  return name.startsWith(".") || IGNORED_DIRECTORIES.has(name);
+}
 
 function slash(path) {
   return path.replaceAll("\\", "/");
@@ -125,7 +133,37 @@ function callsInCaller(caller) {
   return { calls, news };
 }
 
-export function collectJavaScriptTruth(project, filePath, sourceText) {
+function resolveRelativeJavaScriptModule(filePath, specifier, knownFiles) {
+  if (knownFiles === undefined || (!specifier.startsWith("./") && !specifier.startsWith("../"))) {
+    return null;
+  }
+  const base = posix.normalize(posix.join(posix.dirname(filePath), specifier));
+  const candidates = extname(base).length > 0
+    ? [base]
+    : [
+        base,
+        ...[".js", ".mjs", ".cjs", ".jsx"].map((extension) => `${base}${extension}`),
+        ...[".js", ".mjs", ".cjs", ".jsx"].map((extension) => `${base}/index${extension}`)
+      ];
+  const matches = [...new Set(candidates)].filter((candidate) => knownFiles.has(candidate));
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function topLevelBindings(program) {
+  const bindings = new Set();
+  for (const node of program.body) {
+    if ((node.type === "FunctionDeclaration" || node.type === "ClassDeclaration") && node.id) {
+      bindings.add(node.id.name);
+    } else if (node.type === "VariableDeclaration") {
+      node.declarations.forEach((declaration) => patternNames(declaration.id, bindings));
+    } else if (node.type === "ImportDeclaration") {
+      node.specifiers.forEach((specifier) => bindings.add(specifier.local.name));
+    }
+  }
+  return bindings;
+}
+
+export function collectJavaScriptTruth(project, filePath, sourceText, context = {}) {
   const program = parseJavaScript(sourceText, filePath);
   const declarations = program.body.filter(
     (node) =>
@@ -141,6 +179,56 @@ export function collectJavaScriptTruth(project, filePath, sourceText) {
   const unique = new Map([...byName].filter(([, values]) => values.length === 1));
   const file = { filePath, name: filePath, kind: "file", line: 1, column: 1 };
   const facts = [];
+  for (const node of program.body) {
+    if (node.type !== "ImportDeclaration" || typeof node.source?.value !== "string") continue;
+    const targetPath = resolveRelativeJavaScriptModule(filePath, node.source.value, context.knownFiles);
+    if (targetPath !== null) {
+      facts.push({
+        project,
+        type: "positive",
+        stratum: "esmImport",
+        kind: "imports",
+        source: file,
+        target: { filePath: targetPath, name: targetPath, kind: "file", line: 1, column: 1 },
+        occurrence: occurrence(filePath, node.source),
+        moduleSyntax: "esm"
+      });
+    }
+  }
+  const strictCommonJs = filePath.toLowerCase().endsWith(".cjs") || program.body[0]?.directive === "use strict";
+  if (strictCommonJs && !topLevelBindings(program).has("require")) {
+    for (const node of program.body) {
+      if (node.type !== "VariableDeclaration" || node.kind !== "const") continue;
+      for (const declaration of node.declarations) {
+        const call = declaration.init;
+        if (
+          call?.type !== "CallExpression" ||
+          call.callee?.type !== "Identifier" ||
+          call.callee.name !== "require" ||
+          call.arguments?.length !== 1 ||
+          call.arguments[0]?.type !== "Literal" ||
+          typeof call.arguments[0].value !== "string"
+        ) continue;
+        const targetPath = resolveRelativeJavaScriptModule(
+          filePath,
+          call.arguments[0].value,
+          context.knownFiles
+        );
+        if (targetPath !== null) {
+          facts.push({
+            project,
+            type: "positive",
+            stratum: "commonJsImport",
+            kind: "imports",
+            source: file,
+            target: { filePath: targetPath, name: targetPath, kind: "file", line: 1, column: 1 },
+            occurrence: occurrence(filePath, call.arguments[0]),
+            moduleSyntax: "commonjs"
+          });
+        }
+      }
+    }
+  }
   for (const declaration of declarations) {
     const kind = declaration.type === "ClassDeclaration" ? "class" : "function";
     const target = endpoint(filePath, declaration.id.name, kind, declaration.id);
@@ -202,7 +290,7 @@ async function listJavaScriptFiles(root) {
   const visit = async (directory) => {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       if (entry.isDirectory()) {
-        if (!IGNORED_DIRECTORIES.has(entry.name)) await visit(resolve(directory, entry.name));
+        if (!isJavaScriptOracleIgnoredDirectory(entry.name)) await visit(resolve(directory, entry.name));
       } else if (entry.isFile() && JAVASCRIPT_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
         files.push(resolve(directory, entry.name));
       }
@@ -216,11 +304,13 @@ async function collectCorpus(project, sourcePath) {
   const selections = new Map(Object.keys(JAVASCRIPT_POSITIVE_QUOTAS).map((key) => [key, []]));
   let parsedFiles = 0;
   let rejectedFiles = 0;
-  for (const absolutePath of await listJavaScriptFiles(sourcePath)) {
+  const absolutePaths = await listJavaScriptFiles(sourcePath);
+  const knownFiles = new Set(absolutePaths.map((absolutePath) => slash(relative(sourcePath, absolutePath))));
+  for (const absolutePath of absolutePaths) {
     const filePath = slash(relative(sourcePath, absolutePath));
     try {
       const sourceText = await readFile(absolutePath, "utf8");
-      for (const fact of collectJavaScriptTruth(project, filePath, sourceText)) {
+      for (const fact of collectJavaScriptTruth(project, filePath, sourceText, { knownFiles })) {
         retainSmallest(selections.get(fact.stratum), fact, JAVASCRIPT_POSITIVE_QUOTAS[fact.stratum] * 10);
       }
       parsedFiles += 1;
@@ -274,6 +364,72 @@ export function scoreJavaScriptSelection(selection, snapshots) {
   return { positives, scores: { tp, fp: 0, fn, evidenceInvalid } };
 }
 
+export function scoreJavaScriptNegativeMatrix() {
+  const cases = [];
+  const add = (category, entryPath, sourceText, extraFiles = {}) => {
+    cases.push({ category, entryPath, sourceText, extraFiles });
+  };
+  for (let index = 0; index < 10; index += 1) {
+    const marker = `// case:${index}`;
+    add("external-esm", "entry.js", `import value from 'external-package';\n${marker}`);
+    add("dynamic-import-template", "entry.js", `const name = 'target'; import(\`./${"${name}"}.js\`);\n${marker}`);
+    add("dynamic-import-variable", "entry.js", `const path = './target.js'; import(path);\n${marker}`);
+    add("dynamic-require", "entry.cjs", `const path = './target.js'; const value = require(path);\n${marker}`);
+    add("shadowed-require", "entry.cjs", `function require(value) { return value }\nconst value = require('./target.js');\n${marker}`);
+    add("hoisted-require", "entry.cjs", `if (false) { var require }\nconst value = require('./target.js');\n${marker}`);
+    add("reassigned-require", "entry.cjs", `const value = require('./target.js');\nrequire = other;\n${marker}`);
+    add("non-strict-js-require", "entry.js", `const value = require('./target.js');\n${marker}`);
+    add("mixed-esm-commonjs", "entry.js", `import marker from 'external';\nconst value = require('./target.js');\n${marker}`);
+    add("aliased-require", "entry.cjs", `const load = require; const value = load('./target.js');\n${marker}`);
+    add("nested-only-require", "entry.cjs", `function load() { return require('./target.js') }\n${marker}`);
+    add("require-two-arguments", "entry.cjs", `const value = require('./target.js', options);\n${marker}`);
+    add("require-member-call", "entry.cjs", `const value = require.call(null, './target.js');\n${marker}`);
+    add("ambiguous-relative", "entry.js", `import value from './target';\n${marker}`, {
+      "target/index.js": "export default 2;\n"
+    });
+    add("unresolved-relative", "entry.js", `import value from './missing.js';\n${marker}`);
+  }
+  const falsePositives = [];
+  cases.forEach((testCase, index) => {
+    const files = {
+      [testCase.entryPath]: testCase.sourceText,
+      "target.js": "export default 1;\n",
+      ...testCase.extraFiles
+    };
+    const sourceDocuments = Object.entries(files).map(([relativePath, sourceText]) => ({
+      absolutePath: `C:/javascript-negative/${index}/${relativePath}`,
+      relativePath,
+      language: "javascript",
+      sourceText,
+      contentHash: stableHash(sourceText)
+    }));
+    const snapshot = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles: sourceDocuments.map((document) => extractFileFacts({
+        filePath: document.relativePath,
+        language: "javascript",
+        sourceText: document.sourceText
+      })),
+      indexedAt: "2026-09-05T00:00:00.000Z"
+    });
+    const entry = snapshot.symbols.find((symbol) =>
+      symbol.kind === "file" && symbol.filePath === testCase.entryPath
+    );
+    const localTargets = new Set(snapshot.symbols.filter((symbol) =>
+      symbol.kind === "file" && symbol.filePath !== testCase.entryPath
+    ).map((symbol) => symbol.id));
+    const exact = snapshot.edges.filter((edge) =>
+      edge.kind === "imports" &&
+      edge.sourceId === entry?.id &&
+      edge.targetId !== null &&
+      localTargets.has(edge.targetId) &&
+      exactSingleton(edge, edge.targetId)
+    );
+    if (exact.length > 0) falsePositives.push({ index, category: testCase.category, edges: exact.length });
+  });
+  return { total: cases.length, tn: cases.length - falsePositives.length, falsePositives };
+}
+
 function parseArguments(arguments_) {
   const options = { corpora: [] };
   for (let index = 0; index < arguments_.length; index += 1) {
@@ -310,6 +466,16 @@ async function main() {
   }
   const positives = [...pooled.values()].flatMap((items) => items.map((item) => item.fact));
   const positiveCounts = Object.fromEntries([...pooled].map(([key, items]) => [key, items.length]));
+  const positiveTruthSha256 = stableHash(positives.map(factKey).sort().join("\n"));
+  const moduleSyntaxCounts = Object.fromEntries(
+    ["esm", "commonjs"].map((syntax) => [
+      syntax,
+      positives.filter((fact) =>
+        (fact.stratum === "esmImport" || fact.stratum === "commonJsImport") &&
+        fact.moduleSyntax === syntax
+      ).length
+    ])
+  );
   const missingStrata = Object.entries(JAVASCRIPT_POSITIVE_QUOTAS)
     .filter(([key, quota]) => positiveCounts[key] < quota)
     .map(([key, quota]) => ({ stratum: key, expected: quota, actual: positiveCounts[key] }));
@@ -319,9 +485,10 @@ async function main() {
       options.corpora.map((corpus) => [corpus.name, store.getSnapshot(corpus.indexedProjectPath)])
     );
     const scored = scoreJavaScriptSelection({ positives }, snapshots);
+    const negative = scoreJavaScriptNegativeMatrix();
     const output = {
       schemaVersion: 1,
-      benchmark: "symbollattice-javascript-large-project-correctness-v1",
+      benchmark: "symbollattice-javascript-large-project-correctness-v2",
       generatedAt: new Date().toISOString(),
       packageVersion: SYMBOL_LATTICE_VERSION,
       extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION,
@@ -329,14 +496,24 @@ async function main() {
       oracle: { parser: "espree", version: "11.2.0", methodology: "deterministic-independent-estree-stratified-sample" },
       quotas: JAVASCRIPT_POSITIVE_QUOTAS,
       positiveCounts,
+      positiveTruthSha256,
+      moduleSyntaxCounts,
       missingStrata,
       corpusStats,
       status: missingStrata.length === 0 ? "complete" : "inconclusive",
-      ...scored
+      ...scored,
+      negative,
+      passed:
+        missingStrata.length === 0 &&
+        scored.scores.fp === 0 &&
+        scored.scores.fn === 0 &&
+        scored.scores.evidenceInvalid === 0 &&
+        negative.tn === 150 &&
+        negative.falsePositives.length === 0
     };
     await writeFile(options.output, `${JSON.stringify(output, null, 2)}\n`, "utf8");
-    process.stdout.write(`${JSON.stringify({ output: options.output, status: output.status, scores: output.scores, positiveCounts }, null, 2)}\n`);
-    process.exitCode = output.status === "complete" ? 0 : 2;
+    process.stdout.write(`${JSON.stringify({ output: options.output, status: output.status, scores: output.scores, positiveCounts, negative, passed: output.passed }, null, 2)}\n`);
+    process.exitCode = output.passed ? 0 : output.status === "complete" ? 1 : 2;
   } finally {
     store.close();
   }

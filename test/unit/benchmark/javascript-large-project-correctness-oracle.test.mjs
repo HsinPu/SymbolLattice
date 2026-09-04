@@ -2,10 +2,19 @@ import { describe, expect, it } from "vitest";
 
 import {
   collectJavaScriptTruth,
+  isJavaScriptOracleIgnoredDirectory,
+  scoreJavaScriptNegativeMatrix,
   scoreJavaScriptSelection
 } from "../../../benchmarks/javascript/correctness-oracle.mjs";
 
 describe("JavaScript large-project correctness oracle", () => {
+  it("matches default discovery by excluding every dot directory and dependencies", () => {
+    expect([".git", ".github", ".cache", ".SymbolLattice", "node_modules"].every(
+      isJavaScriptOracleIgnoredDirectory
+    )).toBe(true);
+    expect(["lib", "src", "test"].some(isJavaScriptOracleIgnoredDirectory)).toBe(false);
+  });
+
   it("collects conservative ESTree identities and direct relations", () => {
     const facts = collectJavaScriptTruth(
       "fixture",
@@ -26,6 +35,43 @@ describe("JavaScript large-project correctness oracle", () => {
     ]));
   });
 
+  it("collects exact relative ESM and strict CommonJS module imports only when one tracked target exists", () => {
+    const knownFiles = new Set(["src/entry.js", "src/helper.js", "src/legacy.cjs"]);
+    const esm = collectJavaScriptTruth(
+      "fixture",
+      "src/entry.js",
+      "import { helper } from './helper.js'; helper();",
+      { knownFiles }
+    );
+    const commonjs = collectJavaScriptTruth(
+      "fixture",
+      "src/legacy.cjs",
+      "const helper = require('./helper')",
+      { knownFiles }
+    );
+
+    expect(esm.filter((fact) => fact.stratum === "esmImport")).toEqual([
+      expect.objectContaining({
+        kind: "imports",
+        moduleSyntax: "esm",
+        target: expect.objectContaining({ filePath: "src/helper.js", kind: "file" })
+      })
+    ]);
+    expect(commonjs.filter((fact) => fact.stratum === "commonJsImport")).toEqual([
+      expect.objectContaining({
+        kind: "imports",
+        moduleSyntax: "commonjs",
+        target: expect.objectContaining({ filePath: "src/helper.js", kind: "file" })
+      })
+    ]);
+    expect(collectJavaScriptTruth(
+      "fixture",
+      "src/entry.js",
+      "import external from 'external';",
+      { knownFiles }
+    ).filter((fact) => fact.stratum === "esmImport" || fact.stratum === "commonJsImport")).toEqual([]);
+  });
+
   it("does not treat caller-local shadows as same-file direct targets", () => {
     const facts = collectJavaScriptTruth(
       "fixture",
@@ -33,6 +79,14 @@ describe("JavaScript large-project correctness oracle", () => {
       "function helper() {}\nfunction entry(helper) { helper(); }"
     );
     expect(facts.filter((fact) => fact.kind === "calls")).toEqual([]);
+  });
+
+  it("keeps the 150-case JavaScript module negative matrix exact-edge free", () => {
+    expect(scoreJavaScriptNegativeMatrix()).toEqual({
+      total: 150,
+      tn: 150,
+      falsePositives: []
+    });
   });
 
   it("scores only singleton exact evidence as TP", () => {

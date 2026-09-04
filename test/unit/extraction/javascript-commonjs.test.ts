@@ -72,6 +72,35 @@ describe("JavaScript CommonJS extraction", () => {
     );
   });
 
+  it("keeps a direct top-level literal require when another function contains a dynamic require", () => {
+    const facts = extractFileFacts({
+      filePath: "lib/mixed-requires.js",
+      language: "javascript",
+      sourceText: [
+        "'use strict'",
+        "require('./hooks').runner = function stub() {}",
+        "const request = require('./request')",
+        "function lazy(name) { return require(name) }"
+      ].join("\n")
+    });
+
+    expect(facts.pendingReferences.filter((reference) => reference.relationKind === "imports")).toEqual([
+      expect.objectContaining({ referenceName: "./request" })
+    ]);
+  });
+
+  it("rejects direct requires when require is hoisted or reassigned in the source file", () => {
+    for (const sourceText of [
+      "'use strict'; if (false) { var require }; const request = require('./request')",
+      "'use strict'; const request = require('./request'); require = other",
+      "'use strict'; const request = require('./request'); ({ require } = other)",
+      "'use strict'; const request = require('./request'); [require] = other"
+    ]) {
+      const facts = extractFileFacts({ filePath: "lib/unsafe-require.js", language: "javascript", sourceText });
+      expect(facts.pendingReferences.filter((reference) => reference.relationKind === "imports")).toEqual([]);
+    }
+  });
+
   it("fails closed for shadowed CommonJS globals and non-literal or nested shapes", () => {
     const cases = [
       [

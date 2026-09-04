@@ -18,8 +18,8 @@ describe("language depth matrix", () => {
       tiers: {
         "external-tier-a": 1,
         "external-partial": 1,
-        "bounded-relation": 27,
-        "large-project-structural": 10,
+        "bounded-relation": 28,
+        "large-project-structural": 9,
         targeted: 19
       },
       relationDepth: {
@@ -29,7 +29,7 @@ describe("language depth matrix", () => {
         structural: 4
       },
       largeProjectValidated: 18,
-      relationReleaseValidated: 29
+      relationReleaseValidated: 30
     });
   });
 
@@ -45,6 +45,14 @@ describe("language depth matrix", () => {
       evidenceTier: "external-partial",
       relationDepth: "project",
       truthKind: "javac-oracle"
+    });
+    expect(byLanguage.get("javascript")).toMatchObject({
+      evidenceTier: "bounded-relation",
+      relationDepth: "project",
+      truthKind: "javascript-estree",
+      evidenceVersion: "0.500.0",
+      largeProjectValidated: true,
+      relationReleaseValidated: true
     });
     expect(byLanguage.get("shell")).toMatchObject({
       relationDepth: "structural",

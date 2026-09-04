@@ -16,7 +16,7 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.499.0
+Current version: v0.500.0
 
 ## Highlights
 
@@ -50,6 +50,8 @@ v0.497.0 uses the Groovy 5.0.3 compiler AST to verify unique top-level `def` sel
 v0.498.0 extends the same compiler-backed contract to direct calls between unique top-level `def` functions. Source and target declaration identity, arity, and absence of dynamic taint must all be proven. Only one of 14 compiler candidates passes product-parser admission; the other 13 remain explicitly reported as unsupported breadth.
 
 v0.499.0 admits only a plain-assignment, same-line, fully closed Groovy slashy literal and preserves one content-free arity placeholder for string arguments. All 13 previously parser-gated compiler candidates therefore become exact. Division, comparison-position slashy forms, dollar-slashy, multiline, and unterminated forms remain fail closed.
+
+v0.500.0 establishes a 300-positive/150-negative ESTree JavaScript relation truth set with 131 unique relative module imports. A strict CommonJS file may retain safe top-level literal requires even when another function contains a nested or dynamic require; hoisted, reassigned, or shadowed require bindings and dynamic, external, or ambiguous module paths remain unresolved.
 
 Java depth includes explicit imports, annotations, generic direct heritage/object creation, parser-recovery callable signatures/bare calls/parameter/final-field receivers, and evidence from `build.gradle(.kts)` or module-named Gradle build scripts; duplicate qualified types, wildcard or static imports, lambda-contained construction, array/wildcard signatures, mutation/escape, shadowing, anonymous interfaces, and external classpaths remain conservatively omitted.
 

@@ -13,6 +13,7 @@ export type LanguageDepthEvidenceTier = (typeof LANGUAGE_DEPTH_EVIDENCE_TIERS)[n
 export type LanguageRelationDepth = "project" | "same-file" | "framework" | "structural";
 export type LanguageTruthKind =
   | "typescript-compiler-api"
+  | "javascript-estree"
   | "javac-oracle"
   | "groovy-compiler-ast"
   | "source-occurrence-oracle"
@@ -36,11 +37,11 @@ export interface LanguageDepthEvidence {
 const BOUNDED_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
   "go", "rust", "kotlin", "swift", "dart", "csharp", "fsharp", "ocaml", "haskell",
   "scala", "elixir", "erlang", "clojure", "nix", "nim", "zig", "cpp", "c", "php",
-  "objc", "ruby", "sql", "r", "markdown", "proto", "graphql", "groovy"
+  "objc", "ruby", "sql", "r", "markdown", "proto", "graphql", "groovy", "javascript"
 ]);
 
 const LARGE_PROJECT_STRUCTURAL_LANGUAGES = new Set<ArtifactLanguage>([
-  "javascript", "python", "html", "css", "jsp", "shell", "lua", "luau", "julia", "perl"
+  "python", "html", "css", "jsp", "shell", "lua", "luau", "julia", "perl"
 ]);
 
 const PROJECT_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
@@ -70,7 +71,7 @@ const LARGE_PROJECT_VALIDATED_LANGUAGES = new Set<ArtifactLanguage>([
 
 const EVIDENCE_VERSION: Readonly<Partial<Record<ArtifactLanguage, string>>> = Object.freeze({
   typescript: "0.456.0",
-  javascript: "0.427.0",
+  javascript: "0.500.0",
   python: "0.429.0",
   go: "0.457.0",
   rust: "0.458.0",
@@ -112,6 +113,7 @@ const EVIDENCE_VERSION: Readonly<Partial<Record<ArtifactLanguage, string>>> = Ob
 const LANGUAGE_LIMITATIONS: Readonly<Partial<Record<ArtifactLanguage, readonly string[]>>> =
   Object.freeze({
     typescript: ["parse-rejected, overload, conditional export, and runtime dispatch remain nonclaims"],
+    javascript: ["300-positive/150-negative ESTree truth covers bounded same-file relations and unique relative ESM or strict CommonJS imports; dynamic imports, package resolution, re-exports, mutable globals, and runtime dispatch remain nonclaims"],
     java: ["external classpath, compiler-only inference, and wider inherited dispatch remain nonclaims"],
     groovy: ["compiler-confirmed unique top-level def self-recursion and all 14 current inter-function candidates are exact; division, non-assignment slashy forms, closures, delegates, metaclass, class methods, and wider dynamic dispatch remain nonclaims"],
     shell: ["function body calls require parser response ABI v2"],
@@ -150,6 +152,7 @@ function relationDepth(language: ArtifactLanguage): LanguageRelationDepth {
 
 function truthKind(language: ArtifactLanguage): LanguageTruthKind {
   if (language === "typescript") return "typescript-compiler-api";
+  if (language === "javascript") return "javascript-estree";
   if (language === "java") return "javac-oracle";
   if (language === "groovy") return "groovy-compiler-ast";
   if (BOUNDED_RELATION_LANGUAGES.has(language)) return "source-occurrence-oracle";
