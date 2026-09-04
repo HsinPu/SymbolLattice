@@ -13,6 +13,10 @@ import {
   type SymbolKind,
   type SymbolNode
 } from "../domain/index.js";
+import {
+  directSfcTemplateComponentOccurrences,
+  mutatedTopLevelNames
+} from "./sfc-template-components.js";
 
 export interface VueExtractFileFactsInput {
   readonly filePath: string;
@@ -568,6 +572,53 @@ export function extractVueFileFacts(input: VueExtractFileFactsInput): ArtifactFa
         localName: "default",
         exportedName: "default",
         range: rangeForNode(expression)
+      });
+    }
+  }
+
+  if (activeBlock.setup) {
+    const defaultComponentImports = importBindings.filter(
+      (binding) =>
+        binding.importedName === "default" &&
+        binding.isTypeOnly !== true &&
+        /^\.[./]/u.test(binding.moduleSpecifier) &&
+        /\.(?:vue|svelte|astro)$/iu.test(binding.moduleSpecifier) &&
+        /^[A-Z][A-Za-z0-9_$]*$/u.test(binding.localName)
+    );
+    const importCounts = new Map<string, number>();
+    for (const binding of defaultComponentImports) {
+      importCounts.set(binding.localName, (importCounts.get(binding.localName) ?? 0) + 1);
+    }
+    const declaredNames = new Set(
+      symbols.filter((symbol) => symbol.kind !== "file").map((symbol) => symbol.name)
+    );
+    const mutatedNames = mutatedTopLevelNames(sourceFile);
+    for (const occurrence of directSfcTemplateComponentOccurrences(input.sourceText, [{
+      start: activeBlock.contentStart,
+      end: activeBlock.contentEnd
+    }])) {
+      if (
+        importCounts.get(occurrence.name) !== 1 ||
+        declaredNames.has(occurrence.name) ||
+        mutatedNames.has(occurrence.name)
+      ) {
+        continue;
+      }
+      const range = rangeForSpan(lineStarts, occurrence.start, occurrence.end);
+      pendingReferences.push({
+        id: createEdgeId({
+          sourceId: fileNode.id,
+          targetId: null,
+          kind: "references",
+          line: range.start.line,
+          column: range.start.column,
+          referenceName: occurrence.name
+        }),
+        sourceId: fileNode.id,
+        filePath: input.filePath,
+        referenceName: occurrence.name,
+        relationKind: "references",
+        range
       });
     }
   }

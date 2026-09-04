@@ -16,7 +16,7 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.501.0
+Current version: v0.502.0
 
 ## Highlights
 
@@ -54,6 +54,8 @@ v0.499.0 admits only a plain-assignment, same-line, fully closed Groovy slashy l
 v0.500.0 establishes a 300-positive/150-negative ESTree JavaScript relation truth set with 131 unique relative module imports. A strict CommonJS file may retain safe top-level literal requires even when another function contains a nested or dynamic require; hoisted, reassigned, or shadowed require bindings and dynamic, external, or ambiguous module paths remain unresolved.
 
 v0.501.0 promotes Python to bounded relation evidence. Fixed CPython 3.13.11, Django 5.2.15, and Home Assistant Core 2026.8.0 corpora retain the existing 300 CPython-stdlib-AST import, direct-call, constructor, and inheritance truths and add 40 parser-clean, unique direct same-class `self.method()` calls. The combined result is 340 TP, 0 FP, 0 FN, 0 evidence-invalid, plus 150/150 fail-closed negatives. Decorators, metaclasses, attribute hooks, self rebinding, `setattr`/`delattr`, dynamic loading, monkey patching, inherited dispatch, and parser-rejected files remain nonclaims.
+
+v0.502.0 promotes Vue, Svelte, and Astro to bounded relation evidence. Fixed Element Plus 2.14.3, Svelte 5.57.0, and Astro 7.3.1 corpora provide 300 component-reference truths and 150 negatives through an independent TypeScript Compiler API and markup scanner. An exact `references` edge requires a direct PascalCase template/markup tag, one unmutated explicit relative default component import visible to that SFC template, and one tracked target. Vue is limited to `<script setup>`, Svelte to the instance script, and Astro to parse-clean frontmatter. Dynamic components, kebab-case, namespace/member tags, Options API registration, module scripts, template expressions, aliases, macros, hydration, and runtime rendering remain nonclaims.
 
 Java depth includes explicit imports, annotations, generic direct heritage/object creation, parser-recovery callable signatures/bare calls/parameter/final-field receivers, and evidence from `build.gradle(.kts)` or module-named Gradle build scripts; duplicate qualified types, wildcard or static imports, lambda-contained construction, array/wildcard signatures, mutation/escape, shadowing, anonymous interfaces, and external classpaths remain conservatively omitted.
 

@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.501.0
+目前版本：v0.502.0
 
 ## 主要能力
 
@@ -54,6 +54,8 @@ v0.499.0 只新增plain assignment位置、同一行完整閉合的Groovy slashy
 v0.500.0 建立JavaScript 300-positive／150-negative ESTree relation truth，新增131筆unique relative module imports。Strict CommonJS檔即使另有nested／dynamic require，仍保留安全top-level literal require；hoisted／reassigned／shadowed require與dynamic、external、ambiguous module paths維持unresolved。
 
 v0.501.0 將Python提升為bounded relation evidence。固定CPython 3.13.11、Django 5.2.15與Home Assistant Core 2026.8.0，以CPython stdlib AST重跑既有300筆import／direct call／constructor／inheritance真值，並新增40筆parser-clean、同類別唯一direct `self.method()` call；合計340 TP、0 FP、0 FN、0 evidenceInvalid，150筆負向全數fail closed。Decorator、metaclass、attribute hooks、self重綁、`setattr`／`delattr`、dynamic loading、monkey patch、inherited dispatch與parser-rejected檔案仍維持nonclaim。
+
+v0.502.0 將Vue、Svelte與Astro提升為bounded relation evidence。固定Element Plus 2.14.3、Svelte 5.57.0與Astro 7.3.1大型corpus，以獨立TypeScript Compiler API與markup scanner驗證300筆component references及150筆負向。Exact `references`只接受template／markup中的direct PascalCase tag、可見script scope內唯一未重綁的explicit relative default component import與唯一tracked target；Vue限`<script setup>`、Svelte限instance script、Astro限parse-clean frontmatter。Dynamic component、kebab-case、namespace/member tag、Options API registration、module script、template expression、alias、macro、hydration與runtime rendering維持nonclaim。
 
 Java 深度包含唯一專案型別的明確 import、annotation、泛型 direct heritage／object creation、parser-recovery callable signature／bare call／parameter／final field receiver，以及 `build.gradle(.kts)` 或 module-named Gradle build script 證據；重複 qualified type、wildcard／static import、lambda 內建立、array／wildcard signature、mutation／escape、shadow、anonymous interface 與外部 classpath 仍保守省略。
 

@@ -15,6 +15,7 @@ export type LanguageTruthKind =
   | "typescript-compiler-api"
   | "javascript-estree"
   | "python-stdlib-ast"
+  | "sfc-compiler-api"
   | "javac-oracle"
   | "groovy-compiler-ast"
   | "source-occurrence-oracle"
@@ -38,7 +39,8 @@ export interface LanguageDepthEvidence {
 const BOUNDED_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
   "go", "rust", "kotlin", "swift", "dart", "csharp", "fsharp", "ocaml", "haskell",
   "scala", "elixir", "erlang", "clojure", "nix", "nim", "zig", "cpp", "c", "php",
-  "objc", "ruby", "sql", "r", "markdown", "proto", "graphql", "groovy", "javascript", "python"
+  "objc", "ruby", "sql", "r", "markdown", "proto", "graphql", "groovy", "javascript", "python",
+  "vue", "svelte", "astro"
 ]);
 
 const LARGE_PROJECT_STRUCTURAL_LANGUAGES = new Set<ArtifactLanguage>([
@@ -67,13 +69,16 @@ const STRUCTURAL_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
 
 const LARGE_PROJECT_VALIDATED_LANGUAGES = new Set<ArtifactLanguage>([
   "typescript", "javascript", "python", "java", "lua", "luau", "objc", "r", "elixir", "perl",
-  "julia", "ruby", "html", "jsp", "css", "shell", "markdown", "groovy"
+  "julia", "ruby", "html", "jsp", "css", "shell", "markdown", "groovy", "vue", "svelte", "astro"
 ]);
 
 const EVIDENCE_VERSION: Readonly<Partial<Record<ArtifactLanguage, string>>> = Object.freeze({
   typescript: "0.456.0",
   javascript: "0.500.0",
   python: "0.501.0",
+  vue: "0.502.0",
+  svelte: "0.502.0",
+  astro: "0.502.0",
   go: "0.457.0",
   rust: "0.458.0",
   java: "0.494.0",
@@ -116,6 +121,9 @@ const LANGUAGE_LIMITATIONS: Readonly<Partial<Record<ArtifactLanguage, readonly s
     typescript: ["parse-rejected, overload, conditional export, and runtime dispatch remain nonclaims"],
     javascript: ["300-positive/150-negative ESTree truth covers bounded same-file relations and unique relative ESM or strict CommonJS imports; dynamic imports, package resolution, re-exports, mutable globals, and runtime dispatch remain nonclaims"],
     python: ["340-positive/150-negative CPython AST truth covers prior imports, direct calls, construction and inheritance plus parser-clean unique direct self member calls; decorators, metaclasses, attribute hooks, mutation, dynamic loading, monkey patching, inherited dispatch, and parser-rejected files remain nonclaims"],
+    vue: ["direct PascalCase template tags resolve only through one unmutated explicit relative default component import in script setup; Options API registration, kebab-case, dynamic components, directives, slots, macros, aliases, and runtime rendering remain nonclaims"],
+    svelte: ["direct PascalCase markup tags resolve only through one unmutated explicit relative default component import in the instance script; module scripts, svelte:component, snippets, runes, dynamic expressions, aliases, and runtime rendering remain nonclaims"],
+    astro: ["direct PascalCase markup tags resolve only through one unmutated explicit relative default component import in parse-clean frontmatter; expression components, framework hydration, slots, aliases, content collections, and runtime rendering remain nonclaims"],
     java: ["external classpath, compiler-only inference, and wider inherited dispatch remain nonclaims"],
     groovy: ["compiler-confirmed unique top-level def self-recursion and all 14 current inter-function candidates are exact; division, non-assignment slashy forms, closures, delegates, metaclass, class methods, and wider dynamic dispatch remain nonclaims"],
     shell: ["function body calls require parser response ABI v2"],
@@ -156,6 +164,7 @@ function truthKind(language: ArtifactLanguage): LanguageTruthKind {
   if (language === "typescript") return "typescript-compiler-api";
   if (language === "javascript") return "javascript-estree";
   if (language === "python") return "python-stdlib-ast";
+  if (language === "vue" || language === "svelte" || language === "astro") return "sfc-compiler-api";
   if (language === "java") return "javac-oracle";
   if (language === "groovy") return "groovy-compiler-ast";
   if (BOUNDED_RELATION_LANGUAGES.has(language)) return "source-occurrence-oracle";

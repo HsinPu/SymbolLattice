@@ -14,6 +14,10 @@ import type {
   SymbolKind,
   SymbolNode
 } from "../domain/index.js";
+import {
+  directSfcTemplateComponentOccurrences,
+  mutatedTopLevelNames
+} from "./sfc-template-components.js";
 
 export interface AstroExtractFileFactsInput {
   readonly filePath: string;
@@ -369,6 +373,56 @@ export function extractAstroFileFacts(input: AstroExtractFileFactsInput): Artifa
           hasExportModifier(statement)
         );
       }
+    }
+  }
+
+  if (frontmatter !== "absent" && sourceFile !== null) {
+    const componentImportCounts = new Map<string, number>();
+    for (const binding of importBindings) {
+      if (
+        binding.importedName === "default" &&
+        binding.isTypeOnly !== true &&
+        /^\.[./]/u.test(binding.moduleSpecifier) &&
+        /\.(?:vue|svelte|astro)$/iu.test(binding.moduleSpecifier) &&
+        /^[A-Z][A-Za-z0-9_$]*$/u.test(binding.localName)
+      ) {
+        componentImportCounts.set(
+          binding.localName,
+          (componentImportCounts.get(binding.localName) ?? 0) + 1
+        );
+      }
+    }
+    const declaredNames = new Set(
+      symbols.filter((symbol) => symbol.kind !== "file" && symbol.name !== "default").map((symbol) => symbol.name)
+    );
+    const mutatedNames = mutatedTopLevelNames(sourceFile);
+    for (const occurrence of directSfcTemplateComponentOccurrences(input.sourceText, [{
+      start: 0,
+      end: frontmatter.contentEnd + 3
+    }])) {
+      if (
+        componentImportCounts.get(occurrence.name) !== 1 ||
+        declaredNames.has(occurrence.name) ||
+        mutatedNames.has(occurrence.name)
+      ) {
+        continue;
+      }
+      const range = rangeForSpan(lineStarts, occurrence.start, occurrence.end);
+      pendingReferences.push({
+        id: createEdgeId({
+          sourceId: fileNode.id,
+          targetId: null,
+          kind: "references",
+          line: range.start.line,
+          column: range.start.column,
+          referenceName: occurrence.name
+        }),
+        sourceId: fileNode.id,
+        filePath: input.filePath,
+        referenceName: occurrence.name,
+        relationKind: "references",
+        range
+      });
     }
   }
 

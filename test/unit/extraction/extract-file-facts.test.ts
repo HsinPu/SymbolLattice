@@ -18397,7 +18397,8 @@ describe("source extraction", () => {
     ]);
     expect(facts.pendingReferences.map((reference) => reference.referenceName)).toEqual([
       "./AppLink.vue",
-      "vue-router"
+      "vue-router",
+      "AppLink"
     ]);
 
     const unsupportedExport = extractFileFacts({

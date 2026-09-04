@@ -13,6 +13,10 @@ import type {
   SymbolKind,
   SymbolNode
 } from "../domain/index.js";
+import {
+  directSfcTemplateComponentOccurrences,
+  mutatedTopLevelNames
+} from "./sfc-template-components.js";
 
 export interface SvelteExtractFileFactsInput {
   readonly filePath: string;
@@ -383,6 +387,9 @@ export function extractSvelteFileFacts(input: SvelteExtractFileFactsInput): Arti
     scopeId: FILE_SCOPE_ID
   });
 
+  const instanceDefaultComponentImports: ImportBinding[] = [];
+  const instanceMutatedNames = new Set<string>();
+
   for (const entry of parsedBlocks) {
     if (entry.sourceFile === null) {
       continue;
@@ -419,13 +426,17 @@ export function extractSvelteFileFacts(input: SvelteExtractFileFactsInput): Arti
 
       const importClause = statement.importClause;
       if (importClause?.name !== undefined) {
-        importBindings.push({
+        const binding: ImportBinding = {
           moduleSpecifier,
           localName: importClause.name.text,
           importedName: "default",
           range: rangeForNode(importClause.name),
           ...(importClause.isTypeOnly ? { isTypeOnly: true } : {})
-        });
+        };
+        importBindings.push(binding);
+        if (entry.block.kind === "instance") {
+          instanceDefaultComponentImports.push(binding);
+        }
       }
       if (importClause?.namedBindings !== undefined && ts.isNamedImports(importClause.namedBindings)) {
         for (const element of importClause.namedBindings.elements) {
@@ -453,6 +464,9 @@ export function extractSvelteFileFacts(input: SvelteExtractFileFactsInput): Arti
 
     if (entry.block.kind !== "instance") {
       continue;
+    }
+    for (const name of mutatedTopLevelNames(sourceFile)) {
+      instanceMutatedNames.add(name);
     }
 
     for (const statement of sourceFile.statements) {
@@ -487,6 +501,52 @@ export function extractSvelteFileFacts(input: SvelteExtractFileFactsInput): Arti
         );
       }
     }
+  }
+
+  const componentImportCounts = new Map<string, number>();
+  for (const binding of instanceDefaultComponentImports) {
+    if (
+      binding.isTypeOnly !== true &&
+      /^\.[./]/u.test(binding.moduleSpecifier) &&
+      /\.(?:vue|svelte|astro)$/iu.test(binding.moduleSpecifier) &&
+      /^[A-Z][A-Za-z0-9_$]*$/u.test(binding.localName)
+    ) {
+      componentImportCounts.set(
+        binding.localName,
+        (componentImportCounts.get(binding.localName) ?? 0) + 1
+      );
+    }
+  }
+  const declaredNames = new Set(
+    symbols.filter((symbol) => symbol.kind !== "file" && symbol.name !== "default").map((symbol) => symbol.name)
+  );
+  for (const occurrence of directSfcTemplateComponentOccurrences(
+    input.sourceText,
+    blocks.map((block) => ({ start: block.contentStart, end: block.contentEnd }))
+  )) {
+    if (
+      componentImportCounts.get(occurrence.name) !== 1 ||
+      declaredNames.has(occurrence.name) ||
+      instanceMutatedNames.has(occurrence.name)
+    ) {
+      continue;
+    }
+    const range = rangeForSpan(lineStarts, occurrence.start, occurrence.end);
+    pendingReferences.push({
+      id: createEdgeId({
+        sourceId: fileNode.id,
+        targetId: null,
+        kind: "references",
+        line: range.start.line,
+        column: range.start.column,
+        referenceName: occurrence.name
+      }),
+      sourceId: fileNode.id,
+      filePath: input.filePath,
+      referenceName: occurrence.name,
+      relationKind: "references",
+      range
+    });
   }
 
   const routePath = svelteKitStaticPagePath(input.filePath);

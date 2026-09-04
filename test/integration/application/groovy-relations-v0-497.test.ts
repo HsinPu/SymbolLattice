@@ -34,7 +34,7 @@ describe("Groovy relations v0.497", () => {
     const calls = snapshot.edges.filter((edge) => edge.kind === "calls");
 
     expect(status.stale).toBe(false);
-    expect(store.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v407");
+    expect(store.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v408");
     expect(calls).toHaveLength(2);
     expect(calls).toEqual(expect.arrayContaining([
       expect.objectContaining({

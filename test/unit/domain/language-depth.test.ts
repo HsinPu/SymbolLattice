@@ -18,9 +18,9 @@ describe("language depth matrix", () => {
       tiers: {
         "external-tier-a": 1,
         "external-partial": 1,
-        "bounded-relation": 29,
+        "bounded-relation": 32,
         "large-project-structural": 8,
-        targeted: 19
+        targeted: 16
       },
       relationDepth: {
         project: 41,
@@ -28,8 +28,8 @@ describe("language depth matrix", () => {
         framework: 4,
         structural: 4
       },
-      largeProjectValidated: 18,
-      relationReleaseValidated: 31
+      largeProjectValidated: 21,
+      relationReleaseValidated: 34
     });
   });
 
@@ -62,6 +62,16 @@ describe("language depth matrix", () => {
       largeProjectValidated: true,
       relationReleaseValidated: true
     });
+    for (const language of ["vue", "svelte", "astro"] as const) {
+      expect(byLanguage.get(language)).toMatchObject({
+        evidenceTier: "bounded-relation",
+        relationDepth: "project",
+        truthKind: "sfc-compiler-api",
+        evidenceVersion: "0.502.0",
+        largeProjectValidated: true,
+        relationReleaseValidated: true
+      });
+    }
     expect(byLanguage.get("shell")).toMatchObject({
       relationDepth: "structural",
       relationReleaseValidated: false
