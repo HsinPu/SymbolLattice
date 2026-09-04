@@ -2,6 +2,8 @@ import {
   createEdgeId,
   createSymbolId,
   type ArtifactFacts,
+  type FortranCallFact,
+  type FortranProcedureFact,
   type GraphEdge,
   type SourcePosition,
   type SourceRange,
@@ -21,6 +23,7 @@ interface FortranLine {
   readonly code: string;
   readonly codeStart: number;
   readonly codeEnd: number;
+  readonly continuation: boolean;
 }
 
 interface FortranUnit {
@@ -34,6 +37,7 @@ interface FortranDirectCall {
   readonly name: string;
   readonly start: number;
   readonly end: number;
+  readonly argumentCount: number;
 }
 
 interface FortranContainedProcedure extends FortranUnit {
@@ -198,17 +202,14 @@ function normalizedFortranLine(
     fixedForm &&
     (rawLine[0] === "c" || rawLine[0] === "C" || rawLine[0] === "*" || rawLine[0] === "!")
   ) {
-    return { code: "", codeStart: lineStart, codeEnd: lineStart };
+    return { code: "", codeStart: lineStart, codeEnd: lineStart, continuation: false };
   }
-  if (
+  const continuation =
     fixedForm &&
     rawLine.length > 5 &&
     rawLine[5] !== " " &&
     rawLine[5] !== "0" &&
-    rawLine[5] !== "\t"
-  ) {
-    return null;
-  }
+    rawLine[5] !== "\t";
 
   const sourceOffset = fixedForm ? Math.min(6, rawLine.length) : 0;
   const sourceField = fixedForm
@@ -221,19 +222,20 @@ function normalizedFortranLine(
   const firstContent = commentFree.search(/\S/u);
   if (firstContent < 0) {
     const emptyOffset = lineStart + sourceOffset + commentFree.length;
-    return { code: "", codeStart: emptyOffset, codeEnd: emptyOffset };
+    return { code: "", codeStart: emptyOffset, codeEnd: emptyOffset, continuation };
   }
   const trailingContent = commentFree.replace(/[ \t]*$/u, "").length;
   const code = commentFree.slice(firstContent, trailingContent);
   return {
     code,
     codeStart: lineStart + sourceOffset + firstContent,
-    codeEnd: lineStart + sourceOffset + trailingContent
+    codeEnd: lineStart + sourceOffset + trailingContent,
+    continuation
   };
 }
 
 function fortranLines(sourceText: string, fixedForm: boolean): readonly FortranLine[] | null {
-  const lines: FortranLine[] = [];
+  const physicalLines: FortranLine[] = [];
   let lineStart = 0;
   while (lineStart < sourceText.length) {
     const newline = sourceText.indexOf("\n", lineStart);
@@ -248,13 +250,31 @@ function fortranLines(sourceText: string, fixedForm: boolean): readonly FortranL
     if (normalized === null) {
       return null;
     }
-    lines.push(normalized);
+    physicalLines.push(normalized);
     if (newline < 0) {
       break;
     }
     lineStart = newline + 1;
   }
-  return lines;
+  if (!fixedForm) return physicalLines;
+  const logicalLines: FortranLine[] = [];
+  for (const line of physicalLines) {
+    if (!line.continuation) {
+      logicalLines.push(line);
+      continue;
+    }
+    let previousIndex = logicalLines.length - 1;
+    while (previousIndex >= 0 && logicalLines[previousIndex]?.code.length === 0) previousIndex -= 1;
+    const previous = logicalLines[previousIndex];
+    if (previous === undefined || line.code.length === 0) return null;
+    logicalLines[previousIndex] = {
+      code: `${previous.code} ${line.code}`,
+      codeStart: previous.codeStart,
+      codeEnd: line.codeEnd,
+      continuation: false
+    };
+  }
+  return logicalLines;
 }
 
 function directFortranUnit(line: FortranLine): Omit<FortranUnit, "start" | "end"> | null {
@@ -308,6 +328,9 @@ function directUnitEnd(
   kind: FortranUnitKind,
   expectedName: string
 ): "match" | "wrong-name" | "none" {
+  if (/^end\s*$/iu.test(line.code)) {
+    return "match";
+  }
   const ending = new RegExp(
     "^end\\s+" + kind + "(?:\\s+(" + FORTRAN_IDENTIFIER + "))?\\s*$",
     "iu"
@@ -435,6 +458,31 @@ function isBalancedFortranArguments(sourceText: string): boolean {
   return quote === null && depth === 0;
 }
 
+function fortranArgumentCount(argumentsText: string | undefined): number | null {
+  if (argumentsText === undefined) return 0;
+  if (!isBalancedFortranArguments(argumentsText) || !argumentsText.startsWith("(") || !argumentsText.endsWith(")")) return null;
+  const body = argumentsText.slice(1, -1);
+  if (body.trim().length === 0) return 0;
+  let depth = 0;
+  let quote: "'" | '"' | null = null;
+  let count = 1;
+  for (let index = 0; index < body.length; index += 1) {
+    const character = body[index];
+    if (quote !== null) {
+      if (character === quote) {
+        if (body[index + 1] === quote) index += 1;
+        else quote = null;
+      }
+    } else if (character === "'" || character === '"') quote = character;
+    else if (character === "(") depth += 1;
+    else if (character === ")") {
+      if (depth === 0) return null;
+      depth -= 1;
+    } else if (character === "," && depth === 0) count += 1;
+  }
+  return quote === null && depth === 0 ? count : null;
+}
+
 function directFortranCalls(lines: readonly FortranLine[]): readonly FortranDirectCall[] | null {
   const calls: FortranDirectCall[] = [];
   for (const line of lines) {
@@ -444,14 +492,15 @@ function directFortranCalls(lines: readonly FortranLine[]): readonly FortranDire
     }
     const name = match[1];
     const argumentsText = match[2];
-    if (name === undefined || (argumentsText !== undefined && !isBalancedFortranArguments(argumentsText))) {
+    const argumentCount = fortranArgumentCount(argumentsText);
+    if (name === undefined || argumentCount === null) {
       return null;
     }
     const offset = line.code.indexOf(name);
     if (offset < 0) {
       return null;
     }
-    calls.push({ name, start: line.codeStart + offset, end: line.codeStart + offset + name.length });
+    calls.push({ name, start: line.codeStart + offset, end: line.codeStart + offset + name.length, argumentCount });
   }
   return calls;
 }
@@ -871,7 +920,7 @@ function directFortranCall(
   const offset = line.code.indexOf(name);
   return offset < 0
     ? null
-    : { name, start: line.codeStart + offset, end: line.codeStart + offset + name.length };
+    : { name, start: line.codeStart + offset, end: line.codeStart + offset + name.length, argumentCount: 0 };
 }
 
 function permitsFortranDirectCalls(lines: readonly FortranLine[]): boolean {
@@ -904,6 +953,8 @@ export function extractFortranFileFacts(input: FortranExtractFileFactsInput): Ar
   };
   const symbols: SymbolNode[] = [fileNode];
   const edges: GraphEdge[] = [];
+  const fortranProcedures: FortranProcedureFact[] = [];
+  const fortranCalls: FortranCallFact[] = [];
   const declarationOrdinals = new Map<string, number>();
   const symbolsByUnit = new Map<FortranUnit, SymbolNode>();
   const symbolsByContainedProcedure = new Map<FortranContainedProcedure, SymbolNode>();
@@ -977,7 +1028,39 @@ export function extractFortranFileFacts(input: FortranExtractFileFactsInput): Ar
   const lines = fortranLines(input.sourceText, isFixedFormSource(input.filePath));
   const conditionalDepths = lines === null ? null : preprocessorDepths(lines);
   const moduleMembers = lines === null ? null : staticFortranModuleMembers(lines, units);
+  const directProcedureDetails: Array<{
+    readonly unit: FortranUnit;
+    readonly parameterNames: ReadonlySet<string>;
+    readonly blockers: { readonly names: ReadonlySet<string>; readonly hasWildcardUse: boolean };
+    readonly calls: readonly FortranDirectCall[];
+    readonly projectEligible: boolean;
+  }> = [];
+  if (lines !== null && conditionalDepths !== null) {
+    for (const unit of units) {
+      if (unit.kind === "module") continue;
+      const unitLines = lines.filter(
+        (line) => line.codeStart >= unit.start && line.codeEnd <= unit.end && line.code.length > 0
+      );
+      const header = unitLines[0];
+      const parameterNames = header === undefined ? null : namesInFortranHeader(header);
+      const blockers = localFortranCallBlockers(unitLines.slice(1, -1));
+      const calls = directFortranCalls(unitLines.slice(1, -1));
+      if (parameterNames === null || blockers === null || calls === null) continue;
+      directProcedureDetails.push({
+        unit,
+        parameterNames,
+        blockers,
+        calls,
+        projectEligible:
+          isAtFortranPreprocessorDepthZero(lines, conditionalDepths, unit.start) &&
+          !unitLines.some((line) => /^(?:optional|entry)\b/iu.test(line.code))
+      });
+    }
+  }
   const exactCallNames = new Set(units.map((unit) => unit.name.toLowerCase()));
+  for (const detail of directProcedureDetails) {
+    for (const call of detail.calls) exactCallNames.add(call.name.toLowerCase());
+  }
   if (moduleMembers !== null) {
     for (const moduleMemberGroup of moduleMembers) {
       for (const member of moduleMemberGroup.members) {
@@ -1001,6 +1084,35 @@ export function extractFortranFileFacts(input: FortranExtractFileFactsInput): Ar
     conditionalDepths !== null &&
     !isPreprocessingProneFortranSource(input.filePath) &&
     !hasUnsafeFortranPreprocessing(lines, exactCallNames);
+  for (const detail of directProcedureDetails) {
+    const symbol = symbolsByUnit.get(detail.unit);
+    if (symbol === undefined) continue;
+    fortranProcedures.push({
+      symbolId: symbol.id,
+      filePath: input.filePath,
+      name: detail.unit.name,
+      kind: detail.unit.kind as "program" | "subroutine" | "function",
+      parameterCount: detail.parameterNames.size,
+      projectEligible: detail.projectEligible && exactCallsPermitted,
+      range: symbol.range
+    });
+    if (!detail.projectEligible || !exactCallsPermitted || detail.blockers.hasWildcardUse) continue;
+    for (const call of detail.calls) {
+      const callName = call.name.toLowerCase();
+      if (
+        FORTRAN_INTRINSIC_SUBROUTINES.has(callName) ||
+        detail.parameterNames.has(callName) ||
+        detail.blockers.names.has(callName)
+      ) continue;
+      fortranCalls.push({
+        sourceId: symbol.id,
+        filePath: input.filePath,
+        referenceName: call.name,
+        argumentCount: call.argumentCount,
+        range: rangeForSpan(lineStarts, call.start, call.end)
+      });
+    }
+  }
   if (moduleMembers !== null) {
     for (const moduleMemberGroup of moduleMembers) {
       const moduleSymbol = symbolsByUnit.get(moduleMemberGroup.module);
@@ -1112,7 +1224,7 @@ export function extractFortranFileFacts(input: FortranExtractFileFactsInput): Ar
           unit.name.toLowerCase() === call.name.toLowerCase() &&
           isAtFortranPreprocessorDepthZero(lines, conditionalDepths, unit.start) &&
           isZeroArgumentFortranSubroutineHeader(
-            lines.find((line) => line.codeStart === unit.start) ?? { code: "", codeStart: 0, codeEnd: 0 },
+            lines.find((line) => line.codeStart === unit.start) ?? { code: "", codeStart: 0, codeEnd: 0, continuation: false },
             unit.name
           )
       );
@@ -1160,6 +1272,7 @@ export function extractFortranFileFacts(input: FortranExtractFileFactsInput): Ar
     referenceScopes: [],
     importBindings: [],
     exportBindings: [],
-    reExportBindings: []
+    reExportBindings: [],
+    fortranFacts: { procedures: fortranProcedures, calls: fortranCalls }
   };
 }

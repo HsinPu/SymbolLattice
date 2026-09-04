@@ -18,18 +18,18 @@ describe("language depth matrix", () => {
       tiers: {
         "external-tier-a": 1,
         "external-partial": 1,
-        "bounded-relation": 36,
+        "bounded-relation": 37,
         "large-project-structural": 6,
-        targeted: 14
+        targeted: 13
       },
       relationDepth: {
-        project: 41,
-        "same-file": 11,
+        project: 42,
+        "same-file": 10,
         framework: 4,
         structural: 2
       },
-      largeProjectValidated: 23,
-      relationReleaseValidated: 38
+      largeProjectValidated: 24,
+      relationReleaseValidated: 39
     });
   });
 
@@ -99,6 +99,14 @@ describe("language depth matrix", () => {
       relationDepth: "same-file",
       truthKind: "roslyn-vb-ast",
       evidenceVersion: "0.506.0",
+      largeProjectValidated: true,
+      relationReleaseValidated: true
+    });
+    expect(byLanguage.get("fortran")).toMatchObject({
+      evidenceTier: "bounded-relation",
+      relationDepth: "project",
+      truthKind: "fparser-ast",
+      evidenceVersion: "0.507.0",
       largeProjectValidated: true,
       relationReleaseValidated: true
     });

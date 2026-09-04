@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v412";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v413";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v198";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v199";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -4394,6 +4394,31 @@ export interface HaskellFacts {
   readonly heritage?: readonly HaskellHeritageFact[];
 }
 
+/** Source-proven direct Fortran program-unit declaration retained for bounded project resolution. */
+export interface FortranProcedureFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly kind: "program" | "subroutine" | "function";
+  readonly parameterCount: number;
+  readonly projectEligible: boolean;
+  readonly range: SourceRange;
+}
+
+/** Source-proven bare CALL occurrence from one direct Fortran program unit. */
+export interface FortranCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+export interface FortranFacts {
+  readonly procedures: readonly FortranProcedureFact[];
+  readonly calls: readonly FortranCallFact[];
+}
+
 /**
  * Syntax-proven, file-local facts. They deliberately retain unresolved source
  * references so later resolution stages can be recomputed without reparsing.
@@ -4500,6 +4525,8 @@ export interface ArtifactFacts {
   readonly ocamlFacts?: OcamlFacts;
   /** Omitted only by artifact facts persisted before v0.465 Haskell relation depth. */
   readonly haskellFacts?: HaskellFacts;
+  /** Omitted only by artifact facts persisted before v0.507 Fortran project-call depth. */
+  readonly fortranFacts?: FortranFacts;
   /** Omitted only by artifact facts persisted before v0.92. */
   readonly springBootPropertiesFacts?: SpringBootPropertiesFacts;
   /** Omitted only by artifact facts persisted before v0.66. */

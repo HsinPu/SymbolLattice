@@ -16,7 +16,7 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.506.0
+Current version: v0.507.0
 
 ## Highlights
 
@@ -58,6 +58,8 @@ v0.501.0 promotes Python to bounded relation evidence. Fixed CPython 3.13.11, Dj
 v0.502.0 promotes Vue, Svelte, and Astro to bounded relation evidence. Fixed Element Plus 2.14.3, Svelte 5.57.0, and Astro 7.3.1 corpora provide 300 component-reference truths and 150 negatives through an independent TypeScript Compiler API and markup scanner. An exact `references` edge requires a direct PascalCase template/markup tag, one unmutated explicit relative default component import visible to that SFC template, and one tracked target. Vue is limited to `<script setup>`, Svelte to the instance script, and Astro to parse-clean frontmatter. Dynamic components, kebab-case, namespace/member tags, Options API registration, module scripts, template expressions, aliases, macros, hydration, and runtime rendering remain nonclaims.
 
 v0.503.0 promotes Shell to bounded same-file relation evidence. The bundled mvdan.cc/sh v3.13.1 WASM now uses ABI 2, and fixed Git, nvm, Kubernetes, asdf, RVM, and SDKMAN corpora verify 300 parser-proven direct function calls plus 150 negatives. An exact `calls` edge requires a literal command inside a direct top-level function body, one unique direct top-level target in the same file, stable UTF-8 byte ranges, and parser provenance. Duplicate targets, nested functions, command/process substitutions, `eval`, `source`/`.`, alias/unalias/unset, dynamic commands, and external dispatch remain nonclaims.
+
+v0.507.0 promotes Fortran to bounded project relation evidence. Fixed Reference LAPACK v3.12.1 source and fparser 0.2.4 verify 300 project subroutine calls across BLAS, CBLAS, SRC, and TESTING, all 1,227 endpoint-admitted breadth candidates, and 150 negatives. Exact `calls` require lowercase non-preprocessed source, one unique project subroutine target, matching fixed arity, and no dummy, EXTERNAL, PROCEDURE, USE, interface shadow, or Optional target. Fixed-form continuations and standard generic `END` are now admitted safely; type-bound calls, function invocation, macro configuration, and runtime dispatch remain nonclaims.
 
 v0.506.0 promotes VB.NET to bounded same-file relation evidence. Fixed Roslyn Visual Studio 2022 17.14.34 source and Microsoft.Net.Compilers.Toolset 5.9.0 verify 300 private fixed-arity calls across six VB subsystems, 934 endpoint-admitted breadth candidates, and 150 negatives. Exact `calls` require a non-Partial same-file Class or Module, one unique `Private` target, single-line caller and target signatures, matching arity, and no parameter/local shadow, lambda, XML, or Shared-to-instance dispatch. Overloads, Optional or ParamArray parameters, late binding, qualified or member calls, and cross-file partial types remain nonclaims.
 

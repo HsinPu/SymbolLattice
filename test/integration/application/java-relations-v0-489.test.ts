@@ -53,8 +53,8 @@ describe("Java modern callable call relations v0.489", () => {
     const instanceHelper = snapshot.symbols.find((symbol) => symbol.name === "instanceHelper");
 
     expect(indexed).toMatchObject({ initialized: true, stale: false });
-    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v412");
-    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v198");
+    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v413");
+    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v199");
     expect(snapshot.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({
         sourceId: entry?.id,

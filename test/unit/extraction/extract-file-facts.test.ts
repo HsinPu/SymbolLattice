@@ -21089,7 +21089,7 @@ describe("source extraction", () => {
     });
   });
 
-  it("rejects incomplete, generic-end, and continued Fortran input", () => {
+  it("admits generic END and fixed continuation while rejecting unsupported Fortran input", () => {
     const unbalanced = extractFileFacts({
       filePath: "src/unbalanced.f90",
       language: "fortran",
@@ -21131,11 +21131,12 @@ describe("source extraction", () => {
       ].join("\n")
     });
 
+    expect(genericEnd.symbols.some((symbol) => symbol.name === "Broken" && symbol.kind === "module")).toBe(true);
+    expect(fixedContinuation.symbols.some((symbol) => symbol.name === "split" && symbol.kind === "function")).toBe(true);
+
     for (const facts of [
       unbalanced,
-      genericEnd,
       freeContinuation,
-      fixedContinuation,
       moduleProcedure,
       fixedSequenceField
     ]) {

@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.506.0
+目前版本：v0.507.0
 
 ## 主要能力
 
@@ -58,6 +58,8 @@ v0.501.0 將Python提升為bounded relation evidence。固定CPython 3.13.11、D
 v0.502.0 將Vue、Svelte與Astro提升為bounded relation evidence。固定Element Plus 2.14.3、Svelte 5.57.0與Astro 7.3.1大型corpus，以獨立TypeScript Compiler API與markup scanner驗證300筆component references及150筆負向。Exact `references`只接受template／markup中的direct PascalCase tag、可見script scope內唯一未重綁的explicit relative default component import與唯一tracked target；Vue限`<script setup>`、Svelte限instance script、Astro限parse-clean frontmatter。Dynamic component、kebab-case、namespace/member tag、Options API registration、module script、template expression、alias、macro、hydration與runtime rendering維持nonclaim。
 
 v0.503.0 將Shell提升為bounded same-file relation evidence。Bundled mvdan.cc/sh v3.13.1 WASM升至ABI 2，固定Git、nvm、Kubernetes、asdf、RVM與SDKMAN corpus驗證300筆parser-proven direct function calls及150筆負向。Exact `calls`只接受direct top-level function body中的literal command、同檔唯一direct top-level target、固定UTF-8 byte range與parser provenance；duplicate target、nested function、command/process substitution、`eval`、`source`／`.`、alias／unalias／unset、dynamic command與external dispatch維持nonclaim。
+
+v0.507.0 將Fortran提升為bounded project relation evidence。固定Reference LAPACK v3.12.1與fparser 0.2.4，驗證300筆跨BLAS／CBLAS／SRC／TESTING的project subroutine calls、1,227筆endpoint-admitted breadth及150筆負向。Exact `calls`只接受lowercase非preprocessed source、project唯一subroutine target、固定arity、無dummy／EXTERNAL／PROCEDURE／USE／interface shadow或Optional target；fixed-form continuation與標準generic `END`現可安全admit，type-bound call、function invocation、macro configuration與runtime dispatch維持nonclaim。
 
 v0.506.0 將VB.NET提升為bounded same-file relation evidence。固定Roslyn Visual Studio 2022 17.14.34 source與Microsoft.Net.Compilers.Toolset 5.9.0，驗證300筆跨六個VB子系統的private fixed-arity calls、934筆endpoint-admitted breadth及150筆負向。Exact `calls`只接受非Partial同檔Class／Module、唯一`Private` target、單行caller／target signature、固定arity、無parameter/local shadow、lambda、XML或Shared→instance dispatch；overload、Optional／ParamArray、late binding、qualified/member call與跨檔partial type維持nonclaim。
 
