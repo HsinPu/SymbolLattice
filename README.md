@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.492.0
+目前版本：v0.493.0
 
 ## 主要能力
 
@@ -106,6 +106,8 @@ v0.490.0 加深 Java modern-parser parameter receiver recovery。對 clean moder
 v0.491.0 加深 Java modern-parser field receiver recovery。對 clean modern parse 中直接 declared、`final` reference-type field 的 `field.method(...)`，只有在 field 沒有可證明的 mutation／escape／shadow、且既有 resolver 找到唯一 direct callable target 時建立 `calls` exact edge；non-final、chained／computed receiver、array／wildcard／type-variable、inherited virtual dispatch、overload type inference 與外部 classpath 維持 nonclaim。固定三 corpus benchmark 與 150 個負向結果會在 release report 中公布，不將 bounded slice 包裝成完整 Java compiler 支援。
 
 v0.492.0 加深 Java modern-parser local initializer receiver recovery。對 clean modern parse 中 block 內 direct `Type value = new Type(...)` 或 `var value = new Type(...)`，只有在 binding scope 唯一、沒有 reassignment／mutation／escape／shadow，且既有 resolver 證明唯一 direct callable target 時建立 `calls` exact edge；factory／conditional／chained initializer、overload type inference、inherited dispatch 與外部 classpath 維持 nonclaim。固定三 corpus benchmark 與 150 個負向結果會在 release report 中公布。
+
+v0.493.0 加深 Java modern-parser generic local initializer receiver recovery。對 clean modern parse 中單層 generic 或 diamond 的 `var value = new Type<Arg>(...)`／`Type<Arg> value = new Type<>(...)`，只保留 raw type identity，且 type arguments 不得含 wildcard／array／nested generic／type-use annotation；既有 resolver 仍須證明唯一 direct callable target。generic type inference、overload ambiguity、factory／conditional／chained initializer、inherited dispatch 與外部 classpath 維持 nonclaim。固定三 corpus benchmark 與 150 個負向結果會在 release report 中公布。
 
 v0.459.0 加深 Kotlin 的 bounded JVM relations。固定 Kotlin compiler、Ktor、kotlinx.coroutines 三個大型 source scope，加上一個乾淨 synthetic project，驗證 class／object／interface／enum／typealias identity、explicit import、唯一 direct／member／extension call、constructor instantiation、heritage 與 explicit override；300 個核准正向與 150 個 disposable 負向均通過。Overload、default parameter、extension ambiguity、generic／reified、delegation、sealed/interface dispatch、compiler plugin、coroutine runtime、generated/reflection、Java interop 與 external dependency linkage 維持 unresolved 或 nonclaim；大型 corpus unsupported breadth 與 parser-rejected files 另列，不宣稱完整 Kotlin compiler 支援。
 

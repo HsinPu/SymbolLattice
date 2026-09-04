@@ -16,7 +16,7 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.492.0
+Current version: v0.493.0
 
 ## Highlights
 
@@ -106,6 +106,8 @@ v0.490.0 deepens Java modern-parser parameter receiver recovery. For a clean mod
 v0.491.0 deepens Java modern-parser field receiver recovery. For a clean modern parse, a direct declared `final` reference-type `field.method(...)` produces a `calls` exact edge only when mutation, escape, and shadowing are not proven and the existing resolver proves one unique direct callable target. Non-final fields, chained/computed receivers, array/wildcard/type-variable fields, inherited virtual dispatch, overload type inference, and external classpaths remain nonclaims; the bounded three-corpus benchmark and 150-negative result are reported separately from complete Java compiler support.
 
 v0.492.0 deepens Java modern-parser local initializer receiver recovery. For a clean modern parse, a block-local direct `Type value = new Type(...)` or `var value = new Type(...)` produces a `calls` exact edge only when its lexical binding scope is unique, reassignment/mutation/escape/shadowing are not proven, and the existing resolver proves one unique direct callable target. Factory/conditional/chained initializers, overload type inference, inherited dispatch, and external classpaths remain nonclaims; the bounded three-corpus benchmark and 150-negative result are reported separately.
+
+v0.493.0 deepens Java modern-parser generic local initializer receiver recovery. For a clean modern parse, a single-level generic or diamond `var value = new Type<Arg>(...)` / `Type<Arg> value = new Type<>(...)` retains only raw type identity; type arguments cannot contain wildcards, arrays, nested generics, or type-use annotations, and the existing resolver must still prove one unique direct callable target. Generic type inference, overload ambiguity, factory/conditional/chained initializers, inherited dispatch, and external classpaths remain nonclaims; the bounded three-corpus benchmark and 150-negative result are reported separately.
 
 v0.459.0 deepens bounded Kotlin/JVM relations. Three fixed large source scopes (Kotlin compiler, Ktor, and kotlinx.coroutines), plus one clean synthetic project, verify class/object/interface/enum/typealias identity, explicit imports, unique direct/member/extension calls, constructor instantiation, heritage, and explicit overrides. All 300 admitted positives and 150 disposable negatives pass. Overloads, default parameters, extension ambiguity, generic/reified types, delegation, sealed/interface dispatch, compiler plugins, coroutine runtime, generated/reflection behavior, Java interop, and external dependency linkage remain unresolved or nonclaims; unsupported breadth and parser-rejected files are reported separately rather than presented as complete Kotlin compiler support.
 

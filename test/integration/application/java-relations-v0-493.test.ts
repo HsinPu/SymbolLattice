@@ -4,10 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { SymbolLatticeService } from "../../../src/application/index.js";
-import {
-  ARTIFACT_FACTS_EXTRACTOR_VERSION,
-  PROJECT_RESOLVER_VERSION
-} from "../../../src/domain/index.js";
 import { FileSystemSourceCatalog } from "../../../src/infrastructure/filesystem/index.js";
 import { SqliteGraphStore } from "../../../src/infrastructure/sqlite/index.js";
 
@@ -19,19 +15,29 @@ afterEach(async () => {
   );
 });
 
-describe("Java modern object creation relations v0.487", () => {
-  it("projects a direct generic object creation from a parser-recovery method", async () => {
-    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-java-modern-new-"));
+describe("Java modern generic local initializer receiver calls v0.493", () => {
+  it("projects a raw-type exact edge for a generic local initializer in a recovery-safe file", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-java-modern-generic-"));
     temporaryDirectories.push(projectPath);
-    await writeFile(join(projectPath, "Service.java"), "package app; public class Service<T> {}\n", "utf8");
+    await writeFile(
+      join(projectPath, "Box.java"),
+      "package api; public class Box<T> { public void run() {} }\n",
+      "utf8"
+    );
     await writeFile(
       join(projectPath, "Runner.java"),
       [
         "package app;",
+        "import api.Box;",
         "public class Runner {",
         "  void run(Object value) {",
-        "    Service<String> created = new Service<>();",
-        "    if (value instanceof String text) { System.out.println(text); }",
+        "    switch (value) {",
+        "      case String text -> {",
+        "        var box = new Box<String>();",
+        "        box.run();",
+        "      }",
+        "      default -> {}",
+        "    }",
         "  }",
         "}"
       ].join("\n"),
@@ -40,43 +46,50 @@ describe("Java modern object creation relations v0.487", () => {
 
     const store = new SqliteGraphStore();
     const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
-    const indexed = await service.init({ projectPath });
+    await service.init({ projectPath });
     const snapshot = store.getSnapshot(projectPath);
-    const run = snapshot.symbols.find((symbol) => symbol.name === "run");
-    const target = snapshot.symbols.find((symbol) => symbol.name === "Service");
+    const caller = snapshot.symbols.find((symbol) => symbol.name === "run" && symbol.filePath === "Runner.java");
+    const target = snapshot.symbols.find((symbol) => symbol.name === "run" && symbol.filePath === "Box.java");
 
-    expect(indexed).toMatchObject({ initialized: true, stale: false });
-    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v400");
-    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v197");
     expect(snapshot.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        sourceId: run?.id,
+        sourceId: caller?.id,
         targetId: target?.id,
-        kind: "instantiates",
+        kind: "calls",
         resolution: "exact",
         confidence: 1,
         evidence: expect.objectContaining({
-          ruleId: "syntax.java.object-creation.same-package",
+          ruleId: "call.java.member.local.arity.direct-dispatch",
           candidateSymbolIds: [target?.id]
         })
       })
     ]));
   });
 
-  it("does not resolve an ambiguous object-creation target from a parser-recovery method", async () => {
-    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-java-modern-new-ambiguous-"));
+  it("does not project a generic local when a raw target is ambiguous", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-java-modern-generic-ambiguous-"));
     temporaryDirectories.push(projectPath);
-    await writeFile(join(projectPath, "ServiceA.java"), "package app; class Service {}\n", "utf8");
-    await writeFile(join(projectPath, "ServiceB.java"), "package app; class Service {}\n", "utf8");
+    await writeFile(
+      join(projectPath, "Box.java"),
+      "package api; public class Box<T> { public void run(Object value) {} public void run(String value) {} }\n",
+      "utf8"
+    );
     await writeFile(
       join(projectPath, "Runner.java"),
       [
         "package app;",
+        "import api.Box;",
         "public class Runner {",
         "  void run(Object value) {",
-        "    new Service<>();",
-        "    if (value instanceof String text) { System.out.println(text); }",
+        "    switch (value) {",
+        "      case String text -> {",
+        "        var box = new Box<String>();",
+        "        box.run(unknown());",
+        "      }",
+        "      default -> {}",
+        "    }",
         "  }",
+        "  String unknown() { return \"x\"; }",
         "}"
       ].join("\n"),
       "utf8"
@@ -88,7 +101,7 @@ describe("Java modern object creation relations v0.487", () => {
 
     expect(
       store.getSnapshot(projectPath).edges.filter((edge) =>
-        edge.kind === "instantiates" && edge.evidence?.ruleId?.startsWith("syntax.java.object-creation.")
+        edge.kind === "calls" && edge.referenceName === "run"
       )
     ).toEqual([]);
   });

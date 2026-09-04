@@ -1001,6 +1001,26 @@ function modernJavaLocalCallReferences(
   ]);
   const containsKind = (candidate: SgNode, expected: string): boolean =>
     candidate.kind() === expected || directChildren(candidate).some((child) => containsKind(child, expected));
+  const simpleGenericOwner = (candidate: SgNode): boolean => {
+    const genericType = candidate.kind() === "generic_type"
+      ? candidate
+      : directChildren(candidate).find((child) => child.kind() === "generic_type");
+    const typeArguments = genericType === undefined
+      ? []
+      : directChildren(genericType).filter((child) => child.kind() === "type_arguments");
+    if (typeArguments.length === 0) {
+      return true;
+    }
+    if (typeArguments.length !== 1 || typeArguments[0] === undefined) {
+      return false;
+    }
+    return directChildren(typeArguments[0]).every(
+      (child) => child.kind() === "<" ||
+        child.kind() === ">" ||
+        child.kind() === "type_identifier" ||
+        child.kind() === "scoped_type_identifier"
+    );
+  };
   const nodeKey = (candidate: SgNode): string => {
     const range = candidate.range();
     return `${candidate.kind()}:${range.start.index}:${range.end.index}`;
@@ -1050,6 +1070,7 @@ function modernJavaLocalCallReferences(
     );
     const isVar = typeNode?.kind() === "type_identifier" && typeNode.text() === "var";
     const declaredType = isVar ? null : signatureTypeReference(declaration);
+    const declaredTypeArgumentsSupported = typeNode === undefined || simpleGenericOwner(typeNode);
     const equalsIndex = directChildren(declarator).findIndex((child) => child.kind() === "=");
     const initializerCandidates = directChildren(declarator).filter(
       (child) => child.kind() === "object_creation_expression"
@@ -1059,9 +1080,11 @@ function modernJavaLocalCallReferences(
       equalsIndex < 0 ||
       initializerCandidates.length !== 1 ||
       initializer === undefined ||
-      containsKind(declaration, "type_arguments") ||
       containsKind(initializer, "class_body") ||
-      containsKind(initializer, "type_arguments")
+      containsKind(initializer, "wildcard") ||
+      containsKind(initializer, "array_type") ||
+      !declaredTypeArgumentsSupported ||
+      !simpleGenericOwner(initializer)
     ) {
       return null;
     }

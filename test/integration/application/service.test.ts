@@ -6972,6 +6972,7 @@ describe("SymbolLatticeService", () => {
       );
     const serviceId = symbol("src/api/Service.java#Service")?.id;
     const localServiceId = symbol("src/app/LocalService.java#LocalService")?.id;
+    const holderId = symbol("src/api/Holder.java#Holder")?.id;
 
     expect(memberCallAt(7)).toEqual(
       expect.objectContaining({
@@ -7034,7 +7035,21 @@ describe("SymbolLatticeService", () => {
     expect(memberCallAt(13)).toBeUndefined();
     expect(memberCallAt(14)).toBeUndefined();
     expect(memberCallAt(20)).toBeUndefined();
-    expect(memberCallAt(22)).toBeUndefined();
+    expect(memberCallAt(22)).toEqual(
+      expect.objectContaining({
+        targetId: symbol("src/api/Holder.java#Holder.execute")?.id,
+        evidence: expect.objectContaining({
+          callDispatch: expect.objectContaining({
+            receiverTypeSymbolId: holderId,
+            receiverBinding: expect.objectContaining({
+              kind: "local",
+              name: "generic",
+              typeSource: "object-creation-initializer"
+            })
+          })
+        })
+      })
+    );
 
     const runnerFacts = graphStore
       .getArtifactFacts(projectPath)
@@ -7051,14 +7066,15 @@ describe("SymbolLatticeService", () => {
         }),
         expect.objectContaining({ receiverKind: "local", receiverName: "qualified" }),
         expect.objectContaining({ receiverKind: "local", receiverName: "samePackage" }),
-        expect.objectContaining({ receiverKind: "local", receiverName: "scoped" })
+        expect.objectContaining({ receiverKind: "local", receiverName: "scoped" }),
+        expect.objectContaining({ receiverKind: "local", receiverName: "generic" })
       ])
     );
     expect(
       runnerFacts?.jvmFacts?.javaMemberCallReferences.filter(
         (reference) => reference.receiverKind === "parameter" || reference.receiverKind === "local"
       )
-    ).toHaveLength(4);
+    ).toHaveLength(5);
   });
 
   it("resolves direct Java field receivers without crossing lexical or static boundaries", async () => {
