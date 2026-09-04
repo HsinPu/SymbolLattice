@@ -22,6 +22,11 @@ interface GroovyDeclaration {
   readonly name: string;
   readonly start: number;
   readonly end: number;
+  readonly functionShape?: {
+    readonly parameterNames: readonly string[];
+    readonly bodyStart: number;
+    readonly bodyEnd: number;
+  };
   readonly superclass?: {
     readonly name: string;
     readonly start: number;
@@ -489,6 +494,12 @@ function directFunctionDeclaration(sourceText: string, start: number): GroovyDec
   if (closingParenthesis === null) {
     return null;
   }
+  const parameterNames = simpleGroovyParameterNames(
+    sourceText.slice(openingParenthesis + 1, closingParenthesis)
+  );
+  if (parameterNames === null) {
+    return null;
+  }
   const openingBrace = headerOpeningBrace(sourceText, closingParenthesis + 1);
   if (openingBrace === null) {
     return null;
@@ -496,7 +507,110 @@ function directFunctionDeclaration(sourceText: string, start: number): GroovyDec
   const closingBrace = matchingDelimiter(sourceText, openingBrace, "{", "}");
   return closingBrace === null
     ? null
-    : { kind: "function", name: name.name, start, end: closingBrace + 1 };
+    : {
+        kind: "function",
+        name: name.name,
+        start,
+        end: closingBrace + 1,
+        functionShape: {
+          parameterNames,
+          bodyStart: openingBrace + 1,
+          bodyEnd: closingBrace
+        }
+      };
+}
+
+function simpleGroovyParameterNames(parameters: string): readonly string[] | null {
+  if (parameters.trim().length === 0) {
+    return [];
+  }
+  const names: string[] = [];
+  for (const parameter of parameters.split(",")) {
+    const match = /^(?:(?:def|[A-Za-z_$][A-Za-z0-9_$]*(?:\[\])?)\s+)?([A-Za-z_$][A-Za-z0-9_$]*)$/u.exec(
+      parameter.trim()
+    );
+    if (match?.[1] === undefined || names.includes(match[1])) {
+      return null;
+    }
+    names.push(match[1]);
+  }
+  return names;
+}
+
+function directCallArity(sourceText: string, openingParenthesis: number): {
+  readonly arity: number;
+  readonly end: number;
+} | null {
+  const closingParenthesis = matchingDelimiter(sourceText, openingParenthesis, "(", ")");
+  if (closingParenthesis === null) {
+    return null;
+  }
+  const argumentsText = sourceText.slice(openingParenthesis + 1, closingParenthesis);
+  if (argumentsText.trim().length === 0) {
+    return { arity: 0, end: closingParenthesis + 1 };
+  }
+  let parenthesisDepth = 0;
+  let bracketDepth = 0;
+  let arity = 1;
+  let segmentStart = 0;
+  for (let index = 0; index < argumentsText.length; index += 1) {
+    const character = argumentsText[index];
+    if (character === "(") parenthesisDepth += 1;
+    else if (character === ")") parenthesisDepth -= 1;
+    else if (character === "[") bracketDepth += 1;
+    else if (character === "]") bracketDepth -= 1;
+    else if (character === "{" || character === "}" || parenthesisDepth < 0 || bracketDepth < 0) {
+      return null;
+    } else if (character === "," && parenthesisDepth === 0 && bracketDepth === 0) {
+      if (argumentsText.slice(segmentStart, index).trim().length === 0) return null;
+      arity += 1;
+      segmentStart = index + 1;
+    }
+  }
+  if (
+    parenthesisDepth !== 0 ||
+    bracketDepth !== 0 ||
+    argumentsText.slice(segmentStart).trim().length === 0
+  ) {
+    return null;
+  }
+  return { arity, end: closingParenthesis + 1 };
+}
+
+function previousNonWhitespace(sourceText: string, start: number): string | undefined {
+  let index = start - 1;
+  while (index >= 0 && isWhitespace(sourceText[index])) index -= 1;
+  return sourceText[index];
+}
+
+function hasUnsafeDirectCallPrefix(character: string | undefined): boolean {
+  return character === "." || character === "&" || character === "@";
+}
+
+function hasDirectNameAssignment(sourceText: string, name: string): boolean {
+  for (let index = 0; index < sourceText.length; ) {
+    const identifier = readIdentifier(sourceText, index);
+    if (identifier === null) {
+      index += 1;
+      continue;
+    }
+    if (identifier.name === name) {
+      const operatorStart = skipWhitespace(sourceText, identifier.end);
+      const operator = sourceText.slice(operatorStart, operatorStart + 2);
+      if (
+        operator === "+=" ||
+        operator === "-=" ||
+        operator === "*=" ||
+        operator === "/=" ||
+        operator === "%=" ||
+        (sourceText[operatorStart] === "=" && sourceText[operatorStart + 1] !== "=")
+      ) {
+        return true;
+      }
+    }
+    index = identifier.end;
+  }
+  return false;
 }
 
 function directGroovyDeclaration(sourceText: string, start: number): GroovyDeclaration | null {
@@ -746,6 +860,83 @@ export function extractGroovyFileFacts(input: GroovyExtractFileFactsInput): Arti
           candidateSymbolIds: [target.symbol.id]
         }
       });
+    }
+  }
+
+  const sanitized = sanitizeGroovySource(input.sourceText);
+  if (preamble !== null && sanitized !== null && !sanitized.includes(".metaClass")) {
+    const functionsByName = new Map<string, typeof declarationSymbols>();
+    for (const candidate of declarationSymbols) {
+      if (candidate.declaration.kind !== "function") continue;
+      const matches = functionsByName.get(candidate.declaration.name) ?? [];
+      matches.push(candidate);
+      functionsByName.set(candidate.declaration.name, matches);
+    }
+    for (const candidates of functionsByName.values()) {
+      const source = candidates.length === 1 ? candidates[0] : undefined;
+      const shape = source?.declaration.functionShape;
+      if (
+        source === undefined ||
+        shape === undefined ||
+        shape.parameterNames.includes(source.declaration.name) ||
+        preamble.importTerminals.includes(source.declaration.name) ||
+        hasDirectNameAssignment(sanitized, source.declaration.name)
+      ) {
+        continue;
+      }
+      const body = sanitized.slice(shape.bodyStart, shape.bodyEnd);
+      if (body.includes("{") || body.includes("}")) {
+        continue;
+      }
+      for (let index = shape.bodyStart; index < shape.bodyEnd; ) {
+        const identifier = readIdentifier(sanitized, index);
+        if (identifier === null) {
+          index += 1;
+          continue;
+        }
+        index = identifier.end;
+        if (
+          identifier.name !== source.declaration.name ||
+          isIdentifierPart(sanitized[index - identifier.name.length - 1]) ||
+          hasUnsafeDirectCallPrefix(
+            previousNonWhitespace(sanitized, index - identifier.name.length)
+          )
+        ) {
+          continue;
+        }
+        const openingParenthesis = skipWhitespace(sanitized, identifier.end);
+        if (sanitized[openingParenthesis] !== "(") {
+          continue;
+        }
+        const call = directCallArity(sanitized, openingParenthesis);
+        if (call === null || call.arity !== shape.parameterNames.length || call.end > shape.bodyEnd) {
+          continue;
+        }
+        const range = rangeForSpan(lineStarts, index - identifier.name.length, identifier.end);
+        edges.push({
+          id: createEdgeId({
+            sourceId: source.symbol.id,
+            targetId: source.symbol.id,
+            kind: "calls",
+            line: range.start.line,
+            column: range.start.column,
+            referenceName: source.declaration.name
+          }),
+          sourceId: source.symbol.id,
+          targetId: source.symbol.id,
+          kind: "calls",
+          filePath: input.filePath,
+          range,
+          resolution: "exact",
+          confidence: 1,
+          referenceName: source.declaration.name,
+          evidence: {
+            ruleId: "syntax.groovy.same-file.unique-direct-self-call.arity",
+            stage: "syntax",
+            candidateSymbolIds: [source.symbol.id]
+          }
+        });
+      }
     }
   }
 

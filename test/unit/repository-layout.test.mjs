@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const repositoryRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const executableExtensions = new Set([".cjs", ".java", ".js", ".mjs", ".ps1", ".sh", ".ts"]);
+const executableExtensions = new Set([".cjs", ".groovy", ".java", ".js", ".mjs", ".ps1", ".sh", ".ts"]);
 
 async function rootLayout(path) {
   const entries = await readdir(join(repositoryRoot, path), { withFileTypes: true });
@@ -28,7 +28,7 @@ describe("repository automation layout", () => {
 
   it("keeps benchmark executables below their evidence domains", async () => {
     await expect(rootLayout("benchmarks")).resolves.toEqual({
-      directories: ["css", "filesystem", "html", "java", "javascript", "jsp", "julia", "languages", "luau", "markdown", "mcp", "perl", "r"],
+      directories: ["css", "filesystem", "groovy", "html", "java", "javascript", "jsp", "julia", "languages", "luau", "markdown", "mcp", "perl", "r"],
       executableFiles: []
     });
   });

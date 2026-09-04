@@ -18,9 +18,9 @@ describe("language depth matrix", () => {
       tiers: {
         "external-tier-a": 1,
         "external-partial": 1,
-        "bounded-relation": 26,
+        "bounded-relation": 27,
         "large-project-structural": 10,
-        targeted: 20
+        targeted: 19
       },
       relationDepth: {
         project: 41,
@@ -28,8 +28,8 @@ describe("language depth matrix", () => {
         framework: 4,
         structural: 4
       },
-      largeProjectValidated: 17,
-      relationReleaseValidated: 28
+      largeProjectValidated: 18,
+      relationReleaseValidated: 29
     });
   });
 
@@ -57,6 +57,14 @@ describe("language depth matrix", () => {
     expect(byLanguage.get("r")).toMatchObject({
       evidenceTier: "bounded-relation",
       relationDepth: "same-file"
+    });
+    expect(byLanguage.get("groovy")).toMatchObject({
+      evidenceTier: "bounded-relation",
+      relationDepth: "same-file",
+      truthKind: "groovy-compiler-ast",
+      evidenceVersion: "0.497.0",
+      largeProjectValidated: true,
+      relationReleaseValidated: true
     });
   });
 });

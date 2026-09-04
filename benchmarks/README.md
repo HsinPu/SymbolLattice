@@ -11,6 +11,7 @@ These tools generate or validate large-project evidence outside the published np
 | `java/` | `correctness-oracle.mjs`, `JavaOracle.java` | automatic helper contract |
 | `languages/` | `depth-matrix.mjs` | manual |
 | `java/` | `lifecycle.mjs` | manual |
+| `groovy/` | `correctness-oracle.mjs`, `GroovyOracle.groovy` | manual compiler oracle |
 | `javascript/` | `correctness-oracle.mjs` | automatic |
 | `jsp/` | `correctness-oracle.mjs` | automatic |
 | `julia/` | `correctness-oracle.mjs`, `negative-matrix.mjs` | automatic |

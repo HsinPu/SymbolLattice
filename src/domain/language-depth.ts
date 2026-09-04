@@ -14,6 +14,7 @@ export type LanguageRelationDepth = "project" | "same-file" | "framework" | "str
 export type LanguageTruthKind =
   | "typescript-compiler-api"
   | "javac-oracle"
+  | "groovy-compiler-ast"
   | "source-occurrence-oracle"
   | "large-project-structural"
   | "targeted-tests";
@@ -35,7 +36,7 @@ export interface LanguageDepthEvidence {
 const BOUNDED_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
   "go", "rust", "kotlin", "swift", "dart", "csharp", "fsharp", "ocaml", "haskell",
   "scala", "elixir", "erlang", "clojure", "nix", "nim", "zig", "cpp", "c", "php",
-  "objc", "ruby", "sql", "r", "markdown", "proto", "graphql"
+  "objc", "ruby", "sql", "r", "markdown", "proto", "graphql", "groovy"
 ]);
 
 const LARGE_PROJECT_STRUCTURAL_LANGUAGES = new Set<ArtifactLanguage>([
@@ -64,7 +65,7 @@ const STRUCTURAL_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
 
 const LARGE_PROJECT_VALIDATED_LANGUAGES = new Set<ArtifactLanguage>([
   "typescript", "javascript", "python", "java", "lua", "luau", "objc", "r", "elixir", "perl",
-  "julia", "ruby", "html", "jsp", "css", "shell", "markdown"
+  "julia", "ruby", "html", "jsp", "css", "shell", "markdown", "groovy"
 ]);
 
 const EVIDENCE_VERSION: Readonly<Partial<Record<ArtifactLanguage, string>>> = Object.freeze({
@@ -74,6 +75,7 @@ const EVIDENCE_VERSION: Readonly<Partial<Record<ArtifactLanguage, string>>> = Ob
   go: "0.457.0",
   rust: "0.458.0",
   java: "0.494.0",
+  groovy: "0.497.0",
   lua: "0.433.0",
   luau: "0.434.0",
   objc: "0.476.0",
@@ -111,6 +113,7 @@ const LANGUAGE_LIMITATIONS: Readonly<Partial<Record<ArtifactLanguage, readonly s
   Object.freeze({
     typescript: ["parse-rejected, overload, conditional export, and runtime dispatch remain nonclaims"],
     java: ["external classpath, compiler-only inference, and wider inherited dispatch remain nonclaims"],
+    groovy: ["only compiler-confirmed unique top-level def self-recursion is exact; dynamic dispatch, closures, delegates, metaclass, and class methods remain nonclaims"],
     shell: ["function body calls require parser response ABI v2"],
     lua: ["product indexing retains parser-proven function structure without general call edges"],
     html: ["HTML relations are structural resources and containment, not runtime navigation"],
@@ -148,6 +151,7 @@ function relationDepth(language: ArtifactLanguage): LanguageRelationDepth {
 function truthKind(language: ArtifactLanguage): LanguageTruthKind {
   if (language === "typescript") return "typescript-compiler-api";
   if (language === "java") return "javac-oracle";
+  if (language === "groovy") return "groovy-compiler-ast";
   if (BOUNDED_RELATION_LANGUAGES.has(language)) return "source-occurrence-oracle";
   if (LARGE_PROJECT_STRUCTURAL_LANGUAGES.has(language)) return "large-project-structural";
   return "targeted-tests";

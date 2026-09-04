@@ -29,6 +29,33 @@ function functionId(language: DirectCallLanguage, sourceText: string, name: stri
 }
 
 describe("Groovy and CFML direct-call soundness boundaries", () => {
+  it("links unique top-level Groovy self-recursion with matching arity", () => {
+    const sourceText = "def fib(n) { n < 2 ? n : fib(n - 1) + fib(n - 2) }";
+    const targetId = functionId("groovy", sourceText, "fib");
+
+    expect(callsFor("groovy", sourceText)).toEqual([
+      expect.objectContaining({
+        sourceId: targetId,
+        targetId,
+        referenceName: "fib",
+        range: { start: { line: 1, column: 26 }, end: { line: 1, column: 29 } },
+        resolution: "exact",
+        confidence: 1,
+        evidence: {
+          ruleId: "syntax.groovy.same-file.unique-direct-self-call.arity",
+          stage: "syntax",
+          candidateSymbolIds: [targetId]
+        }
+      }),
+      expect.objectContaining({
+        sourceId: targetId,
+        targetId,
+        referenceName: "fib",
+        range: { start: { line: 1, column: 39 }, end: { line: 1, column: 42 } }
+      })
+    ]);
+  });
+
   it("keeps Groovy top-level def symbols without claiming a direct call", () => {
     const sourceText = [
       "def groovyHelper() { 1 }",
@@ -37,6 +64,16 @@ describe("Groovy and CFML direct-call soundness boundaries", () => {
     expect(functionId("groovy", sourceText, "groovyHelper")).toBeDefined();
     expect(functionId("groovy", sourceText, "groovyEntry")).toBeDefined();
     expect(callsFor("groovy", sourceText)).toEqual([]);
+  });
+
+  it("accepts a self-recursive call separated from a return keyword by whitespace", () => {
+    const sourceText = "def recurse(value) { return recurse(value) }";
+    expect(callsFor("groovy", sourceText)).toEqual([
+      expect.objectContaining({
+        referenceName: "recurse",
+        range: { start: { line: 1, column: 29 }, end: { line: 1, column: 36 } }
+      })
+    ]);
   });
 
   it("keeps CFScript function symbols without claiming a direct call", () => {
@@ -94,7 +131,18 @@ describe("Groovy and CFML direct-call soundness boundaries", () => {
         "def groovyHelper() { 1 }",
         "def groovyEntry() { groovyHelper() }",
         "External.metaClass.groovyHelper = { -> 2 }"
-      ].join("\n")
+      ].join("\n"),
+      "def recurse(recurse) { recurse() }",
+      "def recurse() { def recurse = { 1 }; recurse() }",
+      "def recurse() { this.recurse() }",
+      "def recurse() { this.&recurse() }",
+      "def recurse() { this.@recurse() }",
+      "def recurse(value) { recurse() }",
+      [
+        "def recurse(value) { recurse(value) }",
+        "def recurse(other) { recurse(other) }"
+      ].join("\n"),
+      "def recurse(value) { [value].each { recurse(it) } }"
     ];
 
     for (const sourceText of cases) {
