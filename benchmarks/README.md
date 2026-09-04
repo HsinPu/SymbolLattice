@@ -13,6 +13,7 @@ These tools generate or validate large-project evidence outside the published np
 | `java/` | `lifecycle.mjs` | manual |
 | `groovy/` | `correctness-oracle.mjs`, `GroovyOracle.groovy` | manual compiler oracle |
 | `javascript/` | `correctness-oracle.mjs` | automatic |
+| `python/` | `correctness-oracle.mjs`, `PythonOracle.py` | manual CPython stdlib AST oracle |
 | `jsp/` | `correctness-oracle.mjs` | automatic |
 | `julia/` | `correctness-oracle.mjs`, `negative-matrix.mjs` | automatic |
 | `julia/` | `lifecycle.mjs` | manual |

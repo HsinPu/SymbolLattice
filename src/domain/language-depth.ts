@@ -14,6 +14,7 @@ export type LanguageRelationDepth = "project" | "same-file" | "framework" | "str
 export type LanguageTruthKind =
   | "typescript-compiler-api"
   | "javascript-estree"
+  | "python-stdlib-ast"
   | "javac-oracle"
   | "groovy-compiler-ast"
   | "source-occurrence-oracle"
@@ -37,11 +38,11 @@ export interface LanguageDepthEvidence {
 const BOUNDED_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
   "go", "rust", "kotlin", "swift", "dart", "csharp", "fsharp", "ocaml", "haskell",
   "scala", "elixir", "erlang", "clojure", "nix", "nim", "zig", "cpp", "c", "php",
-  "objc", "ruby", "sql", "r", "markdown", "proto", "graphql", "groovy", "javascript"
+  "objc", "ruby", "sql", "r", "markdown", "proto", "graphql", "groovy", "javascript", "python"
 ]);
 
 const LARGE_PROJECT_STRUCTURAL_LANGUAGES = new Set<ArtifactLanguage>([
-  "python", "html", "css", "jsp", "shell", "lua", "luau", "julia", "perl"
+  "html", "css", "jsp", "shell", "lua", "luau", "julia", "perl"
 ]);
 
 const PROJECT_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
@@ -72,7 +73,7 @@ const LARGE_PROJECT_VALIDATED_LANGUAGES = new Set<ArtifactLanguage>([
 const EVIDENCE_VERSION: Readonly<Partial<Record<ArtifactLanguage, string>>> = Object.freeze({
   typescript: "0.456.0",
   javascript: "0.500.0",
-  python: "0.429.0",
+  python: "0.501.0",
   go: "0.457.0",
   rust: "0.458.0",
   java: "0.494.0",
@@ -114,6 +115,7 @@ const LANGUAGE_LIMITATIONS: Readonly<Partial<Record<ArtifactLanguage, readonly s
   Object.freeze({
     typescript: ["parse-rejected, overload, conditional export, and runtime dispatch remain nonclaims"],
     javascript: ["300-positive/150-negative ESTree truth covers bounded same-file relations and unique relative ESM or strict CommonJS imports; dynamic imports, package resolution, re-exports, mutable globals, and runtime dispatch remain nonclaims"],
+    python: ["340-positive/150-negative CPython AST truth covers prior imports, direct calls, construction and inheritance plus parser-clean unique direct self member calls; decorators, metaclasses, attribute hooks, mutation, dynamic loading, monkey patching, inherited dispatch, and parser-rejected files remain nonclaims"],
     java: ["external classpath, compiler-only inference, and wider inherited dispatch remain nonclaims"],
     groovy: ["compiler-confirmed unique top-level def self-recursion and all 14 current inter-function candidates are exact; division, non-assignment slashy forms, closures, delegates, metaclass, class methods, and wider dynamic dispatch remain nonclaims"],
     shell: ["function body calls require parser response ABI v2"],
@@ -153,6 +155,7 @@ function relationDepth(language: ArtifactLanguage): LanguageRelationDepth {
 function truthKind(language: ArtifactLanguage): LanguageTruthKind {
   if (language === "typescript") return "typescript-compiler-api";
   if (language === "javascript") return "javascript-estree";
+  if (language === "python") return "python-stdlib-ast";
   if (language === "java") return "javac-oracle";
   if (language === "groovy") return "groovy-compiler-ast";
   if (BOUNDED_RELATION_LANGUAGES.has(language)) return "source-occurrence-oracle";

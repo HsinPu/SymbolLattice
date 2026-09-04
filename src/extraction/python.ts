@@ -5111,6 +5111,22 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       const methods = directChildren(body).filter(
         (child) => child.name === "FunctionDefinition" && !isAsyncPythonFunction(child)
       );
+      const allMethodNames = new Set(
+        directChildren(body).flatMap((child) => {
+          const definition = decoratedDefinition(child) ?? child;
+          if (definition.name !== "FunctionDefinition") {
+            return [];
+          }
+          const name = declarationName(input, definition);
+          return name === null ? [] : [name];
+        })
+      );
+      const classTaintedNames = new Set(
+        directChildren(body).flatMap((child) => {
+          const name = directAssignmentName(input, child);
+          return name === null ? [] : [name];
+        })
+      );
       const methodNameCounts = new Map<string, number>();
       for (const method of methods) {
         const name = declarationName(input, method);
@@ -5123,7 +5139,16 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         const symbol = symbolsByNodeKey.get(nodeKey(definition));
         return name === null || symbol?.kind !== "method"
           ? []
-          : [{ definition, name, symbol, className, methodNameCounts }];
+          : [{
+              definition,
+              name,
+              symbol,
+              className,
+              classDefinition: statement,
+              methodNameCounts,
+              allMethodNames,
+              classTaintedNames
+            }];
       });
     });
     const declarationsByName = new Map<string, typeof declarations>();
@@ -5297,13 +5322,50 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         topLevelBindCounts.set(name, (topLevelBindCounts.get(name) ?? 0) + 1);
       }
     }
+    const artifactMutatedClassMembers = new Set<string>();
+    function collectArtifactClassMemberMutations(candidate: PythonSyntaxNode): void {
+      if (
+        candidate.name === "AssignStatement" ||
+        candidate.name === "UpdateStatement" ||
+        candidate.name === "DeleteStatement"
+      ) {
+        for (const descendant of directChildren(candidate)) {
+          if (descendant.name !== "MemberExpression") {
+            continue;
+          }
+          const members = directChildren(descendant);
+          const owner = members[0]?.name === "VariableName"
+            ? declarationName(input, members[0])
+            : null;
+          const member = members[2]?.name === "PropertyName"
+            ? nodeText(input, members[2])
+            : null;
+          if (owner !== null && member !== null) {
+            artifactMutatedClassMembers.add(`${owner}.${member}`);
+          }
+        }
+      }
+      for (const child of directChildren(candidate)) {
+        collectArtifactClassMemberMutations(child);
+      }
+    }
+    collectArtifactClassMemberMutations(root);
     const directClassMethods = directClassMethodCandidates
       .filter(
         (candidate) =>
           topLevelBindCounts.get(candidate.className) === 1 &&
           candidate.methodNameCounts.get(candidate.name) === 1
       )
-      .map(({ definition, name, symbol }) => ({ definition, name, symbol }));
+      .map(({ definition, name, symbol, className, classDefinition, methodNameCounts, allMethodNames, classTaintedNames }) => ({
+        definition,
+        name,
+        symbol,
+        className,
+        classDefinition,
+        methodNameCounts,
+        allMethodNames,
+        classTaintedNames
+      }));
     for (const imported of relativeNamedImports) {
       if (
         topLevelBindCounts.get(imported.localName) !== 1 ||
@@ -5372,7 +5434,10 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
 
     function analyzeCaller(definition: PythonSyntaxNode): {
       readonly callsByName: ReadonlyMap<string, readonly PythonSyntaxNode[]>;
+      readonly selfCallsByName: ReadonlyMap<string, readonly PythonSyntaxNode[]>;
       readonly unsafeBindingNames: ReadonlySet<string>;
+      readonly dynamicSelfMemberHazard: boolean;
+      readonly selfReboundHazard: boolean;
     } {
       const bodies = directChildren(definition).filter((child) => child.name === "Body");
       const parameterLists = directChildren(definition).filter(
@@ -5384,7 +5449,13 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         parameterLists.length !== 1 ||
         parameterLists[0] === undefined
       ) {
-        return { callsByName: new Map(), unsafeBindingNames: new Set() };
+        return {
+          callsByName: new Map(),
+          selfCallsByName: new Map(),
+          unsafeBindingNames: new Set(),
+          dynamicSelfMemberHazard: true,
+          selfReboundHazard: true
+        };
       }
       input.directCallTraversalObserver?.();
       const unsafeBindingNames = new Set<string>();
@@ -5420,6 +5491,14 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
         collectTypeParameterNames(typeParameterList);
       }
       const callsByName = new Map<string, PythonSyntaxNode[]>();
+      const selfCallsByName = new Map<string, PythonSyntaxNode[]>();
+      const parameterNames = directChildren(parameterLists[0])
+        .filter((child) => child.name === "VariableName")
+        .map((child) => declarationName(input, child))
+        .filter((name): name is string => name !== null);
+      const selfName = parameterNames[0] === "self" ? "self" : null;
+      let dynamicSelfMemberHazard = false;
+      let selfReboundHazard = false;
       function visitCall(candidate: PythonSyntaxNode): void {
         if (
           candidate !== bodies[0] &&
@@ -5440,7 +5519,14 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
           }
           return;
         }
-        addDirectBindingNames(candidate, unsafeBindingNames);
+        const directBindings = new Set<string>();
+        addDirectBindingNames(candidate, directBindings);
+        if (selfName !== null && directBindings.has(selfName)) {
+          selfReboundHazard = true;
+        }
+        for (const name of directBindings) {
+          unsafeBindingNames.add(name);
+        }
         if (candidate.name === "CallExpression") {
           const callee = directChildren(candidate)[0];
           const name = callee?.name === "VariableName" ? declarationName(input, callee) : null;
@@ -5454,17 +5540,113 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
             calls.push(callee!);
             callsByName.set(name, calls);
           }
+          if (callee?.name === "MemberExpression" && selfName !== null) {
+            const members = directChildren(callee);
+            const receiver = members[0];
+            const member = members[2];
+            const receiverName = receiver?.name === "VariableName"
+              ? declarationName(input, receiver)
+              : null;
+            const memberName = member?.name === "PropertyName"
+              ? nodeText(input, member)
+              : member?.name === "VariableName"
+                ? declarationName(input, member)
+                : null;
+            if (
+              members.length === 3 &&
+              members[1]?.name === "." &&
+              receiverName === selfName &&
+              memberName !== null
+            ) {
+              const calls = selfCallsByName.get(memberName) ?? [];
+              calls.push(member!);
+              selfCallsByName.set(memberName, calls);
+            }
+          }
+          if (name === "setattr" || name === "delattr") {
+            const argumentList = directChildren(candidate).find((child) => child.name === "ArgList");
+            const firstArgument = argumentList === undefined
+              ? undefined
+              : directChildren(argumentList).find((child) => child.name === "VariableName");
+            if (
+              selfName !== null &&
+              firstArgument !== undefined &&
+              declarationName(input, firstArgument) === selfName
+            ) {
+              dynamicSelfMemberHazard = true;
+            }
+          }
         }
         for (const child of directChildren(candidate)) {
           visitCall(child);
         }
       }
       visitCall(bodies[0]);
-      return { callsByName, unsafeBindingNames };
+      return {
+        callsByName,
+        selfCallsByName,
+        unsafeBindingNames,
+        dynamicSelfMemberHazard,
+        selfReboundHazard
+      };
     }
 
     for (const caller of [...declarations, ...directClassMethods]) {
       const analysis = analyzeCaller(caller.definition);
+      const classCaller = directClassMethods.find(
+        (candidate) => candidate.symbol.id === caller.symbol.id
+      );
+      if (
+        classCaller !== undefined &&
+        !artifactCallTaint.dynamicGlobalHazard &&
+        !analysis.dynamicSelfMemberHazard &&
+        !analysis.selfReboundHazard &&
+        isPythonClassInstantiationEligible(input, classCaller.classDefinition) &&
+        !["__getattribute__", "__getattr__", "__setattr__"].some(
+          (name) => classCaller.allMethodNames.has(name)
+        )
+      ) {
+        for (const [targetName, calls] of analysis.selfCallsByName) {
+          const candidates = directClassMethods.filter(
+            (candidate) =>
+              candidate.className === classCaller.className &&
+              candidate.name === targetName &&
+              candidate.methodNameCounts.get(targetName) === 1 &&
+              !candidate.classTaintedNames.has(targetName) &&
+              !artifactMutatedClassMembers.has(`${candidate.className}.${targetName}`)
+          );
+          if (candidates.length !== 1 || candidates[0] === undefined) {
+            continue;
+          }
+          const target = candidates[0].symbol;
+          for (const call of calls) {
+            const range = rangeFor(lineStarts, call.from, call.to);
+            edges.push({
+              id: createEdgeId({
+                sourceId: caller.symbol.id,
+                targetId: target.id,
+                kind: "calls",
+                line: range.start.line,
+                column: range.start.column,
+                referenceName: targetName
+              }),
+              sourceId: caller.symbol.id,
+              targetId: target.id,
+              kind: "calls",
+              filePath: input.filePath,
+              range,
+              resolution: "exact",
+              confidence: 1,
+              referenceName: targetName,
+              evidence: {
+                ruleId: "syntax.python.same-class.unique-direct-self-member-call",
+                stage: "syntax",
+                candidateSymbolIds: [target.id]
+              }
+            });
+          }
+        }
+      }
       for (const [targetName, calls] of analysis.callsByName) {
         const candidates = declarationsByName.get(targetName) ?? [];
         const target = candidates[0];
