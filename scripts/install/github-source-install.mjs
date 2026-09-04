@@ -817,7 +817,7 @@ async function assertRegularFile(path, label) {
 async function validatePackResult(stdout, packDirectory, expectedVersion) {
   let payload;
   try {
-    payload = JSON.parse(stdout);
+    payload = parseFinalJsonArray(stdout);
   } catch {
     throw new Error("npm pack did not return valid JSON evidence.");
   }
@@ -850,6 +850,26 @@ async function validatePackResult(stdout, packDirectory, expectedVersion) {
     sha256: createHash("sha256").update(tarball).digest("hex"),
     files
   };
+}
+
+function parseFinalJsonArray(stdout) {
+  const trimmed = stdout.trim();
+  const candidateStarts = [];
+  for (let index = 0; index < trimmed.length; index += 1) {
+    if (trimmed[index] === "[" && (index === 0 || trimmed[index - 1] === "\n" || trimmed[index - 1] === "\r")) {
+      candidateStarts.push(index);
+    }
+  }
+  for (const start of candidateStarts.reverse()) {
+    try {
+      const payload = JSON.parse(trimmed.slice(start));
+      if (Array.isArray(payload)) return payload;
+    } catch {
+      // Earlier prepack steps may emit newline-delimited diagnostics. Only a
+      // complete JSON array at the end of stdout is eligible as pack evidence.
+    }
+  }
+  throw new Error("No final JSON array was found.");
 }
 
 function isForbiddenPackagePath(path) {

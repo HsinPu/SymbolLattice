@@ -99,13 +99,13 @@ async function executionFixture(options = {}) {
         const filename = "hsinpu-symbollattice-0.421.0.tgz";
         await writeFile(join(packDirectory, filename), "verified package bytes");
         return {
-          stdout: JSON.stringify([{
+          stdout: `${options.packStdoutPrefix ?? ""}${JSON.stringify([{
             id: "@hsinpu/symbollattice@0.421.0",
             name: "@hsinpu/symbollattice",
             version: VERSION,
             filename,
             files: (options.packFiles ?? REQUIRED_PACKAGE_FILES).map((path) => ({ path, size: 1 }))
-          }]),
+          }])}${options.packStdoutSuffix ?? ""}`,
           stderr: ""
         };
       }
@@ -208,6 +208,26 @@ describe("GitHub source installation Stage 2 execution", () => {
       "isolated-help"
     ]);
     expect(fixture.calls.some((call) => call.args.includes("--global"))).toBe(false);
+  });
+
+  it("accepts newline-delimited prepack diagnostics before the final npm pack JSON array", async () => {
+    const fixture = await executionFixture({
+      packStdoutPrefix: '{"asset":"shell","status":"copied"}\n{"asset":"lua","status":"copied"}\n'
+    });
+
+    const result = await executeSourceInstallStage2(fixture.plan, fixture.dependencies);
+
+    expect(result.status).toBe("isolated-verified");
+    expect(result.package.version).toBe(VERSION);
+  });
+
+  it("rejects trailing non-whitespace after the npm pack JSON array", async () => {
+    const fixture = await executionFixture({ packStdoutSuffix: "\nuntrusted trailing output" });
+
+    await expect(executeSourceInstallStage2(fixture.plan, fixture.dependencies)).rejects.toMatchObject({
+      name: "SourceInstallStage2Error",
+      step: "pack"
+    });
   });
 
   it("stops before packing or installation and reports the retained workspace on failure", async () => {
