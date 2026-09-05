@@ -18,9 +18,9 @@ describe("language depth matrix", () => {
       tiers: {
         "external-tier-a": 1,
         "external-partial": 1,
-        "bounded-relation": 38,
+        "bounded-relation": 39,
         "large-project-structural": 6,
-        targeted: 12
+        targeted: 11
       },
       relationDepth: {
         project: 42,
@@ -28,8 +28,8 @@ describe("language depth matrix", () => {
         framework: 4,
         structural: 2
       },
-      largeProjectValidated: 25,
-      relationReleaseValidated: 40
+      largeProjectValidated: 26,
+      relationReleaseValidated: 41
     });
   });
 
@@ -115,6 +115,14 @@ describe("language depth matrix", () => {
       relationDepth: "project",
       truthKind: "gnat-ali-xref",
       evidenceVersion: "0.508.0",
+      largeProjectValidated: true,
+      relationReleaseValidated: true
+    });
+    expect(byLanguage.get("cobol")).toMatchObject({
+      evidenceTier: "bounded-relation",
+      relationDepth: "framework",
+      truthKind: "gnucobol-xref-listing",
+      evidenceVersion: "0.509.0",
       largeProjectValidated: true,
       relationReleaseValidated: true
     });

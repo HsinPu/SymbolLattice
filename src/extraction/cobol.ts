@@ -62,6 +62,7 @@ const COBOL_PROGRAM_ID = new RegExp(
   "^\\s*PROGRAM-ID\\.\\s*(" + COBOL_IDENTIFIER + ")\\s*\\.\\s*$",
   "iu"
 );
+const COBOL_PROGRAM_ID_ONLY = /^\s*PROGRAM-ID\.\s*$/iu;
 const COBOL_PROCEDURE_DIVISION = /^\s*PROCEDURE\s+DIVISION\.\s*$/iu;
 const COBOL_END_PROGRAM = new RegExp(
   "^\\s*END\\s+PROGRAM\\s+(" + COBOL_IDENTIFIER + ")\\s*\\.\\s*$",
@@ -75,6 +76,10 @@ const COBOL_SECTION = new RegExp(
 const COBOL_END_DECLARATIVES = /^\s*END\s+DECLARATIVES\s*\.\s*$/iu;
 const COBOL_DIRECT_PARAGRAPH_PERFORM = new RegExp(
   "^\\s*PERFORM\\s+(" + COBOL_IDENTIFIER + ")\\s*\\.\\s*$",
+  "iu"
+);
+const COBOL_INLINE_PARAGRAPH_PERFORM = new RegExp(
+  "\\bPERFORM\\s+(" + COBOL_IDENTIFIER + ")\\s*\\.",
   "iu"
 );
 const COBOL_AMBIGUOUS_PROCEDURE_CONTROL = /^\s*(?:ALTER|GO\s+TO|COPY|REPLACE)\b/iu;
@@ -217,6 +222,11 @@ function isFixedFormatCommentLine(sourceText: string, line: CobolLine): boolean 
   return indicator === "*" || indicator === "/";
 }
 
+function isFixedFormatLiteralContinuation(sourceText: string, offset: number): boolean {
+  const lineStart = offset;
+  return /^\d{6}-/u.test(sourceText.slice(lineStart, lineStart + 7));
+}
+
 function isCobolIdentifierCharacter(character: string | undefined): boolean {
   return character !== undefined && /[A-Za-z0-9_$#@-]/u.test(character);
 }
@@ -354,14 +364,28 @@ function sanitizeCobol(sourceText: string): SanitizedCobolSource {
   }
 
   let quote: "'" | "\"" | null = null;
+  let continuationDelimiterIndex: number | null = null;
   for (let index = 0; index < characters.length; index += 1) {
     const character = characters[index];
     const next = characters[index + 1];
     if (character === undefined) {
       continue;
     }
+    if (quote !== null && continuationDelimiterIndex === index) {
+      blankCharacter(characters, index);
+      continuationDelimiterIndex = null;
+      continue;
+    }
     if (quote !== null) {
       if (character === "\r" || character === "\n") {
+        const nextLineStart: number = character === "\r" && next === "\n" ? index + 2 : index + 1;
+        if (isFixedFormatLiteralContinuation(sourceText, nextLineStart)) {
+          let delimiter: number = nextLineStart + 7;
+          while (sourceText[delimiter] === " " || sourceText[delimiter] === "\t") delimiter += 1;
+          if (sourceText[delimiter] === quote) continuationDelimiterIndex = delimiter;
+          if (character === "\r" && next === "\n") index += 1;
+          continue;
+        }
         return { valid: false, text: characters.join("") };
       }
       blankCharacter(characters, index);
@@ -395,12 +419,18 @@ function sanitizeCobol(sourceText: string): SanitizedCobolSource {
   return { valid: quote === null, text: characters.join("") };
 }
 
+function isCobolFixedFormatLine(line: CobolLine): boolean {
+  return /^\d{6}[ \t]/u.test(line.text);
+}
+
 function codeFor(line: CobolLine): string {
-  return line.text.trim();
+  const body = isCobolFixedFormatLine(line) ? line.text.slice(6, 72) : line.text;
+  return body.trim();
 }
 
 function firstCodeColumn(line: CobolLine): number | null {
-  for (let index = 0; index < line.text.length; index += 1) {
+  const firstCodeOffset = isCobolFixedFormatLine(line) ? 6 : 0;
+  for (let index = firstCodeOffset; index < line.text.length; index += 1) {
     const character = line.text[index];
     if (character !== " " && character !== "\t") {
       return index;
@@ -501,7 +531,9 @@ function directCobolParagraphPerforms(
 
   const performs: CobolParagraphPerform[] = [];
   for (const line of procedureLines) {
-    const targetName = COBOL_DIRECT_PARAGRAPH_PERFORM.exec(codeFor(line))?.[1];
+    const code = codeFor(line);
+    const directTarget = COBOL_DIRECT_PARAGRAPH_PERFORM.exec(code)?.[1];
+    const targetName = directTarget ?? COBOL_INLINE_PARAGRAPH_PERFORM.exec(code)?.[1];
     if (targetName === undefined) {
       continue;
     }
@@ -531,13 +563,31 @@ function directCobolProgram(
   const identificationLineIndexes = lines
     .map((line, index) => (COBOL_IDENTIFICATION_DIVISION.test(codeFor(line)) ? index : null))
     .filter((index): index is number => index !== null);
-  const programDeclarations = lines
-    .map((line, index) => {
-      const match = COBOL_PROGRAM_ID.exec(codeFor(line));
-      const name = match?.[1];
-      return name === undefined ? null : { index, name };
-    })
-    .filter((declaration): declaration is { index: number; name: string } => declaration !== null);
+  const programDeclarations: Array<{ index: number; name: string }> = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line === undefined) {
+      continue;
+    }
+    const code = codeFor(line);
+    const direct = COBOL_PROGRAM_ID.exec(code)?.[1];
+    if (direct !== undefined) {
+      programDeclarations.push({ index, name: direct });
+      continue;
+    }
+    if (!COBOL_PROGRAM_ID_ONLY.test(code) || !isCobolFixedFormatLine(line)) {
+      continue;
+    }
+    const continuation = lines[index + 1];
+    const name = continuation === undefined
+      ? undefined
+      : isCobolFixedFormatLine(continuation)
+        ? /^\s*([A-Za-z][A-Za-z0-9-]*)\s*\.\s*$/u.exec(codeFor(continuation))?.[1]
+        : undefined;
+    if (name !== undefined) {
+      programDeclarations.push({ index, name });
+    }
+  }
   const procedureLineIndexes = lines
     .map((line, index) => (COBOL_PROCEDURE_DIVISION.test(codeFor(line)) ? index : null))
     .filter((index): index is number => index !== null);

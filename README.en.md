@@ -16,7 +16,7 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.508.0
+Current version: v0.509.0
 
 ## Highlights
 
@@ -62,6 +62,8 @@ v0.503.0 promotes Shell to bounded same-file relation evidence. The bundled mvda
 v0.507.0 promotes Fortran to bounded project relation evidence. Fixed Reference LAPACK v3.12.1 source and fparser 0.2.4 verify 300 project subroutine calls across BLAS, CBLAS, SRC, and TESTING, all 1,227 endpoint-admitted breadth candidates, and 150 negatives. Exact `calls` require lowercase non-preprocessed source, one unique project subroutine target, matching fixed arity, and no dummy, EXTERNAL, PROCEDURE, USE, interface shadow, or Optional target. Fixed-form continuations and standard generic `END` are now admitted safely; type-bound calls, function invocation, macro configuration, and runtime dispatch remain nonclaims.
 
 v0.508.0 promotes Ada to bounded project relation evidence. Fixed GNAT-FSF 16.1.0-1 and the AdaCore Ada Language Server 2026.3.202607051 corpus (1,757 Ada sources) provide GNAT `.ali` cross-reference truth for 300 unique top-level procedure calls and 150 negatives. Exact `calls` require an explicit `with`, an untainted unqualified procedure call, a simple fixed arity, and one unique project target; optional/default profiles, nested or qualified calls, use-clause visibility, duplicates, package members, generics, separate bodies, and runtime dispatch remain nonclaims. The large corpus reports 342 procedure facts, four call candidates, and zero safely projectable relations separately; the synthetic quota is not presented as complete Ada support.
+
+v0.509.0 promotes COBOL to bounded relation evidence. Fixed ProLeap COBOL parser MIT corpus commit `d1bfe75bdd6d480f70c74c6345bcc02610ac30d3` (759 sources) and an isolated SuperBOL GnuCOBOL Windows build use `cobc -Xref -fsyntax-only` to verify 300 fixed-format synthetic positives and 150 negatives. Exact `calls` cover sequence columns, continued `PROGRAM-ID`, legal literal continuation, and same-program inline or bare `PERFORM`; `COPY`/`REPLACE`/`ALTER`/`GO TO`, `THRU`, duplicate or section targets, dynamic or external `CALL`, copy expansion, and compiler-rejected dialects remain nonclaims. The large corpus has 292 clean files, eight compiler candidates, and 8/8 product exact results; 467 rejected files are reported separately.
 
 v0.506.0 promotes VB.NET to bounded same-file relation evidence. Fixed Roslyn Visual Studio 2022 17.14.34 source and Microsoft.Net.Compilers.Toolset 5.9.0 verify 300 private fixed-arity calls across six VB subsystems, 934 endpoint-admitted breadth candidates, and 150 negatives. Exact `calls` require a non-Partial same-file Class or Module, one unique `Private` target, single-line caller and target signatures, matching arity, and no parameter/local shadow, lambda, XML, or Shared-to-instance dispatch. Overloads, Optional or ParamArray parameters, late binding, qualified or member calls, and cross-file partial types remain nonclaims.
 

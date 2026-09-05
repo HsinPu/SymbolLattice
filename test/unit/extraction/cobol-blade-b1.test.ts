@@ -90,6 +90,116 @@ describe("COBOL and Blade B1 exact relations", () => {
     ]);
   });
 
+  it("emits an exact same-program PERFORM from fixed-format sequence columns", () => {
+    const facts = extractCobolFileFacts({
+      filePath: "src/sequence.cbl",
+      language: "cobol",
+      sourceText: [
+        "000100 IDENTIFICATION DIVISION.",
+        "000200 PROGRAM-ID. SEQUENCE.",
+        "000300 PROCEDURE DIVISION.",
+        "000400 MAIN-LOGIC.",
+        "000500     PERFORM SEND-REPORT.",
+        "000600 SEND-REPORT.",
+        "000700     GOBACK.",
+        "000800 END PROGRAM SEQUENCE."
+      ].join("\n")
+    });
+    const caller = symbolByName(facts, "MAIN-LOGIC");
+    const callee = symbolByName(facts, "SEND-REPORT");
+
+    expect(calls(facts)).toEqual([
+      expect.objectContaining({
+        sourceId: caller.id,
+        targetId: callee.id,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: "SEND-REPORT",
+        evidence: {
+          ruleId: "syntax.cobol.same-program.unique-paragraph-perform",
+          stage: "syntax",
+          candidateSymbolIds: [callee.id]
+        }
+      })
+    ]);
+  });
+
+  it("accepts a fixed-format PROGRAM-ID continued onto the next line", () => {
+    const facts = extractCobolFileFacts({
+      filePath: "src/split-program-id.cbl",
+      language: "cobol",
+      sourceText: [
+        "000100 IDENTIFICATION DIVISION.",
+        "000200 PROGRAM-ID.",
+        "000300     SPLIT-PROGRAM.",
+        "000400 PROCEDURE DIVISION.",
+        "000500 MAIN-LOGIC.",
+        "000600     PERFORM SEND-REPORT.",
+        "000700 SEND-REPORT.",
+        "000800     GOBACK.",
+        "000900 END PROGRAM SPLIT-PROGRAM."
+      ].join("\n")
+    });
+    expect(symbolByName(facts, "MAIN-LOGIC")).toBeDefined();
+    expect(calls(facts)).toHaveLength(1);
+  });
+
+  it("keeps a fixed-format literal continuation inside a valid program", () => {
+    const facts = extractCobolFileFacts({
+      filePath: "src/literal-continuation.cbl",
+      language: "cobol",
+      sourceText: [
+        "000100 IDENTIFICATION DIVISION.",
+        "000200 PROGRAM-ID. LITERAL-CONTINUATION.",
+        "000300 DATA DIVISION.",
+        "000400 WORKING-STORAGE SECTION.",
+        "000500 01 MESSAGE-FIELD PIC X(12).",
+        "000600 PROCEDURE DIVISION.",
+        "000700 MAIN-LOGIC.",
+        "000800     MOVE \"HELLO",
+        "000900-    WORLD\" TO MESSAGE-FIELD.",
+        "001000     GOBACK.",
+        "001100 END PROGRAM LITERAL-CONTINUATION."
+      ].join("\n")
+    });
+    expect(facts.symbols.some((symbol) => symbol.name === "LITERAL-CONTINUATION")).toBe(true);
+    expect(symbolByName(facts, "MAIN-LOGIC")).toBeDefined();
+  });
+
+  it("emits an exact inline PERFORM target from a compiler-shaped statement", () => {
+    const facts = extractCobolFileFacts({
+      filePath: "src/inline-perform.cbl",
+      language: "cobol",
+      sourceText: [
+        "000100 IDENTIFICATION DIVISION.",
+        "000200 PROGRAM-ID. INLINE-PERFORM.",
+        "000300 PROCEDURE DIVISION.",
+        "000400 MAIN-LOGIC.",
+        "000500     READ INPUT-FILE NOT INVALID KEY PERFORM SEND-REPORT.",
+        "000600 SEND-REPORT.",
+        "000700     GOBACK.",
+        "000800 END PROGRAM INLINE-PERFORM."
+      ].join("\n")
+    });
+    const caller = symbolByName(facts, "MAIN-LOGIC");
+    const callee = symbolByName(facts, "SEND-REPORT");
+
+    expect(calls(facts)).toEqual([
+      expect.objectContaining({
+        sourceId: caller.id,
+        targetId: callee.id,
+        resolution: "exact",
+        confidence: 1,
+        referenceName: "SEND-REPORT",
+        evidence: {
+          ruleId: "syntax.cobol.same-program.unique-paragraph-perform",
+          stage: "syntax",
+          candidateSymbolIds: [callee.id]
+        }
+      })
+    ]);
+  });
+
   it("fails closed for COBOL forms that can change a paragraph PERFORM target or scope", () => {
     const sources = [
       ["dynamic identifier", "           PERFORM WS-TARGET."],

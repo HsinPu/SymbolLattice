@@ -16,7 +16,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.508.0
+目前版本：v0.509.0
 
 ## 主要能力
 
@@ -62,6 +62,8 @@ v0.503.0 將Shell提升為bounded same-file relation evidence。Bundled mvdan.cc
 v0.507.0 將Fortran提升為bounded project relation evidence。固定Reference LAPACK v3.12.1與fparser 0.2.4，驗證300筆跨BLAS／CBLAS／SRC／TESTING的project subroutine calls、1,227筆endpoint-admitted breadth及150筆負向。Exact `calls`只接受lowercase非preprocessed source、project唯一subroutine target、固定arity、無dummy／EXTERNAL／PROCEDURE／USE／interface shadow或Optional target；fixed-form continuation與標準generic `END`現可安全admit，type-bound call、function invocation、macro configuration與runtime dispatch維持nonclaim。
 
 v0.508.0 將Ada提升為bounded project relation evidence。固定GNAT-FSF 16.1.0-1與AdaCore Ada Language Server 2026.3.202607051（1,757個Ada source），以GNAT `.ali` cross-reference truth驗證300筆唯一top-level procedure calls及150筆負向。Exact `calls`只接受明確 `with`、未污染的unqualified procedure call、簡單固定arity與唯一project target；optional/default profile、nested／qualified／use-clause、duplicate、package-member、generic、separate body與runtime dispatch維持nonclaim。大型corpus另列342個procedure facts、4個call candidates與0個可安全投影的關係，不把synthetic quota包裝成完整Ada支援。
+
+v0.509.0 將COBOL提升為bounded relation evidence。固定ProLeap COBOL parser MIT corpus commit `d1bfe75bdd6d480f70c74c6345bcc02610ac30d3`（759個source）與隔離SuperBOL GnuCOBOL Windows build，以 `cobc -Xref -fsyntax-only` 驗證300個fixed-format synthetic positives及150個負向。Exact `calls`涵蓋sequence columns、continued `PROGRAM-ID`、合法literal continuation與同program inline／bare `PERFORM`；`COPY`／`REPLACE`／`ALTER`／`GO TO`、`THRU`、duplicate／section target、dynamic／external `CALL`、copy expansion與compiler-rejected dialect維持nonclaim。大型corpus 292 clean、8 compiler candidates與8/8 product exact，467 rejected另列。
 
 v0.506.0 將VB.NET提升為bounded same-file relation evidence。固定Roslyn Visual Studio 2022 17.14.34 source與Microsoft.Net.Compilers.Toolset 5.9.0，驗證300筆跨六個VB子系統的private fixed-arity calls、934筆endpoint-admitted breadth及150筆負向。Exact `calls`只接受非Partial同檔Class／Module、唯一`Private` target、單行caller／target signature、固定arity、無parameter/local shadow、lambda、XML或Shared→instance dispatch；overload、Optional／ParamArray、late binding、qualified/member call與跨檔partial type維持nonclaim。
 

@@ -22,6 +22,7 @@ export type LanguageTruthKind =
   | "roslyn-vb-ast"
   | "fparser-ast"
   | "gnat-ali-xref"
+  | "gnucobol-xref-listing"
   | "javac-oracle"
   | "groovy-compiler-ast"
   | "source-occurrence-oracle"
@@ -46,7 +47,7 @@ const BOUNDED_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
   "go", "rust", "kotlin", "swift", "dart", "csharp", "fsharp", "ocaml", "haskell",
   "scala", "elixir", "erlang", "clojure", "nix", "nim", "zig", "cpp", "c", "php",
   "objc", "ruby", "sql", "r", "markdown", "proto", "graphql", "groovy", "javascript", "python",
-  "vue", "svelte", "astro", "shell", "lua", "solidity", "vbnet", "fortran", "ada"
+  "vue", "svelte", "astro", "shell", "lua", "solidity", "vbnet", "fortran", "ada", "cobol"
 ]);
 
 const LARGE_PROJECT_STRUCTURAL_LANGUAGES = new Set<ArtifactLanguage>([
@@ -75,7 +76,7 @@ const STRUCTURAL_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
 
 const LARGE_PROJECT_VALIDATED_LANGUAGES = new Set<ArtifactLanguage>([
   "typescript", "javascript", "python", "java", "lua", "luau", "objc", "r", "elixir", "perl",
-  "julia", "ruby", "html", "jsp", "css", "shell", "markdown", "groovy", "vue", "svelte", "astro", "solidity", "vbnet", "fortran", "ada"
+  "julia", "ruby", "html", "jsp", "css", "shell", "markdown", "groovy", "vue", "svelte", "astro", "solidity", "vbnet", "fortran", "ada", "cobol"
 ]);
 
 const EVIDENCE_VERSION: Readonly<Partial<Record<ArtifactLanguage, string>>> = Object.freeze({
@@ -123,7 +124,8 @@ const EVIDENCE_VERSION: Readonly<Partial<Record<ArtifactLanguage, string>>> = Ob
   html: "0.425.0",
   jsp: "0.428.0",
   css: "0.426.0",
-  shell: "0.503.0"
+  shell: "0.503.0",
+  cobol: "0.509.0"
 });
 
 const LANGUAGE_LIMITATIONS: Readonly<Partial<Record<ArtifactLanguage, readonly string[]>>> =
@@ -142,6 +144,7 @@ const LANGUAGE_LIMITATIONS: Readonly<Partial<Record<ArtifactLanguage, readonly s
     vbnet: ["300-positive/150-negative Roslyn AST truth covers non-partial same-file Class/Module unique private fixed-arity bare calls; public/friend/protected targets, overloads, Optional/ParamArray, shadows, lambdas, XML, partial/cross-file types, late binding, and member dispatch remain nonclaims"],
     fortran: ["300-positive/150-negative fparser truth covers unique project subroutine CALLs with fixed arity plus fixed-form continuation and generic END admission; preprocessing, duplicate targets, dummy/EXTERNAL/PROCEDURE/USE/interface shadows, Optional targets, type-bound calls, and runtime dispatch remain nonclaims"],
     ada: ["300-positive/150-negative GNAT 16.1.0 .ali cross-reference truth covers unique project top-level procedure calls with simple fixed arity; optional/default profiles, nested or qualified calls, use-clause visibility, duplicate targets, package-member dispatch, separate bodies, generics, and runtime dispatch remain nonclaims"],
+    cobol: ["300-positive/150-negative GnuCOBOL Xref-listing truth covers fixed-format same-program paragraph PERFORM, including sequence columns, continued PROGRAM-ID, literal continuation, and inline PERFORM; COPY/REPLACE/ALTER/GO TO, PERFORM THRU, duplicate or section targets, dynamic calls, external CALL, copy expansion, nested programs, CICS runtime handoff, and compiler-rejected dialects remain nonclaims"],
     html: ["HTML relations are structural resources and containment, not runtime navigation"],
     css: ["CSS relations are structural selectors and containment"],
     sql: ["views, routines, search path, and dynamic SQL remain nonclaims"],
@@ -185,6 +188,7 @@ function truthKind(language: ArtifactLanguage): LanguageTruthKind {
   if (language === "vbnet") return "roslyn-vb-ast";
   if (language === "fortran") return "fparser-ast";
   if (language === "ada") return "gnat-ali-xref";
+  if (language === "cobol") return "gnucobol-xref-listing";
   if (language === "java") return "javac-oracle";
   if (language === "groovy") return "groovy-compiler-ast";
   if (BOUNDED_RELATION_LANGUAGES.has(language)) return "source-occurrence-oracle";
