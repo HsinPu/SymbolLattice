@@ -15,6 +15,7 @@ import {
   isUnsafeProjectPath,
   loadSourcePaths,
   MAXIMUM_SOURCE_CONCURRENT_READS,
+  SUPPORTED_EXTENSIONS,
   toProjectRelativePath
 } from "../../../src/infrastructure/filesystem/discovery.js";
 import {
@@ -70,6 +71,32 @@ describe("source discovery", () => {
     expect(getSourceLanguage("src/index.jsx")).toBe("javascript");
     expect(getSourceLanguage("src/index.cjs")).toBe("javascript");
     expect(getSourceLanguage("src/INDEX.CJS")).toBe("javascript");
+  });
+
+  it("content-gates Pascal .pp files without adding .pp to the generic extension map", async () => {
+    const pascalUnit = "{ fake program Fake; }\nunit RealUnit;\ninterface\nprocedure Helper;\nimplementation\nprocedure Helper; begin end;\nend.\n";
+    expect(SUPPORTED_EXTENSIONS.has(".pp")).toBe(false);
+    expect(getSourceLanguage("src/Real.pp")).toBeNull();
+    expect(getSourceLanguage("src/Real.pp", pascalUnit)).toBe("pascal");
+    expect(getSourceLanguage("src/Puppet.pp", "class webserver { package { 'nginx': ensure => installed } }\n")).toBeNull();
+    expect(getSourceLanguage("src/Fake.pp", "const marker = 'unit Fake;';\n")).toBeNull();
+    expect(getSourceLanguage("src/Multiple.pp", "unit One;\nprogram Two;\n")).toBeNull();
+    expect(getSourceLanguage("src/Tainted.pp", "{$IFDEF FPC}\nunit Conditional;\n{$ENDIF}\n")).toBeNull();
+
+    const projectPath = await createProject();
+    await mkdir(join(projectPath, "src"), { recursive: true });
+    await writeFile(join(projectPath, "src", "Real.pp"), pascalUnit, "utf8");
+    await writeFile(join(projectPath, "src", "Puppet.pp"), "class webserver { package { 'nginx': ensure => installed } }\n", "utf8");
+    await writeFile(join(projectPath, "src", "Fake.pp"), "const marker = 'unit Fake;';\n", "utf8");
+    await writeFile(join(projectPath, "src", "Multiple.pp"), "unit One;\nprogram Two;\n", "utf8");
+    await writeFile(join(projectPath, "src", "Tainted.pp"), "{$IFDEF FPC}\nunit Conditional;\n{$ENDIF}\n", "utf8");
+    await writeFile(join(projectPath, "src", "fragment.inc"), "unit Fragment;\n", "utf8");
+
+    const files = await discoverSourceFiles(projectPath);
+    expect(files.map((file) => file.relativePath)).toEqual(["src/Real.pp"]);
+    expect(files[0]?.language).toBe("pascal");
+    const fingerprints = await discoverSourceFileFingerprints(projectPath);
+    expect(fingerprints.map((file) => file.relativePath)).toEqual(["src/Real.pp"]);
   });
 
   it("bounds full source reads for large repositories", async () => {

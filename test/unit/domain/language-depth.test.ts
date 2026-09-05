@@ -130,7 +130,7 @@ describe("language depth matrix", () => {
       evidenceTier: "bounded-relation",
       relationDepth: "project",
       truthKind: "source-occurrence-oracle",
-      evidenceVersion: "0.510.0",
+      evidenceVersion: "0.511.0",
       largeProjectValidated: true,
       relationReleaseValidated: true
     });

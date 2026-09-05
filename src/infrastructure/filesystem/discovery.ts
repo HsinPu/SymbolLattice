@@ -124,6 +124,8 @@ export const SUPPORTED_EXTENSIONS: ReadonlyMap<string, SupportedLanguage> = new 
 ] as const);
 
 const OBJECTIVE_C_HEADER_EXTENSION = ".h";
+const PASCAL_PP_EXTENSION = ".pp";
+const PASCAL_PP_MODULE_HEADER = /^(?:\s*)(?:unit|program|library)\s+[A-Za-z_][A-Za-z0-9_]*\s*;\s*$/iu;
 const OBJECTIVE_C_HEADER_CONTAINER =
   /^[ \t]*@(interface|protocol)[ \t]+[A-Za-z_][A-Za-z0-9_]*/mu;
 const OBJECTIVE_C_HEADER_END = /^[ \t]*@end[ \t]*$/mu;
@@ -253,6 +255,9 @@ export function getSourceLanguage(
     return "blade";
   }
   const extension = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
+  if (extension === PASCAL_PP_EXTENSION) {
+    return sourceText !== undefined && isPascalPpSource(sourceText) ? "pascal" : null;
+  }
   if (extension === OBJECTIVE_C_HEADER_EXTENSION) {
     if (sourceText !== undefined && isProvenObjectiveCHeader(sourceText)) {
       return "objc";
@@ -267,6 +272,126 @@ export function getSourceLanguage(
     return extensionLanguage;
   }
   return sourceText !== undefined && hasExactShellShebang(sourceText) ? "shell" : null;
+}
+
+function isPascalPpPath(filePath: string): boolean {
+  return filePath.toLowerCase().endsWith(PASCAL_PP_EXTENSION);
+}
+
+/**
+ * `.pp` is shared by Free Pascal and Puppet. Admit it only after a lexical
+ * sanitization pass proves exactly one top-level Pascal module header. The
+ * gate intentionally rejects compiler-condition/include/macro taint and
+ * malformed comments or strings; it is a discovery boundary, not a grammar.
+ */
+function isPascalPpSource(sourceText: string): boolean {
+  const characters = sourceText.split("");
+  let commentMode: "brace" | "paren" | null = null;
+  let inString = false;
+  let hasConditional = false;
+  let hasMacro = false;
+  let hasInclude = false;
+
+  const blank = (index: number): void => {
+    const character = characters[index];
+    if (character !== undefined && character !== "\r" && character !== "\n") {
+      characters[index] = " ";
+    }
+  };
+  const markDirective = (body: string): void => {
+    if (/^\s*(?:IFDEF|IFNDEF|ELSEIF|ENDIF|ELSE|IF)\b/iu.test(body)) {
+      hasConditional = true;
+    }
+    if (/^\s*(?:DEFINE|UNDEF|MACRO)\b/iu.test(body)) {
+      hasMacro = true;
+    }
+    if (/^\s*(?:I|INCLUDE)\b/iu.test(body)) {
+      hasInclude = true;
+    }
+  };
+
+  for (let index = 0; index < characters.length; index += 1) {
+    const character = characters[index];
+    const next = characters[index + 1];
+    if (character === undefined) {
+      continue;
+    }
+
+    if (commentMode === "brace") {
+      blank(index);
+      if (character === "}") {
+        commentMode = null;
+      }
+      continue;
+    }
+    if (commentMode === "paren") {
+      blank(index);
+      if (character === "*" && next === ")") {
+        blank(index + 1);
+        index += 1;
+        commentMode = null;
+      }
+      continue;
+    }
+    if (inString) {
+      if (character === "\r" || character === "\n") {
+        return false;
+      }
+      blank(index);
+      if (character === "'") {
+        if (next === "'") {
+          blank(index + 1);
+          index += 1;
+        } else {
+          inString = false;
+        }
+      }
+      continue;
+    }
+
+    if (character === "{") {
+      if (next === "$") {
+        markDirective(sourceText.slice(index + 2));
+      }
+      blank(index);
+      commentMode = "brace";
+      continue;
+    }
+    if (character === "(" && next === "*") {
+      if (characters[index + 2] === "$") {
+        markDirective(sourceText.slice(index + 3));
+      }
+      blank(index);
+      blank(index + 1);
+      index += 1;
+      commentMode = "paren";
+      continue;
+    }
+    if (character === "/" && next === "/") {
+      for (let commentIndex = index; commentIndex < characters.length; commentIndex += 1) {
+        const commentCharacter = characters[commentIndex];
+        if (commentCharacter === "\r" || commentCharacter === "\n") {
+          index = commentIndex - 1;
+          break;
+        }
+        blank(commentIndex);
+        if (commentIndex === characters.length - 1) {
+          index = commentIndex;
+        }
+      }
+      continue;
+    }
+    if (character === "'") {
+      blank(index);
+      inString = true;
+    }
+  }
+
+  if (commentMode !== null || inString || hasConditional || hasMacro || hasInclude) {
+    return false;
+  }
+  const headers = characters.join("").split(/\r?\n/u).filter((line) => PASCAL_PP_MODULE_HEADER.test(line));
+  return headers.length === 1;
 }
 
 function isProvenCHeader(sourceText: string): boolean {
@@ -384,7 +509,7 @@ export async function loadSourcePaths(
           : new TextDecoder("utf-8").decode(sourceInput);
         const language = getSourceLanguage(absolutePath, sourceText);
         if (language === null) {
-          if (isObjectiveCHeaderPath(absolutePath)) {
+          if (isObjectiveCHeaderPath(absolutePath) || isPascalPpPath(absolutePath)) {
             return null;
           }
           throw new Error(`Unsupported source file was discovered: ${absolutePath}`);
@@ -448,7 +573,7 @@ export async function fingerprintSourcePaths(
             : new TextDecoder("utf-8").decode(sourceBytes);
           const language = getSourceLanguage(absolutePath, sourceText);
           if (language === null) {
-            if (needsContentClassification) {
+            if (needsContentClassification && (isObjectiveCHeaderPath(absolutePath) || isPascalPpPath(absolutePath))) {
               return null;
             }
             throw new Error(`Unsupported source file was discovered: ${absolutePath}`);
@@ -540,7 +665,7 @@ async function isSourceCandidateFile(
   absolutePath: string,
   shellShebangReader: ShellShebangReader
 ): Promise<boolean> {
-  if (getSourceLanguage(relativePath) !== null || isObjectiveCHeaderPath(relativePath)) {
+  if (isPascalPpPath(relativePath) || getSourceLanguage(relativePath) !== null || isObjectiveCHeaderPath(relativePath)) {
     return true;
   }
 

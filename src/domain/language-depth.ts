@@ -126,7 +126,7 @@ const EVIDENCE_VERSION: Readonly<Partial<Record<ArtifactLanguage, string>>> = Ob
   css: "0.426.0",
   shell: "0.503.0",
   cobol: "0.509.0",
-  pascal: "0.510.0"
+  pascal: "0.511.0"
 });
 
 const LANGUAGE_LIMITATIONS: Readonly<Partial<Record<ArtifactLanguage, readonly string[]>>> =
@@ -146,7 +146,7 @@ const LANGUAGE_LIMITATIONS: Readonly<Partial<Record<ArtifactLanguage, readonly s
     fortran: ["300-positive/150-negative fparser truth covers unique project subroutine CALLs with fixed arity plus fixed-form continuation and generic END admission; preprocessing, duplicate targets, dummy/EXTERNAL/PROCEDURE/USE/interface shadows, Optional targets, type-bound calls, and runtime dispatch remain nonclaims"],
     ada: ["300-positive/150-negative GNAT 16.1.0 .ali cross-reference truth covers unique project top-level procedure calls with simple fixed arity; optional/default profiles, nested or qualified calls, use-clause visibility, duplicate targets, package-member dispatch, separate bodies, generics, and runtime dispatch remain nonclaims"],
     cobol: ["300-positive/150-negative GnuCOBOL Xref-listing truth covers fixed-format same-program paragraph PERFORM, including sequence columns, continued PROGRAM-ID, literal continuation, and inline PERFORM; COPY/REPLACE/ALTER/GO TO, PERFORM THRU, duplicate or section targets, dynamic calls, external CALL, copy expansion, nested programs, CICS runtime handoff, and compiler-rejected dialects remain nonclaims"],
-    pascal: ["300-positive/150-negative compiler-parse-gate plus independent source truth covers explicit program-level uses of one unique tracked unit and exported zero-argument bare routine calls; overloaded or ambiguous exports, missing/qualified/member calls, include/macro/conditional directives, forward/external declarations, class/virtual dispatch, .pp/.inc discovery expansion, package resolution, and runtime semantics remain nonclaims"],
+    pascal: ["300-positive/150-negative compiler-parse-gate plus independent source truth covers explicit program-level uses of one unique tracked unit and exported zero-argument bare routine calls; .pp discovery now requires one unique sanitized unit/program/library header with no conditional/macro/include taint; overloaded or ambiguous exports, missing/qualified/member calls, .inc fragments, forward/external declarations, class/virtual dispatch, package resolution, and runtime semantics remain nonclaims"],
     html: ["HTML relations are structural resources and containment, not runtime navigation"],
     css: ["CSS relations are structural selectors and containment"],
     sql: ["views, routines, search path, and dynamic SQL remain nonclaims"],
