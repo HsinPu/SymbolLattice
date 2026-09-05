@@ -47,8 +47,8 @@ describe("Java modern heritage relations v0.486", () => {
     const contract = snapshot.symbols.find((symbol) => symbol.name === "Contract");
 
     expect(indexed).toMatchObject({ initialized: true, stale: false });
-    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v418");
-    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v199");
+    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v419");
+    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v200");
     expect(snapshot.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({
         sourceId: child?.id,

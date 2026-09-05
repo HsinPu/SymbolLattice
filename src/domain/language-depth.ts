@@ -47,7 +47,7 @@ const BOUNDED_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
   "go", "rust", "kotlin", "swift", "dart", "csharp", "fsharp", "ocaml", "haskell",
   "scala", "elixir", "erlang", "clojure", "nix", "nim", "zig", "cpp", "c", "php",
   "objc", "ruby", "sql", "r", "markdown", "proto", "graphql", "groovy", "javascript", "python",
-  "vue", "svelte", "astro", "shell", "lua", "solidity", "vbnet", "fortran", "ada", "cobol"
+  "vue", "svelte", "astro", "shell", "lua", "solidity", "vbnet", "fortran", "ada", "cobol", "pascal"
 ]);
 
 const LARGE_PROJECT_STRUCTURAL_LANGUAGES = new Set<ArtifactLanguage>([
@@ -59,11 +59,11 @@ const PROJECT_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
   "rust", "java", "ada", "fortran", "php", "blade", "objc", "elixir", "erlang", "clojure", "haskell",
   "ocaml", "fsharp", "nim", "cpp", "csharp", "ruby", "kotlin", "swift", "dart", "scala",
   "terraform", "liquid", "twig", "nix", "c", "zig", "sql", "graphql", "proto", "markdown",
-  "jsp", "xml"
+  "jsp", "xml", "pascal"
 ]);
 
 const SAME_FILE_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
-  "groovy", "luau", "pascal", "r", "julia", "solidity", "cfml", "vbnet", "shell", "lua"
+  "groovy", "luau", "r", "julia", "solidity", "cfml", "vbnet", "shell", "lua"
 ]);
 
 const FRAMEWORK_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
@@ -76,7 +76,7 @@ const STRUCTURAL_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
 
 const LARGE_PROJECT_VALIDATED_LANGUAGES = new Set<ArtifactLanguage>([
   "typescript", "javascript", "python", "java", "lua", "luau", "objc", "r", "elixir", "perl",
-  "julia", "ruby", "html", "jsp", "css", "shell", "markdown", "groovy", "vue", "svelte", "astro", "solidity", "vbnet", "fortran", "ada", "cobol"
+  "julia", "ruby", "html", "jsp", "css", "shell", "markdown", "groovy", "vue", "svelte", "astro", "solidity", "vbnet", "fortran", "ada", "cobol", "pascal"
 ]);
 
 const EVIDENCE_VERSION: Readonly<Partial<Record<ArtifactLanguage, string>>> = Object.freeze({
@@ -125,7 +125,8 @@ const EVIDENCE_VERSION: Readonly<Partial<Record<ArtifactLanguage, string>>> = Ob
   jsp: "0.428.0",
   css: "0.426.0",
   shell: "0.503.0",
-  cobol: "0.509.0"
+  cobol: "0.509.0",
+  pascal: "0.510.0"
 });
 
 const LANGUAGE_LIMITATIONS: Readonly<Partial<Record<ArtifactLanguage, readonly string[]>>> =
@@ -145,6 +146,7 @@ const LANGUAGE_LIMITATIONS: Readonly<Partial<Record<ArtifactLanguage, readonly s
     fortran: ["300-positive/150-negative fparser truth covers unique project subroutine CALLs with fixed arity plus fixed-form continuation and generic END admission; preprocessing, duplicate targets, dummy/EXTERNAL/PROCEDURE/USE/interface shadows, Optional targets, type-bound calls, and runtime dispatch remain nonclaims"],
     ada: ["300-positive/150-negative GNAT 16.1.0 .ali cross-reference truth covers unique project top-level procedure calls with simple fixed arity; optional/default profiles, nested or qualified calls, use-clause visibility, duplicate targets, package-member dispatch, separate bodies, generics, and runtime dispatch remain nonclaims"],
     cobol: ["300-positive/150-negative GnuCOBOL Xref-listing truth covers fixed-format same-program paragraph PERFORM, including sequence columns, continued PROGRAM-ID, literal continuation, and inline PERFORM; COPY/REPLACE/ALTER/GO TO, PERFORM THRU, duplicate or section targets, dynamic calls, external CALL, copy expansion, nested programs, CICS runtime handoff, and compiler-rejected dialects remain nonclaims"],
+    pascal: ["300-positive/150-negative compiler-parse-gate plus independent source truth covers explicit program-level uses of one unique tracked unit and exported zero-argument bare routine calls; overloaded or ambiguous exports, missing/qualified/member calls, include/macro/conditional directives, forward/external declarations, class/virtual dispatch, .pp/.inc discovery expansion, package resolution, and runtime semantics remain nonclaims"],
     html: ["HTML relations are structural resources and containment, not runtime navigation"],
     css: ["CSS relations are structural selectors and containment"],
     sql: ["views, routines, search path, and dynamic SQL remain nonclaims"],

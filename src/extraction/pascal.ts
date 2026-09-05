@@ -2,6 +2,9 @@ import {
   createEdgeId,
   createSymbolId,
   type ArtifactFacts,
+  type PascalCallFact,
+  type PascalRoutineFact,
+  type PascalUnitFact,
   type GraphEdge,
   type SourcePosition,
   type SourceRange,
@@ -45,6 +48,13 @@ interface StaticPascalProgramMainCall {
   readonly end: number;
 }
 
+interface StaticPascalProgramRoutineCall {
+  readonly targetName: string;
+  readonly start: number;
+  readonly end: number;
+  readonly usesUnitNames: readonly string[];
+}
+
 interface StaticHorseRoute {
   readonly method: HorseRouteMethod;
   readonly path: string;
@@ -84,6 +94,15 @@ type HorseRouteMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD";
 
 const PASCAL_ROUTINE_HEADER =
   /^(?:(?:class|static)\s+)?(procedure|function)\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*(?:\(([^)]*)\))?\s*(?::\s*[A-Za-z_][A-Za-z0-9_.]*)?\s*;\s*(begin\b.*)?$/iu;
+
+const PASCAL_UNIT_DECLARATION = /^unit\s+([A-Za-z_][A-Za-z0-9_]*)\s*;\s*$/iu;
+const PASCAL_PROGRAM_DECLARATION = /^program\s+([A-Za-z_][A-Za-z0-9_]*)\s*;\s*$/iu;
+
+const PASCAL_BUILTIN_ROUTINE_NAMES: ReadonlySet<string> = new Set([
+  "abort", "assign", "break", "continue", "dec", "delete", "dispose", "exit", "halt",
+  "inc", "insert", "new", "read", "readln", "reset", "rewrite", "setlength", "str",
+  "val", "write", "writeln"
+]);
 
 const HORSE_ROUTE_METHODS: ReadonlyMap<string, HorseRouteMethod> = new Map([
   ["get", "GET"],
@@ -305,6 +324,52 @@ function directPascalRoutineHeader(line: PascalLine): PascalRoutineHeader | null
         start: line.start,
         hasInlineBegin: match?.[4] !== undefined
       };
+}
+
+function directPascalUnitName(lines: readonly PascalLine[]): string | null {
+  const declarations = lines
+    .map((line) => PASCAL_UNIT_DECLARATION.exec(line.content)?.[1])
+    .filter((name): name is string => name !== undefined);
+  return declarations.length === 1 ? (declarations[0] ?? null) : null;
+}
+
+function directPascalProgramName(lines: readonly PascalLine[]): string | null {
+  const declarations = lines
+    .map((line) => PASCAL_PROGRAM_DECLARATION.exec(line.content)?.[1])
+    .filter((name): name is string => name !== undefined);
+  return declarations.length === 1 ? (declarations[0] ?? null) : null;
+}
+
+/**
+ * Accepts only one simple, explicit program-level uses clause immediately
+ * before the main block. Qualified unit names, `in` paths, and other program
+ * declarations remain unresolved because they need compiler configuration.
+ */
+function directPascalUses(
+  lines: readonly PascalLine[],
+  declarationLine: number,
+  blockStartLine: number
+): readonly string[] | null {
+  const nonEmpty = lines
+    .slice(declarationLine + 1, blockStartLine)
+    .map((line) => line.content.trim())
+    .filter((content) => content.length > 0);
+  if (nonEmpty.length === 0) {
+    return null;
+  }
+  const match = /^uses\s+([A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*)\s*;\s*$/iu.exec(
+    nonEmpty.join(" ")
+  );
+  if (match?.[1] === undefined) {
+    return null;
+  }
+  const names = match[1]
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
+  return names.length > 0 && new Set(names.map((name) => name.toLowerCase())).size === names.length
+    ? names
+    : null;
 }
 
 function directRoutineBodyStart(
@@ -706,6 +771,59 @@ function directPascalProgramBlock(
   return blocks.length === 1 ? (blocks[0] ?? null) : null;
 }
 
+function directPascalProgramMainRoutineCalls(
+  sourceText: string,
+  lines: readonly PascalLine[],
+  routines: readonly StaticPascalRoutine[],
+  program: PascalProgramBlock | null,
+  hasCompilerIncludeDirective: boolean,
+  hasConditionalCompilerDirective: boolean,
+  hasMacroCompilerDirective: boolean
+): readonly StaticPascalProgramRoutineCall[] {
+  if (
+    program === null ||
+    hasCompilerIncludeDirective ||
+    hasConditionalCompilerDirective ||
+    hasMacroCompilerDirective ||
+    hasPascalUnitDeclaration(lines) ||
+    /\b(?:forward|external|overload|with)\b/iu.test(sourceText)
+  ) {
+    return [];
+  }
+  const usesUnitNames = directPascalUses(lines, program.declarationLine, program.startLine);
+  if (usesUnitNames === null) {
+    return [];
+  }
+  const localRoutineNames = new Set(
+    routines
+      .filter((routine) => !routine.name.includes("."))
+      .map((routine) => routine.name.toLowerCase())
+  );
+  const statements = lines
+    .slice(program.startLine + 1, program.endLine)
+    .filter((line) => line.content.length > 0);
+  const calls: StaticPascalProgramRoutineCall[] = [];
+  for (const statement of statements) {
+    const match = /^([A-Za-z_][A-Za-z0-9_]*)\s*(?:\(\s*\))?\s*;\s*$/u.exec(statement.content);
+    const targetName = match?.[1];
+    if (
+      targetName === undefined ||
+      PASCAL_BUILTIN_ROUTINE_NAMES.has(targetName.toLowerCase()) ||
+      localRoutineNames.has(targetName.toLowerCase())
+    ) {
+      return [];
+    }
+    const start = statement.start + statement.content.indexOf(targetName);
+    calls.push({
+      targetName,
+      start,
+      end: start + targetName.length,
+      usesUnitNames
+    });
+  }
+  return calls;
+}
+
 function directPascalProgramMainCall(
   sourceText: string,
   lines: readonly PascalLine[],
@@ -922,6 +1040,10 @@ export function extractPascalFileFacts(input: PascalExtractFileFactsInput): Arti
   };
   symbols.push(fileNode);
 
+  const pascalUnits: PascalUnitFact[] = [];
+  const pascalRoutines: PascalRoutineFact[] = [];
+  const pascalCalls: PascalCallFact[] = [];
+
   function nextOrdinal(qualifiedName: string, kind: SymbolNode["kind"]): number {
     const identity = `${qualifiedName}\u0000${kind}`;
     const ordinal = declarationOrdinals.get(identity) ?? 0;
@@ -1101,6 +1223,8 @@ export function extractPascalFileFacts(input: PascalExtractFileFactsInput): Arti
   if (sanitized.valid) {
     const sanitizedLines = linesFor(sanitized.text);
     const unitScope = directPascalUnitScope(sanitizedLines);
+    const unitName = directPascalUnitName(sanitizedLines);
+    const programName = directPascalProgramName(sanitizedLines);
     const routines = sanitized.hasConditionalCompilerDirective
       ? []
       : directPascalFileRoutines(
@@ -1108,6 +1232,30 @@ export function extractPascalFileFacts(input: PascalExtractFileFactsInput): Arti
           collectDirectPascalRoutines(sanitizedLines),
           unitScope
         );
+    const programBlock = directPascalProgramBlock(sanitizedLines, routines);
+    const hasStableProjectSyntax =
+      !sanitized.hasConditionalCompilerDirective &&
+      !sanitized.hasMacroCompilerDirective &&
+      !hasPascalCompilerIncludeDirective(input.sourceText);
+    if (unitName !== null && unitScope !== null) {
+      pascalUnits.push({
+        symbolId: fileNode.id,
+        filePath: input.filePath,
+        name: unitName,
+        kind: "unit",
+        projectEligible: hasStableProjectSyntax,
+        range: fileNode.range
+      });
+    } else if (programName !== null && programBlock !== null) {
+      pascalUnits.push({
+        symbolId: fileNode.id,
+        filePath: input.filePath,
+        name: programName,
+        kind: "program",
+        projectEligible: hasStableProjectSyntax,
+        range: fileNode.range
+      });
+    }
     const implementationRoutineCounts = new Map<string, number>();
     for (const routine of routines) {
       const normalizedName = routine.name.toLowerCase();
@@ -1121,6 +1269,22 @@ export function extractPascalFileFacts(input: PascalExtractFileFactsInput): Arti
         (unitScope?.interfaceRoutineCounts.get(normalizedName) === 1 &&
           implementationRoutineCounts.get(normalizedName) === 1);
       const symbol = addRoutine(routine, isExported);
+      pascalRoutines.push({
+        symbolId: symbol.id,
+        filePath: input.filePath,
+        unitName,
+        name: routine.name,
+        kind: routine.kind,
+        parameterCount: routine.hasZeroParameters ? 0 : null,
+        projectEligible:
+          hasStableProjectSyntax &&
+          unitName !== null &&
+          unitScope !== null &&
+          isExported &&
+          !routine.name.includes(".") &&
+          routine.hasZeroParameters,
+        range: symbol.range
+      });
       const existing = routinesByName.get(normalizedName) ?? [];
       existing.push({ routine, symbol });
       routinesByName.set(normalizedName, existing);
@@ -1146,6 +1310,25 @@ export function extractPascalFileFacts(input: PascalExtractFileFactsInput): Arti
           addDirectCall(call, caller.symbol, target.symbol);
         }
       }
+    }
+
+    for (const call of directPascalProgramMainRoutineCalls(
+      sanitized.text,
+      sanitizedLines,
+      routines,
+      programBlock,
+      hasPascalCompilerIncludeDirective(input.sourceText),
+      sanitized.hasConditionalCompilerDirective,
+      sanitized.hasMacroCompilerDirective
+    )) {
+      pascalCalls.push({
+        sourceId: fileNode.id,
+        filePath: input.filePath,
+        referenceName: call.targetName,
+        argumentCount: 0,
+        usesUnitNames: call.usesUnitNames,
+        range: rangeFor(lineStarts, call.start, call.end)
+      });
     }
 
     const programMainCall = directPascalProgramMainCall(
@@ -1195,6 +1378,11 @@ export function extractPascalFileFacts(input: PascalExtractFileFactsInput): Arti
     referenceScopes: [],
     importBindings: [],
     exportBindings: [],
-    reExportBindings: []
+    reExportBindings: [],
+    pascalFacts: {
+      units: pascalUnits,
+      routines: pascalRoutines,
+      calls: pascalCalls
+    }
   };
 }

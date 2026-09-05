@@ -41,8 +41,8 @@ describe("R project relations v0.481", () => {
     const entry = snapshot.symbols.find((symbol) => symbol.qualifiedName === "R/entry.R#entry");
     const helper = snapshot.symbols.find((symbol) => symbol.qualifiedName === "R/entry.R#helper");
     expect(indexed).toMatchObject({ stale: false });
-    expect(graphStore.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v418");
-    expect(graphStore.getActiveGraphBundle(projectPath).resolverVersion).toContain("project-resolver-v199");
+    expect(graphStore.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v419");
+    expect(graphStore.getActiveGraphBundle(projectPath).resolverVersion).toContain("project-resolver-v200");
     expect(graphStore.getArtifactFacts(projectPath).find((facts) => facts.filePath === "R/entry.R")?.rFacts).toMatchObject({ parserRejected: false });
     expect(snapshot.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({ sourceId: entry?.id, targetId: helper?.id, kind: "calls", resolution: "exact", confidence: 1 })

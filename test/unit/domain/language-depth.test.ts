@@ -18,18 +18,18 @@ describe("language depth matrix", () => {
       tiers: {
         "external-tier-a": 1,
         "external-partial": 1,
-        "bounded-relation": 39,
+        "bounded-relation": 40,
         "large-project-structural": 6,
-        targeted: 11
+        targeted: 10
       },
       relationDepth: {
-        project: 42,
-        "same-file": 10,
+        project: 43,
+        "same-file": 9,
         framework: 4,
         structural: 2
       },
-      largeProjectValidated: 26,
-      relationReleaseValidated: 41
+      largeProjectValidated: 27,
+      relationReleaseValidated: 42
     });
   });
 
@@ -123,6 +123,14 @@ describe("language depth matrix", () => {
       relationDepth: "framework",
       truthKind: "gnucobol-xref-listing",
       evidenceVersion: "0.509.0",
+      largeProjectValidated: true,
+      relationReleaseValidated: true
+    });
+    expect(byLanguage.get("pascal")).toMatchObject({
+      evidenceTier: "bounded-relation",
+      relationDepth: "project",
+      truthKind: "source-occurrence-oracle",
+      evidenceVersion: "0.510.0",
       largeProjectValidated: true,
       relationReleaseValidated: true
     });

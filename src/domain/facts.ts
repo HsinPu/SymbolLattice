@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v418";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v419";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v199";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v200";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -4442,6 +4442,45 @@ export interface FortranFacts {
   readonly calls: readonly FortranCallFact[];
 }
 
+/** A source-proven Pascal unit or program module retained for project resolution. */
+export interface PascalUnitFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly name: string;
+  readonly kind: "unit" | "program";
+  readonly projectEligible: boolean;
+  readonly range: SourceRange;
+}
+
+/** A Pascal routine whose unit/interface visibility and zero-argument profile are known. */
+export interface PascalRoutineFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly unitName: string | null;
+  readonly name: string;
+  readonly kind: "procedure" | "function";
+  readonly parameterCount: number | null;
+  readonly projectEligible: boolean;
+  readonly range: SourceRange;
+}
+
+/** A source-ranged bare routine call from a program main block with explicit unit imports. */
+export interface PascalCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly argumentCount: number;
+  readonly usesUnitNames: readonly string[];
+  readonly range: SourceRange;
+}
+
+/** Syntax-only Pascal facts retained for conservative project-level unit-call resolution. */
+export interface PascalFacts {
+  readonly units: readonly PascalUnitFact[];
+  readonly routines: readonly PascalRoutineFact[];
+  readonly calls: readonly PascalCallFact[];
+}
+
 /**
  * Syntax-proven, file-local facts. They deliberately retain unresolved source
  * references so later resolution stages can be recomputed without reparsing.
@@ -4550,6 +4589,8 @@ export interface ArtifactFacts {
   readonly haskellFacts?: HaskellFacts;
   /** Omitted only by artifact facts persisted before v0.507 Fortran project-call depth. */
   readonly fortranFacts?: FortranFacts;
+  /** Omitted only by artifact facts persisted before v0.510 Pascal project-call depth. */
+  readonly pascalFacts?: PascalFacts;
   /** Omitted only by artifact facts persisted before v0.92. */
   readonly springBootPropertiesFacts?: SpringBootPropertiesFacts;
   /** Omitted only by artifact facts persisted before v0.66. */
