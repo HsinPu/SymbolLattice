@@ -13,7 +13,7 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v413";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v414";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
@@ -1590,9 +1590,32 @@ export interface AdaProjectPackageUnitFact {
   readonly endRange: SourceRange;
 }
 
-/** Syntax-only Ada package-unit facts retained for a later bounded project resolver. */
+/** One direct top-level Ada procedure body eligible for bounded project calls. */
+export interface AdaProjectProcedureFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly normalizedFullName: string;
+  readonly parameterCount: number;
+  readonly projectEligible: boolean;
+  readonly range: SourceRange;
+}
+
+/** One source-ranged unqualified Ada procedure call retained for project resolution. */
+export interface AdaProjectCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
+/** Syntax-only Ada facts retained for bounded package and procedure project resolution. */
 export interface AdaProjectFacts {
   readonly packageUnits: readonly AdaProjectPackageUnitFact[];
+  /** Omitted only by facts persisted before the bounded Ada procedure-call slice. */
+  readonly procedures?: readonly AdaProjectProcedureFact[];
+  /** Omitted only by facts persisted before the bounded Ada procedure-call slice. */
+  readonly calls?: readonly AdaProjectCallFact[];
 }
 
 /** A direct external `mod name;` declaration retained for Rust module proof. */

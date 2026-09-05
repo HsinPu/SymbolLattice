@@ -42,7 +42,7 @@ describe("JavaScript relations v0.500", () => {
     const source = snapshot.symbols.find((symbol) => symbol.kind === "file" && symbol.filePath === "lib/entry.js");
     const target = snapshot.symbols.find((symbol) => symbol.kind === "file" && symbol.filePath === "lib/helper.js");
 
-    expect(store.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v413");
+    expect(store.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v414");
     expect(snapshot.edges.filter((edge) => edge.kind === "imports" && edge.sourceId === source?.id)).toEqual([
       expect.objectContaining({
         targetId: target?.id,

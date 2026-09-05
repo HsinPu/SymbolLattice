@@ -18,9 +18,9 @@ describe("language depth matrix", () => {
       tiers: {
         "external-tier-a": 1,
         "external-partial": 1,
-        "bounded-relation": 37,
+        "bounded-relation": 38,
         "large-project-structural": 6,
-        targeted: 13
+        targeted: 12
       },
       relationDepth: {
         project: 42,
@@ -28,8 +28,8 @@ describe("language depth matrix", () => {
         framework: 4,
         structural: 2
       },
-      largeProjectValidated: 24,
-      relationReleaseValidated: 39
+      largeProjectValidated: 25,
+      relationReleaseValidated: 40
     });
   });
 
@@ -107,6 +107,14 @@ describe("language depth matrix", () => {
       relationDepth: "project",
       truthKind: "fparser-ast",
       evidenceVersion: "0.507.0",
+      largeProjectValidated: true,
+      relationReleaseValidated: true
+    });
+    expect(byLanguage.get("ada")).toMatchObject({
+      evidenceTier: "bounded-relation",
+      relationDepth: "project",
+      truthKind: "gnat-ali-xref",
+      evidenceVersion: "0.508.0",
       largeProjectValidated: true,
       relationReleaseValidated: true
     });

@@ -51,7 +51,7 @@ describe("Java modern callable signature relations v0.488", () => {
     const result = snapshot.symbols.find((symbol) => symbol.name === "Result");
 
     expect(indexed).toMatchObject({ initialized: true, stale: false });
-    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v413");
+    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v414");
     expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v199");
     expect(snapshot.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({

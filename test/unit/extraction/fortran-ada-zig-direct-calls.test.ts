@@ -481,6 +481,45 @@ end adaHelper;`
     ]);
   });
 
+  it("emits one exact Ada fixed-arity procedure call with unique target evidence", () => {
+    const facts = extractAdaFileFacts({
+      filePath: "src/smoke.adb",
+      language: "ada",
+      sourceText: `with adaHelper;
+procedure adaEntry is
+begin
+  adaHelper (1, 2);
+end adaEntry;
+
+procedure adaHelper (Left : Integer; Right : Integer) is
+begin
+  null;
+end adaHelper;`
+    });
+    const caller = functionByName(facts, "adaEntry");
+    const callee = functionByName(facts, "adaHelper");
+
+    expect(calls(facts)).toEqual([
+      expect.objectContaining({
+        sourceId: caller.id,
+        targetId: callee.id,
+        filePath: "src/smoke.adb",
+        range: {
+          start: { line: 4, column: 3 },
+          end: { line: 4, column: 12 }
+        },
+        resolution: "exact",
+        confidence: 1,
+        referenceName: "adaHelper",
+        evidence: {
+          ruleId: "syntax.ada.same-file.unique-fixed-arity-procedure-call.direct-context-with",
+          stage: "syntax",
+          candidateSymbolIds: [callee.id]
+        }
+      })
+    ]);
+  });
+
   it("retains exact Ada root package specification and body facts", () => {
     const specification = extractAdaFileFacts({
       filePath: "src/mixed_case.ads",

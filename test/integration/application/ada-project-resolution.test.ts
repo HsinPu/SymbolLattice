@@ -152,6 +152,132 @@ function forgedInvalidIdentifierFacts(input: {
 }
 
 describe("Ada project resolution", () => {
+  it("projects one unique fixed-arity top-level procedure call across files", () => {
+    const callerPath = "src/ada_entry.adb";
+    const targetPath = "src/ada_helper.adb";
+    const callerSource = `with adaHelper;
+procedure adaEntry is
+begin
+  adaHelper (1, 2);
+end adaEntry;`;
+    const targetSource = `procedure adaHelper (Left : Integer; Right : Integer) is
+begin
+  null;
+end adaHelper;`;
+    const snapshot = resolveProjectFacts({
+      sourceDocuments: [
+        document(callerPath, callerSource),
+        document(targetPath, targetSource)
+      ],
+      extractedFiles: [
+        extractedAda(callerPath, callerSource),
+        extractedAda(targetPath, targetSource)
+      ],
+      indexedAt: "2026-09-05T00:00:00.000Z"
+    });
+    const edge = snapshot.edges.find(
+      (candidate) => candidate.evidence?.ruleId === "project.ada.unique-procedure.fixed-arity-call"
+    );
+    expect(edge).toMatchObject({
+      sourceId: expect.stringContaining("ada_entry.adb%23procedure%3AadaEntry"),
+      targetId: expect.stringContaining("ada_helper.adb%23procedure%3AadaHelper"),
+      kind: "calls",
+      filePath: callerPath,
+      range: {
+        start: { line: 4, column: 3 },
+        end: { line: 4, column: 12 }
+      },
+      resolution: "exact",
+      confidence: 1,
+      referenceName: "adaHelper",
+      evidence: {
+        ruleId: "project.ada.unique-procedure.fixed-arity-call",
+        stage: "module",
+        candidateSymbolIds: [expect.any(String)],
+        callArity: {
+          actualArgumentCount: 2,
+          candidates: [{
+            minimumArgumentCount: 2,
+            maximumArgumentCount: 2,
+            applicable: true
+          }]
+        }
+      }
+    });
+  });
+
+  it.each([
+    {
+      name: "duplicate target",
+      callerSource: `with adaHelper;
+procedure adaEntry is
+begin
+  adaHelper (1, 2);
+end adaEntry;`,
+      targetSources: [
+        `procedure adaHelper (Left : Integer; Right : Integer) is
+begin
+  null;
+end adaHelper;`,
+        `procedure adaHelper (Left : Integer; Right : Integer) is
+begin
+  null;
+end adaHelper;`
+      ]
+    },
+    {
+      name: "optional target",
+      callerSource: `with adaHelper;
+procedure adaEntry is
+begin
+  adaHelper (1, 2);
+end adaEntry;`,
+      targetSources: [`procedure adaHelper (Left : Integer := 0; Right : Integer) is
+begin
+  null;
+end adaHelper;`]
+    },
+    {
+      name: "use clause",
+      callerSource: `with adaHelper;
+use Foreign;
+procedure adaEntry is
+begin
+  adaHelper (1, 2);
+end adaEntry;`,
+      targetSources: [`procedure adaHelper (Left : Integer; Right : Integer) is
+begin
+  null;
+end adaHelper;`]
+    },
+    {
+      name: "missing with",
+      callerSource: `procedure adaEntry is
+begin
+  adaHelper (1, 2);
+end adaEntry;`,
+      targetSources: [`procedure adaHelper (Left : Integer; Right : Integer) is
+begin
+  null;
+end adaHelper;`]
+    }
+  ])("keeps Ada project procedure calls unresolved for %s", ({ callerSource, targetSources }) => {
+    const callerPath = "src/ada_entry.adb";
+    const targetPaths = targetSources.map((_, index) => `src/ada_helper_${index}.adb`);
+    const sourceDocuments = [
+      document(callerPath, callerSource),
+      ...targetSources.map((sourceText, index) => document(targetPaths[index]!, sourceText))
+    ];
+    const snapshot = resolveProjectFacts({
+      sourceDocuments,
+      extractedFiles: sourceDocuments.map((source) => extractedAda(source.relativePath, source.sourceText)),
+      indexedAt: "2026-09-05T00:00:00.000Z"
+    });
+    expect(snapshot.edges.some(
+      (edge) => edge.evidence?.ruleId === "project.ada.unique-procedure.fixed-arity-call"
+    )).toBe(false);
+  });
+
   it("pairs a Result-shaped generic package body with its unique specification", async () => {
     const projectPath = await createInlineProject({
       "src/result.ads": SPECIFICATION_SOURCE,

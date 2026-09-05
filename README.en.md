@@ -16,7 +16,7 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.507.0
+Current version: v0.508.0
 
 ## Highlights
 
@@ -60,6 +60,8 @@ v0.502.0 promotes Vue, Svelte, and Astro to bounded relation evidence. Fixed Ele
 v0.503.0 promotes Shell to bounded same-file relation evidence. The bundled mvdan.cc/sh v3.13.1 WASM now uses ABI 2, and fixed Git, nvm, Kubernetes, asdf, RVM, and SDKMAN corpora verify 300 parser-proven direct function calls plus 150 negatives. An exact `calls` edge requires a literal command inside a direct top-level function body, one unique direct top-level target in the same file, stable UTF-8 byte ranges, and parser provenance. Duplicate targets, nested functions, command/process substitutions, `eval`, `source`/`.`, alias/unalias/unset, dynamic commands, and external dispatch remain nonclaims.
 
 v0.507.0 promotes Fortran to bounded project relation evidence. Fixed Reference LAPACK v3.12.1 source and fparser 0.2.4 verify 300 project subroutine calls across BLAS, CBLAS, SRC, and TESTING, all 1,227 endpoint-admitted breadth candidates, and 150 negatives. Exact `calls` require lowercase non-preprocessed source, one unique project subroutine target, matching fixed arity, and no dummy, EXTERNAL, PROCEDURE, USE, interface shadow, or Optional target. Fixed-form continuations and standard generic `END` are now admitted safely; type-bound calls, function invocation, macro configuration, and runtime dispatch remain nonclaims.
+
+v0.508.0 promotes Ada to bounded project relation evidence. Fixed GNAT-FSF 16.1.0-1 and the AdaCore Ada Language Server 2026.3.202607051 corpus (1,757 Ada sources) provide GNAT `.ali` cross-reference truth for 300 unique top-level procedure calls and 150 negatives. Exact `calls` require an explicit `with`, an untainted unqualified procedure call, a simple fixed arity, and one unique project target; optional/default profiles, nested or qualified calls, use-clause visibility, duplicates, package members, generics, separate bodies, and runtime dispatch remain nonclaims. The large corpus reports 342 procedure facts, four call candidates, and zero safely projectable relations separately; the synthetic quota is not presented as complete Ada support.
 
 v0.506.0 promotes VB.NET to bounded same-file relation evidence. Fixed Roslyn Visual Studio 2022 17.14.34 source and Microsoft.Net.Compilers.Toolset 5.9.0 verify 300 private fixed-arity calls across six VB subsystems, 934 endpoint-admitted breadth candidates, and 150 negatives. Exact `calls` require a non-Partial same-file Class or Module, one unique `Private` target, single-line caller and target signatures, matching arity, and no parameter/local shadow, lambda, XML, or Shared-to-instance dispatch. Overloads, Optional or ParamArray parameters, late binding, qualified or member calls, and cross-file partial types remain nonclaims.
 

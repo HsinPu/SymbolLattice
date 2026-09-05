@@ -1,7 +1,9 @@
 import {
   createEdgeId,
   createSymbolId,
+  type AdaProjectCallFact,
   type AdaProjectPackageUnitFact,
+  type AdaProjectProcedureFact,
   type ArtifactFacts,
   type GraphEdge,
   type SourcePosition,
@@ -28,6 +30,8 @@ interface AdaHeader {
   readonly name: string;
   readonly nameStart: number;
   readonly nameEnd: number;
+  /** Null means the simple profile grammar could not prove a fixed arity. */
+  readonly parameterCount: number | null;
   readonly requiresNamedEnd: boolean;
 }
 
@@ -40,6 +44,7 @@ interface AdaUnit {
   readonly headerEnd: number;
   readonly nameStart: number;
   readonly nameEnd: number;
+  readonly parameterCount: number | null;
   readonly endNameStart?: number;
   readonly endNameEnd?: number;
 }
@@ -54,6 +59,7 @@ interface AdaDirectCall {
   readonly name: string;
   readonly start: number;
   readonly end: number;
+  readonly arity: number;
 }
 
 const ADA_NAME = "[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z][A-Za-z0-9_]*)*";
@@ -286,7 +292,46 @@ function headerFromMatch(
     return null;
   }
   const nameStart = line.codeStart + prefixMatch[0].length;
-  return { kind, name, nameStart, nameEnd: nameStart + name.length, requiresNamedEnd };
+  const suffix = line.code.slice(prefixMatch[0].length + name.length);
+  const open = suffix.indexOf("(");
+  let parameterCount: number | null = 0;
+  if (open >= 0) {
+    const close = suffix.lastIndexOf(")");
+    if (close <= open) {
+      parameterCount = null;
+    } else {
+      const profile = suffix.slice(open + 1, close).trim();
+      if (profile.length === 0) {
+        parameterCount = 0;
+      } else if (/[()]/u.test(profile) || /:=/u.test(profile)) {
+        parameterCount = null;
+      } else {
+        const groups = profile.split(";").map((group) => group.trim());
+        parameterCount = 0;
+        for (const group of groups) {
+          const colon = group.indexOf(":");
+          const names = colon < 0 ? "" : group.slice(0, colon).trim();
+          if (
+            colon <= 0 ||
+            names.length === 0 ||
+            names.split(",").some((candidate) => normalizedLegalAdaIdentifier(candidate.trim()) === null)
+          ) {
+            parameterCount = null;
+            break;
+          }
+          parameterCount += names.split(",").length;
+        }
+      }
+    }
+  }
+  return {
+    kind,
+    name,
+    nameStart,
+    nameEnd: nameStart + name.length,
+    parameterCount,
+    requiresNamedEnd
+  };
 }
 
 function directAdaHeader(line: AdaLine): AdaHeader | null {
@@ -392,7 +437,8 @@ function staticAdaUnits(input: AdaExtractFileFactsInput): readonly AdaUnit[] | n
         headerStart: line.codeStart,
         headerEnd: line.codeEnd,
         nameStart: header.nameStart,
-        nameEnd: header.nameEnd
+        nameEnd: header.nameEnd,
+        parameterCount: header.parameterCount
       });
       index += 1;
       continue;
@@ -418,6 +464,7 @@ function staticAdaUnits(input: AdaExtractFileFactsInput): readonly AdaUnit[] | n
       headerEnd: line.codeEnd,
       nameStart: header.nameStart,
       nameEnd: header.nameEnd,
+      parameterCount: header.parameterCount,
       endNameStart: ending.start,
       endNameEnd: ending.end
     });
@@ -442,8 +489,13 @@ function isAdaSubunit(unit: AdaUnit, lines: readonly AdaLine[]): boolean {
 }
 
 function isZeroArgumentAdaProcedureHeader(line: AdaLine, expectedName: string): boolean {
-  const escapedName = expectedName.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-  return new RegExp("^procedure\\s+" + escapedName + "\\s+is\\s*$", "iu").test(line.code);
+  const header = directAdaHeader(line);
+  return (
+    header?.kind === "procedure" &&
+    header.name.toLowerCase() === expectedName.toLowerCase() &&
+    header.requiresNamedEnd &&
+    header.parameterCount === 0
+  );
 }
 
 /**
@@ -470,15 +522,30 @@ function directAdaCall(unit: AdaUnit, lines: readonly AdaLine[]): AdaDirectCall 
   if (body.length !== 2 || body[0]?.code.toLowerCase() !== "begin" || statement === undefined) {
     return null;
   }
-  const match = new RegExp("^(" + ADA_NAME + ")\\s*;\\s*$", "iu").exec(statement.code);
+  const match = new RegExp("^(" + ADA_NAME + ")\\s*(?:\\(([^()]*)\\))?\\s*;\\s*$", "iu").exec(
+    statement.code
+  );
   const name = match?.[1];
   if (match === null || name === undefined) {
     return null;
   }
+  const argumentsText = match[2];
+  if (argumentsText !== undefined && /["']|=>|;/u.test(argumentsText)) {
+    return null;
+  }
+  const arity =
+    argumentsText === undefined || argumentsText.trim().length === 0
+      ? 0
+      : argumentsText.split(",").length;
   const offset = statement.code.indexOf(name);
   return offset < 0
     ? null
-    : { name, start: statement.codeStart + offset, end: statement.codeStart + offset + name.length };
+    : {
+        name,
+        start: statement.codeStart + offset,
+        end: statement.codeStart + offset + name.length,
+        arity
+      };
 }
 
 function permitsAdaDirectCalls(lines: readonly AdaLine[]): boolean {
@@ -520,6 +587,8 @@ function hasDirectAdaContextWith(
 /**
  * Emits source-ranged direct Ada library units without claiming full Ada
  * parsing, member analysis, specification/body pairing, or runtime behavior.
+ * Simple fixed-arity top-level procedure calls are retained for the bounded
+ * project resolver; optional, nested, qualified, and dynamic forms stay out.
  */
 export function extractAdaFileFacts(input: AdaExtractFileFactsInput): ArtifactFacts {
   const lineStarts = lineStartsFor(input.sourceText);
@@ -544,6 +613,8 @@ export function extractAdaFileFacts(input: AdaExtractFileFactsInput): ArtifactFa
   const declarationOrdinals = new Map<string, number>();
   const symbolsByUnit = new Map<AdaUnit, SymbolNode>();
   const packageUnits: AdaProjectPackageUnitFact[] = [];
+  const procedureFacts: AdaProjectProcedureFact[] = [];
+  const callFacts: AdaProjectCallFact[] = [];
 
   function addSymbol(inputSymbol: {
     readonly name: string;
@@ -629,6 +700,21 @@ export function extractAdaFileFacts(input: AdaExtractFileFactsInput): ArtifactFa
         endRange: rangeForSpan(lineStarts, unit.endNameStart, unit.endNameEnd)
       });
     }
+    if (
+      unit.kind === "procedure" &&
+      unit.endNameStart !== undefined &&
+      unit.parameterCount !== null &&
+      normalizedFullName !== null
+    ) {
+      procedureFacts.push({
+        symbolId: symbol.id,
+        filePath: input.filePath,
+        normalizedFullName,
+        parameterCount: unit.parameterCount,
+        projectEligible: !unit.name.includes(".") && !isAdaSubunit(unit, lines ?? []),
+        range: symbol.range
+      });
+    }
   }
 
   if (lines !== null && permitsAdaDirectCalls(lines)) {
@@ -641,13 +727,29 @@ export function extractAdaFileFacts(input: AdaExtractFileFactsInput): ArtifactFa
       ) {
         continue;
       }
+      if (
+        !call.name.includes(".") &&
+        hasDirectAdaContextWith(callerUnit, call.name, units, lines)
+      ) {
+        const caller = symbolsByUnit.get(callerUnit);
+        if (caller !== undefined) {
+          callFacts.push({
+            sourceId: caller.id,
+            filePath: input.filePath,
+            referenceName: call.name,
+            argumentCount: call.arity,
+            range: rangeForSpan(lineStarts, call.start, call.end)
+          });
+        }
+      }
       const candidates = procedures.filter(
         (unit) =>
           unit.name.toLowerCase() === call.name.toLowerCase() &&
-          isZeroArgumentAdaProcedureHeader(
-            lines.find((line) => line.codeStart === unit.start) ?? { code: "", codeStart: 0, codeEnd: 0 },
-            unit.name
-          )
+          unit.parameterCount === call.arity &&
+          unit.parameterCount !== null &&
+          unit.kind === "procedure" &&
+          unit.start !== callerUnit.start &&
+          unit.endNameStart !== undefined
       );
       if (candidates.length !== 1) {
         continue;
@@ -681,7 +783,10 @@ export function extractAdaFileFacts(input: AdaExtractFileFactsInput): ArtifactFa
         confidence: 1,
         referenceName: call.name,
         evidence: {
-          ruleId: "syntax.ada.same-file.unique-zero-argument-procedure-call.direct-context-with",
+          ruleId:
+            call.arity === 0
+              ? "syntax.ada.same-file.unique-zero-argument-procedure-call.direct-context-with"
+              : "syntax.ada.same-file.unique-fixed-arity-procedure-call.direct-context-with",
           stage: "syntax",
           candidateSymbolIds: [target.id]
         }
@@ -698,6 +803,10 @@ export function extractAdaFileFacts(input: AdaExtractFileFactsInput): ArtifactFa
     importBindings: [],
     exportBindings: [],
     reExportBindings: [],
-    adaProjectFacts: { packageUnits }
+    adaProjectFacts: {
+      packageUnits,
+      ...(procedureFacts.length === 0 ? {} : { procedures: procedureFacts }),
+      ...(callFacts.length === 0 ? {} : { calls: callFacts })
+    }
   };
 }

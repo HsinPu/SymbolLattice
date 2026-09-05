@@ -4688,6 +4688,23 @@ interface AdaRuntimePackageUnitFact {
   readonly endRange: SourceRange;
 }
 
+interface AdaRuntimeProcedureFact {
+  readonly symbolId: string;
+  readonly filePath: string;
+  readonly normalizedFullName: string;
+  readonly parameterCount: number;
+  readonly projectEligible: boolean;
+  readonly range: SourceRange;
+}
+
+interface AdaRuntimeCallFact {
+  readonly sourceId: string;
+  readonly filePath: string;
+  readonly referenceName: string;
+  readonly argumentCount: number;
+  readonly range: SourceRange;
+}
+
 const ADA_RESERVED_IDENTIFIERS = new Set([
   "abort", "abs", "abstract", "accept", "access", "aliased", "all", "and", "array", "at",
   "begin", "body", "case", "constant", "declare", "delay", "delta", "digits", "do", "else",
@@ -4727,6 +4744,27 @@ function adaRuntimePackageUnitFact(value: unknown): value is AdaRuntimePackageUn
     adaRuntimeSourceRange(value.headerRange) &&
     adaRuntimeSourceRange(value.nameRange) &&
     adaRuntimeSourceRange(value.endRange);
+}
+
+function adaRuntimeProcedureFact(value: unknown): value is AdaRuntimeProcedureFact {
+  return adaRuntimeRecord(value) &&
+    typeof value.symbolId === "string" &&
+    typeof value.filePath === "string" &&
+    typeof value.normalizedFullName === "string" &&
+    typeof value.projectEligible === "boolean" &&
+    Number.isSafeInteger(value.parameterCount) &&
+    (value.parameterCount as number) >= 0 &&
+    adaRuntimeSourceRange(value.range);
+}
+
+function adaRuntimeCallFact(value: unknown): value is AdaRuntimeCallFact {
+  return adaRuntimeRecord(value) &&
+    typeof value.sourceId === "string" &&
+    typeof value.filePath === "string" &&
+    typeof value.referenceName === "string" &&
+    Number.isSafeInteger(value.argumentCount) &&
+    (value.argumentCount as number) >= 0 &&
+    adaRuntimeSourceRange(value.range);
 }
 
 function legalNormalizedAdaIdentifier(value: string): boolean {
@@ -17683,6 +17721,111 @@ function projectFortranCallReferences(input: {
   return edges;
 }
 
+function projectAdaCallReferences(input: {
+  readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
+  readonly symbolsById: ReadonlyMap<string, SymbolNode>;
+  readonly existingEdges: readonly GraphEdge[];
+  readonly sourceDocumentsByPath: ReadonlyMap<string, SourceDocument>;
+}): readonly GraphEdge[] {
+  const procedures = [...input.factsByFile.values()].flatMap((facts) => {
+    const projectFacts = facts.adaProjectFacts;
+    if (!adaRuntimeRecord(projectFacts) || projectFacts.procedures === undefined) {
+      return [];
+    }
+    return Array.isArray(projectFacts.procedures) && projectFacts.procedures.every(adaRuntimeProcedureFact)
+      ? projectFacts.procedures
+      : [];
+  });
+  const calls = [...input.factsByFile.values()].flatMap((facts) => {
+    const projectFacts = facts.adaProjectFacts;
+    if (!adaRuntimeRecord(projectFacts) || projectFacts.calls === undefined) {
+      return [];
+    }
+    return Array.isArray(projectFacts.calls) && projectFacts.calls.every(adaRuntimeCallFact)
+      ? projectFacts.calls
+      : [];
+  });
+  const edges: GraphEdge[] = [];
+  for (const call of calls) {
+    const source = input.symbolsById.get(call.sourceId);
+    const document = input.sourceDocumentsByPath.get(call.filePath);
+    if (
+      source?.kind !== "function" ||
+      source.filePath !== call.filePath ||
+      document?.language !== "ada" ||
+      !/^[A-Za-z](?:[A-Za-z0-9]|_[A-Za-z0-9])*$/u.test(call.referenceName) ||
+      !Number.isSafeInteger(call.argumentCount) ||
+      call.argumentCount < 0 ||
+      !adaRuntimeSourceRange(call.range)
+    ) {
+      continue;
+    }
+    if (input.existingEdges.some((edge) =>
+      edge.kind === "calls" &&
+      edge.sourceId === call.sourceId &&
+      edge.filePath === call.filePath &&
+      edge.range.start.line === call.range.start.line &&
+      edge.range.start.column === call.range.start.column
+    )) {
+      continue;
+    }
+    const candidates = procedures.filter((procedure) =>
+      procedure.projectEligible &&
+      procedure.normalizedFullName === call.referenceName.toLowerCase() &&
+      procedure.parameterCount === call.argumentCount
+    );
+    const targetFact = candidates.length === 1 ? candidates[0] : undefined;
+    const target = targetFact === undefined ? undefined : input.symbolsById.get(targetFact.symbolId);
+    if (
+      targetFact === undefined ||
+      target === undefined ||
+      target.kind !== "function" ||
+      target.filePath !== targetFact.filePath ||
+      targetFact.normalizedFullName !== targetFact.normalizedFullName.toLowerCase() ||
+      !Number.isSafeInteger(targetFact.parameterCount) ||
+      targetFact.parameterCount < 0 ||
+      !adaRuntimeSourceRange(targetFact.range)
+    ) {
+      continue;
+    }
+    edges.push({
+      id: createEdgeId({
+        sourceId: source.id,
+        targetId: target.id,
+        kind: "calls",
+        line: call.range.start.line,
+        column: call.range.start.column,
+        referenceName: call.referenceName
+      }),
+      sourceId: source.id,
+      targetId: target.id,
+      kind: "calls",
+      filePath: call.filePath,
+      range: call.range,
+      resolution: "exact",
+      confidence: 1,
+      referenceName: call.referenceName,
+      evidence: {
+        ...referenceEvidence(
+          "project.ada.unique-procedure.fixed-arity-call",
+          "module",
+          [target.id]
+        ),
+        callArity: {
+          actualArgumentCount: call.argumentCount,
+          candidates: [{
+            symbolId: target.id,
+            minimumArgumentCount: call.argumentCount,
+            maximumArgumentCount: call.argumentCount,
+            applicable: true
+          }]
+        }
+      }
+    });
+  }
+  return edges.sort((left, right) => compareStableText(left.id, right.id));
+}
+
 export function resolveProjectFacts(input: {
   readonly sourceDocuments: readonly SourceDocument[];
   readonly extractedFiles: readonly ExtractedFileFacts[];
@@ -18316,6 +18459,15 @@ export function resolveProjectFacts(input: {
   for (const symbol of goFrameStandardRouterRouteProjection.symbols) {
     symbolsById.set(symbol.id, symbol);
   }
+
+  resolvedEdges.push(
+    ...projectAdaCallReferences({
+      factsByFile,
+      symbolsById,
+      existingEdges: structuralEdges,
+      sourceDocumentsByPath
+    })
+  );
 
   resolvedEdges.push(
     ...projectAdaProjectFacts({
