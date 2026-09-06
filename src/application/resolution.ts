@@ -5900,13 +5900,20 @@ function projectGoProjectFacts(input: {
         (caller.kind !== "function" && caller.kind !== "method") ||
         candidates.length !== 1 ||
         candidates[0] === undefined ||
-        candidates[0].filePath === filePath ||
         !candidates[0].unconditionallyAvailable
       ) {
         continue;
       }
       const target = input.symbolsById.get(candidates[0].symbolId);
       if (target === undefined || target.filePath !== candidates[0].filePath) {
+        continue;
+      }
+      // Preserve the stronger existing syntax proof when that caller was
+      // already handled during extraction; project resolution fills gaps only.
+      if (facts.edges.some((edge) =>
+        edge.kind === "calls" && edge.sourceId === caller.id && edge.targetId === target.id &&
+        edge.range.start.line === call.range.start.line && edge.range.start.column === call.range.start.column
+      )) {
         continue;
       }
       edges.push({

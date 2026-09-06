@@ -57,7 +57,7 @@ describe("Ruby project relations v0.477", () => {
     const ping = snapshot.symbols.find((symbol) => symbol.qualifiedName === "src/parent.rb#Parent.ping");
     expect(indexed).toMatchObject({ stale: false });
     expect(graphStore.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v420");
-    expect(graphStore.getActiveGraphBundle(projectPath).resolverVersion).toContain("project-resolver-v200");
+    expect(graphStore.getActiveGraphBundle(projectPath).resolverVersion).toContain("project-resolver-v201");
     expect(graphStore.getArtifactFacts(projectPath).find((facts) => facts.filePath === "src/child.rb")?.rubyFacts).toMatchObject({ parserRejected: false });
     expect(snapshot.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({ sourceId: childFile?.id, targetId: parentFile?.id, kind: "imports", resolution: "exact" }),

@@ -16,7 +16,9 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 每條關係都帶有來源範圍、解析階段、信心程度與規則證據。無法可靠證明的關係會保留為 unresolved／pending 或省略，不會為了提高覆蓋率製造錯誤的 exact edge。
 
-目前版本：v0.511.0
+目前版本：v0.513.0
+
+v0.513.0 補齊 Go method 對同檔唯一、無條件 package function 的直接呼叫，並保留既有 syntax 證據。四個固定大型專案的 300 筆 relation 真值由 130 TP 提升至 153 TP（仍有 147 FN），150 個負向案例通過。新增的 1,111 條同檔關係全部通過官方 Go AST 名稱綁定核對；其中 78 條另有零錯誤 go/types 證據。AST 綁定不等於完整套件編譯成功；interface dispatch、外部依賴與未支援語法仍不宣稱完整支援。
 
 ## 主要能力
 

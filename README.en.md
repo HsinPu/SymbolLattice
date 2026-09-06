@@ -16,7 +16,9 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.511.0
+Current version: v0.513.0
+
+v0.513.0 fills direct calls from Go methods to unique, unconditional same-file package functions while preserving existing syntax evidence. Across four locked real-world corpora, the fixed 300-relation sample improves from 130 to 153 TP (147 FN remain), with all 150 negative cases passing. All 1,111 newly enabled same-file edges pass official Go AST name-binding checks; 78 also have zero-error go/types evidence. AST binding does not establish successful package compilation. Interface dispatch, external dependencies, and unsupported syntax remain outside any full-support claim.
 
 ## Highlights
 

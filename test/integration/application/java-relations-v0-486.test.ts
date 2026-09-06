@@ -48,7 +48,7 @@ describe("Java modern heritage relations v0.486", () => {
 
     expect(indexed).toMatchObject({ initialized: true, stale: false });
     expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v420");
-    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v200");
+    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v201");
     expect(snapshot.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({
         sourceId: child?.id,
