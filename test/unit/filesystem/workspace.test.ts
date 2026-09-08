@@ -47,6 +47,39 @@ afterEach(async () => {
 });
 
 describe("workspace package module resolution", () => {
+  it.skipIf(process.platform !== "win32")("keeps mixed-case generated export targets unresolved on Windows", async () => {
+    const projectPath = await createProject({
+      "package.json": JSON.stringify({ private: true, workspaces: ["packages/*"] }),
+      "packages/core/package.json": JSON.stringify({ name: "@fixture/core", exports: { "./DIST/x": "./DIST/x.js" } }),
+      "packages/core/DIST/x.js": "export const x = true;",
+      "apps/consumer.ts": 'import "@fixture/core/DIST/x";'
+    });
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+    expect(scan.moduleResolver.resolve("apps/consumer.ts", "@fixture/core/DIST/x").targetFilePath).toBeNull();
+    expect(scan.sourceDocuments.some((source) => source.relativePath.includes("/DIST/"))).toBe(false);
+  });
+  it("resolves a dist-named public export to a unique admitted source target", async () => {
+    const projectPath = await createProject({
+      "package.json": JSON.stringify({ private: true, workspaces: ["packages/*"] }),
+      "packages/core/package.json": JSON.stringify({ name: "@fixture/core", exports: { "./dist/highlighter": "./src/highlighter.ts" } }),
+      "packages/core/src/highlighter.ts": "export const highlight = true;",
+      "apps/consumer.ts": 'import "@fixture/core/dist/highlighter";'
+    });
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+    expect(scan.moduleResolver.resolve("apps/consumer.ts", "@fixture/core/dist/highlighter").targetFilePath).toBe("packages/core/src/highlighter.ts");
+  });
+  it("accepts dist export names while keeping excluded build targets unresolved", async () => {
+    const projectPath = await createProject({
+      "package.json": JSON.stringify({ private: true, workspaces: ["packages/*"] }),
+      "packages/core/package.json": JSON.stringify({
+        name: "@fixture/core", exports: { "./dist/highlighter": "./dist/highlighter.js" }
+      }),
+      "packages/core/dist/highlighter.js": "export const highlight = true;",
+      "apps/consumer.ts": 'import "@fixture/core/dist/highlighter";'
+    });
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+    expect(scan.moduleResolver.resolve("apps/consumer.ts", "@fixture/core/dist/highlighter").targetFilePath).toBeNull();
+  });
   it("resolves root and explicit subpath exports from an array workspace declaration", async () => {
     const projectPath = await createProject({
       "package.json": JSON.stringify({ private: true, workspaces: ["packages/*"] }),
@@ -488,7 +521,7 @@ describe("workspace package module resolution", () => {
       ProjectConfigurationError
     );
     await expect(new FileSystemSourceCatalog().scan(projectPath)).rejects.toThrow(
-      "project reference is missing or untracked"
+      "project reference is missing or unreadable"
     );
   });
 

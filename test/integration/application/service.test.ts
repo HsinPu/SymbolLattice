@@ -12139,6 +12139,38 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("tracks hidden referenced configuration lifecycle without expanding a persisted source scope", async () => {
+    const hiddenConfig = '{"compilerOptions":{"composite":true}}';
+    const projectPath = await createInlineProject({
+      "tsconfig.json": '{"references":[{"path":"./.github/scripts"}]}',
+      ".github/scripts/tsconfig.json": hiddenConfig,
+      ".github/scripts/hidden.ts": "export const hidden = true;",
+      "src/entry.ts": "export const entry = true;",
+      "outside.ts": "export const outside = true;"
+    });
+    const graphStore = new SqliteGraphStore();
+    const service = new SymbolLatticeService(graphStore, new FileSystemSourceCatalog());
+    const initial = await service.init({ projectPath, scopeRoots: ["src"] });
+    expect(initial).toMatchObject({ stale: false, counts: { files: 1 } });
+    expect(graphStore.getIndexInputs(projectPath)?.configurationInputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: ".github/scripts/tsconfig.json", state: "present" })
+    ]));
+    const configPath = join(projectPath, ".github/scripts/tsconfig.json");
+    const changedConfig = `${hiddenConfig}\n`;
+    await writeFile(configPath, changedConfig);
+    expect(await service.getStatus(projectPath)).toMatchObject({
+      stale: true, staleReasons: expect.arrayContaining(["project-inputs-changed"])
+    });
+    const synced = await service.sync({ projectPath });
+    expect(synced).toMatchObject({ stale: false, counts: { files: 1 } });
+    await rm(configPath);
+    expect(await service.getStatus(projectPath)).toMatchObject({ stale: true });
+    await expect(service.sync({ projectPath })).rejects.toMatchObject({ code: "INVALID_PROJECT_CONFIGURATION" });
+    expect(graphStore.getStatus(projectPath).generationId).toBe(synced.generationId);
+    await writeFile(configPath, changedConfig);
+    expect(await createService().getStatus(projectPath)).toMatchObject({ stale: false, generationId: synced.generationId });
+  });
+
   it("persists scope and configuration identity, resolves aliases, and detects configuration-only drift", async () => {
     const projectPath = await createFixtureProject(configuredFixturePath);
     const graphStore = new SqliteGraphStore();

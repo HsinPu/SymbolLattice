@@ -37,7 +37,7 @@ describe("Markdown reference-link project relations v0.482", () => {
 
     expect(status).toMatchObject({ initialized: true, stale: false });
     expect(store.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v420");
-    expect(store.getActiveGraphBundle(projectPath).resolverVersion).toContain("project-resolver-v201");
+    expect(store.getActiveGraphBundle(projectPath).resolverVersion).toContain("project-resolver-v202");
     expect(referenceEdges).toHaveLength(2);
     expect(referenceEdges).toEqual(expect.arrayContaining([
       expect.objectContaining({

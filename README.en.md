@@ -16,9 +16,9 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.515.0
+Current version: v0.516.0
 
-v0.515.0 adds PR/main verification across Windows/Linux and Node 22/24. Packaging keeps prepack enabled, installs the tarball into an isolated prefix, and checks CLI/MCP startup without automatic publication. Windows native watching resolves the real path first and retains visible polling fallback when setup fails. Language analysis depth is unchanged; nonempty fixtures and real-project evidence remain separate measures of support.
+v0.516.0 admits explicitly referenced hidden TypeScript configuration files as persisted evidence without expanding source discovery. Configuration inheritance and references enforce project, excluded-directory, and physical-path boundaries while preserving access errors. Workspace export names are validated separately from filesystem targets; excluded generated files remain unresolved. A successful large-project scan does not prove complete relation coverage.
 
 ## Highlights
 

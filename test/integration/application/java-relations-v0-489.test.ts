@@ -54,7 +54,7 @@ describe("Java modern callable call relations v0.489", () => {
 
     expect(indexed).toMatchObject({ initialized: true, stale: false });
     expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v420");
-    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v201");
+    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v202");
     expect(snapshot.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({
         sourceId: entry?.id,

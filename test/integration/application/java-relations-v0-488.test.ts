@@ -52,7 +52,7 @@ describe("Java modern callable signature relations v0.488", () => {
 
     expect(indexed).toMatchObject({ initialized: true, stale: false });
     expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v420");
-    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v201");
+    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v202");
     expect(snapshot.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({
         sourceId: run?.id,

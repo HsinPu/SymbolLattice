@@ -3,7 +3,6 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 import ignore, { type Ignore } from "ignore";
 
 import {
-  HARD_EXCLUDED_DIRECTORY_NAMES,
   containsHardExcludedDirectory,
   isDefaultExcludedDirectoryName,
   nativeProjectFilesystemReader,
@@ -176,7 +175,7 @@ export async function walkScopedProject(
       const entryRelativePath = joinProjectRelativePath(directoryRelativePath, entry.name);
 
       if (entry.isDirectory()) {
-        if (HARD_EXCLUDED_DIRECTORY_NAMES.has(entry.name)) continue;
+        if (containsHardExcludedDirectory(entry.name)) continue;
         const ignoreDecision = testIgnoreFrames(frames, entryRelativePath, true);
         if (ignoreDecision.ignored) continue;
         if (

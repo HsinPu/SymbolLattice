@@ -62,7 +62,9 @@ export function containsHardExcludedDirectory(relativePath: string): boolean {
   const normalized = relativePath.replaceAll("\\", "/");
   return normalized !== "." && normalized
     .split("/")
-    .some((name) => HARD_EXCLUDED_DIRECTORY_NAMES.has(name));
+    .some((name) => [...HARD_EXCLUDED_DIRECTORY_NAMES].some((excluded) =>
+      process.platform === "win32" ? excluded.toLowerCase() === name.toLowerCase() : excluded === name
+    ));
 }
 
 export interface ProjectFilesystemEntry {

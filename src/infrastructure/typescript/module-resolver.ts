@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 
 import ts from "typescript";
+import { containsHardExcludedDirectory, projectFilesystemMissingCode, toProjectPathUnreadableError } from "../filesystem/project-filesystem.js";
 
 import {
   compareStableText,
@@ -216,14 +217,15 @@ function configurationInput<TKind extends "tsconfig" | "jsconfig">(
   kind: TKind
 ): ProjectConfigurationInput & { readonly kind: TKind } {
   const absolutePath = resolve(projectPath, ...relativePath.split("/"));
-  if (!existsSync(absolutePath)) {
-    return { kind, path: relativePath, state: "absent", contentHash: null };
-  }
-
   let sourceText: string;
   try {
     sourceText = readFileSync(absolutePath, "utf8");
   } catch (error) {
+    if (projectFilesystemMissingCode(error) !== null) {
+      return { kind, path: relativePath, state: "absent", contentHash: null };
+    }
+    const unreadable = toProjectPathUnreadableError(projectPath, error, absolutePath);
+    if (unreadable !== null) throw unreadable;
     const reason = error instanceof Error ? error.message : String(error);
     throw configurationError(relativePath, reason);
   }
@@ -267,7 +269,17 @@ function resolveLocalExtendsPath(
       `extends "${specifier}" resolves outside the project root`
     );
   }
-  const targetPath = candidates.find((candidate) => existsSync(candidate));
+  const targetPath = candidates.find((candidate) => {
+    try {
+      statSync(candidate);
+      return true;
+    } catch (error) {
+      if (projectFilesystemMissingCode(error) !== null) return false;
+      const unreadable = toProjectPathUnreadableError(projectPath, error, candidate);
+      if (unreadable !== null) throw unreadable;
+      throw configurationError(projectRelativePath(projectPath, candidate) ?? "tsconfig.json", "cannot inspect local extends candidate");
+    }
+  });
 
   if (targetPath === undefined) {
     return {
@@ -277,6 +289,29 @@ function resolveLocalExtendsPath(
   }
 
   return { targetPath, missingRelativePath: null };
+}
+
+function containsExcludedConfigurationDirectory(path: string): boolean {
+  return containsHardExcludedDirectory(path);
+}
+
+function assertReferencedConfigurationBoundary(projectPath: string, absolutePath: string): void {
+  const relativePath = projectRelativePath(projectPath, absolutePath);
+  if (relativePath === null || containsExcludedConfigurationDirectory(relativePath)) {
+    throw configurationError(relativePath ?? "tsconfig.json", "project reference is outside the allowed project boundary");
+  }
+  let physicalTarget: string;
+  try {
+    physicalTarget = realpathSync(absolutePath);
+  } catch (error) {
+    const unreadable = toProjectPathUnreadableError(projectPath, error, absolutePath);
+    if (unreadable !== null) throw unreadable;
+    throw configurationError(relativePath, "project reference is missing or unreadable");
+  }
+  const physicalRelativePath = projectRelativePath(realpathSync(projectPath), physicalTarget);
+  if (physicalRelativePath === null || containsExcludedConfigurationDirectory(physicalRelativePath)) {
+    throw configurationError(relativePath, "project reference is outside the allowed project boundary");
+  }
 }
 
 function loadConfigurationChain(
@@ -290,6 +325,7 @@ function loadConfigurationChain(
   let hasUnavailableExtends = false;
 
   function load(absolutePath: string, kind: ProjectConfigurationInput["kind"]): void {
+    assertReferencedConfigurationBoundary(projectPath, absolutePath);
     const key = fileSystemKey(absolutePath);
     const relativePath = projectRelativePath(projectPath, absolutePath);
     if (relativePath === null) {
@@ -304,6 +340,8 @@ function loadConfigurationChain(
     try {
       sourceText = readFileSync(absolutePath, "utf8");
     } catch (error) {
+      const unreadable = toProjectPathUnreadableError(projectPath, error, absolutePath);
+      if (unreadable !== null) throw unreadable;
       const reason = error instanceof Error ? error.message : String(error);
       throw configurationError(relativePath, reason);
     }
@@ -362,12 +400,8 @@ function loadConfigurationChain(
 
 function loadProjectReferences(
   projectPath: string,
-  selectedConfiguration: LoadedConfiguration,
-  configurationCandidatePaths: readonly string[]
+  selectedConfiguration: LoadedConfiguration
 ): LoadedProjectReferences {
-  const trackedPaths = new Set(
-    configurationCandidatePaths.map((path) => path.replaceAll("\\", "/").replace(/^\.\//u, ""))
-  );
   const configurations: LoadedConfiguration[] = [];
   const visited = new Set<string>();
   const active = new Set<string>([fileSystemKey(selectedConfiguration.absolutePath)]);
@@ -409,12 +443,15 @@ function loadProjectReferences(
         ? rawTarget
         : resolve(rawTarget, "tsconfig.json");
       const relativeTarget = projectRelativePath(projectPath, absoluteTarget);
-      if (relativeTarget === null || !trackedPaths.has(relativeTarget)) {
+      if (relativeTarget === null || containsHardExcludedDirectory(relativeTarget)) {
         throw configurationError(
           configuration.relativePath,
-          `project reference is missing or untracked: ${reference.path}`
+          `project reference is outside the allowed project boundary: ${reference.path}`
         );
       }
+      // Configuration discovery intentionally skips hidden directories. An explicit
+      // reference may supply config evidence, but never expands known source files.
+      assertReferencedConfigurationBoundary(projectPath, absoluteTarget);
       return relativeTarget;
     }).sort(compareStableText);
   }
@@ -804,8 +841,7 @@ function createSingleTypeScriptProjectModuleResolver(input: {
   const chain = loadedChain.configurations;
   const projectReferences = loadProjectReferences(
     projectPath,
-    chain[0]!,
-    input.configurationCandidatePaths
+    chain[0]!
   );
   const chainConfigurationKeys = new Set(
     chain.map((configuration) => fileSystemKey(configuration.absolutePath))

@@ -46,7 +46,7 @@ describe("PostgreSQL project relations v0.478", () => {
     const audit = snapshot.symbols.find((symbol) => symbol.name === "public.audit");
     expect(indexed).toMatchObject({ stale: false });
     expect(graphStore.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v420");
-    expect(graphStore.getActiveGraphBundle(projectPath).resolverVersion).toContain("project-resolver-v201");
+    expect(graphStore.getActiveGraphBundle(projectPath).resolverVersion).toContain("project-resolver-v202");
     expect(graphStore.getArtifactFacts(projectPath).find((facts) => facts.filePath === "db/child.sql")?.sqlFacts).toMatchObject({ parserRejected: false });
     expect(snapshot.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({ sourceId: child?.id, targetId: parent?.id, kind: "references", resolution: "exact" }),

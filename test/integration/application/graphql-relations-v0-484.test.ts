@@ -30,7 +30,7 @@ describe("GraphQL schema relations v0.484", () => {
 
     expect(indexed).toMatchObject({ initialized: true, stale: false });
     expect(store.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v420");
-    expect(store.getActiveGraphBundle(projectPath).resolverVersion).toContain("project-resolver-v201");
+    expect(store.getActiveGraphBundle(projectPath).resolverVersion).toContain("project-resolver-v202");
     expect(snapshot.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({
         sourceId: user?.id,

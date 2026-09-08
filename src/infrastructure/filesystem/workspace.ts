@@ -15,6 +15,7 @@ import {
   HARD_EXCLUDED_DIRECTORY_NAMES
 } from "./discovery.js";
 import { readProjectConfigurationInput } from "./project-inputs.js";
+import { containsHardExcludedDirectory } from "./project-filesystem.js";
 
 const SOURCE_FILE_EXTENSIONS = [".ts", ".tsx", ".js", ".mjs", ".cjs", ".jsx"] as const;
 const PACKAGE_NAME_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
@@ -366,6 +367,8 @@ function validateExportSubpath(value: string, manifestPath: string): string {
     throw configurationError(manifestPath, `export subpath must start with "./": ${value}`);
   }
 
+  // Export names are public specifier keys, not discovered filesystem paths.
+  // Excluded output targets are still rejected by normalizePackageTarget.
   const segments = value.slice(2).split("/");
   if (
     segments.some(
@@ -373,7 +376,8 @@ function validateExportSubpath(value: string, manifestPath: string): string {
         segment === "" ||
         segment === "." ||
         segment === ".." ||
-        HARD_EXCLUDED_DIRECTORY_NAMES.has(segment)
+        segment.includes("\\") ||
+        segment.includes("\u0000")
     )
   ) {
     throw configurationError(manifestPath, `export subpath is unsafe: ${value}`);
@@ -500,7 +504,7 @@ function parsePackageSpecifier(moduleSpecifier: string): ParsedPackageSpecifier 
 
   if (
     subpathSegments.some(
-      (segment) => segment === "" || segment === "." || segment === ".." || HARD_EXCLUDED_DIRECTORY_NAMES.has(segment)
+      (segment) => segment === "" || segment === "." || segment === ".." || segment.includes("\\") || segment.includes("\u0000")
     )
   ) {
     return null;
@@ -609,7 +613,7 @@ function normalizePackageTarget(
   }
 
   const targetRelativeToPackage = relative(workspacePackage.packageRootPath, absoluteTargetPath).replaceAll("\\", "/");
-  if (targetRelativeToPackage.split("/").some((segment) => HARD_EXCLUDED_DIRECTORY_NAMES.has(segment))) {
+  if (containsHardExcludedDirectory(targetRelativeToPackage)) {
     return null;
   }
 
