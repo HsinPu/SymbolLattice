@@ -1,4 +1,4 @@
-import { parser } from "@lezer/go";
+import { parser } from "./go-parser/parser.js";
 
 import {
   createEdgeId,
@@ -1334,7 +1334,7 @@ function staticGoMethodCalls(
     ...descendantsNamed(functionDeclaration.body, "RangeClause")
   ]) {
     for (const child of directChildren(node)) {
-      if (["=", ":=", "UpdateOp", "IncDecOp"].includes(child.name)) break;
+      if (["=", ":=", "UpdateOp", "IncDecOp", "range"].includes(child.name)) break;
       const name = child.name === "VariableName" ? identifierText(input, child) : null;
       if (name !== null) mutatedNames.add(name);
     }

@@ -1,6 +1,6 @@
 {
   "name": "@hsinpu/symbollattice",
-  "version": "0.517.0",
+  "version": "0.518.0",
   "description": "Evidence-first local code intelligence for TypeScript, JavaScript, ArkTS/ArkUI, Vue, Svelte, Astro, HTML, Markdown, CSS, JSP/JSPX/tag files, Razor/Blazor, Terraform/OpenTofu, Shopify Liquid, Twig, Laravel Blade, Solidity, CFML/CFScript, Nix, VB.NET, Python/FastAPI/Django Ninja/Flask/Flask-RESTful/Django/Starlette/aiohttp/Sanic, Go, Rust, Java/Spring/Micronaut/Jakarta REST, Groovy, Fortran, Ada, PHP, C, COBOL/CICS, Zig, YAML, XML/MyBatis, Java properties, Shell/Bash, SQL DDL, GraphQL schema with bounded NestJS resolver links, Protocol Buffers declarations with bounded gRPC service contracts, Lua/Luau, Pascal, Objective-C/Objective-C++, R, Elixir, Erlang, Clojure, Perl, Julia, Haskell, OCaml, F#, Nim, C++, C#, Ruby, Kotlin, Swift, Dart, and Scala projects.",
   "license": "MIT",
   "repository": {
@@ -26,7 +26,7 @@
     "node": ">=22.13 <25"
   },
   "scripts": {
-    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json && node scripts/build/copy-shell-parser-assets.mjs && node scripts/build/copy-lua-parser-assets.mjs",
+    "build": "node scripts/build/generate-go-parser.mjs --check && node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json && node scripts/build/copy-shell-parser-assets.mjs && node scripts/build/copy-lua-parser-assets.mjs",
     "check": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -47,7 +47,9 @@
     "@ast-grep/napi": "0.45.0",
     "@lezer/cpp": "1.1.6",
     "@lezer/go": "1.0.1",
+    "@lezer/highlight": "1.2.3",
     "@lezer/java": "1.1.3",
+    "@lezer/lr": "1.4.10",
     "@lezer/php": "1.0.5",
     "@lezer/python": "1.1.19",
     "@lezer/rust": "1.0.2",
@@ -62,6 +64,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@lezer/generator": "1.8.0",
     "@types/node": "^26.1.2",
     "espree": "11.2.0",
     "postcss": "8.5.24",

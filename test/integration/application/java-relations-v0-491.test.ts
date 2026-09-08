@@ -55,7 +55,7 @@ describe("Java modern field receiver call relations v0.491", () => {
     const handle = snapshot.symbols.find((symbol) => symbol.name === "handle");
 
     expect(indexed).toMatchObject({ initialized: true, stale: false });
-    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v421");
+    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v422");
     expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v202");
     expect(snapshot.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({
