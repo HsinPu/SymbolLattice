@@ -1,3 +1,5 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -139,15 +141,16 @@ describe("project filesystem reader and access contract", () => {
   });
 
   it("normalizes a raw Node access error without exposing its absolute host path", () => {
+    const projectPath = join(tmpdir(), "symbollattice-private-project");
     const error = toProjectPathUnreadableError(
-      "C:/project",
-      Object.assign(new Error("denied"), { code: "EACCES", path: "C:/project/config/private.json" })
+      projectPath,
+      Object.assign(new Error("denied"), { code: "EACCES", path: join(projectPath, "config", "private.json") })
     );
 
     expect(error).toMatchObject({
       code: "PROJECT_PATH_UNREADABLE",
       evidence: [{ path: "config/private.json", code: "EACCES" }]
     });
-    expect(error?.message).not.toContain("C:/project");
+    expect(error?.message).not.toContain(projectPath);
   });
 });

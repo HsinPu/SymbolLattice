@@ -24,11 +24,17 @@ async function stage3Fixture(options = {}) {
   roots.push(root);
   const workspace = join(root, "SymbolLattice-install-fixture");
   const prefix = join(root, "npm-prefix");
-  const globalRoot = join(prefix, "node_modules");
+  const globalRoot = process.platform === "win32" ? join(prefix, "node_modules") : join(prefix, "lib", "node_modules");
+  const executableRoot = process.platform === "win32" ? prefix : join(prefix, "bin");
+  const launchers = (process.platform === "win32"
+    ? ["SymbolLattice", "SymbolLattice.cmd", "SymbolLattice.ps1"]
+    : ["SymbolLattice"]).map((name) => join(executableRoot, name));
+  const previousLauncherPath = process.platform === "win32" ? launchers[1] : launchers[0];
   const packageDirectory = join(globalRoot, "@hsinpu", "symbollattice");
   const tarballPath = join(workspace, "source-install-pack", "hsinpu-symbollattice-0.421.0.tgz");
   await mkdir(resolve(tarballPath, ".."), { recursive: true });
   await mkdir(globalRoot, { recursive: true });
+  await mkdir(executableRoot, { recursive: true });
   await writeFile(tarballPath, "verified stage3 package bytes");
   const tarball = await readFile(tarballPath);
   await writeFile(join(workspace, ".symbollattice-source-install-workspace.json"), `${JSON.stringify({
@@ -45,7 +51,7 @@ async function stage3Fixture(options = {}) {
       ...(options.previousDependencies === undefined ? {} : { dependencies: options.previousDependencies })
     })}\n`);
     await writeFile(join(packageDirectory, "dist", "cli", "main.js"), "// previous global CLI\n");
-    await writeFile(join(prefix, "SymbolLattice.cmd"), "previous launcher\n");
+    await writeFile(previousLauncherPath, "previous launcher\n");
   }
 
   const calls = [];
@@ -64,9 +70,7 @@ async function stage3Fixture(options = {}) {
         version: VERSION
       })}\n`);
       await writeFile(join(packageDirectory, "dist", "cli", "main.js"), "// new global CLI\n");
-      await writeFile(join(prefix, "SymbolLattice"), "new bare launcher\n");
-      await writeFile(join(prefix, "SymbolLattice.cmd"), "new launcher\n");
-      await writeFile(join(prefix, "SymbolLattice.ps1"), "new PowerShell launcher\n");
+      for (const launcher of launchers) await writeFile(launcher, "new launcher\n");
       return { stdout: "installed\n", stderr: "" };
     }
     if (context.step === "global-version") return { stdout: `${VERSION}\n`, stderr: "" };
@@ -108,7 +112,7 @@ async function stage3Fixture(options = {}) {
     globalInstallation: { performed: false },
     cleanup: { performed: false, retainedForStage3: true }
   };
-  return { calls, globalRoot, packageDirectory, plan, prefix, runProcess, stage2, tarballPath, workspace };
+  return { calls, globalRoot, launchers, previousLauncherPath, packageDirectory, plan, prefix, runProcess, stage2, tarballPath, workspace };
 }
 
 describe("GitHub source installation Stage 3 global deployment", () => {
@@ -141,9 +145,7 @@ describe("GitHub source installation Stage 3 global deployment", () => {
     expect(fixture.calls.find((call) => call.step === "global-install")?.args).toContain("--install-strategy=nested");
     expect(existsSync(fixture.workspace)).toBe(false);
     expect(existsSync(fixture.packageDirectory)).toBe(true);
-    expect(existsSync(join(fixture.prefix, "SymbolLattice"))).toBe(true);
-    expect(existsSync(join(fixture.prefix, "SymbolLattice.cmd"))).toBe(true);
-    expect(existsSync(join(fixture.prefix, "SymbolLattice.ps1"))).toBe(true);
+    for (const launcher of fixture.launchers) expect(existsSync(launcher)).toBe(true);
   });
 
   it("rejects a changed tarball before touching the global prefix and retains the workspace", async () => {
@@ -178,7 +180,7 @@ describe("GitHub source installation Stage 3 global deployment", () => {
       previousVersion: "0.420.0"
     });
     expect(await readFile(join(fixture.packageDirectory, "dist", "cli", "main.js"), "utf8")).toBe("// previous global CLI\n");
-    expect(await readFile(join(fixture.prefix, "SymbolLattice.cmd"), "utf8")).toBe("previous launcher\n");
+    expect(await readFile(fixture.previousLauncherPath, "utf8")).toBe("previous launcher\n");
     expect(existsSync(fixture.workspace)).toBe(true);
   });
 

@@ -11,6 +11,11 @@ function loadWorkflow() {
 }
 
 describe("daily CI contract", () => {
+  it("keeps executable ESM scripts LF on Windows checkouts", () => {
+    expect(readFileSync(resolve(".gitattributes"), "utf8").split(/\r?\n/u))
+      .toContain("*.mjs text eol=lf");
+  });
+
   it("checks main and PRs without publishing or granting write permissions", () => {
     const workflow = loadWorkflow();
     expect(workflow.on).toEqual({ push: { branches: ["main"] }, pull_request: { branches: ["main"] } });

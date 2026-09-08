@@ -1,3 +1,4 @@
+*.mjs text eol=lf
 /src/assets/shell/* -text
 /src/assets/lua/* -text
 /tools/shell-parser-adapter/* -text

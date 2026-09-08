@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -58,7 +58,7 @@ describe("loadSymbolLatticePluginModules", () => {
       modulePaths: ["plugins.mjs"]
     });
 
-    expect(result.modulePaths).toEqual([join(projectPath, "plugins.mjs")]);
+    expect(result.modulePaths).toEqual([await realpath(join(projectPath, "plugins.mjs"))]);
     expect(result.extensions.frameworkFactPlugins?.plugins.map(({ id }) => id)).toEqual([
       "sample/file-facts"
     ]);

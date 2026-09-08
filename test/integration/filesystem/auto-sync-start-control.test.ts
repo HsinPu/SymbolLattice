@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -73,15 +73,15 @@ describe("FileSystemAutoSyncStartControl", () => {
       status: "ready",
       mutation: { performed: false },
       command: {
-        executable: resolve(process.execPath),
-        workingDirectory: resolve(projectPath),
+        executable: realpathSync.native(process.execPath),
+        workingDirectory: realpathSync.native(projectPath),
         pluginModulePaths: []
       }
     });
     expect(preview.command.arguments).toEqual([
-      resolve(entryPath),
+      realpathSync.native(entryPath),
       "watch",
-      resolve(projectPath),
+      realpathSync.native(projectPath),
       "--interval",
       "750",
       "--json",
