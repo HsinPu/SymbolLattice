@@ -65,7 +65,7 @@ describe("Lua parser asset closure", () => {
     expect(packageJson.dependencies["web-tree-sitter"]).toBe("0.26.12");
     expect(packageJson.scripts.build).toContain("scripts/build/copy-lua-parser-assets.mjs");
     expect(packageJson.scripts.prepack).toBe("npm run build && npm run verify:language-depth");
-    expect(attributes).toContain("/src/assets/lua/* -text\n");
+    expect(attributes.split(/\r?\n/u)).toContain("/src/assets/lua/* -text");
   });
 
   it("binds the installed runtime artifact and authored worker import allowlist", async () => {
