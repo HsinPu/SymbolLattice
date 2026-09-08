@@ -18,7 +18,7 @@ Every relationship carries a source range, resolution stage, confidence, and rul
 
 Current version: v0.515.0
 
-v0.515.0 adds PR/main verification across Windows/Linux and Node 22/24. Packaging keeps prepack enabled, installs the tarball into an isolated prefix, and checks CLI/MCP startup without automatic publication. Language analysis depth is unchanged; nonempty fixtures and real-project evidence remain separate measures of support.
+v0.515.0 adds PR/main verification across Windows/Linux and Node 22/24. Packaging keeps prepack enabled, installs the tarball into an isolated prefix, and checks CLI/MCP startup without automatic publication. Windows native watching resolves the real path first and retains visible polling fallback when setup fails. Language analysis depth is unchanged; nonempty fixtures and real-project evidence remain separate measures of support.
 
 ## Highlights
 

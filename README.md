@@ -18,7 +18,7 @@ SymbolLattice 掃描本機 repository，將檔案、symbol 與靜態關係保存
 
 目前版本：v0.515.0
 
-v0.515.0 加入 PR／main 自動驗證，涵蓋 Windows／Linux 與 Node 22／24。打包驗證保留正式 prepack，並在隔離位置安裝 tarball、確認 CLI 與 MCP 啟動；流程不會自動發布。本版不改變語言解析深度，仍以分開的非空語料與大型專案證據衡量支援範圍。
+v0.515.0 加入 PR／main 自動驗證，涵蓋 Windows／Linux 與 Node 22／24。打包驗證保留正式 prepack，並在隔離位置安裝 tarball、確認 CLI 與 MCP 啟動；流程不會自動發布。Windows 原生監看會先解析真實路徑，無法建立時保留可見的 polling fallback。本版不改變語言解析深度，仍以分開的非空語料與大型專案證據衡量支援範圍。
 
 ## 主要能力
 

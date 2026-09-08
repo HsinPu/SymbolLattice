@@ -1,4 +1,4 @@
-import { watch } from "node:fs";
+import { realpathSync, watch } from "node:fs";
 
 import type {
   WatchEventCallbacks,
@@ -38,7 +38,9 @@ const nativeWatchOptions: FileSystemWatchOptions = {
 };
 
 const nativeWatchFactory: FileSystemWatchFactory = (projectPath, options, listener) =>
-  watch(projectPath, options, listener);
+  // Windows notifications use long paths; an 8.3 alias can abort inside libuv.
+  // Let resolution errors reach the existing visible polling fallback.
+  watch(process.platform === "win32" ? realpathSync.native(projectPath) : projectPath, options, listener);
 
 /**
  * A native filename can be absent, so treat it as a project-wide invalidation.
