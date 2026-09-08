@@ -63,11 +63,11 @@ const PROJECT_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
 ]);
 
 const SAME_FILE_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
-  "groovy", "luau", "r", "julia", "solidity", "cfml", "vbnet", "shell", "lua"
+  "groovy", "luau", "r", "julia", "solidity", "cfml", "vbnet", "shell", "lua", "cobol"
 ]);
 
 const FRAMEWORK_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
-  "perl", "cobol", "yaml", "properties"
+  "perl", "yaml", "properties"
 ]);
 
 const STRUCTURAL_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
@@ -75,7 +75,7 @@ const STRUCTURAL_RELATION_LANGUAGES = new Set<ArtifactLanguage>([
 ]);
 
 const LARGE_PROJECT_VALIDATED_LANGUAGES = new Set<ArtifactLanguage>([
-  "typescript", "javascript", "python", "java", "lua", "luau", "objc", "r", "elixir", "perl",
+  "typescript", "javascript", "python", "java", "go", "lua", "luau", "objc", "r", "elixir", "perl",
   "julia", "ruby", "html", "jsp", "css", "shell", "markdown", "groovy", "vue", "svelte", "astro", "solidity", "vbnet", "fortran", "ada", "cobol", "pascal"
 ]);
 
@@ -86,7 +86,8 @@ const EVIDENCE_VERSION: Readonly<Partial<Record<ArtifactLanguage, string>>> = Ob
   vue: "0.502.0",
   svelte: "0.502.0",
   astro: "0.502.0",
-  go: "0.457.0",
+  go: "0.513.0",
+  php: "0.475.0",
   rust: "0.458.0",
   java: "0.494.0",
   groovy: "0.499.0",
@@ -138,6 +139,7 @@ const LANGUAGE_LIMITATIONS: Readonly<Partial<Record<ArtifactLanguage, readonly s
     svelte: ["direct PascalCase markup tags resolve only through one unmutated explicit relative default component import in the instance script; module scripts, svelte:component, snippets, runes, dynamic expressions, aliases, and runtime rendering remain nonclaims"],
     astro: ["direct PascalCase markup tags resolve only through one unmutated explicit relative default component import in parse-clean frontmatter; expression components, framework hydration, slots, aliases, content collections, and runtime rendering remain nonclaims"],
     java: ["external classpath, compiler-only inference, and wider inherited dispatch remain nonclaims"],
+    go: ["v0.513 fixed compiler sample covers 153/300 relations; all eligible compiler candidates cover 452/986. Positive-scorer FP not measured; 150 negative cases pass. All 1111 added same-file calls have official AST binding evidence, of which 78 also have zero-error go/types evidence. Interface dispatch, external dependencies and parser-rejected syntax remain nonclaims"],
     groovy: ["compiler-confirmed unique top-level def self-recursion and all 14 current inter-function candidates are exact; division, non-assignment slashy forms, closures, delegates, metaclass, class methods, and wider dynamic dispatch remain nonclaims"],
     shell: ["300-positive/150-negative mvdan ABI v2 truth covers unique same-file direct function calls; eval, source, alias, unset, nested functions, substitutions, dynamic commands, external dispatch, and cross-file loading remain nonclaims"],
     lua: ["300-positive/150-negative tree-sitter truth covers unique earlier local-function and self-recursive bare calls; global/dotted/colon dispatch, shadow, rebind, nested functions, debug, dynamic load, require/module resolution, metatables, and runtime dispatch remain nonclaims"],

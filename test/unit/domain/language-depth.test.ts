@@ -24,11 +24,11 @@ describe("language depth matrix", () => {
       },
       relationDepth: {
         project: 43,
-        "same-file": 9,
-        framework: 4,
+        "same-file": 10,
+        framework: 3,
         structural: 2
       },
-      largeProjectValidated: 27,
+      largeProjectValidated: 28,
       relationReleaseValidated: 42
     });
   });
@@ -120,7 +120,7 @@ describe("language depth matrix", () => {
     });
     expect(byLanguage.get("cobol")).toMatchObject({
       evidenceTier: "bounded-relation",
-      relationDepth: "framework",
+      relationDepth: "same-file",
       truthKind: "gnucobol-xref-listing",
       evidenceVersion: "0.509.0",
       largeProjectValidated: true,
@@ -146,5 +146,16 @@ describe("language depth matrix", () => {
       largeProjectValidated: true,
       relationReleaseValidated: true
     });
+  });
+
+  it("retains the latest Go and PHP evidence without claiming compiler precision", () => {
+    const go = LANGUAGE_DEPTH_MATRIX.find(({ language }) => language === "go");
+    expect(go).toMatchObject({ evidenceVersion: "0.513.0", largeProjectValidated: true });
+    expect(go?.knownLimitations.join(" ")).toContain("FP not measured");
+    expect(LANGUAGE_DEPTH_MATRIX.find(({ language }) => language === "php"))
+      .toMatchObject({ evidenceVersion: "0.475.0" });
+    for (const entry of LANGUAGE_DEPTH_MATRIX) {
+      if (entry.relationReleaseValidated) expect(entry.evidenceVersion).not.toBeNull();
+    }
   });
 });

@@ -1,0 +1,70 @@
+/**
+ * Small, non-empty, parser-valid admission fixtures for every registered language.
+ * Expected symbols and edges are intentionally kept beside each source and are
+ * never derived from product output.  These are a minimum content gate, not a
+ * claim of full-language or full-relation support.
+ */
+export const LANGUAGE_NONEMPTY_FIXTURES = Object.freeze([
+  { language: "typescript", filePath: "sample.ts", sourceText: "export function greet() { return 1; }\ngreet();" },
+  { language: "javascript", filePath: "sample.js", sourceText: "function greet() { return 1; }\ngreet();" },
+  { language: "arkts", filePath: "sample.ets", sourceText: "@Entry\n@Component\nstruct Sample {\n  build() {}\n}" },
+  { language: "vue", filePath: "sample.vue", sourceText: "<script setup>\nconst answer = 1;\n</script>\n<template><div>{{ answer }}</div></template>" },
+  { language: "svelte", filePath: "sample.svelte", sourceText: "<script>\nlet answer = 1;\n</script>\n<h1>{answer}</h1>" },
+  { language: "astro", filePath: "sample.astro", sourceText: "---\nconst answer = 1;\n---\n<div>{answer}</div>" },
+  { language: "razor", filePath: "sample.razor", sourceText: "@page \"/sample\"\n<h1>Hello</h1>" },
+  { language: "python", filePath: "sample.py", sourceText: "def greet():\n    return 1\n\ngreet()" },
+  { language: "go", filePath: "sample.go", sourceText: "package sample\n\nfunc greet() {}\nfunc caller() { greet() }" },
+  { language: "rust", filePath: "sample.rs", sourceText: "fn greet() {}\nfn caller() { greet(); }" },
+  { language: "java", filePath: "Sample.java", sourceText: "class Sample { void greet() {} void caller() { greet(); } }" },
+  { language: "groovy", filePath: "sample.groovy", sourceText: "def greet() { 1 }\ngreet()" },
+  { language: "fortran", filePath: "sample.f90", sourceText: "program sample\ncontains\nsubroutine greet()\nend subroutine greet\nend program sample" },
+  { language: "ada", filePath: "sample.adb", sourceText: "procedure Sample is\n  procedure Greet is\n  begin\n    null;\n  end Greet;\nbegin\n  Greet;\nend Sample;" },
+  { language: "php", filePath: "sample.php", sourceText: "<?php\nfunction greet(): int { return 1; }\ngreet();" },
+  { language: "blade", filePath: "sample.blade.php", sourceText: "@extends('layouts.app')\n<h1>Hello</h1>" },
+  { language: "c", filePath: "sample.c", sourceText: "void greet(void) {}\nvoid caller(void) { greet(); }" },
+  { language: "lua", filePath: "sample.lua", sourceText: "local function greet() return 1 end\ngreet()" },
+  { language: "luau", filePath: "sample.luau", sourceText: "local function greet() return 1 end\ngreet()" },
+  { language: "pascal", filePath: "sample.pas", sourceText: "program Sample;\nprocedure Greet;\nbegin\nend;\nbegin\n  Greet;\nend." },
+  { language: "objc", filePath: "sample.m", sourceText: "@interface Sample : NSObject\n@end\n@implementation Sample\n@end" },
+  { language: "r", filePath: "sample.r", sourceText: "greet <- function() 1\ngreet()" },
+  { language: "elixir", filePath: "sample.ex", sourceText: "defmodule Sample do\n  def greet, do: 1\nend" },
+  { language: "erlang", filePath: "sample.erl", sourceText: "-module(sample).\n-export([greet/0]).\ngreet() -> 1." },
+  { language: "clojure", filePath: "sample.clj", sourceText: "(ns sample)\n(defn greet [] 1)\n(greet)" },
+  { language: "perl", filePath: "sample.pl", sourceText: "sub greet { return 1; }\ngreet();" },
+  { language: "julia", filePath: "sample.jl", sourceText: "function greet()\n  1\nend\ngreet()" },
+  { language: "haskell", filePath: "sample.hs", sourceText: "module Sample where\ngreet :: Int\ngreet = 1" },
+  { language: "ocaml", filePath: "sample.ml", sourceText: "let greet () = 1\nlet value = greet ()" },
+  { language: "fsharp", filePath: "sample.fs", sourceText: "module Sample\nlet greet () = 1\nlet value = greet ()" },
+  { language: "nim", filePath: "sample.nim", sourceText: "proc greet(): int = 1\ndiscard greet()" },
+  { language: "cpp", filePath: "sample.cpp", sourceText: "void greet() {}\nvoid caller() { greet(); }" },
+  { language: "csharp", filePath: "sample.cs", sourceText: "class Sample { void Greet() {} void Caller() { Greet(); } }" },
+  { language: "ruby", filePath: "sample.rb", sourceText: "def greet\n  1\nend\ngreet" },
+  { language: "kotlin", filePath: "sample.kt", sourceText: "fun greet(): Int = 1\nfun caller() { greet() }" },
+  { language: "swift", filePath: "sample.swift", sourceText: "func greet() -> Int { return 1 }\nlet value = greet()" },
+  { language: "dart", filePath: "sample.dart", sourceText: "int greet() => 1;\nvoid caller() { greet(); }" },
+  { language: "scala", filePath: "sample.scala", sourceText: "object Sample { def greet: Int = 1; def caller = greet }" },
+  { language: "terraform", filePath: "sample.tf", sourceText: "resource \"demo\" \"main\" {\n  name = \"sample\"\n}" },
+  { language: "liquid", filePath: "sample.liquid", sourceText: "{% render 'product-card' %}\n<h1>Hello</h1>" },
+  { language: "twig", filePath: "sample.twig", sourceText: "{% extends 'base.html.twig' %}\n<h1>Hello</h1>" },
+  { language: "solidity", filePath: "sample.sol", sourceText: "pragma solidity ^0.8.0;\ncontract Sample { function greet() public pure returns (uint) { return 1; } }" },
+  { language: "cfml", filePath: "sample.cfm", sourceText: "<cfcomponent><cffunction name=\"greet\"><cfreturn 1></cffunction></cfcomponent>" },
+  { language: "nix", filePath: "sample.nix", sourceText: "let greeting = \"hello\"; in greeting" },
+  { language: "vbnet", filePath: "sample.vb", sourceText: "Module Sample\n  Sub Greet()\n  End Sub\nEnd Module" },
+  { language: "cobol", filePath: "sample.cbl", sourceText: "       IDENTIFICATION DIVISION.\n       PROGRAM-ID. SAMPLE.\n       PROCEDURE DIVISION.\n           DISPLAY 'HELLO'.\n           STOP RUN." },
+  { language: "zig", filePath: "sample.zig", sourceText: "fn greet() void {}\nexport fn caller() void { greet(); }" },
+  { language: "yaml", filePath: "sample.yaml", sourceText: "service: sample\napp:\n  name: sample\n  enabled: true\n" },
+  { language: "xml", filePath: "sample.xml", sourceText: "<?xml version=\"1.0\"?><root><item id=\"one\">value</item></root>" },
+  { language: "html", filePath: "sample.html", sourceText: "<!doctype html><html><body><main><h1>Hello</h1></main></body></html>" },
+  { language: "jsp", filePath: "sample.jsp", sourceText: "<%@ page language=\"java\" %><html><body><h1>Hello</h1></body></html>" },
+  { language: "css", filePath: "sample.css", sourceText: ".card { color: red; }" },
+  { language: "properties", filePath: "sample.properties", sourceText: "app.name=sample\napp.enabled=true\n" },
+  { language: "shell", filePath: "sample.sh", sourceText: "greet() { printf '%s\\n' hello; }\ngreet" },
+  { language: "sql", filePath: "sample.sql", sourceText: "CREATE TABLE users (id INTEGER);\nSELECT id FROM users;" },
+  { language: "graphql", filePath: "sample.graphql", sourceText: "type User { id: ID! }\nquery Users { user { id } }" },
+  { language: "proto", filePath: "sample.proto", sourceText: "syntax = \"proto3\";\nmessage User { string name = 1; }" },
+  { language: "markdown", filePath: "sample.md", sourceText: "# Sample\n\nA short paragraph with **bold** text.\n" }
+].map((fixture) => Object.freeze({ ...fixture, sourceText: fixture.sourceText.endsWith("\n") ? fixture.sourceText : `${fixture.sourceText}\n` })));
+
+export const LANGUAGE_NONEMPTY_FIXTURE_MAP = new Map(
+  LANGUAGE_NONEMPTY_FIXTURES.map((fixture) => [fixture.language, fixture])
+);

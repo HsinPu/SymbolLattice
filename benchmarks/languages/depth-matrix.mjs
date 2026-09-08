@@ -1,4 +1,6 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { prepareLuaFixtureFacts } from "./nonempty-depth-runtime.mjs";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -19,6 +21,8 @@ import {
 } from "../../dist/infrastructure/filesystem/discovery.js";
 import { FileSystemSourceCatalog } from "../../dist/infrastructure/filesystem/source-catalog.js";
 import { SYMBOL_LATTICE_VERSION } from "../../dist/version.js";
+import { LANGUAGE_NONEMPTY_FIXTURES } from "./nonempty-depth-fixtures.mjs";
+import { NONEMPTY_EXPECTATIONS, scoreNonEmptyFixtures } from "./nonempty-depth-scorer.mjs";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const ROOT = resolve(dirname(SCRIPT_PATH), "..", "..");
@@ -35,12 +39,6 @@ function argument(name) {
 
 function sameValues(left, right) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
-function primaryPath(language, firstExtension) {
-  return language === "blade"
-    ? "sample.blade.php"
-    : `sample-${language}${firstExtension.get(language) ?? ""}`;
 }
 
 function frameworkCapabilitiesByLanguage() {
@@ -82,28 +80,27 @@ async function languageTestEvidence() {
 }
 
 export async function buildLanguageDepthReport() {
-  const firstExtension = new Map();
-  for (const [extension, language] of SUPPORTED_EXTENSIONS) {
-    if (!firstExtension.has(language)) firstExtension.set(language, extension);
-  }
+  const luaFacts = await prepareLuaFixtureFacts(LANGUAGE_NONEMPTY_FIXTURES);
   const frameworks = frameworkCapabilitiesByLanguage();
   const tests = await languageTestEvidence();
   const temporaryProject = await mkdtemp(join(tmpdir(), "symbollattice-language-depth-"));
   const extractionRows = [];
   try {
     for (const language of ARTIFACT_LANGUAGES) {
-      const filePath = primaryPath(language, firstExtension);
-      await writeFile(join(temporaryProject, filePath), "", "utf8");
-      const discoveredLanguage = getSourceLanguage(filePath, "");
+      const fixture = LANGUAGE_NONEMPTY_FIXTURES.find((entry) => entry.language === language);
+      if (fixture === undefined) throw new Error(`Missing nonempty fixture: ${language}`);
+      const { filePath, sourceText } = fixture;
+      await writeFile(join(temporaryProject, filePath), sourceText, "utf8");
+      const discoveredLanguage = getSourceLanguage(filePath, sourceText);
       let fileIdentity = false;
       let extractionError = null;
       try {
-        const facts = extractFileFacts({
+        const facts = language === "lua" ? luaFacts.get(filePath) : extractFileFacts({
           filePath,
           language,
-          sourceText: "",
+          sourceText,
           ...(language === "shell" || language === "lua"
-            ? { sourceBytes: new Uint8Array() }
+            ? { sourceBytes: new Uint8Array(Buffer.from(sourceText, "utf8")) }
             : {})
         });
         fileIdentity = facts.symbols.some(
@@ -144,6 +141,16 @@ export async function buildLanguageDepthReport() {
     const discoveryMatches = new Set(DISCOVERABLE_LANGUAGES).size === ARTIFACT_LANGUAGES.length &&
       ARTIFACT_LANGUAGES.every((language) => DISCOVERABLE_LANGUAGES.includes(language));
     const summary = summarizeLanguageDepthMatrix(LANGUAGE_DEPTH_MATRIX);
+    const contentGate = scoreNonEmptyFixtures(LANGUAGE_NONEMPTY_FIXTURES, (fixture) =>
+      fixture.language === "lua" ? luaFacts.get(fixture.filePath) : extractFileFacts({
+        filePath: fixture.filePath,
+        language: fixture.language,
+        sourceText: fixture.sourceText,
+        ...(fixture.language === "shell" || fixture.language === "lua"
+          ? { sourceBytes: new Uint8Array(Buffer.from(fixture.sourceText, "utf8")) }
+          : {})
+      })
+    );
     return {
       schemaVersion: 1,
       benchmark: "symbollattice-language-depth-matrix-v1",
@@ -174,10 +181,30 @@ export async function buildLanguageDepthReport() {
         languages: frameworks.size
       },
       testEvidence: {
+        /** These paths are an inventory of tests, not execution evidence. */
+        pathsAreInventoryOnly: true,
         languagesWithEvidence: matrix.filter(({ testEvidencePaths }) => testEvidencePaths.length > 0).length,
         languagesWithoutEvidence: matrix
           .filter(({ testEvidencePaths }) => testEvidencePaths.length === 0)
           .map(({ language }) => language)
+      },
+      contentGate: {
+        methodology: "Hand-authored minimum fixtures; not compiler-confirmed corpus recall. Template references are raw extraction facts, not resolved edges. Column bounds allow existing zero- and one-based extractor conventions; normalized occurrence accuracy is not claimed.",
+        realCorpusRecall: null,
+        productFalsePositiveCount: null,
+        fixtureSha256: createHash("sha256").update(JSON.stringify(LANGUAGE_NONEMPTY_FIXTURES)).digest("hex"),
+        expectationSha256: createHash("sha256").update(JSON.stringify(NONEMPTY_EXPECTATIONS)).digest("hex"),
+        declarationLanguages: Object.values(NONEMPTY_EXPECTATIONS).filter(e => e.symbols?.length > 0).length,
+        exactCallLanguages: Object.values(NONEMPTY_EXPECTATIONS).filter(e => e.relation).length,
+        rawTemplateReferenceLanguages: Object.values(NONEMPTY_EXPECTATIONS).filter(e => e.relationFact).length,
+        fixtureCount: contentGate.languageCount,
+        supportedLanguages: contentGate.supportedCount,
+        acceptedLanguages: contentGate.acceptedCount,
+        knownFileOnlyLanguages: contentGate.knownFileOnlyCount,
+        strictPassed: contentGate.strictPassed,
+        passed: contentGate.passed,
+        rows: contentGate.rows,
+        failures: [...contentGate.supportedFailures, ...contentGate.knownFileOnlyFailures]
       },
       summary,
       matrix,
@@ -186,7 +213,8 @@ export async function buildLanguageDepthReport() {
         discoveryMatches &&
         failures.length === 0 &&
         scan.sourceDocuments.length === ARTIFACT_LANGUAGES.length &&
-        summary.languages === ARTIFACT_LANGUAGES.length
+        summary.languages === ARTIFACT_LANGUAGES.length &&
+        contentGate.strictPassed
     };
   } finally {
     await rm(temporaryProject, { recursive: true, force: true });
@@ -211,6 +239,7 @@ if (invokedDirectly) {
     relationReleaseValidated: report.summary.relationReleaseValidated,
     frameworkCapabilities: report.frameworkCapabilities,
     testEvidence: report.testEvidence,
+    contentGate: report.contentGate,
     runtimeSmoke: report.runtimeSmoke,
     passed: report.passed
   }, null, 2));
