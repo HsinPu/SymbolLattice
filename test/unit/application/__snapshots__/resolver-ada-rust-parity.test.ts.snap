@@ -1,0 +1,2037 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Ada and Rust resolver pre-move parity golden > 'ada' keeps consumer-only project targets unresolved 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.adb:src%2Flocal.adb%23procedure%3AlocalHelper:function:0",
+        ],
+        "ruleId": "syntax.ada.same-file.unique-fixed-arity-procedure-call.direct-context-with",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.adb",
+      "id": "edge:symbol%3Asrc%252Flocal.adb%3Asrc%252Flocal.adb%2523procedure%253AlocalEntry%3Afunction%3A0:symbol%3Asrc%252Flocal.adb%3Asrc%252Flocal.adb%2523procedure%253AlocalHelper%3Afunction%3A0:calls:4:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "localHelper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.adb:src%2Flocal.adb%23procedure%3AlocalEntry:function:0",
+      "targetId": "symbol:src%2Flocal.adb:src%2Flocal.adb%23procedure%3AlocalHelper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.adb:src%2Flocal.adb%23procedure%3AlocalEntry:function:0",
+        ],
+        "ruleId": "language.ada.procedure.direct-library-unit",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.adb",
+      "id": "edge:symbol%3Asrc%252Flocal.adb%3Asrc%252Flocal.adb%3Afile%3A0:symbol%3Asrc%252Flocal.adb%3Asrc%252Flocal.adb%2523procedure%253AlocalEntry%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "localEntry",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.adb:src%2Flocal.adb:file:0",
+      "targetId": "symbol:src%2Flocal.adb:src%2Flocal.adb%23procedure%3AlocalEntry:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.adb:src%2Flocal.adb%23procedure%3AlocalHelper:function:0",
+        ],
+        "ruleId": "language.ada.procedure.direct-library-unit",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.adb",
+      "id": "edge:symbol%3Asrc%252Flocal.adb%3Asrc%252Flocal.adb%3Afile%3A0:symbol%3Asrc%252Flocal.adb%3Asrc%252Flocal.adb%2523procedure%253AlocalHelper%3Afunction%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "localHelper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.adb:src%2Flocal.adb:file:0",
+      "targetId": "symbol:src%2Flocal.adb:src%2Flocal.adb%23procedure%3AlocalHelper:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "a72aacf51c5f3514daec1253e45d991c5a57ebd7b8e3f8ecf7bfe3fe9ca6dd98",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "ada",
+      "path": "src/local.adb",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.adb",
+      "id": "symbol:src%2Flocal.adb:src%2Flocal.adb%23procedure%3AlocalEntry:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "localEntry",
+      "qualifiedName": "src/local.adb#procedure:localEntry",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.adb",
+      "id": "symbol:src%2Flocal.adb:src%2Flocal.adb%23procedure%3AlocalHelper:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "localHelper",
+      "qualifiedName": "src/local.adb#procedure:localHelper",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.adb",
+      "id": "symbol:src%2Flocal.adb:src%2Flocal.adb:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "local.adb",
+      "qualifiedName": "src/local.adb",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Ada and Rust resolver pre-move parity golden > 'ada' preserves project and local/call relations 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "callArity": {
+          "actualArgumentCount": 2,
+          "candidates": [
+            {
+              "applicable": true,
+              "maximumArgumentCount": 2,
+              "minimumArgumentCount": 2,
+              "symbolId": "symbol:src%2Fada_helper.adb:src%2Fada_helper.adb%23procedure%3AadaHelper:function:0",
+            },
+          ],
+        },
+        "candidateSymbolIds": [
+          "symbol:src%2Fada_helper.adb:src%2Fada_helper.adb%23procedure%3AadaHelper:function:0",
+        ],
+        "ruleId": "project.ada.unique-procedure.fixed-arity-call",
+        "stage": "module",
+      },
+      "filePath": "src/ada_entry.adb",
+      "id": "edge:symbol%3Asrc%252Fada_entry.adb%3Asrc%252Fada_entry.adb%2523procedure%253AadaEntry%3Afunction%3A0:symbol%3Asrc%252Fada_helper.adb%3Asrc%252Fada_helper.adb%2523procedure%253AadaHelper%3Afunction%3A0:calls:4:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "adaHelper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fada_entry.adb:src%2Fada_entry.adb%23procedure%3AadaEntry:function:0",
+      "targetId": "symbol:src%2Fada_helper.adb:src%2Fada_helper.adb%23procedure%3AadaHelper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fada_entry.adb:src%2Fada_entry.adb%23procedure%3AadaEntry:function:0",
+        ],
+        "ruleId": "language.ada.procedure.direct-library-unit",
+        "stage": "syntax",
+      },
+      "filePath": "src/ada_entry.adb",
+      "id": "edge:symbol%3Asrc%252Fada_entry.adb%3Asrc%252Fada_entry.adb%3Afile%3A0:symbol%3Asrc%252Fada_entry.adb%3Asrc%252Fada_entry.adb%2523procedure%253AadaEntry%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "adaEntry",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fada_entry.adb:src%2Fada_entry.adb:file:0",
+      "targetId": "symbol:src%2Fada_entry.adb:src%2Fada_entry.adb%23procedure%3AadaEntry:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fada_helper.adb:src%2Fada_helper.adb%23procedure%3AadaHelper:function:0",
+        ],
+        "ruleId": "language.ada.procedure.direct-library-unit",
+        "stage": "syntax",
+      },
+      "filePath": "src/ada_helper.adb",
+      "id": "edge:symbol%3Asrc%252Fada_helper.adb%3Asrc%252Fada_helper.adb%3Afile%3A0:symbol%3Asrc%252Fada_helper.adb%3Asrc%252Fada_helper.adb%2523procedure%253AadaHelper%3Afunction%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 15,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "adaHelper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fada_helper.adb:src%2Fada_helper.adb:file:0",
+      "targetId": "symbol:src%2Fada_helper.adb:src%2Fada_helper.adb%23procedure%3AadaHelper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.adb:src%2Flocal.adb%23procedure%3AlocalHelper:function:0",
+        ],
+        "ruleId": "syntax.ada.same-file.unique-fixed-arity-procedure-call.direct-context-with",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.adb",
+      "id": "edge:symbol%3Asrc%252Flocal.adb%3Asrc%252Flocal.adb%2523procedure%253AlocalEntry%3Afunction%3A0:symbol%3Asrc%252Flocal.adb%3Asrc%252Flocal.adb%2523procedure%253AlocalHelper%3Afunction%3A0:calls:4:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "localHelper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.adb:src%2Flocal.adb%23procedure%3AlocalEntry:function:0",
+      "targetId": "symbol:src%2Flocal.adb:src%2Flocal.adb%23procedure%3AlocalHelper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.adb:src%2Flocal.adb%23procedure%3AlocalEntry:function:0",
+        ],
+        "ruleId": "language.ada.procedure.direct-library-unit",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.adb",
+      "id": "edge:symbol%3Asrc%252Flocal.adb%3Asrc%252Flocal.adb%3Afile%3A0:symbol%3Asrc%252Flocal.adb%3Asrc%252Flocal.adb%2523procedure%253AlocalEntry%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "localEntry",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.adb:src%2Flocal.adb:file:0",
+      "targetId": "symbol:src%2Flocal.adb:src%2Flocal.adb%23procedure%3AlocalEntry:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.adb:src%2Flocal.adb%23procedure%3AlocalHelper:function:0",
+        ],
+        "ruleId": "language.ada.procedure.direct-library-unit",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.adb",
+      "id": "edge:symbol%3Asrc%252Flocal.adb%3Asrc%252Flocal.adb%3Afile%3A0:symbol%3Asrc%252Flocal.adb%3Asrc%252Flocal.adb%2523procedure%253AlocalHelper%3Afunction%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "localHelper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.adb:src%2Flocal.adb:file:0",
+      "targetId": "symbol:src%2Flocal.adb:src%2Flocal.adb%23procedure%3AlocalHelper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fresult.ads:src%2Fresult.ads%23package%3AResult:module:0",
+        ],
+        "resolutionPath": [
+          "src/result.adb",
+          "src/result.ads",
+        ],
+        "ruleId": "project.ada.root-library-package-body.unique-specification",
+        "stage": "module",
+      },
+      "filePath": "src/result.adb",
+      "id": "edge:symbol%3Asrc%252Fresult.adb%3Asrc%252Fresult.adb%2523package-body%253AResult%3Amodule%3A0:symbol%3Asrc%252Fresult.ads%3Asrc%252Fresult.ads%2523package%253AResult%3Amodule%3A0:references:1:14",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 1,
+        },
+        "start": {
+          "column": 14,
+          "line": 1,
+        },
+      },
+      "referenceName": "Result",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fresult.adb:src%2Fresult.adb%23package-body%3AResult:module:0",
+      "targetId": "symbol:src%2Fresult.ads:src%2Fresult.ads%23package%3AResult:module:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fresult.adb:src%2Fresult.adb%23package-body%3AResult:module:0",
+        ],
+        "ruleId": "language.ada.package-body.direct-library-unit",
+        "stage": "syntax",
+      },
+      "filePath": "src/result.adb",
+      "id": "edge:symbol%3Asrc%252Fresult.adb%3Asrc%252Fresult.adb%3Afile%3A0:symbol%3Asrc%252Fresult.adb%3Asrc%252Fresult.adb%2523package-body%253AResult%3Amodule%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Result",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fresult.adb:src%2Fresult.adb:file:0",
+      "targetId": "symbol:src%2Fresult.adb:src%2Fresult.adb%23package-body%3AResult:module:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fresult.ads:src%2Fresult.ads%23package%3AResult:module:0",
+        ],
+        "ruleId": "language.ada.package.direct-library-unit",
+        "stage": "syntax",
+      },
+      "filePath": "src/result.ads",
+      "id": "edge:symbol%3Asrc%252Fresult.ads%3Asrc%252Fresult.ads%3Afile%3A0:symbol%3Asrc%252Fresult.ads%3Asrc%252Fresult.ads%2523package%253AResult%3Amodule%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Result",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fresult.ads:src%2Fresult.ads:file:0",
+      "targetId": "symbol:src%2Fresult.ads:src%2Fresult.ads%23package%3AResult:module:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "c7ffc49efdbc36c72ca1c06aee4f01984dd4c739adf4ed5bf3c96a49e3dbf90e",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "ada",
+      "path": "src/ada_entry.adb",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "d684ad9d061f8e63e31ad8facf43575d9cd692a8830e22afa02e43c1c6b184dc",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "ada",
+      "path": "src/ada_helper.adb",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "a72aacf51c5f3514daec1253e45d991c5a57ebd7b8e3f8ecf7bfe3fe9ca6dd98",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "ada",
+      "path": "src/local.adb",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "d268fb3db200b4bbe11f4ec8365ac1b174b2783f389896b4b264367046ca2fee",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "ada",
+      "path": "src/result.adb",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "2bfff9f1de2c148285d4b05d70f43815bcd303d87368d4a5cda645a358c95885",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "ada",
+      "path": "src/result.ads",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/ada_entry.adb",
+      "id": "symbol:src%2Fada_entry.adb:src%2Fada_entry.adb%23procedure%3AadaEntry:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "adaEntry",
+      "qualifiedName": "src/ada_entry.adb#procedure:adaEntry",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/ada_entry.adb",
+      "id": "symbol:src%2Fada_entry.adb:src%2Fada_entry.adb:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "ada_entry.adb",
+      "qualifiedName": "src/ada_entry.adb",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/ada_helper.adb",
+      "id": "symbol:src%2Fada_helper.adb:src%2Fada_helper.adb%23procedure%3AadaHelper:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "adaHelper",
+      "qualifiedName": "src/ada_helper.adb#procedure:adaHelper",
+      "range": {
+        "end": {
+          "column": 15,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/ada_helper.adb",
+      "id": "symbol:src%2Fada_helper.adb:src%2Fada_helper.adb:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "ada_helper.adb",
+      "qualifiedName": "src/ada_helper.adb",
+      "range": {
+        "end": {
+          "column": 15,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.adb",
+      "id": "symbol:src%2Flocal.adb:src%2Flocal.adb%23procedure%3AlocalEntry:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "localEntry",
+      "qualifiedName": "src/local.adb#procedure:localEntry",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.adb",
+      "id": "symbol:src%2Flocal.adb:src%2Flocal.adb%23procedure%3AlocalHelper:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "localHelper",
+      "qualifiedName": "src/local.adb#procedure:localHelper",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.adb",
+      "id": "symbol:src%2Flocal.adb:src%2Flocal.adb:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "local.adb",
+      "qualifiedName": "src/local.adb",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/result.adb",
+      "id": "symbol:src%2Fresult.adb:src%2Fresult.adb%23package-body%3AResult:module:0",
+      "isExported": true,
+      "kind": "module",
+      "name": "Result",
+      "qualifiedName": "src/result.adb#package-body:Result",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/result.adb",
+      "id": "symbol:src%2Fresult.adb:src%2Fresult.adb:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "result.adb",
+      "qualifiedName": "src/result.adb",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/result.ads",
+      "id": "symbol:src%2Fresult.ads:src%2Fresult.ads%23package%3AResult:module:0",
+      "isExported": true,
+      "kind": "module",
+      "name": "Result",
+      "qualifiedName": "src/result.ads#package:Result",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/result.ads",
+      "id": "symbol:src%2Fresult.ads:src%2Fresult.ads:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "result.ads",
+      "qualifiedName": "src/result.ads",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Ada and Rust resolver pre-move parity golden > 'rust' keeps consumer-only project targets unresolved 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local%3A%3Anew:method:0",
+        ],
+        "ruleId": "project.rust.impl.unique-inherent-associated-function-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.rs",
+      "id": "edge:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%2523local_caller%3Afunction%3A0:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%2523Local%253A%253Anew%3Amethod%3A0:calls:7:29",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 7,
+        },
+        "start": {
+          "column": 29,
+          "line": 7,
+        },
+      },
+      "referenceName": "new",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.rs:src%2Flocal.rs%23local_caller:function:0",
+      "targetId": "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local%3A%3Anew:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local%3A%3Arun:method:0",
+        ],
+        "ruleId": "project.rust.impl.unique-inherent-method-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.rs",
+      "id": "edge:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%2523local_caller%3Afunction%3A0:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%2523Local%253A%253Arun%3Amethod%3A0:calls:8:9",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 8,
+        },
+        "start": {
+          "column": 9,
+          "line": 8,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.rs:src%2Flocal.rs%23local_caller:function:0",
+      "targetId": "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local%3A%3Arun:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local:type:0",
+        ],
+        "ruleId": "project.rust.type.unique-construction",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.rs",
+      "id": "edge:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%2523local_caller%3Afunction%3A0:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%2523Local%3Atype%3A0:instantiates:9:16",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 9,
+        },
+        "start": {
+          "column": 16,
+          "line": 9,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.rs:src%2Flocal.rs%23local_caller:function:0",
+      "targetId": "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local%3A%3Anew:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.rs",
+      "id": "edge:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%3Afile%3A0:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%2523Local%253A%253Anew%3Amethod%3A0:contains:3:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 3,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+      "referenceName": "new",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.rs:src%2Flocal.rs:file:0",
+      "targetId": "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local%3A%3Anew:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local%3A%3Arun:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.rs",
+      "id": "edge:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%3Afile%3A0:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%2523Local%253A%253Arun%3Amethod%3A0:contains:4:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.rs:src%2Flocal.rs:file:0",
+      "targetId": "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local%3A%3Arun:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.rs",
+      "id": "edge:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%3Afile%3A0:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%2523Local%3Atype%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.rs:src%2Flocal.rs:file:0",
+      "targetId": "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.rs:src%2Flocal.rs%23local_caller:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.rs",
+      "id": "edge:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%3Afile%3A0:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%2523local_caller%3Afunction%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "local_caller",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.rs:src%2Flocal.rs:file:0",
+      "targetId": "symbol:src%2Flocal.rs:src%2Flocal.rs%23local_caller:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "6ef3a6aa870af38b0ece8546199d946309e8f8aeb7ea6be59005ac4a5f2cd080",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "rust",
+      "path": "src/local.rs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.rs",
+      "id": "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local%3A%3Anew:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "new",
+      "qualifiedName": "src/local.rs#Local::new",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 3,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.rs",
+      "id": "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local%3A%3Arun:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "src/local.rs#Local::run",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.rs",
+      "id": "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "Local",
+      "qualifiedName": "src/local.rs#Local",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.rs",
+      "id": "symbol:src%2Flocal.rs:src%2Flocal.rs%23local_caller:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "local_caller",
+      "qualifiedName": "src/local.rs#local_caller",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.rs",
+      "id": "symbol:src%2Flocal.rs:src%2Flocal.rs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "local.rs",
+      "qualifiedName": "src/local.rs",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 11,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Ada and Rust resolver pre-move parity golden > 'rust' preserves project and local/call relations 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flib.rs:src%2Flib.rs%23Kind:type:0",
+        ],
+        "resolutionPath": [
+          "src/caller.rs",
+          "src/lib.rs",
+        ],
+        "ruleId": "project.rust.type.unique-construction",
+        "stage": "module",
+      },
+      "filePath": "src/caller.rs",
+      "id": "edge:symbol%3Asrc%252Fcaller.rs%3Asrc%252Fcaller.rs%2523caller%3Afunction%3A0:symbol%3Asrc%252Flib.rs%3Asrc%252Flib.rs%2523Kind%3Atype%3A0:instantiates:6:28",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 6,
+        },
+        "start": {
+          "column": 28,
+          "line": 6,
+        },
+      },
+      "referenceName": "Kind",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcaller.rs:src%2Fcaller.rs%23caller:function:0",
+      "targetId": "symbol:src%2Flib.rs:src%2Flib.rs%23Kind:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service%3A%3Anew:method:0",
+        ],
+        "resolutionPath": [
+          "src/caller.rs",
+          "src/service.rs",
+        ],
+        "ruleId": "project.rust.impl.unique-inherent-associated-function-call",
+        "stage": "module",
+      },
+      "filePath": "src/caller.rs",
+      "id": "edge:symbol%3Asrc%252Fcaller.rs%3Asrc%252Fcaller.rs%2523caller%3Afunction%3A0:symbol%3Asrc%252Fservice.rs%3Asrc%252Fservice.rs%2523Service%253A%253Anew%3Amethod%3A0:calls:3:35",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 3,
+        },
+        "start": {
+          "column": 35,
+          "line": 3,
+        },
+      },
+      "referenceName": "new",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcaller.rs:src%2Fcaller.rs%23caller:function:0",
+      "targetId": "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service%3A%3Anew:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service%3A%3Arun:method:0",
+        ],
+        "resolutionPath": [
+          "src/caller.rs",
+          "src/service.rs",
+        ],
+        "ruleId": "project.rust.impl.unique-inherent-method-call",
+        "stage": "module",
+      },
+      "filePath": "src/caller.rs",
+      "id": "edge:symbol%3Asrc%252Fcaller.rs%3Asrc%252Fcaller.rs%2523caller%3Afunction%3A0:symbol%3Asrc%252Fservice.rs%3Asrc%252Fservice.rs%2523Service%253A%253Arun%3Amethod%3A0:calls:4:11",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 4,
+        },
+        "start": {
+          "column": 11,
+          "line": 4,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcaller.rs:src%2Fcaller.rs%23caller:function:0",
+      "targetId": "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service%3A%3Arun:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service:type:0",
+        ],
+        "resolutionPath": [
+          "src/caller.rs",
+          "src/service.rs",
+        ],
+        "ruleId": "project.rust.type.unique-construction",
+        "stage": "module",
+      },
+      "filePath": "src/caller.rs",
+      "id": "edge:symbol%3Asrc%252Fcaller.rs%3Asrc%252Fcaller.rs%2523caller%3Afunction%3A0:symbol%3Asrc%252Fservice.rs%3Asrc%252Fservice.rs%2523Service%3Atype%3A0:instantiates:5:15",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 5,
+        },
+        "start": {
+          "column": 15,
+          "line": 5,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcaller.rs:src%2Fcaller.rs%23caller:function:0",
+      "targetId": "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcaller.rs:src%2Fcaller.rs%23caller:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/caller.rs",
+      "id": "edge:symbol%3Asrc%252Fcaller.rs%3Asrc%252Fcaller.rs%3Afile%3A0:symbol%3Asrc%252Fcaller.rs%3Asrc%252Fcaller.rs%2523caller%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "caller",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcaller.rs:src%2Fcaller.rs:file:0",
+      "targetId": "symbol:src%2Fcaller.rs:src%2Fcaller.rs%23caller:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcaller.rs:src%2Fcaller.rs%23trait_caller:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/caller.rs",
+      "id": "edge:symbol%3Asrc%252Fcaller.rs%3Asrc%252Fcaller.rs%3Afile%3A0:symbol%3Asrc%252Fcaller.rs%3Asrc%252Fcaller.rs%2523trait_caller%3Afunction%3A0:contains:8:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 66,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+      "referenceName": "trait_caller",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcaller.rs:src%2Fcaller.rs:file:0",
+      "targetId": "symbol:src%2Fcaller.rs:src%2Fcaller.rs%23trait_caller:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fservice.rs:src%2Fservice.rs:file:0",
+        ],
+        "resolutionPath": [
+          "src/caller.rs",
+          "src/lib.rs",
+          "src/service.rs",
+        ],
+        "ruleId": "project.rust.crate.direct-module.named-import-file",
+        "stage": "module",
+      },
+      "filePath": "src/caller.rs",
+      "id": "edge:symbol%3Asrc%252Fcaller.rs%3Asrc%252Fcaller.rs%3Afile%3A0:symbol%3Asrc%252Fservice.rs%3Asrc%252Fservice.rs%3Afile%3A0:imports:1:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "crate::service::Service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcaller.rs:src%2Fcaller.rs:file:0",
+      "targetId": "symbol:src%2Fservice.rs:src%2Fservice.rs:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flib.rs:src%2Flib.rs%23Kind:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/lib.rs",
+      "id": "edge:symbol%3Asrc%252Flib.rs%3Asrc%252Flib.rs%3Afile%3A0:symbol%3Asrc%252Flib.rs%3Asrc%252Flib.rs%2523Kind%3Atype%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "Kind",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flib.rs:src%2Flib.rs:file:0",
+      "targetId": "symbol:src%2Flib.rs:src%2Flib.rs%23Kind:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flib.rs:src%2Flib.rs%23Worker:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/lib.rs",
+      "id": "edge:symbol%3Asrc%252Flib.rs%3Asrc%252Flib.rs%3Afile%3A0:symbol%3Asrc%252Flib.rs%3Asrc%252Flib.rs%2523Worker%3Atype%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "Worker",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flib.rs:src%2Flib.rs:file:0",
+      "targetId": "symbol:src%2Flib.rs:src%2Flib.rs%23Worker:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local%3A%3Anew:method:0",
+        ],
+        "ruleId": "project.rust.impl.unique-inherent-associated-function-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.rs",
+      "id": "edge:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%2523local_caller%3Afunction%3A0:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%2523Local%253A%253Anew%3Amethod%3A0:calls:7:29",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 7,
+        },
+        "start": {
+          "column": 29,
+          "line": 7,
+        },
+      },
+      "referenceName": "new",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.rs:src%2Flocal.rs%23local_caller:function:0",
+      "targetId": "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local%3A%3Anew:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local%3A%3Arun:method:0",
+        ],
+        "ruleId": "project.rust.impl.unique-inherent-method-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.rs",
+      "id": "edge:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%2523local_caller%3Afunction%3A0:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%2523Local%253A%253Arun%3Amethod%3A0:calls:8:9",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 8,
+        },
+        "start": {
+          "column": 9,
+          "line": 8,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.rs:src%2Flocal.rs%23local_caller:function:0",
+      "targetId": "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local%3A%3Arun:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local:type:0",
+        ],
+        "ruleId": "project.rust.type.unique-construction",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.rs",
+      "id": "edge:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%2523local_caller%3Afunction%3A0:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%2523Local%3Atype%3A0:instantiates:9:16",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 9,
+        },
+        "start": {
+          "column": 16,
+          "line": 9,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.rs:src%2Flocal.rs%23local_caller:function:0",
+      "targetId": "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local%3A%3Anew:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.rs",
+      "id": "edge:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%3Afile%3A0:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%2523Local%253A%253Anew%3Amethod%3A0:contains:3:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 3,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+      "referenceName": "new",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.rs:src%2Flocal.rs:file:0",
+      "targetId": "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local%3A%3Anew:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local%3A%3Arun:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.rs",
+      "id": "edge:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%3Afile%3A0:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%2523Local%253A%253Arun%3Amethod%3A0:contains:4:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.rs:src%2Flocal.rs:file:0",
+      "targetId": "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local%3A%3Arun:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.rs",
+      "id": "edge:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%3Afile%3A0:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%2523Local%3Atype%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.rs:src%2Flocal.rs:file:0",
+      "targetId": "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.rs:src%2Flocal.rs%23local_caller:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.rs",
+      "id": "edge:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%3Afile%3A0:symbol%3Asrc%252Flocal.rs%3Asrc%252Flocal.rs%2523local_caller%3Afunction%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "local_caller",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.rs:src%2Flocal.rs:file:0",
+      "targetId": "symbol:src%2Flocal.rs:src%2Flocal.rs%23local_caller:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service:type:0",
+        ],
+        "ruleId": "project.rust.type.unique-construction",
+        "stage": "syntax",
+      },
+      "filePath": "src/service.rs",
+      "id": "edge:symbol%3Asrc%252Fservice.rs%3Asrc%252Fservice.rs%2523Service%253A%253Anew%3Amethod%3A0:symbol%3Asrc%252Fservice.rs%3Asrc%252Fservice.rs%2523Service%3Atype%3A0:instantiates:4:26",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 4,
+        },
+        "start": {
+          "column": 26,
+          "line": 4,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service%3A%3Anew:method:0",
+      "targetId": "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flib.rs:src%2Flib.rs%23Worker:type:0",
+        ],
+        "resolutionPath": [
+          "src/service.rs",
+          "src/lib.rs",
+        ],
+        "ruleId": "project.rust.impl.unique-trait",
+        "stage": "module",
+      },
+      "filePath": "src/service.rs",
+      "id": "edge:symbol%3Asrc%252Fservice.rs%3Asrc%252Fservice.rs%2523Service%3Atype%3A0:symbol%3Asrc%252Flib.rs%3Asrc%252Flib.rs%2523Worker%3Atype%3A0:implements:7:1",
+      "kind": "implements",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "Worker",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service:type:0",
+      "targetId": "symbol:src%2Flib.rs:src%2Flib.rs%23Worker:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service%3A%3AWorker%3A%3Arun:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/service.rs",
+      "id": "edge:symbol%3Asrc%252Fservice.rs%3Asrc%252Fservice.rs%3Afile%3A0:symbol%3Asrc%252Fservice.rs%3Asrc%252Fservice.rs%2523Service%253A%253AWorker%253A%253Arun%3Amethod%3A0:contains:7:27",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 7,
+        },
+        "start": {
+          "column": 27,
+          "line": 7,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fservice.rs:src%2Fservice.rs:file:0",
+      "targetId": "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service%3A%3AWorker%3A%3Arun:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service%3A%3Anew:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/service.rs",
+      "id": "edge:symbol%3Asrc%252Fservice.rs%3Asrc%252Fservice.rs%3Afile%3A0:symbol%3Asrc%252Fservice.rs%3Asrc%252Fservice.rs%2523Service%253A%253Anew%3Amethod%3A0:contains:4:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "new",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fservice.rs:src%2Fservice.rs:file:0",
+      "targetId": "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service%3A%3Anew:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service%3A%3Arun:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/service.rs",
+      "id": "edge:symbol%3Asrc%252Fservice.rs%3Asrc%252Fservice.rs%3Afile%3A0:symbol%3Asrc%252Fservice.rs%3Asrc%252Fservice.rs%2523Service%253A%253Arun%3Amethod%3A0:contains:5:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fservice.rs:src%2Fservice.rs:file:0",
+      "targetId": "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service%3A%3Arun:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/service.rs",
+      "id": "edge:symbol%3Asrc%252Fservice.rs%3Asrc%252Fservice.rs%3Afile%3A0:symbol%3Asrc%252Fservice.rs%3Asrc%252Fservice.rs%2523Service%3Atype%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fservice.rs:src%2Fservice.rs:file:0",
+      "targetId": "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service:type:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "4b5c8dae1ba8d58bf58fb8866918723cf0a216773870be657c150bff5df1353b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "rust",
+      "path": "src/caller.rs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "4d2d3afd5b05160456881eda7f0ffee988cb7b690fa277ec8fd435134642779a",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "rust",
+      "path": "src/lib.rs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "6ef3a6aa870af38b0ece8546199d946309e8f8aeb7ea6be59005ac4a5f2cd080",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "rust",
+      "path": "src/local.rs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "a191e1fd864d89c1759f43338107254dadfe050f7466d52b1c2119f7d4621662",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "rust",
+      "path": "src/service.rs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/caller.rs",
+      "id": "symbol:src%2Fcaller.rs:src%2Fcaller.rs%23caller:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "caller",
+      "qualifiedName": "src/caller.rs#caller",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/caller.rs",
+      "id": "symbol:src%2Fcaller.rs:src%2Fcaller.rs%23trait_caller:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "trait_caller",
+      "qualifiedName": "src/caller.rs#trait_caller",
+      "range": {
+        "end": {
+          "column": 66,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/caller.rs",
+      "id": "symbol:src%2Fcaller.rs:src%2Fcaller.rs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "caller.rs",
+      "qualifiedName": "src/caller.rs",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/lib.rs",
+      "id": "symbol:src%2Flib.rs:src%2Flib.rs%23Kind:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "Kind",
+      "qualifiedName": "src/lib.rs#Kind",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/lib.rs",
+      "id": "symbol:src%2Flib.rs:src%2Flib.rs%23Worker:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "Worker",
+      "qualifiedName": "src/lib.rs#Worker",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/lib.rs",
+      "id": "symbol:src%2Flib.rs:src%2Flib.rs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "lib.rs",
+      "qualifiedName": "src/lib.rs",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.rs",
+      "id": "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local%3A%3Anew:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "new",
+      "qualifiedName": "src/local.rs#Local::new",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 3,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.rs",
+      "id": "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local%3A%3Arun:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "src/local.rs#Local::run",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.rs",
+      "id": "symbol:src%2Flocal.rs:src%2Flocal.rs%23Local:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "Local",
+      "qualifiedName": "src/local.rs#Local",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.rs",
+      "id": "symbol:src%2Flocal.rs:src%2Flocal.rs%23local_caller:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "local_caller",
+      "qualifiedName": "src/local.rs#local_caller",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.rs",
+      "id": "symbol:src%2Flocal.rs:src%2Flocal.rs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "local.rs",
+      "qualifiedName": "src/local.rs",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 11,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/service.rs",
+      "id": "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service%3A%3AWorker%3A%3Arun:method:0",
+      "isExported": false,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "src/service.rs#Service::Worker::run",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 7,
+        },
+        "start": {
+          "column": 27,
+          "line": 7,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/service.rs",
+      "id": "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service%3A%3Anew:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "new",
+      "qualifiedName": "src/service.rs#Service::new",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/service.rs",
+      "id": "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service%3A%3Arun:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "src/service.rs#Service::run",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/service.rs",
+      "id": "symbol:src%2Fservice.rs:src%2Fservice.rs%23Service:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "Service",
+      "qualifiedName": "src/service.rs#Service",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/service.rs",
+      "id": "symbol:src%2Fservice.rs:src%2Fservice.rs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "service.rs",
+      "qualifiedName": "src/service.rs",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

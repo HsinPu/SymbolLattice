@@ -1,0 +1,4784 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`beam and Nim resolver output parity before move > 'clojure' preserves local relations while rejecting consumer-only targets 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.execute:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.clj",
+      "id": "edge:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%2523app%3Aclass%3A0:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%2523app.execute%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "execute",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app:class:0",
+      "targetId": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.execute:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.local:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.clj",
+      "id": "edge:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%2523app%3Aclass%3A0:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%2523app.local%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app:class:0",
+      "targetId": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.local:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.local:function:0",
+        ],
+        "ruleId": "syntax.clojure.unique-local-or-referred-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.clj",
+      "id": "edge:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%2523app.execute%3Afunction%3A0:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%2523app.local%3Afunction%3A0:calls:6:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+      "referenceName": "local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.execute:function:0",
+      "targetId": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.local:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.clj:src%2Fapp.clj%23app:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.clj",
+      "id": "edge:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%3Afile%3A0:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%2523app%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 87,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "app",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.clj:src%2Fapp.clj:file:0",
+      "targetId": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "d4b2eb91731d7ddc456c67c6b69c99fb12f88c318d7f2e12aac69a79aafe520f",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "clojure",
+      "path": "src/app.clj",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.clj",
+      "id": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.execute:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "execute",
+      "qualifiedName": "src/app.clj#app.execute",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.clj",
+      "id": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.local:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "local",
+      "qualifiedName": "src/app.clj#app.local",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.clj",
+      "id": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "app",
+      "qualifiedName": "src/app.clj#app",
+      "range": {
+        "end": {
+          "column": 87,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.clj",
+      "id": "symbol:src%2Fapp.clj:src%2Fapp.clj:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "app.clj",
+      "qualifiedName": "src/app.clj",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`beam and Nim resolver output parity before move > 'clojure' preserves non-empty cross-file relations and evidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.clj:src%2Fapi.clj%23api.build:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.clj",
+      "id": "edge:symbol%3Asrc%252Fapi.clj%3Asrc%252Fapi.clj%2523api%3Aclass%3A0:symbol%3Asrc%252Fapi.clj%3Asrc%252Fapi.clj%2523api.build%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "build",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.clj:src%2Fapi.clj%23api:class:0",
+      "targetId": "symbol:src%2Fapi.clj:src%2Fapi.clj%23api.build:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.clj:src%2Fapi.clj%23api.helper:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.clj",
+      "id": "edge:symbol%3Asrc%252Fapi.clj%3Asrc%252Fapi.clj%2523api%3Aclass%3A0:symbol%3Asrc%252Fapi.clj%3Asrc%252Fapi.clj%2523api.helper%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 28,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.clj:src%2Fapi.clj%23api:class:0",
+      "targetId": "symbol:src%2Fapi.clj:src%2Fapi.clj%23api.helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.clj:src%2Fapi.clj%23api:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.clj",
+      "id": "edge:symbol%3Asrc%252Fapi.clj%3Asrc%252Fapi.clj%3Afile%3A0:symbol%3Asrc%252Fapi.clj%3Asrc%252Fapi.clj%2523api%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 9,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.clj:src%2Fapi.clj:file:0",
+      "targetId": "symbol:src%2Fapi.clj:src%2Fapi.clj%23api:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.execute:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.clj",
+      "id": "edge:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%2523app%3Aclass%3A0:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%2523app.execute%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "execute",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app:class:0",
+      "targetId": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.execute:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.local:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.clj",
+      "id": "edge:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%2523app%3Aclass%3A0:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%2523app.local%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app:class:0",
+      "targetId": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.local:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.clj:src%2Fapi.clj%23api.build:function:0",
+        ],
+        "resolutionPath": [
+          "src/app.clj",
+          "src/api.clj",
+        ],
+        "ruleId": "module.clojure.unique-qualified-call",
+        "stage": "module",
+      },
+      "filePath": "src/app.clj",
+      "id": "edge:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%2523app.execute%3Afunction%3A0:symbol%3Asrc%252Fapi.clj%3Asrc%252Fapi.clj%2523api.build%3Afunction%3A0:calls:4:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "build",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.execute:function:0",
+      "targetId": "symbol:src%2Fapi.clj:src%2Fapi.clj%23api.build:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.clj:src%2Fapi.clj%23api.helper:function:0",
+        ],
+        "resolutionPath": [
+          "src/app.clj",
+          "src/api.clj",
+        ],
+        "ruleId": "syntax.clojure.unique-local-or-referred-call",
+        "stage": "module",
+      },
+      "filePath": "src/app.clj",
+      "id": "edge:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%2523app.execute%3Afunction%3A0:symbol%3Asrc%252Fapi.clj%3Asrc%252Fapi.clj%2523api.helper%3Afunction%3A0:calls:5:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.execute:function:0",
+      "targetId": "symbol:src%2Fapi.clj:src%2Fapi.clj%23api.helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.local:function:0",
+        ],
+        "ruleId": "syntax.clojure.unique-local-or-referred-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.clj",
+      "id": "edge:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%2523app.execute%3Afunction%3A0:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%2523app.local%3Afunction%3A0:calls:6:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+      "referenceName": "local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.execute:function:0",
+      "targetId": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.local:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.clj:src%2Fmodel.clj%23model.Point:type:0",
+        ],
+        "resolutionPath": [
+          "src/app.clj",
+          "src/model.clj",
+        ],
+        "ruleId": "syntax.clojure.unique-type-hint-parameter",
+        "stage": "module",
+      },
+      "filePath": "src/app.clj",
+      "id": "edge:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%2523app.execute%3Afunction%3A0:symbol%3Asrc%252Fmodel.clj%3Asrc%252Fmodel.clj%2523model.Point%3Atype%3A0:accepts:3:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.execute:function:0",
+      "targetId": "symbol:src%2Fmodel.clj:src%2Fmodel.clj%23model.Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.clj:src%2Fmodel.clj%23model.Point:type:0",
+        ],
+        "resolutionPath": [
+          "src/app.clj",
+          "src/model.clj",
+        ],
+        "ruleId": "syntax.clojure.unique-record-constructor",
+        "stage": "module",
+      },
+      "filePath": "src/app.clj",
+      "id": "edge:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%2523app.execute%3Afunction%3A0:symbol%3Asrc%252Fmodel.clj%3Asrc%252Fmodel.clj%2523model.Point%3Atype%3A0:instantiates:7:3",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 7,
+        },
+        "start": {
+          "column": 3,
+          "line": 7,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.execute:function:0",
+      "targetId": "symbol:src%2Fmodel.clj:src%2Fmodel.clj%23model.Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.clj:src%2Fmodel.clj%23model.Point:type:0",
+        ],
+        "resolutionPath": [
+          "src/app.clj",
+          "src/model.clj",
+        ],
+        "ruleId": "syntax.clojure.unique-type-hint-return",
+        "stage": "module",
+      },
+      "filePath": "src/app.clj",
+      "id": "edge:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%2523app.execute%3Afunction%3A0:symbol%3Asrc%252Fmodel.clj%3Asrc%252Fmodel.clj%2523model.Point%3Atype%3A0:returns:3:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.execute:function:0",
+      "targetId": "symbol:src%2Fmodel.clj:src%2Fmodel.clj%23model.Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.clj:src%2Fapi.clj%23api:class:0",
+        ],
+        "resolutionPath": [
+          "src/app.clj",
+          "src/api.clj",
+        ],
+        "ruleId": "module.clojure.explicit-require.unique-namespace",
+        "stage": "module",
+      },
+      "filePath": "src/app.clj",
+      "id": "edge:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%3Afile%3A0:symbol%3Asrc%252Fapi.clj%3Asrc%252Fapi.clj%2523api%3Aclass%3A0:imports:1:19",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 1,
+        },
+        "start": {
+          "column": 19,
+          "line": 1,
+        },
+      },
+      "referenceName": "api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.clj:src%2Fapp.clj:file:0",
+      "targetId": "symbol:src%2Fapi.clj:src%2Fapi.clj%23api:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.clj:src%2Fapi.clj%23api:class:0",
+        ],
+        "resolutionPath": [
+          "src/app.clj",
+          "src/api.clj",
+        ],
+        "ruleId": "module.clojure.explicit-require.unique-namespace",
+        "stage": "module",
+      },
+      "filePath": "src/app.clj",
+      "id": "edge:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%3Afile%3A0:symbol%3Asrc%252Fapi.clj%3Asrc%252Fapi.clj%2523api%3Aclass%3A0:imports:1:33",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 54,
+          "line": 1,
+        },
+        "start": {
+          "column": 33,
+          "line": 1,
+        },
+      },
+      "referenceName": "api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.clj:src%2Fapp.clj:file:0",
+      "targetId": "symbol:src%2Fapi.clj:src%2Fapi.clj%23api:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.clj:src%2Fapp.clj%23app:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.clj",
+      "id": "edge:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%3Afile%3A0:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%2523app%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 87,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "app",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.clj:src%2Fapp.clj:file:0",
+      "targetId": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.clj:src%2Fmodel.clj%23model:class:0",
+        ],
+        "resolutionPath": [
+          "src/app.clj",
+          "src/model.clj",
+        ],
+        "ruleId": "module.clojure.explicit-require.unique-namespace",
+        "stage": "module",
+      },
+      "filePath": "src/app.clj",
+      "id": "edge:symbol%3Asrc%252Fapp.clj%3Asrc%252Fapp.clj%3Afile%3A0:symbol%3Asrc%252Fmodel.clj%3Asrc%252Fmodel.clj%2523model%3Aclass%3A0:imports:1:55",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 85,
+          "line": 1,
+        },
+        "start": {
+          "column": 55,
+          "line": 1,
+        },
+      },
+      "referenceName": "model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.clj:src%2Fapp.clj:file:0",
+      "targetId": "symbol:src%2Fmodel.clj:src%2Fmodel.clj%23model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcontract.clj:src%2Fcontract.clj%23contract.Contract:interface:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/contract.clj",
+      "id": "edge:symbol%3Asrc%252Fcontract.clj%3Asrc%252Fcontract.clj%2523contract%3Aclass%3A0:symbol%3Asrc%252Fcontract.clj%3Asrc%252Fcontract.clj%2523contract.Contract%3Ainterface%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcontract.clj:src%2Fcontract.clj%23contract:class:0",
+      "targetId": "symbol:src%2Fcontract.clj:src%2Fcontract.clj%23contract.Contract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcontract.clj:src%2Fcontract.clj%23contract:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/contract.clj",
+      "id": "edge:symbol%3Asrc%252Fcontract.clj%3Asrc%252Fcontract.clj%3Afile%3A0:symbol%3Asrc%252Fcontract.clj%3Asrc%252Fcontract.clj%2523contract%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcontract.clj:src%2Fcontract.clj:file:0",
+      "targetId": "symbol:src%2Fcontract.clj:src%2Fcontract.clj%23contract:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.clj:src%2Fmodel.clj%23model.Point:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/model.clj",
+      "id": "edge:symbol%3Asrc%252Fmodel.clj%3Asrc%252Fmodel.clj%2523model%3Aclass%3A0:symbol%3Asrc%252Fmodel.clj%3Asrc%252Fmodel.clj%2523model.Point%3Atype%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmodel.clj:src%2Fmodel.clj%23model:class:0",
+      "targetId": "symbol:src%2Fmodel.clj:src%2Fmodel.clj%23model.Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcontract.clj:src%2Fcontract.clj%23contract.Contract:interface:0",
+        ],
+        "resolutionPath": [
+          "src/model.clj",
+          "src/contract.clj",
+        ],
+        "ruleId": "syntax.clojure.unique-record-protocol",
+        "stage": "module",
+      },
+      "filePath": "src/model.clj",
+      "id": "edge:symbol%3Asrc%252Fmodel.clj%3Asrc%252Fmodel.clj%2523model.Point%3Atype%3A0:symbol%3Asrc%252Fcontract.clj%3Asrc%252Fcontract.clj%2523contract.Contract%3Ainterface%3A0:implements:2:1",
+      "kind": "implements",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmodel.clj:src%2Fmodel.clj%23model.Point:type:0",
+      "targetId": "symbol:src%2Fcontract.clj:src%2Fcontract.clj%23contract.Contract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcontract.clj:src%2Fcontract.clj%23contract:class:0",
+        ],
+        "resolutionPath": [
+          "src/model.clj",
+          "src/contract.clj",
+        ],
+        "ruleId": "module.clojure.explicit-require.unique-namespace",
+        "stage": "module",
+      },
+      "filePath": "src/model.clj",
+      "id": "edge:symbol%3Asrc%252Fmodel.clj%3Asrc%252Fmodel.clj%3Afile%3A0:symbol%3Asrc%252Fcontract.clj%3Asrc%252Fcontract.clj%2523contract%3Aclass%3A0:imports:1:21",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 49,
+          "line": 1,
+        },
+        "start": {
+          "column": 21,
+          "line": 1,
+        },
+      },
+      "referenceName": "contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmodel.clj:src%2Fmodel.clj:file:0",
+      "targetId": "symbol:src%2Fcontract.clj:src%2Fcontract.clj%23contract:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.clj:src%2Fmodel.clj%23model:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/model.clj",
+      "id": "edge:symbol%3Asrc%252Fmodel.clj%3Asrc%252Fmodel.clj%3Afile%3A0:symbol%3Asrc%252Fmodel.clj%3Asrc%252Fmodel.clj%2523model%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmodel.clj:src%2Fmodel.clj:file:0",
+      "targetId": "symbol:src%2Fmodel.clj:src%2Fmodel.clj%23model:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "ed27958caada19360b6b2a864b07330dfac84f3ef425c746e82683233ba2212e",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "clojure",
+      "path": "src/api.clj",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "d4b2eb91731d7ddc456c67c6b69c99fb12f88c318d7f2e12aac69a79aafe520f",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "clojure",
+      "path": "src/app.clj",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "3722808709d698435f7d85c8836566c8569b424124f001c147a71340dfa7960f",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "clojure",
+      "path": "src/contract.clj",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "03935fe4b1d947a7f6bd49b360cd962f60624a1806b11a3189da0246c694eab2",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "clojure",
+      "path": "src/model.clj",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.clj",
+      "id": "symbol:src%2Fapi.clj:src%2Fapi.clj%23api.build:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "build",
+      "qualifiedName": "src/api.clj#api.build",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.clj",
+      "id": "symbol:src%2Fapi.clj:src%2Fapi.clj%23api.helper:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "src/api.clj#api.helper",
+      "range": {
+        "end": {
+          "column": 28,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.clj",
+      "id": "symbol:src%2Fapi.clj:src%2Fapi.clj%23api:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "api",
+      "qualifiedName": "src/api.clj#api",
+      "range": {
+        "end": {
+          "column": 9,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.clj",
+      "id": "symbol:src%2Fapi.clj:src%2Fapi.clj:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "api.clj",
+      "qualifiedName": "src/api.clj",
+      "range": {
+        "end": {
+          "column": 28,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.clj",
+      "id": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.execute:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "execute",
+      "qualifiedName": "src/app.clj#app.execute",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.clj",
+      "id": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app.local:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "local",
+      "qualifiedName": "src/app.clj#app.local",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.clj",
+      "id": "symbol:src%2Fapp.clj:src%2Fapp.clj%23app:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "app",
+      "qualifiedName": "src/app.clj#app",
+      "range": {
+        "end": {
+          "column": 87,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.clj",
+      "id": "symbol:src%2Fapp.clj:src%2Fapp.clj:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "app.clj",
+      "qualifiedName": "src/app.clj",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/contract.clj",
+      "id": "symbol:src%2Fcontract.clj:src%2Fcontract.clj%23contract.Contract:interface:0",
+      "isExported": true,
+      "kind": "interface",
+      "name": "Contract",
+      "qualifiedName": "src/contract.clj#contract.Contract",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/contract.clj",
+      "id": "symbol:src%2Fcontract.clj:src%2Fcontract.clj%23contract:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "contract",
+      "qualifiedName": "src/contract.clj#contract",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/contract.clj",
+      "id": "symbol:src%2Fcontract.clj:src%2Fcontract.clj:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "contract.clj",
+      "qualifiedName": "src/contract.clj",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/model.clj",
+      "id": "symbol:src%2Fmodel.clj:src%2Fmodel.clj%23model.Point:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "Point",
+      "qualifiedName": "src/model.clj#model.Point",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/model.clj",
+      "id": "symbol:src%2Fmodel.clj:src%2Fmodel.clj%23model:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "model",
+      "qualifiedName": "src/model.clj#model",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/model.clj",
+      "id": "symbol:src%2Fmodel.clj:src%2Fmodel.clj:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "model.clj",
+      "qualifiedName": "src/model.clj",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`beam and Nim resolver output parity before move > 'elixir' preserves local relations while rejecting consumer-only targets 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.ex",
+      "id": "edge:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%2523App%3Aclass%3A0:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%2523App.execute%3Amethod%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "execute",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App:class:0",
+      "targetId": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute_local:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.ex",
+      "id": "edge:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%2523App%3Aclass%3A0:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%2523App.execute_local%3Amethod%3A0:contains:11:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 13,
+        },
+        "start": {
+          "column": 1,
+          "line": 11,
+        },
+      },
+      "referenceName": "execute_local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App:class:0",
+      "targetId": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute_local:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute_local:method:0",
+        ],
+        "ruleId": "syntax.elixir.unique-same-module-function-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.ex",
+      "id": "edge:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%2523App.execute%3Amethod%3A0:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%2523App.execute_local%3Amethod%3A0:calls:8:5",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 8,
+        },
+        "start": {
+          "column": 5,
+          "line": 8,
+        },
+      },
+      "referenceName": "execute_local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute:method:0",
+      "targetId": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute_local:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.ex:src%2Fapp.ex%23App:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.ex",
+      "id": "edge:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%3Afile%3A0:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%2523App%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 14,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "App",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.ex:src%2Fapp.ex:file:0",
+      "targetId": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "3f15fe8ef52dc1a8f645c5f501a1d7490321aa92ae0bb2c3226e97455f0a0ec9",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "elixir",
+      "path": "src/app.ex",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.ex",
+      "id": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "execute",
+      "qualifiedName": "src/app.ex#App.execute",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.ex",
+      "id": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute_local:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "execute_local",
+      "qualifiedName": "src/app.ex#App.execute_local",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 13,
+        },
+        "start": {
+          "column": 1,
+          "line": 11,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.ex",
+      "id": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "App",
+      "qualifiedName": "src/app.ex#App",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 14,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.ex",
+      "id": "symbol:src%2Fapp.ex:src%2Fapp.ex:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "app.ex",
+      "qualifiedName": "src/app.ex",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 14,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`beam and Nim resolver output parity before move > 'elixir' preserves non-empty cross-file relations and evidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.ex:src%2Fapi.ex%23Api.build:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.ex",
+      "id": "edge:symbol%3Asrc%252Fapi.ex%3Asrc%252Fapi.ex%2523Api%3Aclass%3A0:symbol%3Asrc%252Fapi.ex%3Asrc%252Fapi.ex%2523Api.build%3Amethod%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "build",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ex:src%2Fapi.ex%23Api:class:0",
+      "targetId": "symbol:src%2Fapi.ex:src%2Fapi.ex%23Api.build:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+        ],
+        "resolutionPath": [
+          "src/api.ex",
+          "src/model.ex",
+        ],
+        "ruleId": "syntax.elixir.unique-spec-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/api.ex",
+      "id": "edge:symbol%3Asrc%252Fapi.ex%3Asrc%252Fapi.ex%2523Api.build%3Amethod%3A0:symbol%3Asrc%252Fmodel.ex%3Asrc%252Fmodel.ex%2523Model.struct%3Atype%3A0:accepts:4:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ex:src%2Fapi.ex%23Api.build:method:0",
+      "targetId": "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+        ],
+        "resolutionPath": [
+          "src/api.ex",
+          "src/model.ex",
+        ],
+        "ruleId": "syntax.elixir.unique-spec-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/api.ex",
+      "id": "edge:symbol%3Asrc%252Fapi.ex%3Asrc%252Fapi.ex%2523Api.build%3Amethod%3A0:symbol%3Asrc%252Fmodel.ex%3Asrc%252Fmodel.ex%2523Model.struct%3Atype%3A0:returns:4:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ex:src%2Fapi.ex%23Api.build:method:0",
+      "targetId": "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.ex:src%2Fapi.ex%23Api:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.ex",
+      "id": "edge:symbol%3Asrc%252Fapi.ex%3Asrc%252Fapi.ex%3Afile%3A0:symbol%3Asrc%252Fapi.ex%3Asrc%252Fapi.ex%2523Api%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ex:src%2Fapi.ex:file:0",
+      "targetId": "symbol:src%2Fapi.ex:src%2Fapi.ex%23Api:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.ex:src%2Fmodel.ex:file:0",
+        ],
+        "resolutionPath": [
+          "src/api.ex",
+          "src/model.ex",
+        ],
+        "ruleId": "module.elixir.explicit-alias.unique-module",
+        "stage": "module",
+      },
+      "filePath": "src/api.ex",
+      "id": "edge:symbol%3Asrc%252Fapi.ex%3Asrc%252Fapi.ex%3Afile%3A0:symbol%3Asrc%252Fmodel.ex%3Asrc%252Fmodel.ex%3Afile%3A0:imports:2:3",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 2,
+        },
+        "start": {
+          "column": 3,
+          "line": 2,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ex:src%2Fapi.ex:file:0",
+      "targetId": "symbol:src%2Fmodel.ex:src%2Fmodel.ex:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.ex",
+      "id": "edge:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%2523App%3Aclass%3A0:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%2523App.execute%3Amethod%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "execute",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App:class:0",
+      "targetId": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute_local:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.ex",
+      "id": "edge:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%2523App%3Aclass%3A0:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%2523App.execute_local%3Amethod%3A0:contains:11:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 13,
+        },
+        "start": {
+          "column": 1,
+          "line": 11,
+        },
+      },
+      "referenceName": "execute_local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App:class:0",
+      "targetId": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute_local:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.ex:src%2Fapi.ex%23Api.build:method:0",
+        ],
+        "resolutionPath": [
+          "src/app.ex",
+          "src/api.ex",
+        ],
+        "ruleId": "module.elixir.unique-qualified-function-call",
+        "stage": "module",
+      },
+      "filePath": "src/app.ex",
+      "id": "edge:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%2523App.execute%3Amethod%3A0:symbol%3Asrc%252Fapi.ex%3Asrc%252Fapi.ex%2523Api.build%3Amethod%3A0:calls:7:5",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 7,
+        },
+        "start": {
+          "column": 5,
+          "line": 7,
+        },
+      },
+      "referenceName": "build",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute:method:0",
+      "targetId": "symbol:src%2Fapi.ex:src%2Fapi.ex%23Api.build:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute_local:method:0",
+        ],
+        "ruleId": "syntax.elixir.unique-same-module-function-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.ex",
+      "id": "edge:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%2523App.execute%3Amethod%3A0:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%2523App.execute_local%3Amethod%3A0:calls:8:5",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 8,
+        },
+        "start": {
+          "column": 5,
+          "line": 8,
+        },
+      },
+      "referenceName": "execute_local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute:method:0",
+      "targetId": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute_local:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+        ],
+        "resolutionPath": [
+          "src/app.ex",
+          "src/model.ex",
+        ],
+        "ruleId": "syntax.elixir.unique-spec-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/app.ex",
+      "id": "edge:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%2523App.execute%3Amethod%3A0:symbol%3Asrc%252Fmodel.ex%3Asrc%252Fmodel.ex%2523Model.struct%3Atype%3A0:accepts:5:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute:method:0",
+      "targetId": "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+        ],
+        "resolutionPath": [
+          "src/app.ex",
+          "src/model.ex",
+        ],
+        "ruleId": "syntax.elixir.unique-struct-creation",
+        "stage": "module",
+      },
+      "filePath": "src/app.ex",
+      "id": "edge:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%2523App.execute%3Amethod%3A0:symbol%3Asrc%252Fmodel.ex%3Asrc%252Fmodel.ex%2523Model.struct%3Atype%3A0:instantiates:6:15",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 35,
+          "line": 6,
+        },
+        "start": {
+          "column": 15,
+          "line": 6,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute:method:0",
+      "targetId": "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+        ],
+        "resolutionPath": [
+          "src/app.ex",
+          "src/model.ex",
+        ],
+        "ruleId": "syntax.elixir.unique-spec-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/app.ex",
+      "id": "edge:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%2523App.execute%3Amethod%3A0:symbol%3Asrc%252Fmodel.ex%3Asrc%252Fmodel.ex%2523Model.struct%3Atype%3A0:returns:5:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute:method:0",
+      "targetId": "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+        ],
+        "resolutionPath": [
+          "src/app.ex",
+          "src/model.ex",
+        ],
+        "ruleId": "syntax.elixir.unique-spec-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/app.ex",
+      "id": "edge:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%2523App.execute_local%3Amethod%3A0:symbol%3Asrc%252Fmodel.ex%3Asrc%252Fmodel.ex%2523Model.struct%3Atype%3A0:accepts:11:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 13,
+        },
+        "start": {
+          "column": 1,
+          "line": 11,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute_local:method:0",
+      "targetId": "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+        ],
+        "resolutionPath": [
+          "src/app.ex",
+          "src/model.ex",
+        ],
+        "ruleId": "syntax.elixir.unique-spec-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/app.ex",
+      "id": "edge:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%2523App.execute_local%3Amethod%3A0:symbol%3Asrc%252Fmodel.ex%3Asrc%252Fmodel.ex%2523Model.struct%3Atype%3A0:returns:11:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 13,
+        },
+        "start": {
+          "column": 1,
+          "line": 11,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute_local:method:0",
+      "targetId": "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.ex:src%2Fapi.ex:file:0",
+        ],
+        "resolutionPath": [
+          "src/app.ex",
+          "src/api.ex",
+        ],
+        "ruleId": "module.elixir.explicit-alias.unique-module",
+        "stage": "module",
+      },
+      "filePath": "src/app.ex",
+      "id": "edge:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%3Afile%3A0:symbol%3Asrc%252Fapi.ex%3Asrc%252Fapi.ex%3Afile%3A0:imports:2:3",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 2,
+        },
+        "start": {
+          "column": 3,
+          "line": 2,
+        },
+      },
+      "referenceName": "Api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.ex:src%2Fapp.ex:file:0",
+      "targetId": "symbol:src%2Fapi.ex:src%2Fapi.ex:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.ex:src%2Fapp.ex%23App:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.ex",
+      "id": "edge:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%3Afile%3A0:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%2523App%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 14,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "App",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.ex:src%2Fapp.ex:file:0",
+      "targetId": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.ex:src%2Fmodel.ex:file:0",
+        ],
+        "resolutionPath": [
+          "src/app.ex",
+          "src/model.ex",
+        ],
+        "ruleId": "module.elixir.explicit-alias.unique-module",
+        "stage": "module",
+      },
+      "filePath": "src/app.ex",
+      "id": "edge:symbol%3Asrc%252Fapp.ex%3Asrc%252Fapp.ex%3Afile%3A0:symbol%3Asrc%252Fmodel.ex%3Asrc%252Fmodel.ex%3Afile%3A0:imports:3:3",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 3,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.ex:src%2Fapp.ex:file:0",
+      "targetId": "symbol:src%2Fmodel.ex:src%2Fmodel.ex:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcontract.ex:src%2Fcontract.ex%23Contract:interface:0",
+        ],
+        "ruleId": "syntax.elixir.unique-behaviour-or-protocol-implementation",
+        "stage": "syntax",
+      },
+      "filePath": "src/contract.ex",
+      "id": "edge:symbol%3Asrc%252Fcontract.ex%3Asrc%252Fcontract.ex%2523Service%3Aclass%3A0:symbol%3Asrc%252Fcontract.ex%3Asrc%252Fcontract.ex%2523Contract%3Ainterface%3A0:implements:5:3",
+      "kind": "implements",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcontract.ex:src%2Fcontract.ex%23Service:class:0",
+      "targetId": "symbol:src%2Fcontract.ex:src%2Fcontract.ex%23Contract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcontract.ex:src%2Fcontract.ex%23Service.run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/contract.ex",
+      "id": "edge:symbol%3Asrc%252Fcontract.ex%3Asrc%252Fcontract.ex%2523Service%3Aclass%3A0:symbol%3Asrc%252Fcontract.ex%3Asrc%252Fcontract.ex%2523Service.run%3Amethod%3A0:contains:7:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 7,
+        },
+        "start": {
+          "column": 3,
+          "line": 7,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcontract.ex:src%2Fcontract.ex%23Service:class:0",
+      "targetId": "symbol:src%2Fcontract.ex:src%2Fcontract.ex%23Service.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+        ],
+        "resolutionPath": [
+          "src/contract.ex",
+          "src/model.ex",
+        ],
+        "ruleId": "syntax.elixir.unique-spec-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/contract.ex",
+      "id": "edge:symbol%3Asrc%252Fcontract.ex%3Asrc%252Fcontract.ex%2523Service.run%3Amethod%3A0:symbol%3Asrc%252Fmodel.ex%3Asrc%252Fmodel.ex%2523Model.struct%3Atype%3A0:accepts:7:3",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 7,
+        },
+        "start": {
+          "column": 3,
+          "line": 7,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcontract.ex:src%2Fcontract.ex%23Service.run:method:0",
+      "targetId": "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+        ],
+        "resolutionPath": [
+          "src/contract.ex",
+          "src/model.ex",
+        ],
+        "ruleId": "syntax.elixir.unique-spec-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/contract.ex",
+      "id": "edge:symbol%3Asrc%252Fcontract.ex%3Asrc%252Fcontract.ex%2523Service.run%3Amethod%3A0:symbol%3Asrc%252Fmodel.ex%3Asrc%252Fmodel.ex%2523Model.struct%3Atype%3A0:returns:7:3",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 7,
+        },
+        "start": {
+          "column": 3,
+          "line": 7,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcontract.ex:src%2Fcontract.ex%23Service.run:method:0",
+      "targetId": "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcontract.ex:src%2Fcontract.ex%23Contract:interface:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/contract.ex",
+      "id": "edge:symbol%3Asrc%252Fcontract.ex%3Asrc%252Fcontract.ex%3Afile%3A0:symbol%3Asrc%252Fcontract.ex%3Asrc%252Fcontract.ex%2523Contract%3Ainterface%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcontract.ex:src%2Fcontract.ex:file:0",
+      "targetId": "symbol:src%2Fcontract.ex:src%2Fcontract.ex%23Contract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcontract.ex:src%2Fcontract.ex%23Model.run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/contract.ex",
+      "id": "edge:symbol%3Asrc%252Fcontract.ex%3Asrc%252Fcontract.ex%3Afile%3A0:symbol%3Asrc%252Fcontract.ex%3Asrc%252Fcontract.ex%2523Model.run%3Amethod%3A0:contains:12:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 12,
+        },
+        "start": {
+          "column": 3,
+          "line": 12,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcontract.ex:src%2Fcontract.ex:file:0",
+      "targetId": "symbol:src%2Fcontract.ex:src%2Fcontract.ex%23Model.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcontract.ex:src%2Fcontract.ex%23Service:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/contract.ex",
+      "id": "edge:symbol%3Asrc%252Fcontract.ex%3Asrc%252Fcontract.ex%3Afile%3A0:symbol%3Asrc%252Fcontract.ex%3Asrc%252Fcontract.ex%2523Service%3Aclass%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcontract.ex:src%2Fcontract.ex:file:0",
+      "targetId": "symbol:src%2Fcontract.ex:src%2Fcontract.ex%23Service:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/model.ex",
+      "id": "edge:symbol%3Asrc%252Fmodel.ex%3Asrc%252Fmodel.ex%2523Model%3Aclass%3A0:symbol%3Asrc%252Fmodel.ex%3Asrc%252Fmodel.ex%2523Model.struct%3Atype%3A0:contains:2:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 2,
+        },
+        "start": {
+          "column": 3,
+          "line": 2,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model:class:0",
+      "targetId": "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcontract.ex:src%2Fcontract.ex%23Contract:interface:0",
+        ],
+        "ruleId": "syntax.elixir.unique-behaviour-or-protocol-implementation",
+        "stage": "syntax",
+      },
+      "filePath": "src/contract.ex",
+      "id": "edge:symbol%3Asrc%252Fmodel.ex%3Asrc%252Fmodel.ex%2523Model.struct%3Atype%3A0:symbol%3Asrc%252Fcontract.ex%3Asrc%252Fcontract.ex%2523Contract%3Ainterface%3A0:implements:11:1",
+      "kind": "implements",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 11,
+        },
+        "start": {
+          "column": 1,
+          "line": 11,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+      "targetId": "symbol:src%2Fcontract.ex:src%2Fcontract.ex%23Contract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/model.ex",
+      "id": "edge:symbol%3Asrc%252Fmodel.ex%3Asrc%252Fmodel.ex%3Afile%3A0:symbol%3Asrc%252Fmodel.ex%3Asrc%252Fmodel.ex%2523Model%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmodel.ex:src%2Fmodel.ex:file:0",
+      "targetId": "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "fdb0cb4e46d4fbeb42bae666c4695976bf352d8d9f585059b51d3f7050ef4e1b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "elixir",
+      "path": "src/api.ex",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "3f15fe8ef52dc1a8f645c5f501a1d7490321aa92ae0bb2c3226e97455f0a0ec9",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "elixir",
+      "path": "src/app.ex",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "72313740a8ef4c70cb87e1a7bfc07a3b1dd699b37ac63ca2395c2035ae76642e",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "elixir",
+      "path": "src/contract.ex",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "78afdaa5f00c98b82417945a5c251a8375a661f98b07d852993f81cad7ecd59a",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "elixir",
+      "path": "src/model.ex",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.ex",
+      "id": "symbol:src%2Fapi.ex:src%2Fapi.ex%23Api.build:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "build",
+      "qualifiedName": "src/api.ex#Api.build",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.ex",
+      "id": "symbol:src%2Fapi.ex:src%2Fapi.ex%23Api:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Api",
+      "qualifiedName": "src/api.ex#Api",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.ex",
+      "id": "symbol:src%2Fapi.ex:src%2Fapi.ex:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "api.ex",
+      "qualifiedName": "src/api.ex",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.ex",
+      "id": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "execute",
+      "qualifiedName": "src/app.ex#App.execute",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.ex",
+      "id": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App.execute_local:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "execute_local",
+      "qualifiedName": "src/app.ex#App.execute_local",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 13,
+        },
+        "start": {
+          "column": 1,
+          "line": 11,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.ex",
+      "id": "symbol:src%2Fapp.ex:src%2Fapp.ex%23App:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "App",
+      "qualifiedName": "src/app.ex#App",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 14,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.ex",
+      "id": "symbol:src%2Fapp.ex:src%2Fapp.ex:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "app.ex",
+      "qualifiedName": "src/app.ex",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 14,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/contract.ex",
+      "id": "symbol:src%2Fcontract.ex:src%2Fcontract.ex%23Contract:interface:0",
+      "isExported": true,
+      "kind": "interface",
+      "name": "Contract",
+      "qualifiedName": "src/contract.ex#Contract",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/contract.ex",
+      "id": "symbol:src%2Fcontract.ex:src%2Fcontract.ex%23Model.run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "src/contract.ex#Model.run",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 12,
+        },
+        "start": {
+          "column": 3,
+          "line": 12,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/contract.ex",
+      "id": "symbol:src%2Fcontract.ex:src%2Fcontract.ex%23Service.run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "src/contract.ex#Service.run",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 7,
+        },
+        "start": {
+          "column": 3,
+          "line": 7,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/contract.ex",
+      "id": "symbol:src%2Fcontract.ex:src%2Fcontract.ex%23Service:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Service",
+      "qualifiedName": "src/contract.ex#Service",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/contract.ex",
+      "id": "symbol:src%2Fcontract.ex:src%2Fcontract.ex:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "contract.ex",
+      "qualifiedName": "src/contract.ex",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 15,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/model.ex",
+      "id": "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model.struct:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "Model",
+      "qualifiedName": "src/model.ex#Model.struct",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 2,
+        },
+        "start": {
+          "column": 3,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/model.ex",
+      "id": "symbol:src%2Fmodel.ex:src%2Fmodel.ex%23Model:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Model",
+      "qualifiedName": "src/model.ex#Model",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/model.ex",
+      "id": "symbol:src%2Fmodel.ex:src%2Fmodel.ex:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "model.ex",
+      "qualifiedName": "src/model.ex",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`beam and Nim resolver output parity before move > 'erlang' preserves local relations while rejecting consumer-only targets 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.execute%2F1:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.erl",
+      "id": "edge:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%2523app%3Aclass%3A0:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%2523app.execute%252F1%3Amethod%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 10,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "execute/1",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app:class:0",
+      "targetId": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.execute%2F1:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.local%2F0:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.erl",
+      "id": "edge:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%2523app%3Aclass%3A0:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%2523app.local%252F0%3Amethod%3A0:contains:10:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 10,
+        },
+      },
+      "referenceName": "local/0",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app:class:0",
+      "targetId": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.local%2F0:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.local%2F0:method:0",
+        ],
+        "ruleId": "syntax.erlang.unique-local-or-imported-function-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.erl",
+      "id": "edge:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%2523app.execute%252F1%3Amethod%3A0:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%2523app.local%252F0%3Amethod%3A0:calls:9:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 10,
+          "line": 9,
+        },
+        "start": {
+          "column": 3,
+          "line": 9,
+        },
+      },
+      "referenceName": "local/0",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.execute%2F1:method:0",
+      "targetId": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.local%2F0:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.erl:src%2Fapp.erl%23app:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.erl",
+      "id": "edge:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%3Afile%3A0:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%2523app%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "app",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.erl:src%2Fapp.erl:file:0",
+      "targetId": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "d350c559f576473542bd3d4f26515539866ffaeb6406aa7f9292feefb15e9f9b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "erlang",
+      "path": "src/app.erl",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.erl",
+      "id": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.execute%2F1:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "execute/1",
+      "qualifiedName": "src/app.erl#app.execute/1",
+      "range": {
+        "end": {
+          "column": 10,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.erl",
+      "id": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.local%2F0:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "local/0",
+      "qualifiedName": "src/app.erl#app.local/0",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 10,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.erl",
+      "id": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "app",
+      "qualifiedName": "src/app.erl#app",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.erl",
+      "id": "symbol:src%2Fapp.erl:src%2Fapp.erl:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "app.erl",
+      "qualifiedName": "src/app.erl",
+      "range": {
+        "end": {
+          "column": 15,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`beam and Nim resolver output parity before move > 'erlang' preserves non-empty cross-file relations and evidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.helper%2F1:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.erl",
+      "id": "edge:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%2523api%3Aclass%3A0:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%2523api.helper%252F1%3Amethod%3A0:contains:7:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "helper/1",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api:class:0",
+      "targetId": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.helper%2F1:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.erl",
+      "id": "edge:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%2523api%3Aclass%3A0:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%2523api.point%3Atype%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api:class:0",
+      "targetId": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:1",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.erl",
+      "id": "edge:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%2523api%3Aclass%3A0:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%2523api.point%3Atype%3A1:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api:class:0",
+      "targetId": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:1",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:1",
+        ],
+        "ruleId": "syntax.erlang.unique-spec-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.erl",
+      "id": "edge:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%2523api.helper%252F1%3Amethod%3A0:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%2523api.point%3Atype%3A1:accepts:7:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.helper%2F1:method:0",
+      "targetId": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:1",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:1",
+        ],
+        "ruleId": "syntax.erlang.unique-spec-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.erl",
+      "id": "edge:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%2523api.helper%252F1%3Amethod%3A0:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%2523api.point%3Atype%3A1:returns:7:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.helper%2F1:method:0",
+      "targetId": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:1",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.erl:src%2Fapi.erl%23api:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.erl",
+      "id": "edge:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%3Afile%3A0:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%2523api%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.erl:src%2Fapi.erl:file:0",
+      "targetId": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.execute%2F1:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.erl",
+      "id": "edge:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%2523app%3Aclass%3A0:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%2523app.execute%252F1%3Amethod%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 10,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "execute/1",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app:class:0",
+      "targetId": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.execute%2F1:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.local%2F0:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.erl",
+      "id": "edge:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%2523app%3Aclass%3A0:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%2523app.local%252F0%3Amethod%3A0:contains:10:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 10,
+        },
+      },
+      "referenceName": "local/0",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app:class:0",
+      "targetId": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.local%2F0:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.helper%2F1:method:0",
+        ],
+        "resolutionPath": [
+          "src/app.erl",
+          "src/api.erl",
+        ],
+        "ruleId": "module.erlang.unique-qualified-function-call",
+        "stage": "module",
+      },
+      "filePath": "src/app.erl",
+      "id": "edge:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%2523app.execute%252F1%3Amethod%3A0:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%2523api.helper%252F1%3Amethod%3A0:calls:7:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 7,
+        },
+        "start": {
+          "column": 3,
+          "line": 7,
+        },
+      },
+      "referenceName": "helper/1",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.execute%2F1:method:0",
+      "targetId": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.helper%2F1:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.helper%2F1:method:0",
+        ],
+        "resolutionPath": [
+          "src/app.erl",
+          "src/api.erl",
+        ],
+        "ruleId": "syntax.erlang.unique-local-or-imported-function-call",
+        "stage": "module",
+      },
+      "filePath": "src/app.erl",
+      "id": "edge:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%2523app.execute%252F1%3Amethod%3A0:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%2523api.helper%252F1%3Amethod%3A0:calls:8:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 8,
+        },
+        "start": {
+          "column": 3,
+          "line": 8,
+        },
+      },
+      "referenceName": "helper/1",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.execute%2F1:method:0",
+      "targetId": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.helper%2F1:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:0",
+        ],
+        "resolutionPath": [
+          "src/app.erl",
+          "src/api.erl",
+        ],
+        "ruleId": "syntax.erlang.unique-record-creation",
+        "stage": "module",
+      },
+      "filePath": "src/app.erl",
+      "id": "edge:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%2523app.execute%252F1%3Amethod%3A0:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%2523api.point%3Atype%3A0:instantiates:6:11",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 6,
+        },
+        "start": {
+          "column": 11,
+          "line": 6,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.execute%2F1:method:0",
+      "targetId": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:1",
+        ],
+        "resolutionPath": [
+          "src/app.erl",
+          "src/api.erl",
+        ],
+        "ruleId": "syntax.erlang.unique-spec-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/app.erl",
+      "id": "edge:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%2523app.execute%252F1%3Amethod%3A0:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%2523api.point%3Atype%3A1:accepts:5:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 10,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.execute%2F1:method:0",
+      "targetId": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:1",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:1",
+        ],
+        "resolutionPath": [
+          "src/app.erl",
+          "src/api.erl",
+        ],
+        "ruleId": "syntax.erlang.unique-spec-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/app.erl",
+      "id": "edge:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%2523app.execute%252F1%3Amethod%3A0:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%2523api.point%3Atype%3A1:returns:5:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 10,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.execute%2F1:method:0",
+      "targetId": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:1",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.local%2F0:method:0",
+        ],
+        "ruleId": "syntax.erlang.unique-local-or-imported-function-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.erl",
+      "id": "edge:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%2523app.execute%252F1%3Amethod%3A0:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%2523app.local%252F0%3Amethod%3A0:calls:9:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 10,
+          "line": 9,
+        },
+        "start": {
+          "column": 3,
+          "line": 9,
+        },
+      },
+      "referenceName": "local/0",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.execute%2F1:method:0",
+      "targetId": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.local%2F0:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.erl:src%2Fapi.erl:file:0",
+        ],
+        "resolutionPath": [
+          "src/app.erl",
+          "src/api.erl",
+        ],
+        "ruleId": "module.erlang.explicit-import.unique-module",
+        "stage": "module",
+      },
+      "filePath": "src/app.erl",
+      "id": "edge:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%3Afile%3A0:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%3Afile%3A0:imports:2:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.erl:src%2Fapp.erl:file:0",
+      "targetId": "symbol:src%2Fapi.erl:src%2Fapi.erl:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.erl:src%2Fapp.erl%23app:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.erl",
+      "id": "edge:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%3Afile%3A0:symbol%3Asrc%252Fapp.erl%3Asrc%252Fapp.erl%2523app%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "app",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.erl:src%2Fapp.erl:file:0",
+      "targetId": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcontract.erl:src%2Fcontract.erl%23contract.run%2F1:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/contract.erl",
+      "id": "edge:symbol%3Asrc%252Fcontract.erl%3Asrc%252Fcontract.erl%2523contract%3Aclass%3A0:symbol%3Asrc%252Fcontract.erl%3Asrc%252Fcontract.erl%2523contract.run%252F1%3Amethod%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "run/1",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcontract.erl:src%2Fcontract.erl%23contract:class:0",
+      "targetId": "symbol:src%2Fcontract.erl:src%2Fcontract.erl%23contract.run%2F1:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:1",
+        ],
+        "resolutionPath": [
+          "src/contract.erl",
+          "src/api.erl",
+        ],
+        "ruleId": "syntax.erlang.unique-spec-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/contract.erl",
+      "id": "edge:symbol%3Asrc%252Fcontract.erl%3Asrc%252Fcontract.erl%2523contract.run%252F1%3Amethod%3A0:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%2523api.point%3Atype%3A1:accepts:3:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcontract.erl:src%2Fcontract.erl%23contract.run%2F1:method:0",
+      "targetId": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:1",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:1",
+        ],
+        "resolutionPath": [
+          "src/contract.erl",
+          "src/api.erl",
+        ],
+        "ruleId": "syntax.erlang.unique-spec-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/contract.erl",
+      "id": "edge:symbol%3Asrc%252Fcontract.erl%3Asrc%252Fcontract.erl%2523contract.run%252F1%3Amethod%3A0:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%2523api.point%3Atype%3A1:returns:3:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcontract.erl:src%2Fcontract.erl%23contract.run%2F1:method:0",
+      "targetId": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:1",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcontract.erl:src%2Fcontract.erl%23contract:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/contract.erl",
+      "id": "edge:symbol%3Asrc%252Fcontract.erl%3Asrc%252Fcontract.erl%3Afile%3A0:symbol%3Asrc%252Fcontract.erl%3Asrc%252Fcontract.erl%2523contract%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcontract.erl:src%2Fcontract.erl:file:0",
+      "targetId": "symbol:src%2Fcontract.erl:src%2Fcontract.erl%23contract:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcontract.erl:src%2Fcontract.erl%23contract:class:0",
+        ],
+        "resolutionPath": [
+          "src/service.erl",
+          "src/contract.erl",
+        ],
+        "ruleId": "syntax.erlang.unique-behaviour-implementation",
+        "stage": "module",
+      },
+      "filePath": "src/service.erl",
+      "id": "edge:symbol%3Asrc%252Fservice.erl%3Asrc%252Fservice.erl%2523service%3Aclass%3A0:symbol%3Asrc%252Fcontract.erl%3Asrc%252Fcontract.erl%2523contract%3Aclass%3A0:implements:2:1",
+      "kind": "implements",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fservice.erl:src%2Fservice.erl%23service:class:0",
+      "targetId": "symbol:src%2Fcontract.erl:src%2Fcontract.erl%23contract:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fservice.erl:src%2Fservice.erl%23service.run%2F1:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/service.erl",
+      "id": "edge:symbol%3Asrc%252Fservice.erl%3Asrc%252Fservice.erl%2523service%3Aclass%3A0:symbol%3Asrc%252Fservice.erl%3Asrc%252Fservice.erl%2523service.run%252F1%3Amethod%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "run/1",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fservice.erl:src%2Fservice.erl%23service:class:0",
+      "targetId": "symbol:src%2Fservice.erl:src%2Fservice.erl%23service.run%2F1:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:1",
+        ],
+        "resolutionPath": [
+          "src/service.erl",
+          "src/api.erl",
+        ],
+        "ruleId": "syntax.erlang.unique-spec-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/service.erl",
+      "id": "edge:symbol%3Asrc%252Fservice.erl%3Asrc%252Fservice.erl%2523service.run%252F1%3Amethod%3A0:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%2523api.point%3Atype%3A1:accepts:5:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fservice.erl:src%2Fservice.erl%23service.run%2F1:method:0",
+      "targetId": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:1",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:1",
+        ],
+        "resolutionPath": [
+          "src/service.erl",
+          "src/api.erl",
+        ],
+        "ruleId": "syntax.erlang.unique-spec-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/service.erl",
+      "id": "edge:symbol%3Asrc%252Fservice.erl%3Asrc%252Fservice.erl%2523service.run%252F1%3Amethod%3A0:symbol%3Asrc%252Fapi.erl%3Asrc%252Fapi.erl%2523api.point%3Atype%3A1:returns:5:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fservice.erl:src%2Fservice.erl%23service.run%2F1:method:0",
+      "targetId": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:1",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fservice.erl:src%2Fservice.erl%23service:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/service.erl",
+      "id": "edge:symbol%3Asrc%252Fservice.erl%3Asrc%252Fservice.erl%3Afile%3A0:symbol%3Asrc%252Fservice.erl%3Asrc%252Fservice.erl%2523service%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fservice.erl:src%2Fservice.erl:file:0",
+      "targetId": "symbol:src%2Fservice.erl:src%2Fservice.erl%23service:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "ea19b17e331eabead456a98d2845b9bd08e94317dd2c92daa722314f278e05a4",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "erlang",
+      "path": "src/api.erl",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "d350c559f576473542bd3d4f26515539866ffaeb6406aa7f9292feefb15e9f9b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "erlang",
+      "path": "src/app.erl",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "b8b98cf47eaa567f8d29419b265a3c750c4cc9294d2009e56e4b3f9c11c2fa03",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "erlang",
+      "path": "src/contract.erl",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "b3bd8dad1a268b05f8a2ea02c94a0cb1ce2df8445a03806cbe7506f21839b458",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "erlang",
+      "path": "src/service.erl",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.erl",
+      "id": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.helper%2F1:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "helper/1",
+      "qualifiedName": "src/api.erl#api.helper/1",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.erl",
+      "id": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "point",
+      "qualifiedName": "src/api.erl#api.point",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 1,
+      "filePath": "src/api.erl",
+      "id": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api.point:type:1",
+      "isExported": true,
+      "kind": "type",
+      "name": "point",
+      "qualifiedName": "src/api.erl#api.point",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.erl",
+      "id": "symbol:src%2Fapi.erl:src%2Fapi.erl%23api:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "api",
+      "qualifiedName": "src/api.erl#api",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.erl",
+      "id": "symbol:src%2Fapi.erl:src%2Fapi.erl:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "api.erl",
+      "qualifiedName": "src/api.erl",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.erl",
+      "id": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.execute%2F1:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "execute/1",
+      "qualifiedName": "src/app.erl#app.execute/1",
+      "range": {
+        "end": {
+          "column": 10,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.erl",
+      "id": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app.local%2F0:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "local/0",
+      "qualifiedName": "src/app.erl#app.local/0",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 10,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.erl",
+      "id": "symbol:src%2Fapp.erl:src%2Fapp.erl%23app:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "app",
+      "qualifiedName": "src/app.erl#app",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.erl",
+      "id": "symbol:src%2Fapp.erl:src%2Fapp.erl:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "app.erl",
+      "qualifiedName": "src/app.erl",
+      "range": {
+        "end": {
+          "column": 15,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/contract.erl",
+      "id": "symbol:src%2Fcontract.erl:src%2Fcontract.erl%23contract.run%2F1:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run/1",
+      "qualifiedName": "src/contract.erl#contract.run/1",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/contract.erl",
+      "id": "symbol:src%2Fcontract.erl:src%2Fcontract.erl%23contract:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "contract",
+      "qualifiedName": "src/contract.erl#contract",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/contract.erl",
+      "id": "symbol:src%2Fcontract.erl:src%2Fcontract.erl:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "contract.erl",
+      "qualifiedName": "src/contract.erl",
+      "range": {
+        "end": {
+          "column": 35,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/service.erl",
+      "id": "symbol:src%2Fservice.erl:src%2Fservice.erl%23service.run%2F1:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run/1",
+      "qualifiedName": "src/service.erl#service.run/1",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/service.erl",
+      "id": "symbol:src%2Fservice.erl:src%2Fservice.erl%23service:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "service",
+      "qualifiedName": "src/service.erl#service",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/service.erl",
+      "id": "symbol:src%2Fservice.erl:src%2Fservice.erl:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "service.erl",
+      "qualifiedName": "src/service.erl",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`beam and Nim resolver output parity before move > 'nim' preserves local relations while rejecting consumer-only targets 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.nim:src%2Fapp.nim.helper:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.nim",
+      "id": "edge:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim%3Afile%3A0:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim.helper%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.nim:src%2Fapp.nim:file:0",
+      "targetId": "symbol:src%2Fapp.nim:src%2Fapp.nim.helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.nim:src%2Fapp.nim.local:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.nim",
+      "id": "edge:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim%3Afile%3A0:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim.local%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.nim:src%2Fapp.nim:file:0",
+      "targetId": "symbol:src%2Fapp.nim:src%2Fapp.nim.local:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.nim:src%2Fapp.nim.make:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.nim",
+      "id": "edge:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim%3Afile%3A0:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim.make%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "make",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.nim:src%2Fapp.nim:file:0",
+      "targetId": "symbol:src%2Fapp.nim:src%2Fapp.nim.make:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.nim:src%2Fapp.nim.remote:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.nim",
+      "id": "edge:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim%3Afile%3A0:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim.remote%3Afunction%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 49,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "remote",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.nim:src%2Fapp.nim:file:0",
+      "targetId": "symbol:src%2Fapp.nim:src%2Fapp.nim.remote:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.nim:src%2Fapp.nim.helper:function:0",
+        ],
+        "ruleId": "syntax.nim.unique-local-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.nim",
+      "id": "edge:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim.local%3Afunction%3A0:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim.helper%3Afunction%3A0:calls:3:32",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 3,
+        },
+        "start": {
+          "column": 32,
+          "line": 3,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.nim:src%2Fapp.nim.local:function:0",
+      "targetId": "symbol:src%2Fapp.nim:src%2Fapp.nim.helper:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "4fa4b413618c672d0e1ee3e966b5571b2e046ea6084226818482109dc6a77af9",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "nim",
+      "path": "src/app.nim",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.nim",
+      "id": "symbol:src%2Fapp.nim:src%2Fapp.nim.helper:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "src/app.nim.helper",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.nim",
+      "id": "symbol:src%2Fapp.nim:src%2Fapp.nim.local:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "local",
+      "qualifiedName": "src/app.nim.local",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.nim",
+      "id": "symbol:src%2Fapp.nim:src%2Fapp.nim.make:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "make",
+      "qualifiedName": "src/app.nim.make",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.nim",
+      "id": "symbol:src%2Fapp.nim:src%2Fapp.nim.remote:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "remote",
+      "qualifiedName": "src/app.nim.remote",
+      "range": {
+        "end": {
+          "column": 49,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.nim",
+      "id": "symbol:src%2Fapp.nim:src%2Fapp.nim:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "app.nim",
+      "qualifiedName": "src/app.nim",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`beam and Nim resolver output parity before move > 'nim' preserves non-empty cross-file relations and evidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.nim:src%2Fapi.nim.build:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.nim",
+      "id": "edge:symbol%3Asrc%252Fapi.nim%3Asrc%252Fapi.nim%3Afile%3A0:symbol%3Asrc%252Fapi.nim%3Asrc%252Fapi.nim.build%3Afunction%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "build",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.nim:src%2Fapi.nim:file:0",
+      "targetId": "symbol:src%2Fapi.nim:src%2Fapi.nim.build:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.nim:src%2Fapi.nim:file:0",
+        ],
+        "resolutionPath": [
+          "src/app.nim",
+          "src/api.nim",
+        ],
+        "ruleId": "module.nim.literal-import.unique-file",
+        "stage": "module",
+      },
+      "filePath": "src/app.nim",
+      "id": "edge:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim%3Afile%3A0:symbol%3Asrc%252Fapi.nim%3Asrc%252Fapi.nim%3Afile%3A0:imports:1:8",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 11,
+          "line": 1,
+        },
+        "start": {
+          "column": 8,
+          "line": 1,
+        },
+      },
+      "referenceName": "api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.nim:src%2Fapp.nim:file:0",
+      "targetId": "symbol:src%2Fapi.nim:src%2Fapi.nim:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.nim:src%2Fapp.nim.helper:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.nim",
+      "id": "edge:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim%3Afile%3A0:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim.helper%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.nim:src%2Fapp.nim:file:0",
+      "targetId": "symbol:src%2Fapp.nim:src%2Fapp.nim.helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.nim:src%2Fapp.nim.local:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.nim",
+      "id": "edge:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim%3Afile%3A0:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim.local%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.nim:src%2Fapp.nim:file:0",
+      "targetId": "symbol:src%2Fapp.nim:src%2Fapp.nim.local:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.nim:src%2Fapp.nim.make:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.nim",
+      "id": "edge:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim%3Afile%3A0:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim.make%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "make",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.nim:src%2Fapp.nim:file:0",
+      "targetId": "symbol:src%2Fapp.nim:src%2Fapp.nim.make:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.nim:src%2Fapp.nim.remote:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.nim",
+      "id": "edge:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim%3Afile%3A0:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim.remote%3Afunction%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 49,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "remote",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.nim:src%2Fapp.nim:file:0",
+      "targetId": "symbol:src%2Fapp.nim:src%2Fapp.nim.remote:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.nim:src%2Fmodel.nim:file:0",
+        ],
+        "resolutionPath": [
+          "src/app.nim",
+          "src/model.nim",
+        ],
+        "ruleId": "module.nim.literal-import.unique-file",
+        "stage": "module",
+      },
+      "filePath": "src/app.nim",
+      "id": "edge:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim%3Afile%3A0:symbol%3Asrc%252Fmodel.nim%3Asrc%252Fmodel.nim%3Afile%3A0:imports:1:13",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 1,
+        },
+        "start": {
+          "column": 13,
+          "line": 1,
+        },
+      },
+      "referenceName": "model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.nim:src%2Fapp.nim:file:0",
+      "targetId": "symbol:src%2Fmodel.nim:src%2Fmodel.nim:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.nim:src%2Fapp.nim.helper:function:0",
+        ],
+        "ruleId": "syntax.nim.unique-local-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.nim",
+      "id": "edge:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim.local%3Afunction%3A0:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim.helper%3Afunction%3A0:calls:3:32",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 3,
+        },
+        "start": {
+          "column": 32,
+          "line": 3,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.nim:src%2Fapp.nim.local:function:0",
+      "targetId": "symbol:src%2Fapp.nim:src%2Fapp.nim.helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.nim:src%2Fmodel.nim%23type%3AChild:type:0",
+        ],
+        "resolutionPath": [
+          "src/app.nim",
+          "src/model.nim",
+        ],
+        "ruleId": "syntax.nim.unique-type-construction",
+        "stage": "module",
+      },
+      "filePath": "src/app.nim",
+      "id": "edge:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim.make%3Afunction%3A0:symbol%3Asrc%252Fmodel.nim%3Asrc%252Fmodel.nim%2523type%253AChild%3Atype%3A0:instantiates:5:23",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 28,
+          "line": 5,
+        },
+        "start": {
+          "column": 23,
+          "line": 5,
+        },
+      },
+      "referenceName": "Child",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.nim:src%2Fapp.nim.make:function:0",
+      "targetId": "symbol:src%2Fmodel.nim:src%2Fmodel.nim%23type%3AChild:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.nim:src%2Fmodel.nim%23type%3AChild:type:0",
+        ],
+        "resolutionPath": [
+          "src/app.nim",
+          "src/model.nim",
+        ],
+        "ruleId": "syntax.nim.unique-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/app.nim",
+      "id": "edge:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim.make%3Afunction%3A0:symbol%3Asrc%252Fmodel.nim%3Asrc%252Fmodel.nim%2523type%253AChild%3Atype%3A0:returns:5:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "Child",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.nim:src%2Fapp.nim.make:function:0",
+      "targetId": "symbol:src%2Fmodel.nim:src%2Fmodel.nim%23type%3AChild:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.nim:src%2Fapi.nim.build:function:0",
+        ],
+        "resolutionPath": [
+          "src/app.nim",
+          "src/api.nim",
+        ],
+        "ruleId": "module.nim.unique-qualified-call",
+        "stage": "module",
+      },
+      "filePath": "src/app.nim",
+      "id": "edge:symbol%3Asrc%252Fapp.nim%3Asrc%252Fapp.nim.remote%3Afunction%3A0:symbol%3Asrc%252Fapi.nim%3Asrc%252Fapi.nim.build%3Afunction%3A0:calls:4:33",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 4,
+        },
+        "start": {
+          "column": 33,
+          "line": 4,
+        },
+      },
+      "referenceName": "api.build",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.nim:src%2Fapp.nim.remote:function:0",
+      "targetId": "symbol:src%2Fapi.nim:src%2Fapi.nim.build:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fbase.nim:src%2Fbase.nim%23type%3AParent:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/base.nim",
+      "id": "edge:symbol%3Asrc%252Fbase.nim%3Asrc%252Fbase.nim%3Afile%3A0:symbol%3Asrc%252Fbase.nim%3Asrc%252Fbase.nim%2523type%253AParent%3Atype%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Parent",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fbase.nim:src%2Fbase.nim:file:0",
+      "targetId": "symbol:src%2Fbase.nim:src%2Fbase.nim%23type%3AParent:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fbase.nim:src%2Fbase.nim%23type%3AParent:type:0",
+        ],
+        "resolutionPath": [
+          "src/model.nim",
+          "src/base.nim",
+        ],
+        "ruleId": "syntax.nim.unique-object-heritage",
+        "stage": "module",
+      },
+      "filePath": "src/model.nim",
+      "id": "edge:symbol%3Asrc%252Fmodel.nim%3Asrc%252Fmodel.nim%2523type%253AChild%3Atype%3A0:symbol%3Asrc%252Fbase.nim%3Asrc%252Fbase.nim%2523type%253AParent%3Atype%3A0:extends:2:1",
+      "kind": "extends",
+      "range": {
+        "end": {
+          "column": 31,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Parent",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmodel.nim:src%2Fmodel.nim%23type%3AChild:type:0",
+      "targetId": "symbol:src%2Fbase.nim:src%2Fbase.nim%23type%3AParent:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fbase.nim:src%2Fbase.nim:file:0",
+        ],
+        "resolutionPath": [
+          "src/model.nim",
+          "src/base.nim",
+        ],
+        "ruleId": "module.nim.literal-import.unique-file",
+        "stage": "module",
+      },
+      "filePath": "src/model.nim",
+      "id": "edge:symbol%3Asrc%252Fmodel.nim%3Asrc%252Fmodel.nim%3Afile%3A0:symbol%3Asrc%252Fbase.nim%3Asrc%252Fbase.nim%3Afile%3A0:imports:1:8",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 1,
+        },
+        "start": {
+          "column": 8,
+          "line": 1,
+        },
+      },
+      "referenceName": "base",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmodel.nim:src%2Fmodel.nim:file:0",
+      "targetId": "symbol:src%2Fbase.nim:src%2Fbase.nim:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmodel.nim:src%2Fmodel.nim%23type%3AChild:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/model.nim",
+      "id": "edge:symbol%3Asrc%252Fmodel.nim%3Asrc%252Fmodel.nim%3Afile%3A0:symbol%3Asrc%252Fmodel.nim%3Asrc%252Fmodel.nim%2523type%253AChild%3Atype%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 31,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Child",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmodel.nim:src%2Fmodel.nim:file:0",
+      "targetId": "symbol:src%2Fmodel.nim:src%2Fmodel.nim%23type%3AChild:type:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "3ebb11612874123509871165260ddafb7b451a5c15487a44ed4a532b1ed257e3",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "nim",
+      "path": "src/api.nim",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "4fa4b413618c672d0e1ee3e966b5571b2e046ea6084226818482109dc6a77af9",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "nim",
+      "path": "src/app.nim",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "e9b08a5b4c6f87bfdb2a2890081d4ce7c2d72dabf2201fcc97b91beea77af80c",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "nim",
+      "path": "src/base.nim",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "a16c7ebd6700558a13bd18456e7a00f0791a4a422d3e29cbdf8ecdfe04f7458d",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "nim",
+      "path": "src/model.nim",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.nim",
+      "id": "symbol:src%2Fapi.nim:src%2Fapi.nim.build:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "build",
+      "qualifiedName": "src/api.nim.build",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.nim",
+      "id": "symbol:src%2Fapi.nim:src%2Fapi.nim:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "api.nim",
+      "qualifiedName": "src/api.nim",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.nim",
+      "id": "symbol:src%2Fapp.nim:src%2Fapp.nim.helper:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "src/app.nim.helper",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.nim",
+      "id": "symbol:src%2Fapp.nim:src%2Fapp.nim.local:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "local",
+      "qualifiedName": "src/app.nim.local",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.nim",
+      "id": "symbol:src%2Fapp.nim:src%2Fapp.nim.make:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "make",
+      "qualifiedName": "src/app.nim.make",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.nim",
+      "id": "symbol:src%2Fapp.nim:src%2Fapp.nim.remote:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "remote",
+      "qualifiedName": "src/app.nim.remote",
+      "range": {
+        "end": {
+          "column": 49,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.nim",
+      "id": "symbol:src%2Fapp.nim:src%2Fapp.nim:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "app.nim",
+      "qualifiedName": "src/app.nim",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/base.nim",
+      "id": "symbol:src%2Fbase.nim:src%2Fbase.nim%23type%3AParent:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "Parent",
+      "qualifiedName": "src/base.nim#type:Parent",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/base.nim",
+      "id": "symbol:src%2Fbase.nim:src%2Fbase.nim:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "base.nim",
+      "qualifiedName": "src/base.nim",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/model.nim",
+      "id": "symbol:src%2Fmodel.nim:src%2Fmodel.nim%23type%3AChild:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "Child",
+      "qualifiedName": "src/model.nim#type:Child",
+      "range": {
+        "end": {
+          "column": 31,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/model.nim",
+      "id": "symbol:src%2Fmodel.nim:src%2Fmodel.nim:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "model.nim",
+      "qualifiedName": "src/model.nim",
+      "range": {
+        "end": {
+          "column": 31,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

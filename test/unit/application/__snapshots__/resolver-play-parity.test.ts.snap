@@ -1,0 +1,1241 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Play complete-output parity before move > preserves ambiguous controller and router nonclaim 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Fapi%2FRoutes.scala:app%2Fapi%2FRoutes.scala%23Routes:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/api/Routes.scala",
+      "id": "edge:symbol%3Aapp%252Fapi%252FRoutes.scala%3Aapp%252Fapi%252FRoutes.scala%3Afile%3A0:symbol%3Aapp%252Fapi%252FRoutes.scala%3Aapp%252Fapi%252FRoutes.scala%2523Routes%3Aclass%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Routes",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Fapi%2FRoutes.scala:app%2Fapi%2FRoutes.scala:file:0",
+      "targetId": "symbol:app%2Fapi%2FRoutes.scala:app%2Fapi%2FRoutes.scala%23Routes:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java%23HealthController.health:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/controllers/HealthController.java",
+      "id": "edge:symbol%3Aapp%252Fcontrollers%252FHealthController.java%3Aapp%252Fcontrollers%252FHealthController.java%2523HealthController%3Aclass%3A0:symbol%3Aapp%252Fcontrollers%252FHealthController.java%3Aapp%252Fcontrollers%252FHealthController.java%2523HealthController.health%3Amethod%3A0:contains:1:54",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 93,
+          "line": 1,
+        },
+        "start": {
+          "column": 54,
+          "line": 1,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java%23HealthController:class:0",
+      "targetId": "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java%23HealthController.health:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java%23HealthController:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/controllers/HealthController.java",
+      "id": "edge:symbol%3Aapp%252Fcontrollers%252FHealthController.java%3Aapp%252Fcontrollers%252FHealthController.java%3Afile%3A0:symbol%3Aapp%252Fcontrollers%252FHealthController.java%3Aapp%252Fcontrollers%252FHealthController.java%2523HealthController%3Aclass%3A0:contains:1:22",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 95,
+          "line": 1,
+        },
+        "start": {
+          "column": 22,
+          "line": 1,
+        },
+      },
+      "referenceName": "HealthController",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java:file:0",
+      "targetId": "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java%23HealthController:class:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java%23HealthController:class:0",
+          "symbol:duplicate%2Fapp%2Fcontrollers%2FHealthController.java:duplicate%2Fapp%2Fcontrollers%2FHealthController.java%23HealthController:class:0",
+        ],
+        "ruleId": "framework.play.conf-routes.literal-controller-action.unresolved-handler",
+        "stage": "unresolved",
+      },
+      "filePath": "conf/routes",
+      "id": "edge:symbol%3Aconf%252Froutes%3Aconf%252Froutes%2523route%253AGET%2520%252Fhealth%3Aroute%3A0:controllers.HealthController.health:routes:1:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "controllers.HealthController.health",
+      "resolution": "unresolved",
+      "sourceId": "symbol:conf%2Froutes:conf%2Froutes%23route%3AGET%20%2Fhealth:route:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Fapi%2FRoutes.scala:app%2Fapi%2FRoutes.scala%23Routes:class:0",
+          "symbol:duplicate%2Fapp%2Fapi%2FRoutes.scala:duplicate%2Fapp%2Fapi%2FRoutes.scala%23Routes:class:0",
+        ],
+        "ruleId": "framework.play.conf-routes.literal-router-mount.unresolved-router",
+        "stage": "unresolved",
+      },
+      "filePath": "conf/routes",
+      "id": "edge:symbol%3Aconf%252Froutes%3Aconf%252Froutes%2523route%253AMOUNT%2520%252Fapi%2520-%253E%2520api.Routes%3Aroute%3A0:api.Routes:handles:2:1",
+      "kind": "handles",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "api.Routes",
+      "resolution": "unresolved",
+      "sourceId": "symbol:conf%2Froutes:conf%2Froutes%23route%3AMOUNT%20%2Fapi%20-%3E%20api.Routes:route:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:conf%2Froutes:conf%2Froutes%23route%3AGET%20%2Fhealth:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "conf/routes",
+      "id": "edge:symbol%3Aconf%252Froutes%3Aconf%252Froutes%3Afile%3A0:symbol%3Aconf%252Froutes%3Aconf%252Froutes%2523route%253AGET%2520%252Fhealth%3Aroute%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "GET /health",
+      "resolution": "exact",
+      "sourceId": "symbol:conf%2Froutes:conf%2Froutes:file:0",
+      "targetId": "symbol:conf%2Froutes:conf%2Froutes%23route%3AGET%20%2Fhealth:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:conf%2Froutes:conf%2Froutes%23route%3AMOUNT%20%2Fapi%20-%3E%20api.Routes:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "conf/routes",
+      "id": "edge:symbol%3Aconf%252Froutes%3Aconf%252Froutes%3Afile%3A0:symbol%3Aconf%252Froutes%3Aconf%252Froutes%2523route%253AMOUNT%2520%252Fapi%2520-%253E%2520api.Routes%3Aroute%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "MOUNT /api -> api.Routes",
+      "resolution": "exact",
+      "sourceId": "symbol:conf%2Froutes:conf%2Froutes:file:0",
+      "targetId": "symbol:conf%2Froutes:conf%2Froutes%23route%3AMOUNT%20%2Fapi%20-%3E%20api.Routes:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:duplicate%2Fapp%2Fapi%2FRoutes.scala:duplicate%2Fapp%2Fapi%2FRoutes.scala%23Routes:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "duplicate/app/api/Routes.scala",
+      "id": "edge:symbol%3Aduplicate%252Fapp%252Fapi%252FRoutes.scala%3Aduplicate%252Fapp%252Fapi%252FRoutes.scala%3Afile%3A0:symbol%3Aduplicate%252Fapp%252Fapi%252FRoutes.scala%3Aduplicate%252Fapp%252Fapi%252FRoutes.scala%2523Routes%3Aclass%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Routes",
+      "resolution": "exact",
+      "sourceId": "symbol:duplicate%2Fapp%2Fapi%2FRoutes.scala:duplicate%2Fapp%2Fapi%2FRoutes.scala:file:0",
+      "targetId": "symbol:duplicate%2Fapp%2Fapi%2FRoutes.scala:duplicate%2Fapp%2Fapi%2FRoutes.scala%23Routes:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:duplicate%2Fapp%2Fcontrollers%2FHealthController.java:duplicate%2Fapp%2Fcontrollers%2FHealthController.java%23HealthController.health:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "duplicate/app/controllers/HealthController.java",
+      "id": "edge:symbol%3Aduplicate%252Fapp%252Fcontrollers%252FHealthController.java%3Aduplicate%252Fapp%252Fcontrollers%252FHealthController.java%2523HealthController%3Aclass%3A0:symbol%3Aduplicate%252Fapp%252Fcontrollers%252FHealthController.java%3Aduplicate%252Fapp%252Fcontrollers%252FHealthController.java%2523HealthController.health%3Amethod%3A0:contains:1:54",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 93,
+          "line": 1,
+        },
+        "start": {
+          "column": 54,
+          "line": 1,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:duplicate%2Fapp%2Fcontrollers%2FHealthController.java:duplicate%2Fapp%2Fcontrollers%2FHealthController.java%23HealthController:class:0",
+      "targetId": "symbol:duplicate%2Fapp%2Fcontrollers%2FHealthController.java:duplicate%2Fapp%2Fcontrollers%2FHealthController.java%23HealthController.health:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:duplicate%2Fapp%2Fcontrollers%2FHealthController.java:duplicate%2Fapp%2Fcontrollers%2FHealthController.java%23HealthController:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "duplicate/app/controllers/HealthController.java",
+      "id": "edge:symbol%3Aduplicate%252Fapp%252Fcontrollers%252FHealthController.java%3Aduplicate%252Fapp%252Fcontrollers%252FHealthController.java%3Afile%3A0:symbol%3Aduplicate%252Fapp%252Fcontrollers%252FHealthController.java%3Aduplicate%252Fapp%252Fcontrollers%252FHealthController.java%2523HealthController%3Aclass%3A0:contains:1:22",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 95,
+          "line": 1,
+        },
+        "start": {
+          "column": 22,
+          "line": 1,
+        },
+      },
+      "referenceName": "HealthController",
+      "resolution": "exact",
+      "sourceId": "symbol:duplicate%2Fapp%2Fcontrollers%2FHealthController.java:duplicate%2Fapp%2Fcontrollers%2FHealthController.java:file:0",
+      "targetId": "symbol:duplicate%2Fapp%2Fcontrollers%2FHealthController.java:duplicate%2Fapp%2Fcontrollers%2FHealthController.java%23HealthController:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "0eaea53a342e61ee324aeb23fbe806cd88eccab4fa0829dfc5d39c8fab544394",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "scala",
+      "path": "app/api/Routes.scala",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "1fb0f0a8b449f077c411b85e023efc9edfe0a3dc085f8be913f99617c01aa6a8",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "java",
+      "path": "app/controllers/HealthController.java",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "46cb40ae943558a830b140724b19d68992ca8d59e2b28789d03eec125846eb25",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "scala",
+      "path": "conf/routes",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "0eaea53a342e61ee324aeb23fbe806cd88eccab4fa0829dfc5d39c8fab544394",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "scala",
+      "path": "duplicate/app/api/Routes.scala",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "1fb0f0a8b449f077c411b85e023efc9edfe0a3dc085f8be913f99617c01aa6a8",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "java",
+      "path": "duplicate/app/controllers/HealthController.java",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [
+    {
+      "filePath": "conf/routes",
+      "id": "edge:symbol%3Aconf%252Froutes%3Aconf%252Froutes%2523route%253AGET%2520%252Fhealth%3Aroute%3A0:controllers.HealthController.health:routes:1:1",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "controllers.HealthController.health",
+      "relationKind": "routes",
+      "routeFramework": "play",
+      "sourceId": "symbol:conf%2Froutes:conf%2Froutes%23route%3AGET%20%2Fhealth:route:0",
+    },
+  ],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/api/Routes.scala",
+      "id": "symbol:app%2Fapi%2FRoutes.scala:app%2Fapi%2FRoutes.scala%23Routes:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Routes",
+      "qualifiedName": "app/api/Routes.scala#Routes",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/api/Routes.scala",
+      "id": "symbol:app%2Fapi%2FRoutes.scala:app%2Fapi%2FRoutes.scala:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Routes.scala",
+      "qualifiedName": "app/api/Routes.scala",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/controllers/HealthController.java",
+      "id": "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java%23HealthController.health:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "health",
+      "qualifiedName": "app/controllers/HealthController.java#HealthController.health",
+      "range": {
+        "end": {
+          "column": 93,
+          "line": 1,
+        },
+        "start": {
+          "column": 54,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/controllers/HealthController.java",
+      "id": "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java%23HealthController:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "HealthController",
+      "qualifiedName": "app/controllers/HealthController.java#HealthController",
+      "range": {
+        "end": {
+          "column": 95,
+          "line": 1,
+        },
+        "start": {
+          "column": 22,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/controllers/HealthController.java",
+      "id": "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "HealthController.java",
+      "qualifiedName": "app/controllers/HealthController.java",
+      "range": {
+        "end": {
+          "column": 95,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "conf/routes",
+      "id": "symbol:conf%2Froutes:conf%2Froutes%23route%3AGET%20%2Fhealth:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /health",
+      "qualifiedName": "conf/routes#route:GET /health",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "conf/routes",
+      "id": "symbol:conf%2Froutes:conf%2Froutes%23route%3AMOUNT%20%2Fapi%20-%3E%20api.Routes:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "MOUNT /api -> api.Routes",
+      "qualifiedName": "conf/routes#route:MOUNT /api -> api.Routes",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "conf/routes",
+      "id": "symbol:conf%2Froutes:conf%2Froutes:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "routes",
+      "qualifiedName": "conf/routes",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "duplicate/app/api/Routes.scala",
+      "id": "symbol:duplicate%2Fapp%2Fapi%2FRoutes.scala:duplicate%2Fapp%2Fapi%2FRoutes.scala%23Routes:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Routes",
+      "qualifiedName": "duplicate/app/api/Routes.scala#Routes",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "duplicate/app/api/Routes.scala",
+      "id": "symbol:duplicate%2Fapp%2Fapi%2FRoutes.scala:duplicate%2Fapp%2Fapi%2FRoutes.scala:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Routes.scala",
+      "qualifiedName": "duplicate/app/api/Routes.scala",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "duplicate/app/controllers/HealthController.java",
+      "id": "symbol:duplicate%2Fapp%2Fcontrollers%2FHealthController.java:duplicate%2Fapp%2Fcontrollers%2FHealthController.java%23HealthController.health:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "health",
+      "qualifiedName": "duplicate/app/controllers/HealthController.java#HealthController.health",
+      "range": {
+        "end": {
+          "column": 93,
+          "line": 1,
+        },
+        "start": {
+          "column": 54,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "duplicate/app/controllers/HealthController.java",
+      "id": "symbol:duplicate%2Fapp%2Fcontrollers%2FHealthController.java:duplicate%2Fapp%2Fcontrollers%2FHealthController.java%23HealthController:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "HealthController",
+      "qualifiedName": "duplicate/app/controllers/HealthController.java#HealthController",
+      "range": {
+        "end": {
+          "column": 95,
+          "line": 1,
+        },
+        "start": {
+          "column": 22,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "duplicate/app/controllers/HealthController.java",
+      "id": "symbol:duplicate%2Fapp%2Fcontrollers%2FHealthController.java:duplicate%2Fapp%2Fcontrollers%2FHealthController.java:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "HealthController.java",
+      "qualifiedName": "duplicate/app/controllers/HealthController.java",
+      "range": {
+        "end": {
+          "column": 95,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Play complete-output parity before move > preserves controller routes and router mount evidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Fapi%2FRoutes.scala:app%2Fapi%2FRoutes.scala%23Routes:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/api/Routes.scala",
+      "id": "edge:symbol%3Aapp%252Fapi%252FRoutes.scala%3Aapp%252Fapi%252FRoutes.scala%3Afile%3A0:symbol%3Aapp%252Fapi%252FRoutes.scala%3Aapp%252Fapi%252FRoutes.scala%2523Routes%3Aclass%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Routes",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Fapi%2FRoutes.scala:app%2Fapi%2FRoutes.scala:file:0",
+      "targetId": "symbol:app%2Fapi%2FRoutes.scala:app%2Fapi%2FRoutes.scala%23Routes:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java%23HealthController.health:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/controllers/HealthController.java",
+      "id": "edge:symbol%3Aapp%252Fcontrollers%252FHealthController.java%3Aapp%252Fcontrollers%252FHealthController.java%2523HealthController%3Aclass%3A0:symbol%3Aapp%252Fcontrollers%252FHealthController.java%3Aapp%252Fcontrollers%252FHealthController.java%2523HealthController.health%3Amethod%3A0:contains:1:54",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 93,
+          "line": 1,
+        },
+        "start": {
+          "column": 54,
+          "line": 1,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java%23HealthController:class:0",
+      "targetId": "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java%23HealthController.health:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java%23HealthController:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/controllers/HealthController.java",
+      "id": "edge:symbol%3Aapp%252Fcontrollers%252FHealthController.java%3Aapp%252Fcontrollers%252FHealthController.java%3Afile%3A0:symbol%3Aapp%252Fcontrollers%252FHealthController.java%3Aapp%252Fcontrollers%252FHealthController.java%2523HealthController%3Aclass%3A0:contains:1:22",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 95,
+          "line": 1,
+        },
+        "start": {
+          "column": 22,
+          "line": 1,
+        },
+      },
+      "referenceName": "HealthController",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java:file:0",
+      "targetId": "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java%23HealthController:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java%23HealthController.health:method:0",
+          "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java%23HealthController:class:0",
+        ],
+        "ruleId": "framework.play.conf-routes.literal-controller-action.package-class-method",
+        "stage": "module",
+      },
+      "filePath": "conf/routes",
+      "id": "edge:symbol%3Aconf%252Froutes%3Aconf%252Froutes%2523route%253AGET%2520%252Fhealth%3Aroute%3A0:symbol%3Aapp%252Fcontrollers%252FHealthController.java%3Aapp%252Fcontrollers%252FHealthController.java%2523HealthController.health%3Amethod%3A0:routes:1:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "controllers.HealthController.health",
+      "resolution": "exact",
+      "sourceId": "symbol:conf%2Froutes:conf%2Froutes%23route%3AGET%20%2Fhealth:route:0",
+      "targetId": "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java%23HealthController.health:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Fapi%2FRoutes.scala:app%2Fapi%2FRoutes.scala%23Routes:class:0",
+        ],
+        "ruleId": "framework.play.conf-routes.literal-router-mount.package-class",
+        "stage": "module",
+      },
+      "filePath": "conf/routes",
+      "id": "edge:symbol%3Aconf%252Froutes%3Aconf%252Froutes%2523route%253AMOUNT%2520%252Fapi%2520-%253E%2520api.Routes%3Aroute%3A0:symbol%3Aapp%252Fapi%252FRoutes.scala%3Aapp%252Fapi%252FRoutes.scala%2523Routes%3Aclass%3A0:handles:2:1",
+      "kind": "handles",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "api.Routes",
+      "resolution": "exact",
+      "sourceId": "symbol:conf%2Froutes:conf%2Froutes%23route%3AMOUNT%20%2Fapi%20-%3E%20api.Routes:route:0",
+      "targetId": "symbol:app%2Fapi%2FRoutes.scala:app%2Fapi%2FRoutes.scala%23Routes:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:conf%2Froutes:conf%2Froutes%23route%3AGET%20%2Fhealth:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "conf/routes",
+      "id": "edge:symbol%3Aconf%252Froutes%3Aconf%252Froutes%3Afile%3A0:symbol%3Aconf%252Froutes%3Aconf%252Froutes%2523route%253AGET%2520%252Fhealth%3Aroute%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "GET /health",
+      "resolution": "exact",
+      "sourceId": "symbol:conf%2Froutes:conf%2Froutes:file:0",
+      "targetId": "symbol:conf%2Froutes:conf%2Froutes%23route%3AGET%20%2Fhealth:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:conf%2Froutes:conf%2Froutes%23route%3AMOUNT%20%2Fapi%20-%3E%20api.Routes:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "conf/routes",
+      "id": "edge:symbol%3Aconf%252Froutes%3Aconf%252Froutes%3Afile%3A0:symbol%3Aconf%252Froutes%3Aconf%252Froutes%2523route%253AMOUNT%2520%252Fapi%2520-%253E%2520api.Routes%3Aroute%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "MOUNT /api -> api.Routes",
+      "resolution": "exact",
+      "sourceId": "symbol:conf%2Froutes:conf%2Froutes:file:0",
+      "targetId": "symbol:conf%2Froutes:conf%2Froutes%23route%3AMOUNT%20%2Fapi%20-%3E%20api.Routes:route:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "0eaea53a342e61ee324aeb23fbe806cd88eccab4fa0829dfc5d39c8fab544394",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "scala",
+      "path": "app/api/Routes.scala",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "1fb0f0a8b449f077c411b85e023efc9edfe0a3dc085f8be913f99617c01aa6a8",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "java",
+      "path": "app/controllers/HealthController.java",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "46cb40ae943558a830b140724b19d68992ca8d59e2b28789d03eec125846eb25",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "scala",
+      "path": "conf/routes",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/api/Routes.scala",
+      "id": "symbol:app%2Fapi%2FRoutes.scala:app%2Fapi%2FRoutes.scala%23Routes:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Routes",
+      "qualifiedName": "app/api/Routes.scala#Routes",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/api/Routes.scala",
+      "id": "symbol:app%2Fapi%2FRoutes.scala:app%2Fapi%2FRoutes.scala:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Routes.scala",
+      "qualifiedName": "app/api/Routes.scala",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/controllers/HealthController.java",
+      "id": "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java%23HealthController.health:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "health",
+      "qualifiedName": "app/controllers/HealthController.java#HealthController.health",
+      "range": {
+        "end": {
+          "column": 93,
+          "line": 1,
+        },
+        "start": {
+          "column": 54,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/controllers/HealthController.java",
+      "id": "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java%23HealthController:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "HealthController",
+      "qualifiedName": "app/controllers/HealthController.java#HealthController",
+      "range": {
+        "end": {
+          "column": 95,
+          "line": 1,
+        },
+        "start": {
+          "column": 22,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/controllers/HealthController.java",
+      "id": "symbol:app%2Fcontrollers%2FHealthController.java:app%2Fcontrollers%2FHealthController.java:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "HealthController.java",
+      "qualifiedName": "app/controllers/HealthController.java",
+      "range": {
+        "end": {
+          "column": 95,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "conf/routes",
+      "id": "symbol:conf%2Froutes:conf%2Froutes%23route%3AGET%20%2Fhealth:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /health",
+      "qualifiedName": "conf/routes#route:GET /health",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "conf/routes",
+      "id": "symbol:conf%2Froutes:conf%2Froutes%23route%3AMOUNT%20%2Fapi%20-%3E%20api.Routes:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "MOUNT /api -> api.Routes",
+      "qualifiedName": "conf/routes#route:MOUNT /api -> api.Routes",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "conf/routes",
+      "id": "symbol:conf%2Froutes:conf%2Froutes:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "routes",
+      "qualifiedName": "conf/routes",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Play complete-output parity before move > preserves missing controller and router nonclaim 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "framework.play.conf-routes.literal-controller-action.unresolved-handler",
+        "stage": "unresolved",
+      },
+      "filePath": "conf/routes",
+      "id": "edge:symbol%3Aconf%252Froutes%3Aconf%252Froutes%2523route%253AGET%2520%252Fhealth%3Aroute%3A0:controllers.HealthController.health:routes:1:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "controllers.HealthController.health",
+      "resolution": "unresolved",
+      "sourceId": "symbol:conf%2Froutes:conf%2Froutes%23route%3AGET%20%2Fhealth:route:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "framework.play.conf-routes.literal-router-mount.unresolved-router",
+        "stage": "unresolved",
+      },
+      "filePath": "conf/routes",
+      "id": "edge:symbol%3Aconf%252Froutes%3Aconf%252Froutes%2523route%253AMOUNT%2520%252Fapi%2520-%253E%2520api.Routes%3Aroute%3A0:api.Routes:handles:2:1",
+      "kind": "handles",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "api.Routes",
+      "resolution": "unresolved",
+      "sourceId": "symbol:conf%2Froutes:conf%2Froutes%23route%3AMOUNT%20%2Fapi%20-%3E%20api.Routes:route:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:conf%2Froutes:conf%2Froutes%23route%3AGET%20%2Fhealth:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "conf/routes",
+      "id": "edge:symbol%3Aconf%252Froutes%3Aconf%252Froutes%3Afile%3A0:symbol%3Aconf%252Froutes%3Aconf%252Froutes%2523route%253AGET%2520%252Fhealth%3Aroute%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "GET /health",
+      "resolution": "exact",
+      "sourceId": "symbol:conf%2Froutes:conf%2Froutes:file:0",
+      "targetId": "symbol:conf%2Froutes:conf%2Froutes%23route%3AGET%20%2Fhealth:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:conf%2Froutes:conf%2Froutes%23route%3AMOUNT%20%2Fapi%20-%3E%20api.Routes:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "conf/routes",
+      "id": "edge:symbol%3Aconf%252Froutes%3Aconf%252Froutes%3Afile%3A0:symbol%3Aconf%252Froutes%3Aconf%252Froutes%2523route%253AMOUNT%2520%252Fapi%2520-%253E%2520api.Routes%3Aroute%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "MOUNT /api -> api.Routes",
+      "resolution": "exact",
+      "sourceId": "symbol:conf%2Froutes:conf%2Froutes:file:0",
+      "targetId": "symbol:conf%2Froutes:conf%2Froutes%23route%3AMOUNT%20%2Fapi%20-%3E%20api.Routes:route:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "46cb40ae943558a830b140724b19d68992ca8d59e2b28789d03eec125846eb25",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "scala",
+      "path": "conf/routes",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [
+    {
+      "filePath": "conf/routes",
+      "id": "edge:symbol%3Aconf%252Froutes%3Aconf%252Froutes%2523route%253AGET%2520%252Fhealth%3Aroute%3A0:controllers.HealthController.health:routes:1:1",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "controllers.HealthController.health",
+      "relationKind": "routes",
+      "routeFramework": "play",
+      "sourceId": "symbol:conf%2Froutes:conf%2Froutes%23route%3AGET%20%2Fhealth:route:0",
+    },
+  ],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "conf/routes",
+      "id": "symbol:conf%2Froutes:conf%2Froutes%23route%3AGET%20%2Fhealth:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /health",
+      "qualifiedName": "conf/routes#route:GET /health",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "conf/routes",
+      "id": "symbol:conf%2Froutes:conf%2Froutes%23route%3AMOUNT%20%2Fapi%20-%3E%20api.Routes:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "MOUNT /api -> api.Routes",
+      "qualifiedName": "conf/routes#route:MOUNT /api -> api.Routes",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "conf/routes",
+      "id": "symbol:conf%2Froutes:conf%2Froutes:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "routes",
+      "qualifiedName": "conf/routes",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

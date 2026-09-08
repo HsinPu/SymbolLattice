@@ -1,0 +1,5635 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`multi-language resolver complete-output parity > 'csharp' preserves the full multi-file snapshot 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Base.Base:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Base%3Aclass%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Base.Base%3Amethod%3A0:contains:5:5",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 5,
+        },
+        "start": {
+          "column": 5,
+          "line": 5,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs%23Base:class:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Base.Base:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Base.Run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Base%3Aclass%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Base.Run%3Amethod%3A0:contains:6:5",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 44,
+          "line": 6,
+        },
+        "start": {
+          "column": 5,
+          "line": 6,
+        },
+      },
+      "referenceName": "Run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs%23Base:class:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Base.Run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+        ],
+        "ruleId": "syntax.csharp.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Base.Run%3Amethod%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Point%3Atype%3A0:accepts:6:5",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 44,
+          "line": 6,
+        },
+        "start": {
+          "column": 5,
+          "line": 6,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs%23Base.Run:method:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+        ],
+        "ruleId": "syntax.csharp.unique-signature-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Base.Run%3Amethod%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Point%3Atype%3A0:returns:6:5",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 44,
+          "line": 6,
+        },
+        "start": {
+          "column": 5,
+          "line": 6,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs%23Base.Run:method:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Helpers.Helper:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Helpers%3Aclass%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Helpers.Helper%3Amethod%3A0:contains:13:33",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 74,
+          "line": 13,
+        },
+        "start": {
+          "column": 33,
+          "line": 13,
+        },
+      },
+      "referenceName": "Helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs%23Helpers:class:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Helpers.Helper:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+        ],
+        "ruleId": "syntax.csharp.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Helpers.Helper%3Amethod%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Point%3Atype%3A0:accepts:13:33",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 74,
+          "line": 13,
+        },
+        "start": {
+          "column": 33,
+          "line": 13,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs%23Helpers.Helper:method:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+        ],
+        "ruleId": "syntax.csharp.unique-signature-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Helpers.Helper%3Amethod%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Point%3Atype%3A0:returns:13:33",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 74,
+          "line": 13,
+        },
+        "start": {
+          "column": 33,
+          "line": 13,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs%23Helpers.Helper:method:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23IContract.Act:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523IContract%3Ainterface%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523IContract.Act%3Amethod%3A0:contains:2:32",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 2,
+        },
+        "start": {
+          "column": 32,
+          "line": 2,
+        },
+      },
+      "referenceName": "Act",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs%23IContract:interface:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23IContract.Act:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+        ],
+        "ruleId": "syntax.csharp.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523IContract.Act%3Amethod%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Point%3Atype%3A0:accepts:2:32",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 2,
+        },
+        "start": {
+          "column": 32,
+          "line": 2,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs%23IContract.Act:method:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Base:class:0",
+        ],
+        "ruleId": "syntax.csharp.unique-extends-target",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Service%3Aclass%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Base%3Aclass%3A0:extends:8:3",
+      "kind": "extends",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 12,
+        },
+        "start": {
+          "column": 3,
+          "line": 8,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs%23Service:class:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Base:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23IContract:interface:0",
+        ],
+        "ruleId": "syntax.csharp.unique-interface-target",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Service%3Aclass%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523IContract%3Ainterface%3A0:implements:8:3",
+      "kind": "implements",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 12,
+        },
+        "start": {
+          "column": 3,
+          "line": 8,
+        },
+      },
+      "referenceName": "IContract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs%23Service:class:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23IContract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Service.Act:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Service%3Aclass%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Service.Act%3Amethod%3A0:contains:11:5",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 11,
+        },
+        "start": {
+          "column": 5,
+          "line": 11,
+        },
+      },
+      "referenceName": "Act",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs%23Service:class:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Service.Act:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Service.Run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Service%3Aclass%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Service.Run%3Amethod%3A0:contains:10:5",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 10,
+        },
+        "start": {
+          "column": 5,
+          "line": 10,
+        },
+      },
+      "referenceName": "Run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs%23Service:class:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Service.Run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Service.Service:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Service%3Aclass%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Service.Service%3Amethod%3A0:contains:9:5",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 47,
+          "line": 9,
+        },
+        "start": {
+          "column": 5,
+          "line": 9,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs%23Service:class:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Service.Service:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+        ],
+        "ruleId": "syntax.csharp.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Service.Act%3Amethod%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Point%3Atype%3A0:accepts:11:5",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 11,
+        },
+        "start": {
+          "column": 5,
+          "line": 11,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs%23Service.Act:method:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Base.Run:method:0",
+        ],
+        "ruleId": "syntax.csharp.explicit-direct-base-method",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Service.Run%3Amethod%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Base.Run%3Amethod%3A0:overrides:10:5",
+      "kind": "overrides",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 10,
+        },
+        "start": {
+          "column": 5,
+          "line": 10,
+        },
+      },
+      "referenceName": "Run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs%23Service.Run:method:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Base.Run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+        ],
+        "ruleId": "syntax.csharp.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Service.Run%3Amethod%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Point%3Atype%3A0:accepts:10:5",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 10,
+        },
+        "start": {
+          "column": 5,
+          "line": 10,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs%23Service.Run:method:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+        ],
+        "ruleId": "syntax.csharp.unique-signature-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Service.Run%3Amethod%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Point%3Atype%3A0:returns:10:5",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 10,
+        },
+        "start": {
+          "column": 5,
+          "line": 10,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs%23Service.Run:method:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Base:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%3Afile%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Base%3Aclass%3A0:contains:4:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 7,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs:file:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Base:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Helpers:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%3Afile%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Helpers%3Aclass%3A0:contains:13:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 76,
+          "line": 13,
+        },
+        "start": {
+          "column": 3,
+          "line": 13,
+        },
+      },
+      "referenceName": "Helpers",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs:file:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Helpers:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23IContract:interface:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%3Afile%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523IContract%3Ainterface%3A0:contains:2:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 2,
+        },
+        "start": {
+          "column": 3,
+          "line": 2,
+        },
+      },
+      "referenceName": "IContract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs:file:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23IContract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%3Afile%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Point%3Atype%3A0:contains:3:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 3,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs:file:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Service:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%3Afile%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Service%3Aclass%3A0:contains:8:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 12,
+        },
+        "start": {
+          "column": 3,
+          "line": 8,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs:file:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Service:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23namespace%3ADemo.Api:module:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.cs",
+      "id": "edge:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%3Afile%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523namespace%253ADemo.Api%3Amodule%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 14,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Demo.Api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.cs:src%2FApi.cs:file:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23namespace%3ADemo.Api:module:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.cs:src%2FApp.cs%23Caller.Execute:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.cs",
+      "id": "edge:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%2523Caller%3Aclass%3A0:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%2523Caller.Execute%3Amethod%3A0:contains:4:5",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 11,
+        },
+        "start": {
+          "column": 5,
+          "line": 4,
+        },
+      },
+      "referenceName": "Execute",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller:class:0",
+      "targetId": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller.Execute:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Helpers.Helper:method:0",
+        ],
+        "resolutionPath": [
+          "src/App.cs",
+          "src/Api.cs",
+        ],
+        "ruleId": "syntax.csharp.unique-member-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.cs",
+      "id": "edge:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%2523Caller.Execute%3Amethod%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Helpers.Helper%3Amethod%3A0:calls:10:14",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 10,
+        },
+        "start": {
+          "column": 14,
+          "line": 10,
+        },
+      },
+      "referenceName": "Helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller.Execute:method:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Helpers.Helper:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Helpers.Helper:method:0",
+        ],
+        "resolutionPath": [
+          "src/App.cs",
+          "src/Api.cs",
+        ],
+        "ruleId": "syntax.csharp.unique-member-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.cs",
+      "id": "edge:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%2523Caller.Execute%3Amethod%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Helpers.Helper%3Amethod%3A0:calls:8:7",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 35,
+          "line": 8,
+        },
+        "start": {
+          "column": 7,
+          "line": 8,
+        },
+      },
+      "referenceName": "Helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller.Execute:method:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Helpers.Helper:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+        ],
+        "resolutionPath": [
+          "src/App.cs",
+          "src/Api.cs",
+        ],
+        "ruleId": "syntax.csharp.unique-signature-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.cs",
+      "id": "edge:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%2523Caller.Execute%3Amethod%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Point%3Atype%3A0:accepts:4:5",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 11,
+        },
+        "start": {
+          "column": 5,
+          "line": 4,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller.Execute:method:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+        ],
+        "resolutionPath": [
+          "src/App.cs",
+          "src/Api.cs",
+        ],
+        "ruleId": "syntax.csharp.unique-constructor-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.cs",
+      "id": "edge:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%2523Caller.Execute%3Amethod%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Point%3Atype%3A0:instantiates:10:29",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 41,
+          "line": 10,
+        },
+        "start": {
+          "column": 29,
+          "line": 10,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller.Execute:method:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+        ],
+        "resolutionPath": [
+          "src/App.cs",
+          "src/Api.cs",
+        ],
+        "ruleId": "syntax.csharp.unique-constructor-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.cs",
+      "id": "edge:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%2523Caller.Execute%3Amethod%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Point%3Atype%3A0:instantiates:5:21",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 5,
+        },
+        "start": {
+          "column": 21,
+          "line": 5,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller.Execute:method:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+        ],
+        "resolutionPath": [
+          "src/App.cs",
+          "src/Api.cs",
+        ],
+        "ruleId": "syntax.csharp.unique-constructor-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.cs",
+      "id": "edge:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%2523Caller.Execute%3Amethod%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Point%3Atype%3A0:instantiates:6:15",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 6,
+        },
+        "start": {
+          "column": 15,
+          "line": 6,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller.Execute:method:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+        ],
+        "resolutionPath": [
+          "src/App.cs",
+          "src/Api.cs",
+        ],
+        "ruleId": "syntax.csharp.unique-constructor-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.cs",
+      "id": "edge:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%2523Caller.Execute%3Amethod%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Point%3Atype%3A0:instantiates:8:22",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 8,
+        },
+        "start": {
+          "column": 22,
+          "line": 8,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller.Execute:method:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+        ],
+        "resolutionPath": [
+          "src/App.cs",
+          "src/Api.cs",
+        ],
+        "ruleId": "syntax.csharp.unique-signature-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.cs",
+      "id": "edge:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%2523Caller.Execute%3Amethod%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Point%3Atype%3A0:returns:4:5",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 11,
+        },
+        "start": {
+          "column": 5,
+          "line": 4,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller.Execute:method:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Service:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.cs",
+          "src/Api.cs",
+        ],
+        "ruleId": "syntax.csharp.unique-signature-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.cs",
+      "id": "edge:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%2523Caller.Execute%3Amethod%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Service%3Aclass%3A0:accepts:4:5",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 11,
+        },
+        "start": {
+          "column": 5,
+          "line": 4,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller.Execute:method:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Service:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Service:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.cs",
+          "src/Api.cs",
+        ],
+        "ruleId": "syntax.csharp.unique-constructor-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.cs",
+      "id": "edge:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%2523Caller.Execute%3Amethod%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Service%3Aclass%3A0:instantiates:9:7",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 9,
+        },
+        "start": {
+          "column": 7,
+          "line": 9,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller.Execute:method:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Service:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs%23Service.Run:method:0",
+        ],
+        "resolutionPath": [
+          "src/App.cs",
+          "src/Api.cs",
+        ],
+        "ruleId": "syntax.csharp.unique-member-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.cs",
+      "id": "edge:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%2523Caller.Execute%3Amethod%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%2523Service.Run%3Amethod%3A0:calls:7:7",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 7,
+        },
+        "start": {
+          "column": 7,
+          "line": 7,
+        },
+      },
+      "referenceName": "Run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller.Execute:method:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs%23Service.Run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.cs:src%2FApi.cs:file:0",
+        ],
+        "resolutionPath": [
+          "src/App.cs",
+          "src/Api.cs",
+        ],
+        "ruleId": "module.csharp.explicit-using.unique-file",
+        "stage": "module",
+      },
+      "filePath": "src/App.cs",
+      "id": "edge:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%3Afile%3A0:symbol%3Asrc%252FApi.cs%3Asrc%252FApi.cs%3Afile%3A0:imports:1:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Demo.Api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.cs:src%2FApp.cs:file:0",
+      "targetId": "symbol:src%2FApi.cs:src%2FApi.cs:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.cs:src%2FApp.cs%23Caller:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.cs",
+      "id": "edge:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%3Afile%3A0:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%2523Caller%3Aclass%3A0:contains:3:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 12,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+      "referenceName": "Caller",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.cs:src%2FApp.cs:file:0",
+      "targetId": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.cs:src%2FApp.cs%23namespace%3ADemo.App:module:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.cs",
+      "id": "edge:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%3Afile%3A0:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%2523namespace%253ADemo.App%3Amodule%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 13,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Demo.App",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.cs:src%2FApp.cs:file:0",
+      "targetId": "symbol:src%2FApp.cs:src%2FApp.cs%23namespace%3ADemo.App:module:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "2cde853fdb8796594bf5993dd29ba25dd6819a27e11560037f87cab2e875fbce",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "csharp",
+      "path": "src/Api.cs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "4bdb53da08a5d5742171cc773c18bb98e990ad8344da16c0e7ad2ff1dd74c192",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "csharp",
+      "path": "src/App.cs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.cs",
+      "id": "symbol:src%2FApi.cs:src%2FApi.cs%23Base.Base:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Base",
+      "qualifiedName": "src/Api.cs#Base.Base",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 5,
+        },
+        "start": {
+          "column": 5,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.cs",
+      "id": "symbol:src%2FApi.cs:src%2FApi.cs%23Base.Run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Run",
+      "qualifiedName": "src/Api.cs#Base.Run",
+      "range": {
+        "end": {
+          "column": 44,
+          "line": 6,
+        },
+        "start": {
+          "column": 5,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.cs",
+      "id": "symbol:src%2FApi.cs:src%2FApi.cs%23Base:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Base",
+      "qualifiedName": "src/Api.cs#Base",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 7,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.cs",
+      "id": "symbol:src%2FApi.cs:src%2FApi.cs%23Helpers.Helper:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Helper",
+      "qualifiedName": "src/Api.cs#Helpers.Helper",
+      "range": {
+        "end": {
+          "column": 74,
+          "line": 13,
+        },
+        "start": {
+          "column": 33,
+          "line": 13,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.cs",
+      "id": "symbol:src%2FApi.cs:src%2FApi.cs%23Helpers:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Helpers",
+      "qualifiedName": "src/Api.cs#Helpers",
+      "range": {
+        "end": {
+          "column": 76,
+          "line": 13,
+        },
+        "start": {
+          "column": 3,
+          "line": 13,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.cs",
+      "id": "symbol:src%2FApi.cs:src%2FApi.cs%23IContract.Act:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Act",
+      "qualifiedName": "src/Api.cs#IContract.Act",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 2,
+        },
+        "start": {
+          "column": 32,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.cs",
+      "id": "symbol:src%2FApi.cs:src%2FApi.cs%23IContract:interface:0",
+      "isExported": true,
+      "kind": "interface",
+      "name": "IContract",
+      "qualifiedName": "src/Api.cs#IContract",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 2,
+        },
+        "start": {
+          "column": 3,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.cs",
+      "id": "symbol:src%2FApi.cs:src%2FApi.cs%23Point:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "Point",
+      "qualifiedName": "src/Api.cs#Point",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 3,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.cs",
+      "id": "symbol:src%2FApi.cs:src%2FApi.cs%23Service.Act:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Act",
+      "qualifiedName": "src/Api.cs#Service.Act",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 11,
+        },
+        "start": {
+          "column": 5,
+          "line": 11,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.cs",
+      "id": "symbol:src%2FApi.cs:src%2FApi.cs%23Service.Run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Run",
+      "qualifiedName": "src/Api.cs#Service.Run",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 10,
+        },
+        "start": {
+          "column": 5,
+          "line": 10,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.cs",
+      "id": "symbol:src%2FApi.cs:src%2FApi.cs%23Service.Service:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Service",
+      "qualifiedName": "src/Api.cs#Service.Service",
+      "range": {
+        "end": {
+          "column": 47,
+          "line": 9,
+        },
+        "start": {
+          "column": 5,
+          "line": 9,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.cs",
+      "id": "symbol:src%2FApi.cs:src%2FApi.cs%23Service:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Service",
+      "qualifiedName": "src/Api.cs#Service",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 12,
+        },
+        "start": {
+          "column": 3,
+          "line": 8,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.cs",
+      "id": "symbol:src%2FApi.cs:src%2FApi.cs%23namespace%3ADemo.Api:module:0",
+      "isExported": true,
+      "kind": "module",
+      "name": "Demo.Api",
+      "qualifiedName": "src/Api.cs#namespace:Demo.Api",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 14,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.cs",
+      "id": "symbol:src%2FApi.cs:src%2FApi.cs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Api.cs",
+      "qualifiedName": "src/Api.cs",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 14,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.cs",
+      "id": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller.Execute:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Execute",
+      "qualifiedName": "src/App.cs#Caller.Execute",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 11,
+        },
+        "start": {
+          "column": 5,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.cs",
+      "id": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Caller",
+      "qualifiedName": "src/App.cs#Caller",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 12,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.cs",
+      "id": "symbol:src%2FApp.cs:src%2FApp.cs%23namespace%3ADemo.App:module:0",
+      "isExported": true,
+      "kind": "module",
+      "name": "Demo.App",
+      "qualifiedName": "src/App.cs#namespace:Demo.App",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 13,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.cs",
+      "id": "symbol:src%2FApp.cs:src%2FApp.cs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "App.cs",
+      "qualifiedName": "src/App.cs",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 13,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`multi-language resolver complete-output parity > 'csharp' preserves unresolved imports when only the consumer remains 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.cs:src%2FApp.cs%23Caller.Execute:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.cs",
+      "id": "edge:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%2523Caller%3Aclass%3A0:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%2523Caller.Execute%3Amethod%3A0:contains:4:5",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 11,
+        },
+        "start": {
+          "column": 5,
+          "line": 4,
+        },
+      },
+      "referenceName": "Execute",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller:class:0",
+      "targetId": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller.Execute:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.cs:src%2FApp.cs%23Caller:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.cs",
+      "id": "edge:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%3Afile%3A0:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%2523Caller%3Aclass%3A0:contains:3:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 12,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+      "referenceName": "Caller",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.cs:src%2FApp.cs:file:0",
+      "targetId": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.cs:src%2FApp.cs%23namespace%3ADemo.App:module:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.cs",
+      "id": "edge:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%3Afile%3A0:symbol%3Asrc%252FApp.cs%3Asrc%252FApp.cs%2523namespace%253ADemo.App%3Amodule%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 13,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Demo.App",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.cs:src%2FApp.cs:file:0",
+      "targetId": "symbol:src%2FApp.cs:src%2FApp.cs%23namespace%3ADemo.App:module:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "4bdb53da08a5d5742171cc773c18bb98e990ad8344da16c0e7ad2ff1dd74c192",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "csharp",
+      "path": "src/App.cs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.cs",
+      "id": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller.Execute:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Execute",
+      "qualifiedName": "src/App.cs#Caller.Execute",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 11,
+        },
+        "start": {
+          "column": 5,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.cs",
+      "id": "symbol:src%2FApp.cs:src%2FApp.cs%23Caller:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Caller",
+      "qualifiedName": "src/App.cs#Caller",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 12,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.cs",
+      "id": "symbol:src%2FApp.cs:src%2FApp.cs%23namespace%3ADemo.App:module:0",
+      "isExported": true,
+      "kind": "module",
+      "name": "Demo.App",
+      "qualifiedName": "src/App.cs#namespace:Demo.App",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 13,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.cs",
+      "id": "symbol:src%2FApp.cs:src%2FApp.cs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "App.cs",
+      "qualifiedName": "src/App.cs",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 13,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`multi-language resolver complete-output parity > 'dart' preserves the full multi-file snapshot 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Base.Base:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Base%3Aclass%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Base.Base%3Amethod%3A0:contains:2:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 2,
+        },
+        "start": {
+          "column": 3,
+          "line": 2,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Base:class:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Base.Base:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Base.run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Base%3Aclass%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Base.run%3Amethod%3A0:contains:3:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 3,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Base:class:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Base.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Base:class:0",
+        ],
+        "ruleId": "syntax.dart.unique-extends-target",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Child%3Aclass%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Base%3Aclass%3A0:extends:5:1",
+      "kind": "extends",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Child:class:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Base:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Child.Child:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Child%3Aclass%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Child.Child%3Amethod%3A0:contains:6:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+      "referenceName": "Child",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Child:class:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Child.Child:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Child.run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Child%3Aclass%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Child.run%3Amethod%3A0:contains:8:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 8,
+        },
+        "start": {
+          "column": 3,
+          "line": 8,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Child:class:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Child.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Contract:class:0",
+        ],
+        "ruleId": "syntax.dart.unique-interface-target",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Child%3Aclass%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Contract%3Aclass%3A0:implements:5:1",
+      "kind": "implements",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Child:class:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Contract:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Mixin:type:0",
+        ],
+        "ruleId": "syntax.dart.unique-mixin-target",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Child%3Aclass%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Mixin%3Atype%3A0:implements:5:1",
+      "kind": "implements",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "Mixin",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Child:class:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Mixin:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Base.run:method:0",
+        ],
+        "ruleId": "syntax.dart.explicit-direct-base-method",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Child.run%3Amethod%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Base.run%3Amethod%3A0:overrides:8:3",
+      "kind": "overrides",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 8,
+        },
+        "start": {
+          "column": 3,
+          "line": 8,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Child.run:method:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Base.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Contract.act:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Contract%3Aclass%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Contract.act%3Amethod%3A0:contains:11:27",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 11,
+        },
+        "start": {
+          "column": 27,
+          "line": 11,
+        },
+      },
+      "referenceName": "act",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Contract:class:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Contract.act:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Mixin.mix:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Mixin%3Atype%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Mixin.mix%3Amethod%3A0:contains:10:15",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 10,
+        },
+        "start": {
+          "column": 15,
+          "line": 10,
+        },
+      },
+      "referenceName": "mix",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Mixin:type:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Mixin.mix:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point.Point:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Point%3Aclass%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Point.Point%3Amethod%3A0:contains:13:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 13,
+        },
+        "start": {
+          "column": 3,
+          "line": 13,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point:class:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point.Point:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point.magnitude:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Point%3Aclass%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Point.magnitude%3Amethod%3A0:contains:14:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 14,
+        },
+        "start": {
+          "column": 3,
+          "line": 14,
+        },
+      },
+      "referenceName": "magnitude",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point:class:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point.magnitude:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23PointExtensions.doubled:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523PointExtensions%3Atype%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523PointExtensions.doubled%3Amethod%3A0:contains:16:38",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 16,
+        },
+        "start": {
+          "column": 38,
+          "line": 16,
+        },
+      },
+      "referenceName": "doubled",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23PointExtensions:type:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23PointExtensions.doubled:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point:class:0",
+        ],
+        "ruleId": "syntax.dart.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523helper%3Afunction%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Point%3Aclass%3A0:accepts:17:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 17,
+        },
+        "start": {
+          "column": 1,
+          "line": 17,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23helper:function:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point.magnitude:method:0",
+        ],
+        "ruleId": "syntax.dart.unique-member-call",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523helper%3Afunction%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Point.magnitude%3Amethod%3A0:calls:17:28",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 17,
+        },
+        "start": {
+          "column": 28,
+          "line": 17,
+        },
+      },
+      "referenceName": "magnitude",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23helper:function:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point.magnitude:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Base:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%3Afile%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Base%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart:file:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Base:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Child:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%3Afile%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Child%3Aclass%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "Child",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart:file:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Child:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Contract:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%3Afile%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Contract%3Aclass%3A0:contains:11:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 40,
+          "line": 11,
+        },
+        "start": {
+          "column": 1,
+          "line": 11,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart:file:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Contract:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Mixin:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%3Afile%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Mixin%3Atype%3A0:contains:10:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 10,
+        },
+      },
+      "referenceName": "Mixin",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart:file:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Mixin:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%3Afile%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Point%3Aclass%3A0:contains:12:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 15,
+        },
+        "start": {
+          "column": 1,
+          "line": 12,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart:file:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23PointExtensions:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%3Afile%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523PointExtensions%3Atype%3A0:contains:16:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 59,
+          "line": 16,
+        },
+        "start": {
+          "column": 1,
+          "line": 16,
+        },
+      },
+      "referenceName": "PointExtensions",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart:file:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23PointExtensions:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23helper:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "lib/api.dart",
+      "id": "edge:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%3Afile%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523helper%3Afunction%3A0:contains:17:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 17,
+        },
+        "start": {
+          "column": 1,
+          "line": 17,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart:file:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Child:class:0",
+        ],
+        "resolutionPath": [
+          "lib/app.dart",
+          "lib/api.dart",
+        ],
+        "ruleId": "syntax.dart.unique-constructor-call",
+        "stage": "module",
+      },
+      "filePath": "lib/app.dart",
+      "id": "edge:symbol%3Alib%252Fapp.dart%3Alib%252Fapp.dart%2523caller%3Afunction%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Child%3Aclass%3A0:instantiates:7:3",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 11,
+          "line": 7,
+        },
+        "start": {
+          "column": 3,
+          "line": 7,
+        },
+      },
+      "referenceName": "Child",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapp.dart:lib%2Fapp.dart%23caller:function:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Child:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point:class:0",
+        ],
+        "resolutionPath": [
+          "lib/app.dart",
+          "lib/api.dart",
+        ],
+        "ruleId": "syntax.dart.unique-constructor-call",
+        "stage": "module",
+      },
+      "filePath": "lib/app.dart",
+      "id": "edge:symbol%3Alib%252Fapp.dart%3Alib%252Fapp.dart%2523caller%3Afunction%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Point%3Aclass%3A0:instantiates:3:23",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 31,
+          "line": 3,
+        },
+        "start": {
+          "column": 23,
+          "line": 3,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapp.dart:lib%2Fapp.dart%23caller:function:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point:class:0",
+        ],
+        "resolutionPath": [
+          "lib/app.dart",
+          "lib/api.dart",
+        ],
+        "ruleId": "syntax.dart.unique-constructor-call",
+        "stage": "module",
+      },
+      "filePath": "lib/app.dart",
+      "id": "edge:symbol%3Alib%252Fapp.dart%3Alib%252Fapp.dart%2523caller%3Afunction%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Point%3Aclass%3A0:instantiates:6:10",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 6,
+        },
+        "start": {
+          "column": 10,
+          "line": 6,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapp.dart:lib%2Fapp.dart%23caller:function:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point.magnitude:method:0",
+        ],
+        "resolutionPath": [
+          "lib/app.dart",
+          "lib/api.dart",
+        ],
+        "ruleId": "syntax.dart.unique-member-call",
+        "stage": "module",
+      },
+      "filePath": "lib/app.dart",
+      "id": "edge:symbol%3Alib%252Fapp.dart%3Alib%252Fapp.dart%2523caller%3Afunction%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523Point.magnitude%3Amethod%3A0:calls:4:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "magnitude",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapp.dart:lib%2Fapp.dart%23caller:function:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point.magnitude:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23PointExtensions.doubled:method:0",
+        ],
+        "resolutionPath": [
+          "lib/app.dart",
+          "lib/api.dart",
+        ],
+        "ruleId": "syntax.dart.unique-extension-member-call",
+        "stage": "module",
+      },
+      "filePath": "lib/app.dart",
+      "id": "edge:symbol%3Alib%252Fapp.dart%3Alib%252Fapp.dart%2523caller%3Afunction%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523PointExtensions.doubled%3Amethod%3A0:calls:5:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+      "referenceName": "doubled",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapp.dart:lib%2Fapp.dart%23caller:function:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23PointExtensions.doubled:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23helper:function:0",
+        ],
+        "resolutionPath": [
+          "lib/app.dart",
+          "lib/api.dart",
+        ],
+        "ruleId": "syntax.dart.unique-direct-function-call",
+        "stage": "module",
+      },
+      "filePath": "lib/app.dart",
+      "id": "edge:symbol%3Alib%252Fapp.dart%3Alib%252Fapp.dart%2523caller%3Afunction%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%2523helper%3Afunction%3A0:calls:6:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapp.dart:lib%2Fapp.dart%23caller:function:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapi.dart:lib%2Fapi.dart:file:0",
+        ],
+        "resolutionPath": [
+          "lib/app.dart",
+          "lib/api.dart",
+        ],
+        "ruleId": "module.dart.explicit-import.unique-file",
+        "stage": "module",
+      },
+      "filePath": "lib/app.dart",
+      "id": "edge:symbol%3Alib%252Fapp.dart%3Alib%252Fapp.dart%3Afile%3A0:symbol%3Alib%252Fapi.dart%3Alib%252Fapi.dart%3Afile%3A0:imports:1:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "api.dart",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapp.dart:lib%2Fapp.dart:file:0",
+      "targetId": "symbol:lib%2Fapi.dart:lib%2Fapi.dart:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapp.dart:lib%2Fapp.dart%23caller:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "lib/app.dart",
+      "id": "edge:symbol%3Alib%252Fapp.dart%3Alib%252Fapp.dart%3Afile%3A0:symbol%3Alib%252Fapp.dart%3Alib%252Fapp.dart%2523caller%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "caller",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapp.dart:lib%2Fapp.dart:file:0",
+      "targetId": "symbol:lib%2Fapp.dart:lib%2Fapp.dart%23caller:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "f837c6f2ad2f5f533ee9edee90e3ec535116e846b7cc6e0d5440e0b8dfdb24ec",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "dart",
+      "path": "lib/api.dart",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "f41626b18d6e7866dfb55212b41a3e1087057cbfaf165be625e50669fec42c7a",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "dart",
+      "path": "lib/app.dart",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/api.dart",
+      "id": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Base.Base:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Base",
+      "qualifiedName": "lib/api.dart#Base.Base",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 2,
+        },
+        "start": {
+          "column": 3,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/api.dart",
+      "id": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Base.run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "lib/api.dart#Base.run",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 3,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/api.dart",
+      "id": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Base:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Base",
+      "qualifiedName": "lib/api.dart#Base",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/api.dart",
+      "id": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Child.Child:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Child",
+      "qualifiedName": "lib/api.dart#Child.Child",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/api.dart",
+      "id": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Child.run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "lib/api.dart#Child.run",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 8,
+        },
+        "start": {
+          "column": 3,
+          "line": 8,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/api.dart",
+      "id": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Child:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Child",
+      "qualifiedName": "lib/api.dart#Child",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/api.dart",
+      "id": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Contract.act:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "act",
+      "qualifiedName": "lib/api.dart#Contract.act",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 11,
+        },
+        "start": {
+          "column": 27,
+          "line": 11,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/api.dart",
+      "id": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Contract:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Contract",
+      "qualifiedName": "lib/api.dart#Contract",
+      "range": {
+        "end": {
+          "column": 40,
+          "line": 11,
+        },
+        "start": {
+          "column": 1,
+          "line": 11,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/api.dart",
+      "id": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Mixin.mix:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "mix",
+      "qualifiedName": "lib/api.dart#Mixin.mix",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 10,
+        },
+        "start": {
+          "column": 15,
+          "line": 10,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/api.dart",
+      "id": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Mixin:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "Mixin",
+      "qualifiedName": "lib/api.dart#Mixin",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 10,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/api.dart",
+      "id": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point.Point:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Point",
+      "qualifiedName": "lib/api.dart#Point.Point",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 13,
+        },
+        "start": {
+          "column": 3,
+          "line": 13,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/api.dart",
+      "id": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point.magnitude:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "magnitude",
+      "qualifiedName": "lib/api.dart#Point.magnitude",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 14,
+        },
+        "start": {
+          "column": 3,
+          "line": 14,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/api.dart",
+      "id": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23Point:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Point",
+      "qualifiedName": "lib/api.dart#Point",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 15,
+        },
+        "start": {
+          "column": 1,
+          "line": 12,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/api.dart",
+      "id": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23PointExtensions.doubled:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "doubled",
+      "qualifiedName": "lib/api.dart#PointExtensions.doubled",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 16,
+        },
+        "start": {
+          "column": 38,
+          "line": 16,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/api.dart",
+      "id": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23PointExtensions:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "PointExtensions",
+      "qualifiedName": "lib/api.dart#PointExtensions",
+      "range": {
+        "end": {
+          "column": 59,
+          "line": 16,
+        },
+        "start": {
+          "column": 1,
+          "line": 16,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/api.dart",
+      "id": "symbol:lib%2Fapi.dart:lib%2Fapi.dart%23helper:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "lib/api.dart#helper",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 17,
+        },
+        "start": {
+          "column": 1,
+          "line": 17,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/api.dart",
+      "id": "symbol:lib%2Fapi.dart:lib%2Fapi.dart:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "api.dart",
+      "qualifiedName": "lib/api.dart",
+      "range": {
+        "end": {
+          "column": 46,
+          "line": 17,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/app.dart",
+      "id": "symbol:lib%2Fapp.dart:lib%2Fapp.dart%23caller:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "caller",
+      "qualifiedName": "lib/app.dart#caller",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/app.dart",
+      "id": "symbol:lib%2Fapp.dart:lib%2Fapp.dart:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "app.dart",
+      "qualifiedName": "lib/app.dart",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`multi-language resolver complete-output parity > 'dart' preserves unresolved imports when only the consumer remains 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Fapp.dart:lib%2Fapp.dart%23caller:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "lib/app.dart",
+      "id": "edge:symbol%3Alib%252Fapp.dart%3Alib%252Fapp.dart%3Afile%3A0:symbol%3Alib%252Fapp.dart%3Alib%252Fapp.dart%2523caller%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "caller",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Fapp.dart:lib%2Fapp.dart:file:0",
+      "targetId": "symbol:lib%2Fapp.dart:lib%2Fapp.dart%23caller:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "f41626b18d6e7866dfb55212b41a3e1087057cbfaf165be625e50669fec42c7a",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "dart",
+      "path": "lib/app.dart",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/app.dart",
+      "id": "symbol:lib%2Fapp.dart:lib%2Fapp.dart%23caller:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "caller",
+      "qualifiedName": "lib/app.dart#caller",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/app.dart",
+      "id": "symbol:lib%2Fapp.dart:lib%2Fapp.dart:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "app.dart",
+      "qualifiedName": "lib/app.dart",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`multi-language resolver complete-output parity > 'kotlin' preserves the full multi-file snapshot 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Contract.act:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api/Contract.kt",
+      "id": "edge:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%2523Contract%3Ainterface%3A0:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%2523Contract.act%3Amethod%3A0:contains:3:22",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 31,
+          "line": 3,
+        },
+        "start": {
+          "column": 22,
+          "line": 3,
+        },
+      },
+      "referenceName": "act",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Contract:interface:0",
+      "targetId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Contract.act:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Widget.run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api/Contract.kt",
+      "id": "edge:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%2523Widget%3Aclass%3A0:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%2523Widget.run%3Amethod%3A0:contains:5:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Widget:class:0",
+      "targetId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Widget.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Contract:interface:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api/Contract.kt",
+      "id": "edge:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%3Afile%3A0:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%2523Contract%3Ainterface%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt:file:0",
+      "targetId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Contract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Widget:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api/Contract.kt",
+      "id": "edge:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%3Afile%3A0:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%2523Widget%3Aclass%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "Widget",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt:file:0",
+      "targetId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Widget:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23ext:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api/Contract.kt",
+      "id": "edge:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%3Afile%3A0:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%2523ext%3Afunction%3A0:contains:8:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+      "referenceName": "ext",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt:file:0",
+      "targetId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23ext:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23helper:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api/Contract.kt",
+      "id": "edge:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%3Afile%3A0:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%2523helper%3Afunction%3A0:contains:7:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt:file:0",
+      "targetId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Widget:class:0",
+        ],
+        "resolutionPath": [
+          "src/app/Caller.kt",
+          "src/api/Contract.kt",
+        ],
+        "ruleId": "syntax.kotlin.unique-constructor-call",
+        "stage": "module",
+      },
+      "filePath": "src/app/Caller.kt",
+      "id": "edge:symbol%3Asrc%252Fapp%252FCaller.kt%3Asrc%252Fapp%252FCaller.kt%2523caller%3Afunction%3A0:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%2523Widget%3Aclass%3A0:instantiates:10:24",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 10,
+        },
+        "start": {
+          "column": 24,
+          "line": 10,
+        },
+      },
+      "referenceName": "Widget",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FCaller.kt:src%2Fapp%2FCaller.kt%23caller:function:0",
+      "targetId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Widget:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Widget.run:method:0",
+        ],
+        "resolutionPath": [
+          "src/app/Caller.kt",
+          "src/api/Contract.kt",
+        ],
+        "ruleId": "syntax.kotlin.unique-member-call",
+        "stage": "module",
+      },
+      "filePath": "src/app/Caller.kt",
+      "id": "edge:symbol%3Asrc%252Fapp%252FCaller.kt%3Asrc%252Fapp%252FCaller.kt%2523caller%3Afunction%3A0:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%2523Widget.run%3Amethod%3A0:calls:11:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 15,
+          "line": 11,
+        },
+        "start": {
+          "column": 3,
+          "line": 11,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FCaller.kt:src%2Fapp%2FCaller.kt%23caller:function:0",
+      "targetId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Widget.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23ext:function:0",
+        ],
+        "resolutionPath": [
+          "src/app/Caller.kt",
+          "src/api/Contract.kt",
+        ],
+        "ruleId": "syntax.kotlin.unique-extension-function-call",
+        "stage": "module",
+      },
+      "filePath": "src/app/Caller.kt",
+      "id": "edge:symbol%3Asrc%252Fapp%252FCaller.kt%3Asrc%252Fapp%252FCaller.kt%2523caller%3Afunction%3A0:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%2523ext%3Afunction%3A0:calls:12:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 15,
+          "line": 12,
+        },
+        "start": {
+          "column": 3,
+          "line": 12,
+        },
+      },
+      "referenceName": "ext",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FCaller.kt:src%2Fapp%2FCaller.kt%23caller:function:0",
+      "targetId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23ext:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23helper:function:0",
+        ],
+        "resolutionPath": [
+          "src/app/Caller.kt",
+          "src/api/Contract.kt",
+        ],
+        "ruleId": "syntax.kotlin.unique-direct-function-call",
+        "stage": "module",
+      },
+      "filePath": "src/app/Caller.kt",
+      "id": "edge:symbol%3Asrc%252Fapp%252FCaller.kt%3Asrc%252Fapp%252FCaller.kt%2523caller%3Afunction%3A0:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%2523helper%3Afunction%3A0:calls:13:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 11,
+          "line": 13,
+        },
+        "start": {
+          "column": 3,
+          "line": 13,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FCaller.kt:src%2Fapp%2FCaller.kt%23caller:function:0",
+      "targetId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt%23Service:class:0",
+        ],
+        "resolutionPath": [
+          "src/app/Caller.kt",
+          "src/app/Service.kt",
+        ],
+        "ruleId": "syntax.kotlin.unique-constructor-call",
+        "stage": "module",
+      },
+      "filePath": "src/app/Caller.kt",
+      "id": "edge:symbol%3Asrc%252Fapp%252FCaller.kt%3Asrc%252Fapp%252FCaller.kt%2523caller%3Afunction%3A0:symbol%3Asrc%252Fapp%252FService.kt%3Asrc%252Fapp%252FService.kt%2523Service%3Aclass%3A0:instantiates:9:26",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 35,
+          "line": 9,
+        },
+        "start": {
+          "column": 26,
+          "line": 9,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FCaller.kt:src%2Fapp%2FCaller.kt%23caller:function:0",
+      "targetId": "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt%23Service:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt%23Service.act:method:0",
+        ],
+        "resolutionPath": [
+          "src/app/Caller.kt",
+          "src/app/Service.kt",
+        ],
+        "ruleId": "syntax.kotlin.unique-member-call",
+        "stage": "module",
+      },
+      "filePath": "src/app/Caller.kt",
+      "id": "edge:symbol%3Asrc%252Fapp%252FCaller.kt%3Asrc%252Fapp%252FCaller.kt%2523caller%3Afunction%3A0:symbol%3Asrc%252Fapp%252FService.kt%3Asrc%252Fapp%252FService.kt%2523Service.act%3Amethod%3A0:calls:14:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 14,
+        },
+        "start": {
+          "column": 3,
+          "line": 14,
+        },
+      },
+      "referenceName": "act",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FCaller.kt:src%2Fapp%2FCaller.kt%23caller:function:0",
+      "targetId": "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt%23Service.act:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Widget:class:0",
+        ],
+        "resolutionPath": [
+          "src/app/Caller.kt",
+          "src/api/Contract.kt",
+        ],
+        "ruleId": "module.kotlin.explicit-import.unique-target",
+        "stage": "module",
+      },
+      "filePath": "src/app/Caller.kt",
+      "id": "edge:symbol%3Asrc%252Fapp%252FCaller.kt%3Asrc%252Fapp%252FCaller.kt%3Afile%3A0:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%2523Widget%3Aclass%3A0:imports:3:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Widget",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FCaller.kt:src%2Fapp%2FCaller.kt:file:0",
+      "targetId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Widget:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23ext:function:0",
+        ],
+        "resolutionPath": [
+          "src/app/Caller.kt",
+          "src/api/Contract.kt",
+        ],
+        "ruleId": "module.kotlin.explicit-import.unique-target",
+        "stage": "module",
+      },
+      "filePath": "src/app/Caller.kt",
+      "id": "edge:symbol%3Asrc%252Fapp%252FCaller.kt%3Asrc%252Fapp%252FCaller.kt%3Afile%3A0:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%2523ext%3Afunction%3A0:imports:4:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "ext",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FCaller.kt:src%2Fapp%2FCaller.kt:file:0",
+      "targetId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23ext:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23helper:function:0",
+        ],
+        "resolutionPath": [
+          "src/app/Caller.kt",
+          "src/api/Contract.kt",
+        ],
+        "ruleId": "module.kotlin.explicit-import.unique-target",
+        "stage": "module",
+      },
+      "filePath": "src/app/Caller.kt",
+      "id": "edge:symbol%3Asrc%252Fapp%252FCaller.kt%3Asrc%252Fapp%252FCaller.kt%3Afile%3A0:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%2523helper%3Afunction%3A0:imports:5:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FCaller.kt:src%2Fapp%2FCaller.kt:file:0",
+      "targetId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp%2FCaller.kt:src%2Fapp%2FCaller.kt%23caller:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app/Caller.kt",
+      "id": "edge:symbol%3Asrc%252Fapp%252FCaller.kt%3Asrc%252Fapp%252FCaller.kt%3Afile%3A0:symbol%3Asrc%252Fapp%252FCaller.kt%3Asrc%252Fapp%252FCaller.kt%2523caller%3Afunction%3A0:contains:8:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 15,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+      "referenceName": "caller",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FCaller.kt:src%2Fapp%2FCaller.kt:file:0",
+      "targetId": "symbol:src%2Fapp%2FCaller.kt:src%2Fapp%2FCaller.kt%23caller:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt%23Service:class:0",
+        ],
+        "resolutionPath": [
+          "src/app/Caller.kt",
+          "src/app/Service.kt",
+        ],
+        "ruleId": "module.kotlin.explicit-import.unique-target",
+        "stage": "module",
+      },
+      "filePath": "src/app/Caller.kt",
+      "id": "edge:symbol%3Asrc%252Fapp%252FCaller.kt%3Asrc%252Fapp%252FCaller.kt%3Afile%3A0:symbol%3Asrc%252Fapp%252FService.kt%3Asrc%252Fapp%252FService.kt%2523Service%3Aclass%3A0:imports:6:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FCaller.kt:src%2Fapp%2FCaller.kt:file:0",
+      "targetId": "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt%23Service:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Contract:interface:0",
+        ],
+        "resolutionPath": [
+          "src/app/Service.kt",
+          "src/api/Contract.kt",
+        ],
+        "ruleId": "syntax.jvm.cross-file.explicit-import.direct-implements",
+        "stage": "module",
+      },
+      "filePath": "src/app/Service.kt",
+      "id": "edge:symbol%3Asrc%252Fapp%252FService.kt%3Asrc%252Fapp%252FService.kt%2523Service%3Aclass%3A0:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%2523Contract%3Ainterface%3A0:implements:6:17",
+      "kind": "implements",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 6,
+        },
+        "start": {
+          "column": 17,
+          "line": 6,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt%23Service:class:0",
+      "targetId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Contract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt%23Service.act:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app/Service.kt",
+      "id": "edge:symbol%3Asrc%252Fapp%252FService.kt%3Asrc%252Fapp%252FService.kt%2523Service%3Aclass%3A0:symbol%3Asrc%252Fapp%252FService.kt%3Asrc%252Fapp%252FService.kt%2523Service.act%3Amethod%3A0:contains:7:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 7,
+        },
+        "start": {
+          "column": 3,
+          "line": 7,
+        },
+      },
+      "referenceName": "act",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt%23Service:class:0",
+      "targetId": "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt%23Service.act:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt%23Service.create:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app/Service.kt",
+      "id": "edge:symbol%3Asrc%252Fapp%252FService.kt%3Asrc%252Fapp%252FService.kt%2523Service%3Aclass%3A0:symbol%3Asrc%252Fapp%252FService.kt%3Asrc%252Fapp%252FService.kt%2523Service.create%3Amethod%3A0:contains:8:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 35,
+          "line": 8,
+        },
+        "start": {
+          "column": 3,
+          "line": 8,
+        },
+      },
+      "referenceName": "create",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt%23Service:class:0",
+      "targetId": "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt%23Service.create:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Contract.act:method:0",
+        ],
+        "ruleId": "syntax.override.explicit-direct-base-method",
+        "stage": "syntax",
+      },
+      "filePath": "src/app/Service.kt",
+      "id": "edge:symbol%3Asrc%252Fapp%252FService.kt%3Asrc%252Fapp%252FService.kt%2523Service.act%3Amethod%3A0:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%2523Contract.act%3Amethod%3A0:overrides:7:16",
+      "kind": "overrides",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 7,
+        },
+        "start": {
+          "column": 16,
+          "line": 7,
+        },
+      },
+      "referenceName": "act",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt%23Service.act:method:0",
+      "targetId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Contract.act:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Contract:interface:0",
+        ],
+        "resolutionPath": [
+          "src/app/Service.kt",
+          "src/api/Contract.kt",
+        ],
+        "ruleId": "module.kotlin.explicit-import.unique-target",
+        "stage": "module",
+      },
+      "filePath": "src/app/Service.kt",
+      "id": "edge:symbol%3Asrc%252Fapp%252FService.kt%3Asrc%252Fapp%252FService.kt%3Afile%3A0:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%2523Contract%3Ainterface%3A0:imports:3:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt:file:0",
+      "targetId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Contract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Widget:class:0",
+        ],
+        "resolutionPath": [
+          "src/app/Service.kt",
+          "src/api/Contract.kt",
+        ],
+        "ruleId": "module.kotlin.explicit-import.unique-target",
+        "stage": "module",
+      },
+      "filePath": "src/app/Service.kt",
+      "id": "edge:symbol%3Asrc%252Fapp%252FService.kt%3Asrc%252Fapp%252FService.kt%3Afile%3A0:symbol%3Asrc%252Fapi%252FContract.kt%3Asrc%252Fapi%252FContract.kt%2523Widget%3Aclass%3A0:imports:4:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "Widget",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt:file:0",
+      "targetId": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Widget:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt%23Service:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app/Service.kt",
+      "id": "edge:symbol%3Asrc%252Fapp%252FService.kt%3Asrc%252Fapp%252FService.kt%3Afile%3A0:symbol%3Asrc%252Fapp%252FService.kt%3Asrc%252Fapp%252FService.kt%2523Service%3Aclass%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt:file:0",
+      "targetId": "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt%23Service:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "40a50e0242f3f4737aa9282cff1a1ec0ce66977d77ba225418c8c9d64bde7e31",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "kotlin",
+      "path": "src/api/Contract.kt",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "e36bbe388587fb320d901b2b7630c774974ab6a28b07ffa46bfbfa97be1824c3",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "kotlin",
+      "path": "src/app/Caller.kt",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "84dad1d8ccca73594a84bd5fda1fc5e5edd92892eacb4d7d98c0e993ad544fa5",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "kotlin",
+      "path": "src/app/Service.kt",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api/Contract.kt",
+      "id": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Contract.act:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "act",
+      "qualifiedName": "src/api/Contract.kt#Contract.act",
+      "range": {
+        "end": {
+          "column": 31,
+          "line": 3,
+        },
+        "start": {
+          "column": 22,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api/Contract.kt",
+      "id": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Contract:interface:0",
+      "isExported": true,
+      "kind": "interface",
+      "name": "Contract",
+      "qualifiedName": "src/api/Contract.kt#Contract",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api/Contract.kt",
+      "id": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Widget.run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "src/api/Contract.kt#Widget.run",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api/Contract.kt",
+      "id": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23Widget:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Widget",
+      "qualifiedName": "src/api/Contract.kt#Widget",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api/Contract.kt",
+      "id": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23ext:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "ext",
+      "qualifiedName": "src/api/Contract.kt#ext",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api/Contract.kt",
+      "id": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt%23helper:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "src/api/Contract.kt#helper",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api/Contract.kt",
+      "id": "symbol:src%2Fapi%2FContract.kt:src%2Fapi%2FContract.kt:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Contract.kt",
+      "qualifiedName": "src/api/Contract.kt",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/Caller.kt",
+      "id": "symbol:src%2Fapp%2FCaller.kt:src%2Fapp%2FCaller.kt%23caller:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "caller",
+      "qualifiedName": "src/app/Caller.kt#caller",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 15,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/Caller.kt",
+      "id": "symbol:src%2Fapp%2FCaller.kt:src%2Fapp%2FCaller.kt:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Caller.kt",
+      "qualifiedName": "src/app/Caller.kt",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 16,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/Service.kt",
+      "id": "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt%23Service.act:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "act",
+      "qualifiedName": "src/app/Service.kt#Service.act",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 7,
+        },
+        "start": {
+          "column": 3,
+          "line": 7,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/Service.kt",
+      "id": "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt%23Service.create:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "create",
+      "qualifiedName": "src/app/Service.kt#Service.create",
+      "range": {
+        "end": {
+          "column": 35,
+          "line": 8,
+        },
+        "start": {
+          "column": 3,
+          "line": 8,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/Service.kt",
+      "id": "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt%23Service:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Service",
+      "qualifiedName": "src/app/Service.kt#Service",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/Service.kt",
+      "id": "symbol:src%2Fapp%2FService.kt:src%2Fapp%2FService.kt:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Service.kt",
+      "qualifiedName": "src/app/Service.kt",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`multi-language resolver complete-output parity > 'kotlin' preserves unresolved imports when only the consumer remains 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp%2FCaller.kt:src%2Fapp%2FCaller.kt%23caller:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app/Caller.kt",
+      "id": "edge:symbol%3Asrc%252Fapp%252FCaller.kt%3Asrc%252Fapp%252FCaller.kt%3Afile%3A0:symbol%3Asrc%252Fapp%252FCaller.kt%3Asrc%252Fapp%252FCaller.kt%2523caller%3Afunction%3A0:contains:8:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 15,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+      "referenceName": "caller",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FCaller.kt:src%2Fapp%2FCaller.kt:file:0",
+      "targetId": "symbol:src%2Fapp%2FCaller.kt:src%2Fapp%2FCaller.kt%23caller:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "e36bbe388587fb320d901b2b7630c774974ab6a28b07ffa46bfbfa97be1824c3",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "kotlin",
+      "path": "src/app/Caller.kt",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/Caller.kt",
+      "id": "symbol:src%2Fapp%2FCaller.kt:src%2Fapp%2FCaller.kt%23caller:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "caller",
+      "qualifiedName": "src/app/Caller.kt#caller",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 15,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/Caller.kt",
+      "id": "symbol:src%2Fapp%2FCaller.kt:src%2Fapp%2FCaller.kt:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Caller.kt",
+      "qualifiedName": "src/app/Caller.kt",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 16,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`multi-language resolver complete-output parity > 'swift' preserves the full multi-file snapshot 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Base.init:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Base%3Aclass%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Base.init%3Amethod%3A0:contains:5:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+      "referenceName": "init",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Base:class:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Base.init:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Base.run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Base%3Aclass%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Base.run%3Amethod%3A0:contains:6:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Base:class:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Base.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Contract.act:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Contract%3Ainterface%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Contract.act%3Amethod%3A0:contains:2:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 2,
+        },
+        "start": {
+          "column": 3,
+          "line": 2,
+        },
+      },
+      "referenceName": "act",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Contract:interface:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Contract.act:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point.init:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Point%3Aclass%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Point.init%3Amethod%3A0:contains:9:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 9,
+        },
+        "start": {
+          "column": 3,
+          "line": 9,
+        },
+      },
+      "referenceName": "init",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point:class:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point.init:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point.magnitude:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Point%3Aclass%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Point.magnitude%3Amethod%3A0:contains:10:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 10,
+        },
+        "start": {
+          "column": 3,
+          "line": 10,
+        },
+      },
+      "referenceName": "magnitude",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point:class:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point.magnitude:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Base:class:0",
+        ],
+        "ruleId": "syntax.swift.unique-heritage-target",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Service%3Aclass%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Base%3Aclass%3A0:extends:12:1",
+      "kind": "extends",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 16,
+        },
+        "start": {
+          "column": 1,
+          "line": 12,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service:class:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Base:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Contract:interface:0",
+        ],
+        "ruleId": "syntax.swift.unique-conformance-target",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Service%3Aclass%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Contract%3Ainterface%3A0:implements:12:1",
+      "kind": "implements",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 16,
+        },
+        "start": {
+          "column": 1,
+          "line": 12,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service:class:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Contract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service.act:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Service%3Aclass%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Service.act%3Amethod%3A0:contains:15:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 15,
+        },
+        "start": {
+          "column": 3,
+          "line": 15,
+        },
+      },
+      "referenceName": "act",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service:class:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service.act:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service.init:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Service%3Aclass%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Service.init%3Amethod%3A0:contains:13:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 13,
+        },
+        "start": {
+          "column": 3,
+          "line": 13,
+        },
+      },
+      "referenceName": "init",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service:class:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service.init:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service.run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Service%3Aclass%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Service.run%3Amethod%3A0:contains:14:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 14,
+        },
+        "start": {
+          "column": 3,
+          "line": 14,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service:class:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Base.run:method:0",
+        ],
+        "ruleId": "syntax.swift.explicit-direct-base-method",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Service.run%3Amethod%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Base.run%3Amethod%3A0:overrides:14:3",
+      "kind": "overrides",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 14,
+        },
+        "start": {
+          "column": 3,
+          "line": 14,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service.run:method:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Base.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23extension%3APoint.doubled:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523extension%253APoint%3Aclass%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523extension%253APoint.doubled%3Amethod%3A0:contains:18:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 18,
+        },
+        "start": {
+          "column": 3,
+          "line": 18,
+        },
+      },
+      "referenceName": "doubled",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23extension%3APoint:class:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23extension%3APoint.doubled:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point:class:0",
+        ],
+        "ruleId": "syntax.swift.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523makePoint%3Afunction%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Point%3Aclass%3A0:accepts:21:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 57,
+          "line": 21,
+        },
+        "start": {
+          "column": 1,
+          "line": 21,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23makePoint:function:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point:class:0",
+        ],
+        "ruleId": "syntax.swift.unique-signature-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523makePoint%3Afunction%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Point%3Aclass%3A0:returns:21:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 57,
+          "line": 21,
+        },
+        "start": {
+          "column": 1,
+          "line": 21,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23makePoint:function:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Base:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%3Afile%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Base%3Aclass%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift:file:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Base:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Contract:interface:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%3Afile%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Contract%3Ainterface%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift:file:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Contract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%3Afile%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Point%3Aclass%3A0:contains:8:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 11,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift:file:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%3Afile%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Service%3Aclass%3A0:contains:12:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 16,
+        },
+        "start": {
+          "column": 1,
+          "line": 12,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift:file:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23extension%3APoint:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%3Afile%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523extension%253APoint%3Aclass%3A0:contains:17:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 19,
+        },
+        "start": {
+          "column": 1,
+          "line": 17,
+        },
+      },
+      "referenceName": "extension Point",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift:file:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23extension%3APoint:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23helper:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%3Afile%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523helper%3Afunction%3A0:contains:20:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 20,
+        },
+        "start": {
+          "column": 1,
+          "line": 20,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift:file:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23makePoint:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/API.swift",
+      "id": "edge:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%3Afile%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523makePoint%3Afunction%3A0:contains:21:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 57,
+          "line": 21,
+        },
+        "start": {
+          "column": 1,
+          "line": 21,
+        },
+      },
+      "referenceName": "makePoint",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift:file:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23makePoint:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point:class:0",
+        ],
+        "resolutionPath": [
+          "Sources/App.swift",
+          "Sources/API.swift",
+        ],
+        "ruleId": "syntax.swift.unique-signature-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "Sources/App.swift",
+      "id": "edge:symbol%3ASources%252FApp.swift%3ASources%252FApp.swift%2523caller%3Afunction%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Point%3Aclass%3A0:accepts:7:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 14,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FApp.swift:Sources%2FApp.swift%23caller:function:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point:class:0",
+        ],
+        "resolutionPath": [
+          "Sources/App.swift",
+          "Sources/API.swift",
+        ],
+        "ruleId": "syntax.swift.unique-initializer-call",
+        "stage": "module",
+      },
+      "filePath": "Sources/App.swift",
+      "id": "edge:symbol%3ASources%252FApp.swift%3ASources%252FApp.swift%2523caller%3Afunction%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Point%3Aclass%3A0:instantiates:11:3",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 11,
+        },
+        "start": {
+          "column": 3,
+          "line": 11,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FApp.swift:Sources%2FApp.swift%23caller:function:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point:class:0",
+        ],
+        "resolutionPath": [
+          "Sources/App.swift",
+          "Sources/API.swift",
+        ],
+        "ruleId": "syntax.swift.unique-initializer-call",
+        "stage": "module",
+      },
+      "filePath": "Sources/App.swift",
+      "id": "edge:symbol%3ASources%252FApp.swift%3ASources%252FApp.swift%2523caller%3Afunction%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Point%3Aclass%3A0:instantiates:13:13",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 13,
+        },
+        "start": {
+          "column": 13,
+          "line": 13,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FApp.swift:Sources%2FApp.swift%23caller:function:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point.magnitude:method:0",
+        ],
+        "resolutionPath": [
+          "Sources/App.swift",
+          "Sources/API.swift",
+        ],
+        "ruleId": "syntax.swift.unique-member-call",
+        "stage": "module",
+      },
+      "filePath": "Sources/App.swift",
+      "id": "edge:symbol%3ASources%252FApp.swift%3ASources%252FApp.swift%2523caller%3Afunction%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Point.magnitude%3Amethod%3A0:calls:8:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 8,
+        },
+        "start": {
+          "column": 3,
+          "line": 8,
+        },
+      },
+      "referenceName": "magnitude",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FApp.swift:Sources%2FApp.swift%23caller:function:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point.magnitude:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service:class:0",
+        ],
+        "resolutionPath": [
+          "Sources/App.swift",
+          "Sources/API.swift",
+        ],
+        "ruleId": "syntax.swift.unique-signature-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "Sources/App.swift",
+      "id": "edge:symbol%3ASources%252FApp.swift%3ASources%252FApp.swift%2523caller%3Afunction%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Service%3Aclass%3A0:accepts:7:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 14,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FApp.swift:Sources%2FApp.swift%23caller:function:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service.run:method:0",
+        ],
+        "resolutionPath": [
+          "Sources/App.swift",
+          "Sources/API.swift",
+        ],
+        "ruleId": "syntax.swift.unique-member-call",
+        "stage": "module",
+      },
+      "filePath": "Sources/App.swift",
+      "id": "edge:symbol%3ASources%252FApp.swift%3ASources%252FApp.swift%2523caller%3Afunction%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Service.run%3Amethod%3A0:calls:10:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 10,
+        },
+        "start": {
+          "column": 3,
+          "line": 10,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FApp.swift:Sources%2FApp.swift%23caller:function:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23extension%3APoint.doubled:method:0",
+        ],
+        "resolutionPath": [
+          "Sources/App.swift",
+          "Sources/API.swift",
+        ],
+        "ruleId": "syntax.swift.unique-extension-member-call",
+        "stage": "module",
+      },
+      "filePath": "Sources/App.swift",
+      "id": "edge:symbol%3ASources%252FApp.swift%3ASources%252FApp.swift%2523caller%3Afunction%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523extension%253APoint.doubled%3Amethod%3A0:calls:9:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 9,
+        },
+        "start": {
+          "column": 3,
+          "line": 9,
+        },
+      },
+      "referenceName": "doubled",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FApp.swift:Sources%2FApp.swift%23caller:function:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23extension%3APoint.doubled:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23helper:function:0",
+        ],
+        "resolutionPath": [
+          "Sources/App.swift",
+          "Sources/API.swift",
+        ],
+        "ruleId": "syntax.swift.unique-direct-function-call",
+        "stage": "module",
+      },
+      "filePath": "Sources/App.swift",
+      "id": "edge:symbol%3ASources%252FApp.swift%3ASources%252FApp.swift%2523caller%3Afunction%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523helper%3Afunction%3A0:calls:12:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 11,
+          "line": 12,
+        },
+        "start": {
+          "column": 3,
+          "line": 12,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FApp.swift:Sources%2FApp.swift%23caller:function:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23makePoint:function:0",
+        ],
+        "resolutionPath": [
+          "Sources/App.swift",
+          "Sources/API.swift",
+        ],
+        "ruleId": "syntax.swift.unique-direct-function-call",
+        "stage": "module",
+      },
+      "filePath": "Sources/App.swift",
+      "id": "edge:symbol%3ASources%252FApp.swift%3ASources%252FApp.swift%2523caller%3Afunction%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523makePoint%3Afunction%3A0:calls:13:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 13,
+        },
+        "start": {
+          "column": 3,
+          "line": 13,
+        },
+      },
+      "referenceName": "makePoint",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FApp.swift:Sources%2FApp.swift%23caller:function:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23makePoint:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Contract:interface:0",
+        ],
+        "resolutionPath": [
+          "Sources/App.swift",
+          "Sources/API.swift",
+        ],
+        "ruleId": "module.swift.explicit-import.unique-target",
+        "stage": "module",
+      },
+      "filePath": "Sources/App.swift",
+      "id": "edge:symbol%3ASources%252FApp.swift%3ASources%252FApp.swift%3Afile%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Contract%3Ainterface%3A0:imports:3:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FApp.swift:Sources%2FApp.swift:file:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Contract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point:class:0",
+        ],
+        "resolutionPath": [
+          "Sources/App.swift",
+          "Sources/API.swift",
+        ],
+        "ruleId": "module.swift.explicit-import.unique-target",
+        "stage": "module",
+      },
+      "filePath": "Sources/App.swift",
+      "id": "edge:symbol%3ASources%252FApp.swift%3ASources%252FApp.swift%3Afile%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Point%3Aclass%3A0:imports:1:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FApp.swift:Sources%2FApp.swift:file:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service:class:0",
+        ],
+        "resolutionPath": [
+          "Sources/App.swift",
+          "Sources/API.swift",
+        ],
+        "ruleId": "module.swift.explicit-import.unique-target",
+        "stage": "module",
+      },
+      "filePath": "Sources/App.swift",
+      "id": "edge:symbol%3ASources%252FApp.swift%3ASources%252FApp.swift%3Afile%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523Service%3Aclass%3A0:imports:2:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FApp.swift:Sources%2FApp.swift:file:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23helper:function:0",
+        ],
+        "resolutionPath": [
+          "Sources/App.swift",
+          "Sources/API.swift",
+        ],
+        "ruleId": "module.swift.explicit-import.unique-target",
+        "stage": "module",
+      },
+      "filePath": "Sources/App.swift",
+      "id": "edge:symbol%3ASources%252FApp.swift%3ASources%252FApp.swift%3Afile%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523helper%3Afunction%3A0:imports:4:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FApp.swift:Sources%2FApp.swift:file:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23makePoint:function:0",
+        ],
+        "resolutionPath": [
+          "Sources/App.swift",
+          "Sources/API.swift",
+        ],
+        "ruleId": "module.swift.explicit-import.unique-target",
+        "stage": "module",
+      },
+      "filePath": "Sources/App.swift",
+      "id": "edge:symbol%3ASources%252FApp.swift%3ASources%252FApp.swift%3Afile%3A0:symbol%3ASources%252FAPI.swift%3ASources%252FAPI.swift%2523makePoint%3Afunction%3A0:imports:5:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "makePoint",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FApp.swift:Sources%2FApp.swift:file:0",
+      "targetId": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23makePoint:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FApp.swift:Sources%2FApp.swift%23caller:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/App.swift",
+      "id": "edge:symbol%3ASources%252FApp.swift%3ASources%252FApp.swift%3Afile%3A0:symbol%3ASources%252FApp.swift%3ASources%252FApp.swift%2523caller%3Afunction%3A0:contains:7:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 14,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "caller",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FApp.swift:Sources%2FApp.swift:file:0",
+      "targetId": "symbol:Sources%2FApp.swift:Sources%2FApp.swift%23caller:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "06d716339cbaf31c5530ac4de05578cc988c4fcebfaf701d922d520c250b036f",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "swift",
+      "path": "Sources/API.swift",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "c7b8a65f9f774bf13eff2cf3dd72ba783d20ccf836d821fc9cb4f5d0eb3e0425",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "swift",
+      "path": "Sources/App.swift",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/API.swift",
+      "id": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Base.init:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "init",
+      "qualifiedName": "Sources/API.swift#Base.init",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/API.swift",
+      "id": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Base.run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "Sources/API.swift#Base.run",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/API.swift",
+      "id": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Base:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Base",
+      "qualifiedName": "Sources/API.swift#Base",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/API.swift",
+      "id": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Contract.act:method:0",
+      "isExported": false,
+      "kind": "method",
+      "name": "act",
+      "qualifiedName": "Sources/API.swift#Contract.act",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 2,
+        },
+        "start": {
+          "column": 3,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/API.swift",
+      "id": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Contract:interface:0",
+      "isExported": true,
+      "kind": "interface",
+      "name": "Contract",
+      "qualifiedName": "Sources/API.swift#Contract",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/API.swift",
+      "id": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point.init:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "init",
+      "qualifiedName": "Sources/API.swift#Point.init",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 9,
+        },
+        "start": {
+          "column": 3,
+          "line": 9,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/API.swift",
+      "id": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point.magnitude:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "magnitude",
+      "qualifiedName": "Sources/API.swift#Point.magnitude",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 10,
+        },
+        "start": {
+          "column": 3,
+          "line": 10,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/API.swift",
+      "id": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Point:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Point",
+      "qualifiedName": "Sources/API.swift#Point",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 11,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/API.swift",
+      "id": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service.act:method:0",
+      "isExported": false,
+      "kind": "method",
+      "name": "act",
+      "qualifiedName": "Sources/API.swift#Service.act",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 15,
+        },
+        "start": {
+          "column": 3,
+          "line": 15,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/API.swift",
+      "id": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service.init:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "init",
+      "qualifiedName": "Sources/API.swift#Service.init",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 13,
+        },
+        "start": {
+          "column": 3,
+          "line": 13,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/API.swift",
+      "id": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service.run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "Sources/API.swift#Service.run",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 14,
+        },
+        "start": {
+          "column": 3,
+          "line": 14,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/API.swift",
+      "id": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23Service:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Service",
+      "qualifiedName": "Sources/API.swift#Service",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 16,
+        },
+        "start": {
+          "column": 1,
+          "line": 12,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/API.swift",
+      "id": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23extension%3APoint.doubled:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "doubled",
+      "qualifiedName": "Sources/API.swift#extension:Point.doubled",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 18,
+        },
+        "start": {
+          "column": 3,
+          "line": 18,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/API.swift",
+      "id": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23extension%3APoint:class:0",
+      "isExported": false,
+      "kind": "class",
+      "name": "extension Point",
+      "qualifiedName": "Sources/API.swift#extension:Point",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 19,
+        },
+        "start": {
+          "column": 1,
+          "line": 17,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/API.swift",
+      "id": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23helper:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "Sources/API.swift#helper",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 20,
+        },
+        "start": {
+          "column": 1,
+          "line": 20,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/API.swift",
+      "id": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift%23makePoint:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "makePoint",
+      "qualifiedName": "Sources/API.swift#makePoint",
+      "range": {
+        "end": {
+          "column": 57,
+          "line": 21,
+        },
+        "start": {
+          "column": 1,
+          "line": 21,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/API.swift",
+      "id": "symbol:Sources%2FAPI.swift:Sources%2FAPI.swift:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "API.swift",
+      "qualifiedName": "Sources/API.swift",
+      "range": {
+        "end": {
+          "column": 57,
+          "line": 21,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/App.swift",
+      "id": "symbol:Sources%2FApp.swift:Sources%2FApp.swift%23caller:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "caller",
+      "qualifiedName": "Sources/App.swift#caller",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 14,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/App.swift",
+      "id": "symbol:Sources%2FApp.swift:Sources%2FApp.swift:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "App.swift",
+      "qualifiedName": "Sources/App.swift",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 14,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`multi-language resolver complete-output parity > 'swift' preserves unresolved imports when only the consumer remains 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Sources%2FApp.swift:Sources%2FApp.swift%23caller:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Sources/App.swift",
+      "id": "edge:symbol%3ASources%252FApp.swift%3ASources%252FApp.swift%3Afile%3A0:symbol%3ASources%252FApp.swift%3ASources%252FApp.swift%2523caller%3Afunction%3A0:contains:7:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 14,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "caller",
+      "resolution": "exact",
+      "sourceId": "symbol:Sources%2FApp.swift:Sources%2FApp.swift:file:0",
+      "targetId": "symbol:Sources%2FApp.swift:Sources%2FApp.swift%23caller:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "c7b8a65f9f774bf13eff2cf3dd72ba783d20ccf836d821fc9cb4f5d0eb3e0425",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "swift",
+      "path": "Sources/App.swift",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/App.swift",
+      "id": "symbol:Sources%2FApp.swift:Sources%2FApp.swift%23caller:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "caller",
+      "qualifiedName": "Sources/App.swift#caller",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 14,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Sources/App.swift",
+      "id": "symbol:Sources%2FApp.swift:Sources%2FApp.swift:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "App.swift",
+      "qualifiedName": "Sources/App.swift",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 14,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

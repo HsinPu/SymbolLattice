@@ -1,0 +1,1060 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Spring configuration complete-output parity before move > preserves exact literals and separate relaxed/prefix heuristic confidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 0.85,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aapp.cache.size:variable:0",
+        ],
+        "configurationPaths": [
+          "src/main/resources/application.properties",
+        ],
+        "ruleId": "framework.spring-boot.configuration-properties.literal-prefix.unique-leaf",
+        "stage": "heuristic",
+      },
+      "filePath": "src/AppConfig.java",
+      "id": "edge:symbol%3Asrc%252FAppConfig.java%3Asrc%252FAppConfig.java%2523AppConfig%3Aclass%3A0:symbol%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Asrc%252Fmain%252Fresources%252Fapplication.properties%2523properties-key%253Aapp.cache.size%3Avariable%3A0:references:3:1",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 47,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "app.cache:app.cache.size",
+      "resolution": "heuristic",
+      "sourceId": "symbol:src%2FAppConfig.java:src%2FAppConfig.java%23AppConfig:class:0",
+      "targetId": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aapp.cache.size:variable:0",
+    },
+    {
+      "confidence": 0.75,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aapp.client-name:variable:0",
+        ],
+        "configurationPaths": [
+          "src/main/resources/application.properties",
+        ],
+        "ruleId": "framework.spring-boot.properties.direct-value.relaxed-key.unique-key",
+        "stage": "heuristic",
+      },
+      "filePath": "src/AppConfig.java",
+      "id": "edge:symbol%3Asrc%252FAppConfig.java%3Asrc%252FAppConfig.java%2523AppConfig%3Aclass%3A0:symbol%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Asrc%252Fmain%252Fresources%252Fapplication.properties%2523properties-key%253Aapp.client-name%3Avariable%3A0:references:6:3",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+      "referenceName": "app.clientName",
+      "resolution": "heuristic",
+      "sourceId": "symbol:src%2FAppConfig.java:src%2FAppConfig.java%23AppConfig:class:0",
+      "targetId": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aapp.client-name:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aserver.port:variable:0",
+        ],
+        "configurationPaths": [
+          "src/main/resources/application.properties",
+        ],
+        "ruleId": "framework.spring-boot.properties.direct-value.literal-key.exact-key",
+        "stage": "module",
+      },
+      "filePath": "src/AppConfig.java",
+      "id": "edge:symbol%3Asrc%252FAppConfig.java%3Asrc%252FAppConfig.java%2523AppConfig%3Aclass%3A0:symbol%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Asrc%252Fmain%252Fresources%252Fapplication.properties%2523properties-key%253Aserver.port%3Avariable%3A0:references:5:3",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+      "referenceName": "server.port",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FAppConfig.java:src%2FAppConfig.java%23AppConfig:class:0",
+      "targetId": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aserver.port:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FAppConfig.java:src%2FAppConfig.java%23AppConfig:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/AppConfig.java",
+      "id": "edge:symbol%3Asrc%252FAppConfig.java%3Asrc%252FAppConfig.java%3Afile%3A0:symbol%3Asrc%252FAppConfig.java%3Asrc%252FAppConfig.java%2523AppConfig%3Aclass%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "AppConfig",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FAppConfig.java:src%2FAppConfig.java:file:0",
+      "targetId": "symbol:src%2FAppConfig.java:src%2FAppConfig.java%23AppConfig:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aapp.cache.size:variable:0",
+        ],
+        "ruleId": "syntax.properties.literal-key",
+        "stage": "syntax",
+      },
+      "filePath": "src/main/resources/application.properties",
+      "id": "edge:symbol%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Afile%3A0:symbol%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Asrc%252Fmain%252Fresources%252Fapplication.properties%2523properties-key%253Aapp.cache.size%3Avariable%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 15,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "app.cache.size",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties:file:0",
+      "targetId": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aapp.cache.size:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aapp.client-name:variable:0",
+        ],
+        "ruleId": "syntax.properties.literal-key",
+        "stage": "syntax",
+      },
+      "filePath": "src/main/resources/application.properties",
+      "id": "edge:symbol%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Afile%3A0:symbol%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Asrc%252Fmain%252Fresources%252Fapplication.properties%2523properties-key%253Aapp.client-name%3Avariable%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "app.client-name",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties:file:0",
+      "targetId": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aapp.client-name:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aserver.port:variable:0",
+        ],
+        "ruleId": "syntax.properties.literal-key",
+        "stage": "syntax",
+      },
+      "filePath": "src/main/resources/application.properties",
+      "id": "edge:symbol%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Afile%3A0:symbol%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Asrc%252Fmain%252Fresources%252Fapplication.properties%2523properties-key%253Aserver.port%3Avariable%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "server.port",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties:file:0",
+      "targetId": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aserver.port:variable:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "0d41cf54fd8f10c108299d01a5cf9355ec576043572ab0c2de0b262241cc22a6",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "java",
+      "path": "src/AppConfig.java",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "bcf4e61259c21cd80002e0fcf7c9bf964a58d95e7650fe9bb551e2538a3d9753",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "properties",
+      "path": "src/main/resources/application.properties",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/AppConfig.java",
+      "id": "symbol:src%2FAppConfig.java:src%2FAppConfig.java%23AppConfig:class:0",
+      "isExported": false,
+      "kind": "class",
+      "name": "AppConfig",
+      "qualifiedName": "src/AppConfig.java#AppConfig",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/AppConfig.java",
+      "id": "symbol:src%2FAppConfig.java:src%2FAppConfig.java:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "AppConfig.java",
+      "qualifiedName": "src/AppConfig.java",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main/resources/application.properties",
+      "id": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aapp.cache.size:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "app.cache.size",
+      "qualifiedName": "src/main/resources/application.properties#properties-key:app.cache.size",
+      "range": {
+        "end": {
+          "column": 15,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main/resources/application.properties",
+      "id": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aapp.client-name:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "app.client-name",
+      "qualifiedName": "src/main/resources/application.properties#properties-key:app.client-name",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main/resources/application.properties",
+      "id": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aserver.port:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "server.port",
+      "qualifiedName": "src/main/resources/application.properties#properties-key:server.port",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main/resources/application.properties",
+      "id": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "application.properties",
+      "qualifiedName": "src/main/resources/application.properties",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Spring configuration complete-output parity before move > preserves missing configuration nonclaim 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "framework.spring-boot.configuration-properties.literal-prefix.unresolved-prefix",
+        "stage": "unresolved",
+      },
+      "filePath": "src/AppConfig.java",
+      "id": "edge:symbol%3Asrc%252FAppConfig.java%3Asrc%252FAppConfig.java%2523AppConfig%3Aclass%3A0:app.cache:references:3:1",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 47,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "app.cache",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2FAppConfig.java:src%2FAppConfig.java%23AppConfig:class:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "framework.spring-boot.config.direct-value.literal-key.unresolved-key",
+        "stage": "unresolved",
+      },
+      "filePath": "src/AppConfig.java",
+      "id": "edge:symbol%3Asrc%252FAppConfig.java%3Asrc%252FAppConfig.java%2523AppConfig%3Aclass%3A0:app.clientName:references:6:3",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+      "referenceName": "app.clientName",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2FAppConfig.java:src%2FAppConfig.java%23AppConfig:class:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "framework.spring-boot.config.direct-value.literal-key.unresolved-key",
+        "stage": "unresolved",
+      },
+      "filePath": "src/AppConfig.java",
+      "id": "edge:symbol%3Asrc%252FAppConfig.java%3Asrc%252FAppConfig.java%2523AppConfig%3Aclass%3A0:server.port:references:5:3",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+      "referenceName": "server.port",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2FAppConfig.java:src%2FAppConfig.java%23AppConfig:class:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FAppConfig.java:src%2FAppConfig.java%23AppConfig:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/AppConfig.java",
+      "id": "edge:symbol%3Asrc%252FAppConfig.java%3Asrc%252FAppConfig.java%3Afile%3A0:symbol%3Asrc%252FAppConfig.java%3Asrc%252FAppConfig.java%2523AppConfig%3Aclass%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "AppConfig",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FAppConfig.java:src%2FAppConfig.java:file:0",
+      "targetId": "symbol:src%2FAppConfig.java:src%2FAppConfig.java%23AppConfig:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "0d41cf54fd8f10c108299d01a5cf9355ec576043572ab0c2de0b262241cc22a6",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "java",
+      "path": "src/AppConfig.java",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/AppConfig.java",
+      "id": "symbol:src%2FAppConfig.java:src%2FAppConfig.java%23AppConfig:class:0",
+      "isExported": false,
+      "kind": "class",
+      "name": "AppConfig",
+      "qualifiedName": "src/AppConfig.java#AppConfig",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/AppConfig.java",
+      "id": "symbol:src%2FAppConfig.java:src%2FAppConfig.java:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "AppConfig.java",
+      "qualifiedName": "src/AppConfig.java",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Spring configuration complete-output parity before move > preserves profile collision nonclaim without choosing precedence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fresources%2Fapplication-prod.properties:src%2Fmain%2Fresources%2Fapplication-prod.properties%23properties-key%3Aapp.cache.size:variable:0",
+          "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aapp.cache.size:variable:0",
+        ],
+        "configurationPaths": [
+          "src/main/resources/application-prod.properties",
+          "src/main/resources/application.properties",
+        ],
+        "ruleId": "framework.spring-boot.configuration-properties.literal-prefix.ambiguous-leaf",
+        "stage": "unresolved",
+      },
+      "filePath": "src/AppConfig.java",
+      "id": "edge:symbol%3Asrc%252FAppConfig.java%3Asrc%252FAppConfig.java%2523AppConfig%3Aclass%3A0:app.cache%3Aapp.cache.size:references:3:1",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 47,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "app.cache:app.cache.size",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2FAppConfig.java:src%2FAppConfig.java%23AppConfig:class:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fresources%2Fapplication-prod.properties:src%2Fmain%2Fresources%2Fapplication-prod.properties%23properties-key%3Aapp.client-name:variable:0",
+          "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aapp.client-name:variable:0",
+        ],
+        "configurationPaths": [
+          "src/main/resources/application-prod.properties",
+          "src/main/resources/application.properties",
+        ],
+        "ruleId": "framework.spring-boot.properties.direct-value.relaxed-key.ambiguous-key",
+        "stage": "unresolved",
+      },
+      "filePath": "src/AppConfig.java",
+      "id": "edge:symbol%3Asrc%252FAppConfig.java%3Asrc%252FAppConfig.java%2523AppConfig%3Aclass%3A0:app.clientName:references:6:3",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+      "referenceName": "app.clientName",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2FAppConfig.java:src%2FAppConfig.java%23AppConfig:class:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fresources%2Fapplication-prod.properties:src%2Fmain%2Fresources%2Fapplication-prod.properties%23properties-key%3Aserver.port:variable:0",
+          "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aserver.port:variable:0",
+        ],
+        "configurationPaths": [
+          "src/main/resources/application-prod.properties",
+          "src/main/resources/application.properties",
+        ],
+        "ruleId": "framework.spring-boot.properties.direct-value.literal-key.ambiguous-key",
+        "stage": "unresolved",
+      },
+      "filePath": "src/AppConfig.java",
+      "id": "edge:symbol%3Asrc%252FAppConfig.java%3Asrc%252FAppConfig.java%2523AppConfig%3Aclass%3A0:server.port:references:5:3",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+      "referenceName": "server.port",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2FAppConfig.java:src%2FAppConfig.java%23AppConfig:class:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FAppConfig.java:src%2FAppConfig.java%23AppConfig:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/AppConfig.java",
+      "id": "edge:symbol%3Asrc%252FAppConfig.java%3Asrc%252FAppConfig.java%3Afile%3A0:symbol%3Asrc%252FAppConfig.java%3Asrc%252FAppConfig.java%2523AppConfig%3Aclass%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "AppConfig",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FAppConfig.java:src%2FAppConfig.java:file:0",
+      "targetId": "symbol:src%2FAppConfig.java:src%2FAppConfig.java%23AppConfig:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fresources%2Fapplication-prod.properties:src%2Fmain%2Fresources%2Fapplication-prod.properties%23properties-key%3Aapp.cache.size:variable:0",
+        ],
+        "ruleId": "syntax.properties.literal-key",
+        "stage": "syntax",
+      },
+      "filePath": "src/main/resources/application-prod.properties",
+      "id": "edge:symbol%3Asrc%252Fmain%252Fresources%252Fapplication-prod.properties%3Asrc%252Fmain%252Fresources%252Fapplication-prod.properties%3Afile%3A0:symbol%3Asrc%252Fmain%252Fresources%252Fapplication-prod.properties%3Asrc%252Fmain%252Fresources%252Fapplication-prod.properties%2523properties-key%253Aapp.cache.size%3Avariable%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 15,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "app.cache.size",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain%2Fresources%2Fapplication-prod.properties:src%2Fmain%2Fresources%2Fapplication-prod.properties:file:0",
+      "targetId": "symbol:src%2Fmain%2Fresources%2Fapplication-prod.properties:src%2Fmain%2Fresources%2Fapplication-prod.properties%23properties-key%3Aapp.cache.size:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fresources%2Fapplication-prod.properties:src%2Fmain%2Fresources%2Fapplication-prod.properties%23properties-key%3Aapp.client-name:variable:0",
+        ],
+        "ruleId": "syntax.properties.literal-key",
+        "stage": "syntax",
+      },
+      "filePath": "src/main/resources/application-prod.properties",
+      "id": "edge:symbol%3Asrc%252Fmain%252Fresources%252Fapplication-prod.properties%3Asrc%252Fmain%252Fresources%252Fapplication-prod.properties%3Afile%3A0:symbol%3Asrc%252Fmain%252Fresources%252Fapplication-prod.properties%3Asrc%252Fmain%252Fresources%252Fapplication-prod.properties%2523properties-key%253Aapp.client-name%3Avariable%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "app.client-name",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain%2Fresources%2Fapplication-prod.properties:src%2Fmain%2Fresources%2Fapplication-prod.properties:file:0",
+      "targetId": "symbol:src%2Fmain%2Fresources%2Fapplication-prod.properties:src%2Fmain%2Fresources%2Fapplication-prod.properties%23properties-key%3Aapp.client-name:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fresources%2Fapplication-prod.properties:src%2Fmain%2Fresources%2Fapplication-prod.properties%23properties-key%3Aserver.port:variable:0",
+        ],
+        "ruleId": "syntax.properties.literal-key",
+        "stage": "syntax",
+      },
+      "filePath": "src/main/resources/application-prod.properties",
+      "id": "edge:symbol%3Asrc%252Fmain%252Fresources%252Fapplication-prod.properties%3Asrc%252Fmain%252Fresources%252Fapplication-prod.properties%3Afile%3A0:symbol%3Asrc%252Fmain%252Fresources%252Fapplication-prod.properties%3Asrc%252Fmain%252Fresources%252Fapplication-prod.properties%2523properties-key%253Aserver.port%3Avariable%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "server.port",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain%2Fresources%2Fapplication-prod.properties:src%2Fmain%2Fresources%2Fapplication-prod.properties:file:0",
+      "targetId": "symbol:src%2Fmain%2Fresources%2Fapplication-prod.properties:src%2Fmain%2Fresources%2Fapplication-prod.properties%23properties-key%3Aserver.port:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aapp.cache.size:variable:0",
+        ],
+        "ruleId": "syntax.properties.literal-key",
+        "stage": "syntax",
+      },
+      "filePath": "src/main/resources/application.properties",
+      "id": "edge:symbol%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Afile%3A0:symbol%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Asrc%252Fmain%252Fresources%252Fapplication.properties%2523properties-key%253Aapp.cache.size%3Avariable%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 15,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "app.cache.size",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties:file:0",
+      "targetId": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aapp.cache.size:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aapp.client-name:variable:0",
+        ],
+        "ruleId": "syntax.properties.literal-key",
+        "stage": "syntax",
+      },
+      "filePath": "src/main/resources/application.properties",
+      "id": "edge:symbol%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Afile%3A0:symbol%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Asrc%252Fmain%252Fresources%252Fapplication.properties%2523properties-key%253Aapp.client-name%3Avariable%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "app.client-name",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties:file:0",
+      "targetId": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aapp.client-name:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aserver.port:variable:0",
+        ],
+        "ruleId": "syntax.properties.literal-key",
+        "stage": "syntax",
+      },
+      "filePath": "src/main/resources/application.properties",
+      "id": "edge:symbol%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Afile%3A0:symbol%3Asrc%252Fmain%252Fresources%252Fapplication.properties%3Asrc%252Fmain%252Fresources%252Fapplication.properties%2523properties-key%253Aserver.port%3Avariable%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "server.port",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties:file:0",
+      "targetId": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aserver.port:variable:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "0d41cf54fd8f10c108299d01a5cf9355ec576043572ab0c2de0b262241cc22a6",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "java",
+      "path": "src/AppConfig.java",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "bcf4e61259c21cd80002e0fcf7c9bf964a58d95e7650fe9bb551e2538a3d9753",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "properties",
+      "path": "src/main/resources/application-prod.properties",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "bcf4e61259c21cd80002e0fcf7c9bf964a58d95e7650fe9bb551e2538a3d9753",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "properties",
+      "path": "src/main/resources/application.properties",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/AppConfig.java",
+      "id": "symbol:src%2FAppConfig.java:src%2FAppConfig.java%23AppConfig:class:0",
+      "isExported": false,
+      "kind": "class",
+      "name": "AppConfig",
+      "qualifiedName": "src/AppConfig.java#AppConfig",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/AppConfig.java",
+      "id": "symbol:src%2FAppConfig.java:src%2FAppConfig.java:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "AppConfig.java",
+      "qualifiedName": "src/AppConfig.java",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main/resources/application-prod.properties",
+      "id": "symbol:src%2Fmain%2Fresources%2Fapplication-prod.properties:src%2Fmain%2Fresources%2Fapplication-prod.properties%23properties-key%3Aapp.cache.size:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "app.cache.size",
+      "qualifiedName": "src/main/resources/application-prod.properties#properties-key:app.cache.size",
+      "range": {
+        "end": {
+          "column": 15,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main/resources/application-prod.properties",
+      "id": "symbol:src%2Fmain%2Fresources%2Fapplication-prod.properties:src%2Fmain%2Fresources%2Fapplication-prod.properties%23properties-key%3Aapp.client-name:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "app.client-name",
+      "qualifiedName": "src/main/resources/application-prod.properties#properties-key:app.client-name",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main/resources/application-prod.properties",
+      "id": "symbol:src%2Fmain%2Fresources%2Fapplication-prod.properties:src%2Fmain%2Fresources%2Fapplication-prod.properties%23properties-key%3Aserver.port:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "server.port",
+      "qualifiedName": "src/main/resources/application-prod.properties#properties-key:server.port",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main/resources/application-prod.properties",
+      "id": "symbol:src%2Fmain%2Fresources%2Fapplication-prod.properties:src%2Fmain%2Fresources%2Fapplication-prod.properties:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "application-prod.properties",
+      "qualifiedName": "src/main/resources/application-prod.properties",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main/resources/application.properties",
+      "id": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aapp.cache.size:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "app.cache.size",
+      "qualifiedName": "src/main/resources/application.properties#properties-key:app.cache.size",
+      "range": {
+        "end": {
+          "column": 15,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main/resources/application.properties",
+      "id": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aapp.client-name:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "app.client-name",
+      "qualifiedName": "src/main/resources/application.properties#properties-key:app.client-name",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main/resources/application.properties",
+      "id": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties%23properties-key%3Aserver.port:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "server.port",
+      "qualifiedName": "src/main/resources/application.properties#properties-key:server.port",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main/resources/application.properties",
+      "id": "symbol:src%2Fmain%2Fresources%2Fapplication.properties:src%2Fmain%2Fresources%2Fapplication.properties:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "application.properties",
+      "qualifiedName": "src/main/resources/application.properties",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

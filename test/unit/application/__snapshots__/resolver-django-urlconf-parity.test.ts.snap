@@ -1,0 +1,1471 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Django URLconf resolver pre-move parity golden > does not cross a missing regular-package boundary 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+        ],
+        "ruleId": "framework.django.direct-urlpatterns.path.local-function",
+        "stage": "syntax",
+      },
+      "filePath": "project/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523route%253AALL%2520%252Fitems%252F%3Aroute%3A0:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523items%3Afunction%3A0:routes:6:16",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+      "referenceName": "items",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fitems%2F:route:0",
+      "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%3Afile%3A0:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523items%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "items",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
+      "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fitems%2F:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%3Afile%3A0:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523route%253AALL%2520%252Fitems%252F%3Aroute%3A0:contains:6:16",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+      "referenceName": "ALL /items/",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
+      "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fitems%2F:route:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "40676d35557281e44c942abc71cc175029409da95d49c940844dcd126b0d2195",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "project/catalog/urls.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "aa5e8e9b90821da04330e67382de1f2ffdb656cc440a3a4df49fab20b73d91ae",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "project/urls.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/urls.py",
+      "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "items",
+      "qualifiedName": "project/catalog/urls.py#items",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/urls.py",
+      "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fitems%2F:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "ALL /items/",
+      "qualifiedName": "project/catalog/urls.py#route:ALL /items/",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/urls.py",
+      "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "urls.py",
+      "qualifiedName": "project/catalog/urls.py",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/urls.py",
+      "id": "symbol:project%2Furls.py:project%2Furls.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "urls.py",
+      "qualifiedName": "project/urls.py",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Django URLconf resolver pre-move parity golden > keeps dynamic, malformed, and missing URLconf inclusions unresolved 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+        ],
+        "ruleId": "framework.django.direct-urlpatterns.path.local-function",
+        "stage": "syntax",
+      },
+      "filePath": "project/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523route%253AALL%2520%252Fitems%252F%3Aroute%3A0:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523items%3Afunction%3A0:routes:6:16",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+      "referenceName": "items",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fitems%2F:route:0",
+      "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%3Afile%3A0:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523items%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "items",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
+      "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fitems%2F:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%3Afile%3A0:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523route%253AALL%2520%252Fitems%252F%3Aroute%3A0:contains:6:16",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+      "referenceName": "ALL /items/",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
+      "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fitems%2F:route:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "project/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "project/catalog/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "40676d35557281e44c942abc71cc175029409da95d49c940844dcd126b0d2195",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "project/catalog/urls.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "09bdcf56d721cbe9cac3b6e55c196fd60d1de8392bc402100bb9e702635b8d64",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "project/urls.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/__init__.py",
+      "id": "symbol:project%2F__init__.py:project%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "project/__init__.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/__init__.py",
+      "id": "symbol:project%2Fcatalog%2F__init__.py:project%2Fcatalog%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "project/catalog/__init__.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/urls.py",
+      "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "items",
+      "qualifiedName": "project/catalog/urls.py#items",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/urls.py",
+      "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fitems%2F:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "ALL /items/",
+      "qualifiedName": "project/catalog/urls.py#route:ALL /items/",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/urls.py",
+      "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "urls.py",
+      "qualifiedName": "project/catalog/urls.py",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/urls.py",
+      "id": "symbol:project%2Furls.py:project%2Furls.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "urls.py",
+      "qualifiedName": "project/urls.py",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Django URLconf resolver pre-move parity golden > preserves relative import, initializer re-export, and dotted literal URLConfs 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+        ],
+        "resolutionPath": [
+          "project/urls.py",
+          "project/catalog/urls.py",
+        ],
+        "ruleId": "framework.django.imported-urlconf.path.include.local-function",
+        "stage": "module",
+      },
+      "filePath": "project/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523route%253AALL%2520%252Fapi%252Fitems%252F%3Aroute%3A0:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523items%3Afunction%3A0:routes:6:16",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+      "referenceName": "items",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fapi%2Fitems%2F:route:0",
+      "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+        ],
+        "resolutionPath": [
+          "project/urls.py",
+          "project/catalog/urls.py",
+        ],
+        "ruleId": "framework.django.literal-urlconf.path.include.local-function",
+        "stage": "module",
+      },
+      "filePath": "project/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523route%253AALL%2520%252Finternal%252Fitems%252F%3Aroute%3A0:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523items%3Afunction%3A0:routes:6:16",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+      "referenceName": "items",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Finternal%2Fitems%2F:route:0",
+      "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+        ],
+        "ruleId": "framework.django.direct-urlpatterns.path.local-function",
+        "stage": "syntax",
+      },
+      "filePath": "project/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523route%253AALL%2520%252Fitems%252F%3Aroute%3A0:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523items%3Afunction%3A0:routes:6:16",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+      "referenceName": "items",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fitems%2F:route:0",
+      "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%3Afile%3A0:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523items%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "items",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
+      "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fapi%2Fitems%2F:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%3Afile%3A0:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523route%253AALL%2520%252Fapi%252Fitems%252F%3Aroute%3A0:contains:6:16",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+      "referenceName": "ALL /api/items/",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
+      "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fapi%2Fitems%2F:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Finternal%2Fitems%2F:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%3Afile%3A0:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523route%253AALL%2520%252Finternal%252Fitems%252F%3Aroute%3A0:contains:6:16",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+      "referenceName": "ALL /internal/items/",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
+      "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Finternal%2Fitems%2F:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fitems%2F:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%3Afile%3A0:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523route%253AALL%2520%252Fitems%252F%3Aroute%3A0:contains:6:16",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+      "referenceName": "ALL /items/",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
+      "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fitems%2F:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py%23health:function:0",
+        ],
+        "ruleId": "framework.django.direct-urlpatterns.re-path.local-function",
+        "stage": "syntax",
+      },
+      "filePath": "project/routes/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Froutes%252Fcatalog%252Furls.py%3Aproject%252Froutes%252Fcatalog%252Furls.py%2523route%253AALL%2520%252Fhealth%252F%3Aroute%3A0:symbol%3Aproject%252Froutes%252Fcatalog%252Furls.py%3Aproject%252Froutes%252Fcatalog%252Furls.py%2523health%3Afunction%3A0:routes:6:16",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py%23route%3AALL%20%2Fhealth%2F:route:0",
+      "targetId": "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py%23health:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py%23health:function:0",
+        ],
+        "resolutionPath": [
+          "project/urls.py",
+          "project/routes/__init__.py",
+          "project/routes/catalog/urls.py",
+        ],
+        "ruleId": "framework.django.reexported-urlconf.re-path.include.local-function",
+        "stage": "module",
+      },
+      "filePath": "project/routes/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Froutes%252Fcatalog%252Furls.py%3Aproject%252Froutes%252Fcatalog%252Furls.py%2523route%253AALL%2520%252Fv1%252Fhealth%252F%3Aroute%3A0:symbol%3Aproject%252Froutes%252Fcatalog%252Furls.py%3Aproject%252Froutes%252Fcatalog%252Furls.py%2523health%3Afunction%3A0:routes:6:16",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py%23route%3AALL%20%2Fv1%2Fhealth%2F:route:0",
+      "targetId": "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py%23health:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py%23health:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/routes/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Froutes%252Fcatalog%252Furls.py%3Aproject%252Froutes%252Fcatalog%252Furls.py%3Afile%3A0:symbol%3Aproject%252Froutes%252Fcatalog%252Furls.py%3Aproject%252Froutes%252Fcatalog%252Furls.py%2523health%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py:file:0",
+      "targetId": "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py%23health:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py%23route%3AALL%20%2Fhealth%2F:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/routes/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Froutes%252Fcatalog%252Furls.py%3Aproject%252Froutes%252Fcatalog%252Furls.py%3Afile%3A0:symbol%3Aproject%252Froutes%252Fcatalog%252Furls.py%3Aproject%252Froutes%252Fcatalog%252Furls.py%2523route%253AALL%2520%252Fhealth%252F%3Aroute%3A0:contains:6:16",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+      "referenceName": "ALL /health/",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py:file:0",
+      "targetId": "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py%23route%3AALL%20%2Fhealth%2F:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py%23route%3AALL%20%2Fv1%2Fhealth%2F:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/routes/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Froutes%252Fcatalog%252Furls.py%3Aproject%252Froutes%252Fcatalog%252Furls.py%3Afile%3A0:symbol%3Aproject%252Froutes%252Fcatalog%252Furls.py%3Aproject%252Froutes%252Fcatalog%252Furls.py%2523route%253AALL%2520%252Fv1%252Fhealth%252F%3Aroute%3A0:contains:6:16",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+      "referenceName": "ALL /v1/health/",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py:file:0",
+      "targetId": "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py%23route%3AALL%20%2Fv1%2Fhealth%2F:route:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "project/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "project/catalog/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "40676d35557281e44c942abc71cc175029409da95d49c940844dcd126b0d2195",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "project/catalog/urls.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "0f98ad789f672a0fad0f5cd406b93938fc26b7f1c384e2523f7e403d6f05ef42",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "project/routes/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "project/routes/catalog/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "75c7f55bf11d5c8dae47a975527dd96b745b3c0f2bc69f7cdbb12190fa0b2ac6",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "project/routes/catalog/urls.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "19979648e80b5fddc51850d787defb440f3b0ee42142b9dce71684b0800ee208",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "project/urls.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/__init__.py",
+      "id": "symbol:project%2F__init__.py:project%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "project/__init__.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/__init__.py",
+      "id": "symbol:project%2Fcatalog%2F__init__.py:project%2Fcatalog%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "project/catalog/__init__.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/urls.py",
+      "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "items",
+      "qualifiedName": "project/catalog/urls.py#items",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/urls.py",
+      "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fapi%2Fitems%2F:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "ALL /api/items/",
+      "qualifiedName": "project/catalog/urls.py#route:ALL /api/items/",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/urls.py",
+      "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Finternal%2Fitems%2F:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "ALL /internal/items/",
+      "qualifiedName": "project/catalog/urls.py#route:ALL /internal/items/",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/urls.py",
+      "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fitems%2F:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "ALL /items/",
+      "qualifiedName": "project/catalog/urls.py#route:ALL /items/",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/urls.py",
+      "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "urls.py",
+      "qualifiedName": "project/catalog/urls.py",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/routes/__init__.py",
+      "id": "symbol:project%2Froutes%2F__init__.py:project%2Froutes%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "project/routes/__init__.py",
+      "range": {
+        "end": {
+          "column": 57,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/routes/catalog/__init__.py",
+      "id": "symbol:project%2Froutes%2Fcatalog%2F__init__.py:project%2Froutes%2Fcatalog%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "project/routes/catalog/__init__.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/routes/catalog/urls.py",
+      "id": "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py%23health:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "health",
+      "qualifiedName": "project/routes/catalog/urls.py#health",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/routes/catalog/urls.py",
+      "id": "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py%23route%3AALL%20%2Fhealth%2F:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "ALL /health/",
+      "qualifiedName": "project/routes/catalog/urls.py#route:ALL /health/",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/routes/catalog/urls.py",
+      "id": "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py%23route%3AALL%20%2Fv1%2Fhealth%2F:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "ALL /v1/health/",
+      "qualifiedName": "project/routes/catalog/urls.py#route:ALL /v1/health/",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/routes/catalog/urls.py",
+      "id": "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "urls.py",
+      "qualifiedName": "project/routes/catalog/urls.py",
+      "range": {
+        "end": {
+          "column": 46,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/urls.py",
+      "id": "symbol:project%2Furls.py:project%2Furls.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "urls.py",
+      "qualifiedName": "project/urls.py",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Django URLconf resolver pre-move parity golden > rejects a child URL pattern with an invalid double-slash path 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+        ],
+        "ruleId": "framework.django.direct-urlpatterns.path.local-function",
+        "stage": "syntax",
+      },
+      "filePath": "project/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523route%253AALL%2520%252Fitems%252F%252F%3Aroute%3A0:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523items%3Afunction%3A0:routes:6:16",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+      "referenceName": "items",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fitems%2F%2F:route:0",
+      "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%3Afile%3A0:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523items%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "items",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
+      "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fitems%2F%2F:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%3Afile%3A0:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523route%253AALL%2520%252Fitems%252F%252F%3Aroute%3A0:contains:6:16",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+      "referenceName": "ALL /items//",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
+      "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fitems%2F%2F:route:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "project/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "project/catalog/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "c589d291da8c4b88b17ed333e6aea9ed849a2a7479c4196604508494574e9ba9",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "project/catalog/urls.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "3d98621ebaa69dd1a20b27a1a929286f50c1a2d89576512b18a95e3405566a40",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "project/urls.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/__init__.py",
+      "id": "symbol:project%2F__init__.py:project%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "project/__init__.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/__init__.py",
+      "id": "symbol:project%2Fcatalog%2F__init__.py:project%2Fcatalog%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "project/catalog/__init__.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/urls.py",
+      "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23items:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "items",
+      "qualifiedName": "project/catalog/urls.py#items",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/urls.py",
+      "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fitems%2F%2F:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "ALL /items//",
+      "qualifiedName": "project/catalog/urls.py#route:ALL /items//",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 6,
+        },
+        "start": {
+          "column": 16,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/urls.py",
+      "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "urls.py",
+      "qualifiedName": "project/catalog/urls.py",
+      "range": {
+        "end": {
+          "column": 39,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/urls.py",
+      "id": "symbol:project%2Furls.py:project%2Furls.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "urls.py",
+      "qualifiedName": "project/urls.py",
+      "range": {
+        "end": {
+          "column": 62,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

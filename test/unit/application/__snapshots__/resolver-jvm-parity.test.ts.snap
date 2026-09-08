@@ -1,0 +1,1674 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`JVM resolver module-move parity golden > preserves complete Java/Kotlin import, annotation, heritage and evidence output 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FBase.java:src%2Fapi%2FBase.java%23Base:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api/Base.java",
+      "id": "edge:symbol%3Asrc%252Fapi%252FBase.java%3Asrc%252Fapi%252FBase.java%3Afile%3A0:symbol%3Asrc%252Fapi%252FBase.java%3Asrc%252Fapi%252FBase.java%2523Base%3Aclass%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi%2FBase.java:src%2Fapi%2FBase.java:file:0",
+      "targetId": "symbol:src%2Fapi%2FBase.java:src%2Fapi%2FBase.java%23Base:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.java:src%2Fapi%2FContract.java%23Contract:interface:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api/Contract.java",
+      "id": "edge:symbol%3Asrc%252Fapi%252FContract.java%3Asrc%252Fapi%252FContract.java%3Afile%3A0:symbol%3Asrc%252Fapi%252FContract.java%3Asrc%252Fapi%252FContract.java%2523Contract%3Ainterface%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi%2FContract.java:src%2Fapi%2FContract.java:file:0",
+      "targetId": "symbol:src%2Fapi%2FContract.java:src%2Fapi%2FContract.java%23Contract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FMarker.java:src%2Fapi%2FMarker.java%23Marker:interface:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api/Marker.java",
+      "id": "edge:symbol%3Asrc%252Fapi%252FMarker.java%3Asrc%252Fapi%252FMarker.java%3Afile%3A0:symbol%3Asrc%252Fapi%252FMarker.java%3Asrc%252Fapi%252FMarker.java%2523Marker%3Ainterface%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 28,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Marker",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi%2FMarker.java:src%2Fapi%2FMarker.java:file:0",
+      "targetId": "symbol:src%2Fapi%2FMarker.java:src%2Fapi%2FMarker.java%23Marker:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FBase.java:src%2Fapi%2FBase.java%23Base:class:0",
+        ],
+        "configurationPaths": [
+          "api/pom.xml",
+          "app/pom.xml",
+          "pom.xml",
+        ],
+        "resolutionPath": [
+          "src/app/Consumer.java",
+          "src/api/Base.java",
+        ],
+        "ruleId": "syntax.jvm.cross-file.explicit-import.declared-maven-module.direct-superclass",
+        "stage": "module",
+      },
+      "filePath": "src/app/Consumer.java",
+      "id": "edge:symbol%3Asrc%252Fapp%252FConsumer.java%3Asrc%252Fapp%252FConsumer.java%2523Consumer%3Aclass%3A0:symbol%3Asrc%252Fapi%252FBase.java%3Asrc%252Fapi%252FBase.java%2523Base%3Aclass%3A0:extends:6:31",
+      "kind": "extends",
+      "range": {
+        "end": {
+          "column": 35,
+          "line": 6,
+        },
+        "start": {
+          "column": 31,
+          "line": 6,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FConsumer.java:src%2Fapp%2FConsumer.java%23Consumer:class:0",
+      "targetId": "symbol:src%2Fapi%2FBase.java:src%2Fapi%2FBase.java%23Base:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.java:src%2Fapi%2FContract.java%23Contract:interface:0",
+        ],
+        "configurationPaths": [
+          "api/pom.xml",
+          "app/pom.xml",
+          "pom.xml",
+        ],
+        "resolutionPath": [
+          "src/app/Consumer.java",
+          "src/api/Contract.java",
+        ],
+        "ruleId": "syntax.jvm.cross-file.explicit-import.declared-maven-module.direct-implements",
+        "stage": "module",
+      },
+      "filePath": "src/app/Consumer.java",
+      "id": "edge:symbol%3Asrc%252Fapp%252FConsumer.java%3Asrc%252Fapp%252FConsumer.java%2523Consumer%3Aclass%3A0:symbol%3Asrc%252Fapi%252FContract.java%3Asrc%252Fapi%252FContract.java%2523Contract%3Ainterface%3A0:implements:6:47",
+      "kind": "implements",
+      "range": {
+        "end": {
+          "column": 55,
+          "line": 6,
+        },
+        "start": {
+          "column": 47,
+          "line": 6,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FConsumer.java:src%2Fapp%2FConsumer.java%23Consumer:class:0",
+      "targetId": "symbol:src%2Fapi%2FContract.java:src%2Fapi%2FContract.java%23Contract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FMarker.java:src%2Fapi%2FMarker.java%23Marker:interface:0",
+        ],
+        "configurationPaths": [
+          "api/pom.xml",
+          "app/pom.xml",
+          "pom.xml",
+        ],
+        "resolutionPath": [
+          "src/app/Consumer.java",
+          "src/api/Marker.java",
+        ],
+        "ruleId": "module.java.annotation-type.explicit-import.project-type",
+        "stage": "module",
+      },
+      "filePath": "src/app/Consumer.java",
+      "id": "edge:symbol%3Asrc%252Fapp%252FConsumer.java%3Asrc%252Fapp%252FConsumer.java%2523Consumer%3Aclass%3A0:symbol%3Asrc%252Fapi%252FMarker.java%3Asrc%252Fapi%252FMarker.java%2523Marker%3Ainterface%3A0:references:5:2",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 8,
+          "line": 5,
+        },
+        "start": {
+          "column": 2,
+          "line": 5,
+        },
+      },
+      "referenceName": "Marker",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FConsumer.java:src%2Fapp%2FConsumer.java%23Consumer:class:0",
+      "targetId": "symbol:src%2Fapi%2FMarker.java:src%2Fapi%2FMarker.java%23Marker:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp%2FConsumer.java:src%2Fapp%2FConsumer.java%23Consumer.run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app/Consumer.java",
+      "id": "edge:symbol%3Asrc%252Fapp%252FConsumer.java%3Asrc%252Fapp%252FConsumer.java%2523Consumer%3Aclass%3A0:symbol%3Asrc%252Fapp%252FConsumer.java%3Asrc%252Fapp%252FConsumer.java%2523Consumer.run%3Amethod%3A0:contains:7:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 26,
+          "line": 7,
+        },
+        "start": {
+          "column": 3,
+          "line": 7,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FConsumer.java:src%2Fapp%2FConsumer.java%23Consumer:class:0",
+      "targetId": "symbol:src%2Fapp%2FConsumer.java:src%2Fapp%2FConsumer.java%23Consumer.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp%2FLocalTag.java:src%2Fapp%2FLocalTag.java%23LocalTag:interface:0",
+        ],
+        "configurationPaths": [
+          "app/pom.xml",
+          "pom.xml",
+        ],
+        "resolutionPath": [
+          "src/app/Consumer.java",
+          "src/app/LocalTag.java",
+        ],
+        "ruleId": "module.java.annotation-type.same-package.project-type",
+        "stage": "module",
+      },
+      "filePath": "src/app/Consumer.java",
+      "id": "edge:symbol%3Asrc%252Fapp%252FConsumer.java%3Asrc%252Fapp%252FConsumer.java%2523Consumer.run%3Amethod%3A0:symbol%3Asrc%252Fapp%252FLocalTag.java%3Asrc%252Fapp%252FLocalTag.java%2523LocalTag%3Ainterface%3A0:references:7:4",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 7,
+        },
+        "start": {
+          "column": 4,
+          "line": 7,
+        },
+      },
+      "referenceName": "LocalTag",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FConsumer.java:src%2Fapp%2FConsumer.java%23Consumer.run:method:0",
+      "targetId": "symbol:src%2Fapp%2FLocalTag.java:src%2Fapp%2FLocalTag.java%23LocalTag:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FBase.java:src%2Fapi%2FBase.java%23Base:class:0",
+        ],
+        "configurationPaths": [
+          "api/pom.xml",
+          "app/pom.xml",
+          "pom.xml",
+        ],
+        "resolutionPath": [
+          "src/app/Consumer.java",
+          "src/api/Base.java",
+        ],
+        "ruleId": "module.java.explicit-import.project-type",
+        "stage": "module",
+      },
+      "filePath": "src/app/Consumer.java",
+      "id": "edge:symbol%3Asrc%252Fapp%252FConsumer.java%3Asrc%252Fapp%252FConsumer.java%3Afile%3A0:symbol%3Asrc%252Fapi%252FBase.java%3Asrc%252Fapi%252FBase.java%2523Base%3Aclass%3A0:imports:3:8",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 3,
+        },
+        "start": {
+          "column": 8,
+          "line": 3,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FConsumer.java:src%2Fapp%2FConsumer.java:file:0",
+      "targetId": "symbol:src%2Fapi%2FBase.java:src%2Fapi%2FBase.java%23Base:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.java:src%2Fapi%2FContract.java%23Contract:interface:0",
+        ],
+        "configurationPaths": [
+          "api/pom.xml",
+          "app/pom.xml",
+          "pom.xml",
+        ],
+        "resolutionPath": [
+          "src/app/Consumer.java",
+          "src/api/Contract.java",
+        ],
+        "ruleId": "module.java.explicit-import.project-type",
+        "stage": "module",
+      },
+      "filePath": "src/app/Consumer.java",
+      "id": "edge:symbol%3Asrc%252Fapp%252FConsumer.java%3Asrc%252Fapp%252FConsumer.java%3Afile%3A0:symbol%3Asrc%252Fapi%252FContract.java%3Asrc%252Fapi%252FContract.java%2523Contract%3Ainterface%3A0:imports:4:8",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 4,
+        },
+        "start": {
+          "column": 8,
+          "line": 4,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FConsumer.java:src%2Fapp%2FConsumer.java:file:0",
+      "targetId": "symbol:src%2Fapi%2FContract.java:src%2Fapi%2FContract.java%23Contract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FMarker.java:src%2Fapi%2FMarker.java%23Marker:interface:0",
+        ],
+        "configurationPaths": [
+          "api/pom.xml",
+          "app/pom.xml",
+          "pom.xml",
+        ],
+        "resolutionPath": [
+          "src/app/Consumer.java",
+          "src/api/Marker.java",
+        ],
+        "ruleId": "module.java.explicit-import.project-type",
+        "stage": "module",
+      },
+      "filePath": "src/app/Consumer.java",
+      "id": "edge:symbol%3Asrc%252Fapp%252FConsumer.java%3Asrc%252Fapp%252FConsumer.java%3Afile%3A0:symbol%3Asrc%252Fapi%252FMarker.java%3Asrc%252Fapi%252FMarker.java%2523Marker%3Ainterface%3A0:imports:2:8",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 2,
+        },
+        "start": {
+          "column": 8,
+          "line": 2,
+        },
+      },
+      "referenceName": "Marker",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FConsumer.java:src%2Fapp%2FConsumer.java:file:0",
+      "targetId": "symbol:src%2Fapi%2FMarker.java:src%2Fapi%2FMarker.java%23Marker:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp%2FConsumer.java:src%2Fapp%2FConsumer.java%23Consumer:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app/Consumer.java",
+      "id": "edge:symbol%3Asrc%252Fapp%252FConsumer.java%3Asrc%252Fapp%252FConsumer.java%3Afile%3A0:symbol%3Asrc%252Fapp%252FConsumer.java%3Asrc%252Fapp%252FConsumer.java%2523Consumer%3Aclass%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "Consumer",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FConsumer.java:src%2Fapp%2FConsumer.java:file:0",
+      "targetId": "symbol:src%2Fapp%2FConsumer.java:src%2Fapp%2FConsumer.java%23Consumer:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp%2FLocalBase.java:src%2Fapp%2FLocalBase.java%23LocalBase:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app/LocalBase.java",
+      "id": "edge:symbol%3Asrc%252Fapp%252FLocalBase.java%3Asrc%252Fapp%252FLocalBase.java%3Afile%3A0:symbol%3Asrc%252Fapp%252FLocalBase.java%3Asrc%252Fapp%252FLocalBase.java%2523LocalBase%3Aclass%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 26,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "LocalBase",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FLocalBase.java:src%2Fapp%2FLocalBase.java:file:0",
+      "targetId": "symbol:src%2Fapp%2FLocalBase.java:src%2Fapp%2FLocalBase.java%23LocalBase:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp%2FLocalBase.java:src%2Fapp%2FLocalBase.java%23LocalBase:class:0",
+        ],
+        "configurationPaths": [
+          "app/pom.xml",
+          "pom.xml",
+        ],
+        "resolutionPath": [
+          "src/app/LocalChild.java",
+          "src/app/LocalBase.java",
+        ],
+        "ruleId": "syntax.jvm.cross-file.same-package.direct-superclass",
+        "stage": "module",
+      },
+      "filePath": "src/app/LocalChild.java",
+      "id": "edge:symbol%3Asrc%252Fapp%252FLocalChild.java%3Asrc%252Fapp%252FLocalChild.java%2523LocalChild%3Aclass%3A0:symbol%3Asrc%252Fapp%252FLocalBase.java%3Asrc%252Fapp%252FLocalBase.java%2523LocalBase%3Aclass%3A0:extends:2:33",
+      "kind": "extends",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 2,
+        },
+        "start": {
+          "column": 33,
+          "line": 2,
+        },
+      },
+      "referenceName": "LocalBase",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FLocalChild.java:src%2Fapp%2FLocalChild.java%23LocalChild:class:0",
+      "targetId": "symbol:src%2Fapp%2FLocalBase.java:src%2Fapp%2FLocalBase.java%23LocalBase:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp%2FLocalChild.java:src%2Fapp%2FLocalChild.java%23LocalChild:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app/LocalChild.java",
+      "id": "edge:symbol%3Asrc%252Fapp%252FLocalChild.java%3Asrc%252Fapp%252FLocalChild.java%3Afile%3A0:symbol%3Asrc%252Fapp%252FLocalChild.java%3Asrc%252Fapp%252FLocalChild.java%2523LocalChild%3Aclass%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "LocalChild",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FLocalChild.java:src%2Fapp%2FLocalChild.java:file:0",
+      "targetId": "symbol:src%2Fapp%2FLocalChild.java:src%2Fapp%2FLocalChild.java%23LocalChild:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp%2FLocalTag.java:src%2Fapp%2FLocalTag.java%23LocalTag:interface:0",
+        ],
+        "configurationPaths": [
+          "app/pom.xml",
+          "pom.xml",
+        ],
+        "resolutionPath": [
+          "src/app/LocalInterfaceChild.java",
+          "src/app/LocalTag.java",
+        ],
+        "ruleId": "syntax.jvm.cross-file.same-package.direct-interface-extends",
+        "stage": "module",
+      },
+      "filePath": "src/app/LocalInterfaceChild.java",
+      "id": "edge:symbol%3Asrc%252Fapp%252FLocalInterfaceChild.java%3Asrc%252Fapp%252FLocalInterfaceChild.java%2523LocalInterfaceChild%3Ainterface%3A0:symbol%3Asrc%252Fapp%252FLocalTag.java%3Asrc%252Fapp%252FLocalTag.java%2523LocalTag%3Ainterface%3A0:extends:2:46",
+      "kind": "extends",
+      "range": {
+        "end": {
+          "column": 54,
+          "line": 2,
+        },
+        "start": {
+          "column": 46,
+          "line": 2,
+        },
+      },
+      "referenceName": "LocalTag",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FLocalInterfaceChild.java:src%2Fapp%2FLocalInterfaceChild.java%23LocalInterfaceChild:interface:0",
+      "targetId": "symbol:src%2Fapp%2FLocalTag.java:src%2Fapp%2FLocalTag.java%23LocalTag:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp%2FLocalInterfaceChild.java:src%2Fapp%2FLocalInterfaceChild.java%23LocalInterfaceChild:interface:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app/LocalInterfaceChild.java",
+      "id": "edge:symbol%3Asrc%252Fapp%252FLocalInterfaceChild.java%3Asrc%252Fapp%252FLocalInterfaceChild.java%3Afile%3A0:symbol%3Asrc%252Fapp%252FLocalInterfaceChild.java%3Asrc%252Fapp%252FLocalInterfaceChild.java%2523LocalInterfaceChild%3Ainterface%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 57,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "LocalInterfaceChild",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FLocalInterfaceChild.java:src%2Fapp%2FLocalInterfaceChild.java:file:0",
+      "targetId": "symbol:src%2Fapp%2FLocalInterfaceChild.java:src%2Fapp%2FLocalInterfaceChild.java%23LocalInterfaceChild:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp%2FLocalTag.java:src%2Fapp%2FLocalTag.java%23LocalTag:interface:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app/LocalTag.java",
+      "id": "edge:symbol%3Asrc%252Fapp%252FLocalTag.java%3Asrc%252Fapp%252FLocalTag.java%3Afile%3A0:symbol%3Asrc%252Fapp%252FLocalTag.java%3Asrc%252Fapp%252FLocalTag.java%2523LocalTag%3Ainterface%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "LocalTag",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FLocalTag.java:src%2Fapp%2FLocalTag.java:file:0",
+      "targetId": "symbol:src%2Fapp%2FLocalTag.java:src%2Fapp%2FLocalTag.java%23LocalTag:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fkotlin%2Fapi%2FKotlinContract.kt:src%2Fkotlin%2Fapi%2FKotlinContract.kt%23KotlinContract:interface:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/kotlin/api/KotlinContract.kt",
+      "id": "edge:symbol%3Asrc%252Fkotlin%252Fapi%252FKotlinContract.kt%3Asrc%252Fkotlin%252Fapi%252FKotlinContract.kt%3Afile%3A0:symbol%3Asrc%252Fkotlin%252Fapi%252FKotlinContract.kt%3Asrc%252Fkotlin%252Fapi%252FKotlinContract.kt%2523KotlinContract%3Ainterface%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "KotlinContract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fkotlin%2Fapi%2FKotlinContract.kt:src%2Fkotlin%2Fapi%2FKotlinContract.kt:file:0",
+      "targetId": "symbol:src%2Fkotlin%2Fapi%2FKotlinContract.kt:src%2Fkotlin%2Fapi%2FKotlinContract.kt%23KotlinContract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fkotlin%2Fapi%2FKotlinContract.kt:src%2Fkotlin%2Fapi%2FKotlinContract.kt%23KotlinContract:interface:0",
+        ],
+        "configurationPaths": [
+          "api/pom.xml",
+          "app/pom.xml",
+          "pom.xml",
+        ],
+        "resolutionPath": [
+          "src/kotlin/app/KotlinChild.kt",
+          "src/kotlin/api/KotlinContract.kt",
+        ],
+        "ruleId": "syntax.jvm.cross-file.explicit-import.declared-maven-module.direct-implements",
+        "stage": "module",
+      },
+      "filePath": "src/kotlin/app/KotlinChild.kt",
+      "id": "edge:symbol%3Asrc%252Fkotlin%252Fapp%252FKotlinChild.kt%3Asrc%252Fkotlin%252Fapp%252FKotlinChild.kt%2523KotlinChild%3Aclass%3A0:symbol%3Asrc%252Fkotlin%252Fapi%252FKotlinContract.kt%3Asrc%252Fkotlin%252Fapi%252FKotlinContract.kt%2523KotlinContract%3Ainterface%3A0:implements:3:21",
+      "kind": "implements",
+      "range": {
+        "end": {
+          "column": 35,
+          "line": 3,
+        },
+        "start": {
+          "column": 21,
+          "line": 3,
+        },
+      },
+      "referenceName": "KotlinContract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fkotlin%2Fapp%2FKotlinChild.kt:src%2Fkotlin%2Fapp%2FKotlinChild.kt%23KotlinChild:class:0",
+      "targetId": "symbol:src%2Fkotlin%2Fapi%2FKotlinContract.kt:src%2Fkotlin%2Fapi%2FKotlinContract.kt%23KotlinContract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fkotlin%2Fapi%2FKotlinContract.kt:src%2Fkotlin%2Fapi%2FKotlinContract.kt%23KotlinContract:interface:0",
+        ],
+        "resolutionPath": [
+          "src/kotlin/app/KotlinChild.kt",
+          "src/kotlin/api/KotlinContract.kt",
+        ],
+        "ruleId": "module.kotlin.explicit-import.unique-target",
+        "stage": "module",
+      },
+      "filePath": "src/kotlin/app/KotlinChild.kt",
+      "id": "edge:symbol%3Asrc%252Fkotlin%252Fapp%252FKotlinChild.kt%3Asrc%252Fkotlin%252Fapp%252FKotlinChild.kt%3Afile%3A0:symbol%3Asrc%252Fkotlin%252Fapi%252FKotlinContract.kt%3Asrc%252Fkotlin%252Fapi%252FKotlinContract.kt%2523KotlinContract%3Ainterface%3A0:imports:2:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 26,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "KotlinContract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fkotlin%2Fapp%2FKotlinChild.kt:src%2Fkotlin%2Fapp%2FKotlinChild.kt:file:0",
+      "targetId": "symbol:src%2Fkotlin%2Fapi%2FKotlinContract.kt:src%2Fkotlin%2Fapi%2FKotlinContract.kt%23KotlinContract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fkotlin%2Fapp%2FKotlinChild.kt:src%2Fkotlin%2Fapp%2FKotlinChild.kt%23KotlinChild:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/kotlin/app/KotlinChild.kt",
+      "id": "edge:symbol%3Asrc%252Fkotlin%252Fapp%252FKotlinChild.kt%3Asrc%252Fkotlin%252Fapp%252FKotlinChild.kt%3Afile%3A0:symbol%3Asrc%252Fkotlin%252Fapp%252FKotlinChild.kt%3Asrc%252Fkotlin%252Fapp%252FKotlinChild.kt%2523KotlinChild%3Aclass%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 35,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "KotlinChild",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fkotlin%2Fapp%2FKotlinChild.kt:src%2Fkotlin%2Fapp%2FKotlinChild.kt:file:0",
+      "targetId": "symbol:src%2Fkotlin%2Fapp%2FKotlinChild.kt:src%2Fkotlin%2Fapp%2FKotlinChild.kt%23KotlinChild:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "7e459490ef411558c5e357007382655f913aea8bfc272fb46f5d22e2569f62cd",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "java",
+      "path": "src/api/Base.java",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "b2d4253b3334db0576c407b7449a0a47e0a3ee077728a2ecd923dffc72d19b31",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "java",
+      "path": "src/api/Contract.java",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "d5b464dbf33f01b6ae803c0338765fb52dbe439de3ae87a0cf7486a12bea6d30",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "java",
+      "path": "src/api/Marker.java",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "20e562105626d4e8ac9b46d5a5097e6f6869b2d1703e5e99bf255d2c9d3ba1cf",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "java",
+      "path": "src/app/Consumer.java",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "d327f379248e9b8cc46cf136459da16aef898bdac1ca317092476cc949c1d335",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "java",
+      "path": "src/app/LocalBase.java",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "1132c96472bb60a473de7706ab42da60f027d5abd93eedc61eae2d3851335a1f",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "java",
+      "path": "src/app/LocalChild.java",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "cbeffe1c25e43fff1259f09a709abf912773cccfa879e00d9f6e35f8c8e85893",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "java",
+      "path": "src/app/LocalInterfaceChild.java",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "8c6639bec7c872d108f42178dd77eb4cce101ed68fe5599f7daa9e8bd27fd999",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "java",
+      "path": "src/app/LocalTag.java",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "0c053d1ea97883b9910329857d5bbacd6e5fd9b48953fd86d4a4fa81e11a3816",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "kotlin",
+      "path": "src/kotlin/api/KotlinContract.kt",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "6eec75b312602f00bd328e28d01d94004440304d5f5f6e22643c2f2db9b59cc8",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "kotlin",
+      "path": "src/kotlin/app/KotlinChild.kt",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api/Base.java",
+      "id": "symbol:src%2Fapi%2FBase.java:src%2Fapi%2FBase.java%23Base:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Base",
+      "qualifiedName": "src/api/Base.java#Base",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api/Base.java",
+      "id": "symbol:src%2Fapi%2FBase.java:src%2Fapi%2FBase.java:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Base.java",
+      "qualifiedName": "src/api/Base.java",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api/Contract.java",
+      "id": "symbol:src%2Fapi%2FContract.java:src%2Fapi%2FContract.java%23Contract:interface:0",
+      "isExported": true,
+      "kind": "interface",
+      "name": "Contract",
+      "qualifiedName": "src/api/Contract.java#Contract",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api/Contract.java",
+      "id": "symbol:src%2Fapi%2FContract.java:src%2Fapi%2FContract.java:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Contract.java",
+      "qualifiedName": "src/api/Contract.java",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api/Marker.java",
+      "id": "symbol:src%2Fapi%2FMarker.java:src%2Fapi%2FMarker.java%23Marker:interface:0",
+      "isExported": true,
+      "kind": "interface",
+      "name": "Marker",
+      "qualifiedName": "src/api/Marker.java#Marker",
+      "range": {
+        "end": {
+          "column": 28,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api/Marker.java",
+      "id": "symbol:src%2Fapi%2FMarker.java:src%2Fapi%2FMarker.java:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Marker.java",
+      "qualifiedName": "src/api/Marker.java",
+      "range": {
+        "end": {
+          "column": 28,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/Consumer.java",
+      "id": "symbol:src%2Fapp%2FConsumer.java:src%2Fapp%2FConsumer.java%23Consumer.run:method:0",
+      "isExported": false,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "src/app/Consumer.java#Consumer.run",
+      "range": {
+        "end": {
+          "column": 26,
+          "line": 7,
+        },
+        "start": {
+          "column": 3,
+          "line": 7,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/Consumer.java",
+      "id": "symbol:src%2Fapp%2FConsumer.java:src%2Fapp%2FConsumer.java%23Consumer:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Consumer",
+      "qualifiedName": "src/app/Consumer.java#Consumer",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/Consumer.java",
+      "id": "symbol:src%2Fapp%2FConsumer.java:src%2Fapp%2FConsumer.java:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Consumer.java",
+      "qualifiedName": "src/app/Consumer.java",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/LocalBase.java",
+      "id": "symbol:src%2Fapp%2FLocalBase.java:src%2Fapp%2FLocalBase.java%23LocalBase:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "LocalBase",
+      "qualifiedName": "src/app/LocalBase.java#LocalBase",
+      "range": {
+        "end": {
+          "column": 26,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/LocalBase.java",
+      "id": "symbol:src%2Fapp%2FLocalBase.java:src%2Fapp%2FLocalBase.java:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "LocalBase.java",
+      "qualifiedName": "src/app/LocalBase.java",
+      "range": {
+        "end": {
+          "column": 26,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/LocalChild.java",
+      "id": "symbol:src%2Fapp%2FLocalChild.java:src%2Fapp%2FLocalChild.java%23LocalChild:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "LocalChild",
+      "qualifiedName": "src/app/LocalChild.java#LocalChild",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/LocalChild.java",
+      "id": "symbol:src%2Fapp%2FLocalChild.java:src%2Fapp%2FLocalChild.java:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "LocalChild.java",
+      "qualifiedName": "src/app/LocalChild.java",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/LocalInterfaceChild.java",
+      "id": "symbol:src%2Fapp%2FLocalInterfaceChild.java:src%2Fapp%2FLocalInterfaceChild.java%23LocalInterfaceChild:interface:0",
+      "isExported": true,
+      "kind": "interface",
+      "name": "LocalInterfaceChild",
+      "qualifiedName": "src/app/LocalInterfaceChild.java#LocalInterfaceChild",
+      "range": {
+        "end": {
+          "column": 57,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/LocalInterfaceChild.java",
+      "id": "symbol:src%2Fapp%2FLocalInterfaceChild.java:src%2Fapp%2FLocalInterfaceChild.java:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "LocalInterfaceChild.java",
+      "qualifiedName": "src/app/LocalInterfaceChild.java",
+      "range": {
+        "end": {
+          "column": 57,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/LocalTag.java",
+      "id": "symbol:src%2Fapp%2FLocalTag.java:src%2Fapp%2FLocalTag.java%23LocalTag:interface:0",
+      "isExported": true,
+      "kind": "interface",
+      "name": "LocalTag",
+      "qualifiedName": "src/app/LocalTag.java#LocalTag",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/LocalTag.java",
+      "id": "symbol:src%2Fapp%2FLocalTag.java:src%2Fapp%2FLocalTag.java:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "LocalTag.java",
+      "qualifiedName": "src/app/LocalTag.java",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/kotlin/api/KotlinContract.kt",
+      "id": "symbol:src%2Fkotlin%2Fapi%2FKotlinContract.kt:src%2Fkotlin%2Fapi%2FKotlinContract.kt%23KotlinContract:interface:0",
+      "isExported": true,
+      "kind": "interface",
+      "name": "KotlinContract",
+      "qualifiedName": "src/kotlin/api/KotlinContract.kt#KotlinContract",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/kotlin/api/KotlinContract.kt",
+      "id": "symbol:src%2Fkotlin%2Fapi%2FKotlinContract.kt:src%2Fkotlin%2Fapi%2FKotlinContract.kt:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "KotlinContract.kt",
+      "qualifiedName": "src/kotlin/api/KotlinContract.kt",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/kotlin/app/KotlinChild.kt",
+      "id": "symbol:src%2Fkotlin%2Fapp%2FKotlinChild.kt:src%2Fkotlin%2Fapp%2FKotlinChild.kt%23KotlinChild:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "KotlinChild",
+      "qualifiedName": "src/kotlin/app/KotlinChild.kt#KotlinChild",
+      "range": {
+        "end": {
+          "column": 35,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/kotlin/app/KotlinChild.kt",
+      "id": "symbol:src%2Fkotlin%2Fapp%2FKotlinChild.kt:src%2Fkotlin%2Fapp%2FKotlinChild.kt:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "KotlinChild.kt",
+      "qualifiedName": "src/kotlin/app/KotlinChild.kt",
+      "range": {
+        "end": {
+          "column": 35,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`JVM resolver module-move parity golden > preserves duplicate, wildcard, missing and nested-type nonclaims 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi%2FContract.java:src%2Fapi%2FContract.java%23Contract:interface:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api/Contract.java",
+      "id": "edge:symbol%3Asrc%252Fapi%252FContract.java%3Asrc%252Fapi%252FContract.java%3Afile%3A0:symbol%3Asrc%252Fapi%252FContract.java%3Asrc%252Fapi%252FContract.java%2523Contract%3Ainterface%3A0:contains:1:14",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 1,
+        },
+        "start": {
+          "column": 14,
+          "line": 1,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi%2FContract.java:src%2Fapi%2FContract.java:file:0",
+      "targetId": "symbol:src%2Fapi%2FContract.java:src%2Fapi%2FContract.java%23Contract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp%2FMissingChild.java:src%2Fapp%2FMissingChild.java%23MissingChild:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app/MissingChild.java",
+      "id": "edge:symbol%3Asrc%252Fapp%252FMissingChild.java%3Asrc%252Fapp%252FMissingChild.java%3Afile%3A0:symbol%3Asrc%252Fapp%252FMissingChild.java%3Asrc%252Fapp%252FMissingChild.java%2523MissingChild%3Aclass%3A0:contains:1:14",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 63,
+          "line": 1,
+        },
+        "start": {
+          "column": 14,
+          "line": 1,
+        },
+      },
+      "referenceName": "MissingChild",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FMissingChild.java:src%2Fapp%2FMissingChild.java:file:0",
+      "targetId": "symbol:src%2Fapp%2FMissingChild.java:src%2Fapp%2FMissingChild.java%23MissingChild:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp%2FNestedChild.java:src%2Fapp%2FNestedChild.java%23NestedChild:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app/NestedChild.java",
+      "id": "edge:symbol%3Asrc%252Fapp%252FNestedChild.java%3Asrc%252Fapp%252FNestedChild.java%3Afile%3A0:symbol%3Asrc%252Fapp%252FNestedChild.java%3Asrc%252Fapp%252FNestedChild.java%2523NestedChild%3Aclass%3A0:contains:1:14",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 71,
+          "line": 1,
+        },
+        "start": {
+          "column": 14,
+          "line": 1,
+        },
+      },
+      "referenceName": "NestedChild",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FNestedChild.java:src%2Fapp%2FNestedChild.java:file:0",
+      "targetId": "symbol:src%2Fapp%2FNestedChild.java:src%2Fapp%2FNestedChild.java%23NestedChild:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp%2FWildcardChild.java:src%2Fapp%2FWildcardChild.java%23WildcardChild:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app/WildcardChild.java",
+      "id": "edge:symbol%3Asrc%252Fapp%252FWildcardChild.java%3Asrc%252Fapp%252FWildcardChild.java%3Afile%3A0:symbol%3Asrc%252Fapp%252FWildcardChild.java%3Asrc%252Fapp%252FWildcardChild.java%2523WildcardChild%3Aclass%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "WildcardChild",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp%2FWildcardChild.java:src%2Fapp%2FWildcardChild.java:file:0",
+      "targetId": "symbol:src%2Fapp%2FWildcardChild.java:src%2Fapp%2FWildcardChild.java%23WildcardChild:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fduplicate%2FContract.java:src%2Fduplicate%2FContract.java%23Contract:interface:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/duplicate/Contract.java",
+      "id": "edge:symbol%3Asrc%252Fduplicate%252FContract.java%3Asrc%252Fduplicate%252FContract.java%3Afile%3A0:symbol%3Asrc%252Fduplicate%252FContract.java%3Asrc%252Fduplicate%252FContract.java%2523Contract%3Ainterface%3A0:contains:1:14",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 1,
+        },
+        "start": {
+          "column": 14,
+          "line": 1,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fduplicate%2FContract.java:src%2Fduplicate%2FContract.java:file:0",
+      "targetId": "symbol:src%2Fduplicate%2FContract.java:src%2Fduplicate%2FContract.java%23Contract:interface:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "4a6bfabf3b6e060f549fb33bac69da729e66fc22fce8c1b3118866e9b2e5bf8f",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "java",
+      "path": "src/api/Contract.java",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "031b342ad1f961994d5cb34800358819a0a54cc681c623ffafe5611b9c9ac7cd",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "java",
+      "path": "src/app/MissingChild.java",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "c02078482457d078f3505703bafa716c31d57a6587e0ed1d466e38ae6a71e5d3",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "java",
+      "path": "src/app/NestedChild.java",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "f9f2b4fa861b0f303f19a8b1df75d9c052ba5bff254d0fd6defc53a1c4ecbd08",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "java",
+      "path": "src/app/WildcardChild.java",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "4a6bfabf3b6e060f549fb33bac69da729e66fc22fce8c1b3118866e9b2e5bf8f",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "java",
+      "path": "src/duplicate/Contract.java",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api/Contract.java",
+      "id": "symbol:src%2Fapi%2FContract.java:src%2Fapi%2FContract.java%23Contract:interface:0",
+      "isExported": true,
+      "kind": "interface",
+      "name": "Contract",
+      "qualifiedName": "src/api/Contract.java#Contract",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 1,
+        },
+        "start": {
+          "column": 14,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api/Contract.java",
+      "id": "symbol:src%2Fapi%2FContract.java:src%2Fapi%2FContract.java:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Contract.java",
+      "qualifiedName": "src/api/Contract.java",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/MissingChild.java",
+      "id": "symbol:src%2Fapp%2FMissingChild.java:src%2Fapp%2FMissingChild.java%23MissingChild:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "MissingChild",
+      "qualifiedName": "src/app/MissingChild.java#MissingChild",
+      "range": {
+        "end": {
+          "column": 63,
+          "line": 1,
+        },
+        "start": {
+          "column": 14,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/MissingChild.java",
+      "id": "symbol:src%2Fapp%2FMissingChild.java:src%2Fapp%2FMissingChild.java:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "MissingChild.java",
+      "qualifiedName": "src/app/MissingChild.java",
+      "range": {
+        "end": {
+          "column": 63,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/NestedChild.java",
+      "id": "symbol:src%2Fapp%2FNestedChild.java:src%2Fapp%2FNestedChild.java%23NestedChild:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "NestedChild",
+      "qualifiedName": "src/app/NestedChild.java#NestedChild",
+      "range": {
+        "end": {
+          "column": 71,
+          "line": 1,
+        },
+        "start": {
+          "column": 14,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/NestedChild.java",
+      "id": "symbol:src%2Fapp%2FNestedChild.java:src%2Fapp%2FNestedChild.java:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "NestedChild.java",
+      "qualifiedName": "src/app/NestedChild.java",
+      "range": {
+        "end": {
+          "column": 71,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/WildcardChild.java",
+      "id": "symbol:src%2Fapp%2FWildcardChild.java:src%2Fapp%2FWildcardChild.java%23WildcardChild:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "WildcardChild",
+      "qualifiedName": "src/app/WildcardChild.java#WildcardChild",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app/WildcardChild.java",
+      "id": "symbol:src%2Fapp%2FWildcardChild.java:src%2Fapp%2FWildcardChild.java:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "WildcardChild.java",
+      "qualifiedName": "src/app/WildcardChild.java",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/duplicate/Contract.java",
+      "id": "symbol:src%2Fduplicate%2FContract.java:src%2Fduplicate%2FContract.java%23Contract:interface:0",
+      "isExported": true,
+      "kind": "interface",
+      "name": "Contract",
+      "qualifiedName": "src/duplicate/Contract.java#Contract",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 1,
+        },
+        "start": {
+          "column": 14,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/duplicate/Contract.java",
+      "id": "symbol:src%2Fduplicate%2FContract.java:src%2Fduplicate%2FContract.java:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Contract.java",
+      "qualifiedName": "src/duplicate/Contract.java",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

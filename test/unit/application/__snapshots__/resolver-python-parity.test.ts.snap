@@ -1,0 +1,1304 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Python resolver module-move parity > preserves decorated target nonclaims 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23run:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "pkg/entry.py",
+      "id": "edge:symbol%3Apkg%252Fentry.py%3Apkg%252Fentry.py%3Afile%3A0:symbol%3Apkg%252Fentry.py%3Apkg%252Fentry.py%2523run%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:pkg%2Fentry.py:pkg%2Fentry.py:file:0",
+      "targetId": "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23run:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "pkg/helpers.py",
+      "id": "edge:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%3Afile%3A0:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%2523helper%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py:file:0",
+      "targetId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "pkg/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "2659849a4263b3ee359addb15ce8d0bac8d90cac688d32400644b85a3352aa6b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "pkg/entry.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "2f1f6cf481296546173ebf4df4edd0e795a3da0fa67127ab6f1f4726d1edeacb",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "pkg/helpers.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/__init__.py",
+      "id": "symbol:pkg%2F__init__.py:pkg%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "pkg/__init__.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/entry.py",
+      "id": "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23run:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "run",
+      "qualifiedName": "pkg/entry.py#run",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/entry.py",
+      "id": "symbol:pkg%2Fentry.py:pkg%2Fentry.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "entry.py",
+      "qualifiedName": "pkg/entry.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/helpers.py",
+      "id": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "pkg/helpers.py#helper",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/helpers.py",
+      "id": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "helpers.py",
+      "qualifiedName": "pkg/helpers.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Python resolver module-move parity > preserves duplicate declaration nonclaims 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23run:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "pkg/entry.py",
+      "id": "edge:symbol%3Apkg%252Fentry.py%3Apkg%252Fentry.py%3Afile%3A0:symbol%3Apkg%252Fentry.py%3Apkg%252Fentry.py%2523run%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:pkg%2Fentry.py:pkg%2Fentry.py:file:0",
+      "targetId": "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23run:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "pkg/helpers.py",
+      "id": "edge:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%3Afile%3A0:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%2523helper%3Afunction%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py:file:0",
+      "targetId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:1",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "pkg/helpers.py",
+      "id": "edge:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%3Afile%3A0:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%2523helper%3Afunction%3A1:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py:file:0",
+      "targetId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:1",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "pkg/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "2659849a4263b3ee359addb15ce8d0bac8d90cac688d32400644b85a3352aa6b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "pkg/entry.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "43e524a9f979a6e9a20572c76ce586c7d16b48ee01f6be31f187ed957446c730",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "pkg/helpers.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/__init__.py",
+      "id": "symbol:pkg%2F__init__.py:pkg%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "pkg/__init__.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/entry.py",
+      "id": "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23run:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "run",
+      "qualifiedName": "pkg/entry.py#run",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/entry.py",
+      "id": "symbol:pkg%2Fentry.py:pkg%2Fentry.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "entry.py",
+      "qualifiedName": "pkg/entry.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/helpers.py",
+      "id": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "pkg/helpers.py#helper",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 1,
+      "filePath": "pkg/helpers.py",
+      "id": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:1",
+      "isExported": false,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "pkg/helpers.py#helper",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/helpers.py",
+      "id": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "helpers.py",
+      "qualifiedName": "pkg/helpers.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Python resolver module-move parity > preserves full import, call, construction and heritage evidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23Base:class:0",
+        ],
+        "resolutionPath": [
+          "pkg/entry.py",
+          "pkg/helpers.py",
+        ],
+        "ruleId": "module.python.regular-package.relative-named-import.unique-top-level-class-inheritance",
+        "stage": "module",
+      },
+      "filePath": "pkg/entry.py",
+      "id": "edge:symbol%3Apkg%252Fentry.py%3Apkg%252Fentry.py%2523Child%3Aclass%3A0:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%2523Base%3Aclass%3A0:extends:3:13",
+      "kind": "extends",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 3,
+        },
+        "start": {
+          "column": 13,
+          "line": 3,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23Child:class:0",
+      "targetId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23Base:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23Base:class:0",
+        ],
+        "resolutionPath": [
+          "pkg/entry.py",
+          "pkg/helpers.py",
+        ],
+        "ruleId": "module.python.regular-package.relative-named-import.unique-top-level-class-instantiation",
+        "stage": "module",
+      },
+      "filePath": "pkg/entry.py",
+      "id": "edge:symbol%3Apkg%252Fentry.py%3Apkg%252Fentry.py%2523run%3Afunction%3A0:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%2523Base%3Aclass%3A0:instantiates:7:12",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 7,
+        },
+        "start": {
+          "column": 12,
+          "line": 7,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23run:function:0",
+      "targetId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23Base:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:0",
+        ],
+        "resolutionPath": [
+          "pkg/entry.py",
+          "pkg/helpers.py",
+        ],
+        "ruleId": "module.python.regular-package.relative-named-import.unique-top-level-function-call",
+        "stage": "module",
+      },
+      "filePath": "pkg/entry.py",
+      "id": "edge:symbol%3Apkg%252Fentry.py%3Apkg%252Fentry.py%2523run%3Afunction%3A0:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%2523helper%3Afunction%3A0:calls:6:5",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 11,
+          "line": 6,
+        },
+        "start": {
+          "column": 5,
+          "line": 6,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23run:function:0",
+      "targetId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23Child:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "pkg/entry.py",
+      "id": "edge:symbol%3Apkg%252Fentry.py%3Apkg%252Fentry.py%3Afile%3A0:symbol%3Apkg%252Fentry.py%3Apkg%252Fentry.py%2523Child%3Aclass%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 9,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Child",
+      "resolution": "exact",
+      "sourceId": "symbol:pkg%2Fentry.py:pkg%2Fentry.py:file:0",
+      "targetId": "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23Child:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23run:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "pkg/entry.py",
+      "id": "edge:symbol%3Apkg%252Fentry.py%3Apkg%252Fentry.py%3Afile%3A0:symbol%3Apkg%252Fentry.py%3Apkg%252Fentry.py%2523run%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:pkg%2Fentry.py:pkg%2Fentry.py:file:0",
+      "targetId": "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23run:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py:file:0",
+        ],
+        "resolutionPath": [
+          "pkg/entry.py",
+          "pkg/helpers.py",
+        ],
+        "ruleId": "module.python.regular-package.relative-named-import",
+        "stage": "module",
+      },
+      "filePath": "pkg/entry.py",
+      "id": "edge:symbol%3Apkg%252Fentry.py%3Apkg%252Fentry.py%3Afile%3A0:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%3Afile%3A0:imports:1:6",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 1,
+        },
+        "start": {
+          "column": 6,
+          "line": 1,
+        },
+      },
+      "referenceName": ".helpers",
+      "resolution": "exact",
+      "sourceId": "symbol:pkg%2Fentry.py:pkg%2Fentry.py:file:0",
+      "targetId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py:file:0",
+        ],
+        "resolutionPath": [
+          "pkg/entry.py",
+          "pkg/helpers.py",
+        ],
+        "ruleId": "module.python.regular-package.relative-named-import",
+        "stage": "module",
+      },
+      "filePath": "pkg/entry.py",
+      "id": "edge:symbol%3Apkg%252Fentry.py%3Apkg%252Fentry.py%3Afile%3A0:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%3Afile%3A0:imports:2:6",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 2,
+        },
+        "start": {
+          "column": 6,
+          "line": 2,
+        },
+      },
+      "referenceName": ".helpers",
+      "resolution": "exact",
+      "sourceId": "symbol:pkg%2Fentry.py:pkg%2Fentry.py:file:0",
+      "targetId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23Base:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "pkg/helpers.py",
+      "id": "edge:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%3Afile%3A0:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%2523Base%3Aclass%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 9,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py:file:0",
+      "targetId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23Base:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "pkg/helpers.py",
+      "id": "edge:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%3Afile%3A0:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%2523helper%3Afunction%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py:file:0",
+      "targetId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "pkg/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "9745e188befa1cb0c8fbce45ef79945df69a4563de21e56cf7720fd7a97cb866",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "pkg/entry.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "f38138f120a5297b572ed255f018e5a20ec90e0cfb5654418a2054c333c3f860",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "pkg/helpers.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/__init__.py",
+      "id": "symbol:pkg%2F__init__.py:pkg%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "pkg/__init__.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/entry.py",
+      "id": "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23Child:class:0",
+      "isExported": false,
+      "kind": "class",
+      "name": "Child",
+      "qualifiedName": "pkg/entry.py#Child",
+      "range": {
+        "end": {
+          "column": 9,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/entry.py",
+      "id": "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23run:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "run",
+      "qualifiedName": "pkg/entry.py#run",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/entry.py",
+      "id": "symbol:pkg%2Fentry.py:pkg%2Fentry.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "entry.py",
+      "qualifiedName": "pkg/entry.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/helpers.py",
+      "id": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23Base:class:0",
+      "isExported": false,
+      "kind": "class",
+      "name": "Base",
+      "qualifiedName": "pkg/helpers.py#Base",
+      "range": {
+        "end": {
+          "column": 9,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/helpers.py",
+      "id": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "pkg/helpers.py#helper",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/helpers.py",
+      "id": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "helpers.py",
+      "qualifiedName": "pkg/helpers.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Python resolver module-move parity > preserves namespace package nonclaims 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23run:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "pkg/entry.py",
+      "id": "edge:symbol%3Apkg%252Fentry.py%3Apkg%252Fentry.py%3Afile%3A0:symbol%3Apkg%252Fentry.py%3Apkg%252Fentry.py%2523run%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:pkg%2Fentry.py:pkg%2Fentry.py:file:0",
+      "targetId": "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23run:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "pkg/helpers.py",
+      "id": "edge:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%3Afile%3A0:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%2523helper%3Afunction%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py:file:0",
+      "targetId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "2659849a4263b3ee359addb15ce8d0bac8d90cac688d32400644b85a3352aa6b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "pkg/entry.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "b6631639de17fb869c43278f858c465cc5b71c8ec51c8c25d803905361f8a544",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "pkg/helpers.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/entry.py",
+      "id": "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23run:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "run",
+      "qualifiedName": "pkg/entry.py#run",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/entry.py",
+      "id": "symbol:pkg%2Fentry.py:pkg%2Fentry.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "entry.py",
+      "qualifiedName": "pkg/entry.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/helpers.py",
+      "id": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "pkg/helpers.py#helper",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/helpers.py",
+      "id": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "helpers.py",
+      "qualifiedName": "pkg/helpers.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Python resolver module-move parity > preserves rebound target nonclaims 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23run:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "pkg/entry.py",
+      "id": "edge:symbol%3Apkg%252Fentry.py%3Apkg%252Fentry.py%3Afile%3A0:symbol%3Apkg%252Fentry.py%3Apkg%252Fentry.py%2523run%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:pkg%2Fentry.py:pkg%2Fentry.py:file:0",
+      "targetId": "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23run:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "pkg/helpers.py",
+      "id": "edge:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%3Afile%3A0:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%2523helper%3Afunction%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py:file:0",
+      "targetId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "pkg/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "2659849a4263b3ee359addb15ce8d0bac8d90cac688d32400644b85a3352aa6b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "pkg/entry.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "da5d34ee99fe3059a326ea5d0eba98020b76101cb905e52c6895f2c3e91d6cd0",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "pkg/helpers.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/__init__.py",
+      "id": "symbol:pkg%2F__init__.py:pkg%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "pkg/__init__.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/entry.py",
+      "id": "symbol:pkg%2Fentry.py:pkg%2Fentry.py%23run:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "run",
+      "qualifiedName": "pkg/entry.py#run",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/entry.py",
+      "id": "symbol:pkg%2Fentry.py:pkg%2Fentry.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "entry.py",
+      "qualifiedName": "pkg/entry.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/helpers.py",
+      "id": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "pkg/helpers.py#helper",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/helpers.py",
+      "id": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "helpers.py",
+      "qualifiedName": "pkg/helpers.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

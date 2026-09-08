@@ -16,9 +16,9 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.518.0
+Current version: v0.519.0
 
-v0.518.0 adds Go range clauses without an iteration binding and avoids treating a range RHS receiver as reassigned. Across 1,457 fixed files from four large projects, parse-clean files increase from 1,223 to 1,256; 201 remain unsupported. The original 1,223 files retain identical ASTs and extraction facts. The frozen 986-relation truth set remains at 529 TP, and all 150 negative contracts pass. Better parser admission does not mean every added relation is compiler-verified, complete Go support, or a full FP=0 claim.
+v0.519.0 separates language, document, and framework relation resolution into dedicated modules while preserving evidence rules, ambiguity handling, and public interfaces. All 185 differential scenarios match the fixed baseline, including 58 non-empty language inputs and cross-file framework cases. This is a behavior-preserving structural improvement, not an increase in TP, complete language support, or a new performance claim.
 
 ## Highlights
 

@@ -1,0 +1,1647 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Sanic Blueprint resolver pre-move parity golden > does not cross a missing regular-package boundary 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23items:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/catalog.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fcatalog.py%3Aapp%252Froutes%252Fcatalog.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fcatalog.py%3Aapp%252Froutes%252Fcatalog.py%2523items%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "items",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23items:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "6ec043414033238ee9ea156962b4ed5eb8982750dba8a40f2292795ceb9b3410",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/main.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/routes/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "9cc6ad2e756ce6ddd2b83b2a8d428f0dd4d41ec7382fcb99b4d24bee8ccedac4",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/routes/catalog.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/main.py",
+      "id": "symbol:app%2Fmain.py:app%2Fmain.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "main.py",
+      "qualifiedName": "app/main.py",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/__init__.py",
+      "id": "symbol:app%2Froutes%2F__init__.py:app%2Froutes%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "app/routes/__init__.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/catalog.py",
+      "id": "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23items:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "items",
+      "qualifiedName": "app/routes/catalog.py#items",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/catalog.py",
+      "id": "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "catalog.py",
+      "qualifiedName": "app/routes/catalog.py",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Sanic Blueprint resolver pre-move parity golden > keeps distinct repeated named group mounts exact 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23health:function:0",
+        ],
+        "resolutionPath": [
+          "app/main.py",
+          "app/routes/public.py",
+          "app/routes/users.py",
+        ],
+        "ruleId": "framework.sanic.imported-named-blueprint-group.app-blueprint.decorator.local-function",
+        "stage": "module",
+      },
+      "filePath": "app/routes/users.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%2523route%253AGET%2520%252Fv1%252Fpublic%252Fusers%252Fhealth%3Aroute%3A0:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%2523health%3Afunction%3A0:routes:4:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23route%3AGET%20%2Fv1%2Fpublic%2Fusers%2Fhealth:route:0",
+      "targetId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23health:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23health:function:0",
+        ],
+        "resolutionPath": [
+          "app/main.py",
+          "app/routes/admin.py",
+          "app/routes/users.py",
+        ],
+        "ruleId": "framework.sanic.imported-named-blueprint-group.app-blueprint.decorator.local-function",
+        "stage": "module",
+      },
+      "filePath": "app/routes/users.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%2523route%253AGET%2520%252Fv2%252Fadmin%252Fusers%252Fhealth%3Aroute%3A0:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%2523health%3Afunction%3A0:routes:4:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23route%3AGET%20%2Fv2%2Fadmin%2Fusers%2Fhealth:route:0",
+      "targetId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23health:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23health:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/users.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%2523health%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23health:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23route%3AGET%20%2Fv1%2Fpublic%2Fusers%2Fhealth:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/users.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%2523route%253AGET%2520%252Fv1%252Fpublic%252Fusers%252Fhealth%3Aroute%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "GET /v1/public/users/health",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23route%3AGET%20%2Fv1%2Fpublic%2Fusers%2Fhealth:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23route%3AGET%20%2Fv2%2Fadmin%2Fusers%2Fhealth:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/users.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%2523route%253AGET%2520%252Fv2%252Fadmin%252Fusers%252Fhealth%3Aroute%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "GET /v2/admin/users/health",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23route%3AGET%20%2Fv2%2Fadmin%2Fusers%2Fhealth:route:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "a26e6b46f8a0fa4ee42f9791882bde174ce0aa91b4a2ea382827a5c4d3a28fdb",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/main.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/routes/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "dada122ecbe85ada154367955c27f649554b188d648c68b3970eef4945b5804d",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/routes/admin.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "a220c2a6382d9f9eb42bab35597740709af7b4bbb5e481d0de132c056ecc6119",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/routes/public.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "7e1b2cdeb90f56ac7e4d761123eaf529d7db2265f640079d149db7a8dfb04721",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/routes/users.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/__init__.py",
+      "id": "symbol:app%2F__init__.py:app%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "app/__init__.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/main.py",
+      "id": "symbol:app%2Fmain.py:app%2Fmain.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "main.py",
+      "qualifiedName": "app/main.py",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/__init__.py",
+      "id": "symbol:app%2Froutes%2F__init__.py:app%2Froutes%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "app/routes/__init__.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/admin.py",
+      "id": "symbol:app%2Froutes%2Fadmin.py:app%2Froutes%2Fadmin.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "admin.py",
+      "qualifiedName": "app/routes/admin.py",
+      "range": {
+        "end": {
+          "column": 80,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/public.py",
+      "id": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "public.py",
+      "qualifiedName": "app/routes/public.py",
+      "range": {
+        "end": {
+          "column": 83,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/users.py",
+      "id": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23health:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "health",
+      "qualifiedName": "app/routes/users.py#health",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/users.py",
+      "id": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23route%3AGET%20%2Fv1%2Fpublic%2Fusers%2Fhealth:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /v1/public/users/health",
+      "qualifiedName": "app/routes/users.py#route:GET /v1/public/users/health",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/users.py",
+      "id": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23route%3AGET%20%2Fv2%2Fadmin%2Fusers%2Fhealth:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /v2/admin/users/health",
+      "qualifiedName": "app/routes/users.py#route:GET /v2/admin/users/health",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/users.py",
+      "id": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "users.py",
+      "qualifiedName": "app/routes/users.py",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Sanic Blueprint resolver pre-move parity golden > preserves re-exported nested Blueprint groups and literal route prefixes 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py%23summary:function:0",
+        ],
+        "resolutionPath": [
+          "app/main.py",
+          "app/routes/__init__.py",
+          "app/routes/api.py",
+        ],
+        "ruleId": "framework.sanic.reexported-blueprint-group.app-blueprint.decorator.local-function",
+        "stage": "module",
+      },
+      "filePath": "app/routes/api.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fapi.py%3Aapp%252Froutes%252Fapi.py%2523route%253AGET%2520%252Fv2%252Fapi%252Freports%252Fsummary%3Aroute%3A0:symbol%3Aapp%252Froutes%252Fapi.py%3Aapp%252Froutes%252Fapi.py%2523summary%3Afunction%3A0:routes:7:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "summary",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py%23route%3AGET%20%2Fv2%2Fapi%2Freports%2Fsummary:route:0",
+      "targetId": "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py%23summary:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py%23route%3AGET%20%2Fv2%2Fapi%2Freports%2Fsummary:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/api.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fapi.py%3Aapp%252Froutes%252Fapi.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fapi.py%3Aapp%252Froutes%252Fapi.py%2523route%253AGET%2520%252Fv2%252Fapi%252Freports%252Fsummary%3Aroute%3A0:contains:7:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "GET /v2/api/reports/summary",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py%23route%3AGET%20%2Fv2%2Fapi%2Freports%2Fsummary:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py%23summary:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/api.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fapi.py%3Aapp%252Froutes%252Fapi.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fapi.py%3Aapp%252Froutes%252Fapi.py%2523summary%3Afunction%3A0:contains:8:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+      "referenceName": "summary",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py%23summary:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23items:function:0",
+        ],
+        "resolutionPath": [
+          "app/main.py",
+          "app/routes/__init__.py",
+          "app/routes/api.py",
+          "app/routes/catalog.py",
+        ],
+        "ruleId": "framework.sanic.reexported-blueprint-group.app-blueprint.decorator.local-function",
+        "stage": "module",
+      },
+      "filePath": "app/routes/catalog.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fcatalog.py%3Aapp%252Froutes%252Fcatalog.py%2523route%253AGET%2520%252Fv2%252Fapi%252Fcatalog%252Fitems%3Aroute%3A0:symbol%3Aapp%252Froutes%252Fcatalog.py%3Aapp%252Froutes%252Fcatalog.py%2523items%3Afunction%3A0:routes:4:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "items",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23route%3AGET%20%2Fv2%2Fapi%2Fcatalog%2Fitems:route:0",
+      "targetId": "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23items:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23items:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/catalog.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fcatalog.py%3Aapp%252Froutes%252Fcatalog.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fcatalog.py%3Aapp%252Froutes%252Fcatalog.py%2523items%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "items",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23items:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23route%3AGET%20%2Fv2%2Fapi%2Fcatalog%2Fitems:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/catalog.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fcatalog.py%3Aapp%252Froutes%252Fcatalog.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fcatalog.py%3Aapp%252Froutes%252Fcatalog.py%2523route%253AGET%2520%252Fv2%252Fapi%252Fcatalog%252Fitems%3Aroute%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "GET /v2/api/catalog/items",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23route%3AGET%20%2Fv2%2Fapi%2Fcatalog%2Fitems:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23status:function:0",
+        ],
+        "resolutionPath": [
+          "app/main.py",
+          "app/routes/__init__.py",
+          "app/routes/public.py",
+        ],
+        "ruleId": "framework.sanic.reexported-blueprint.app-blueprint.decorator.local-function",
+        "stage": "module",
+      },
+      "filePath": "app/routes/public.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fpublic.py%3Aapp%252Froutes%252Fpublic.py%2523route%253AGET%2520%252Fv1%252Fpublic%252Fstatus%3Aroute%3A0:symbol%3Aapp%252Froutes%252Fpublic.py%3Aapp%252Froutes%252Fpublic.py%2523status%3Afunction%3A0:routes:4:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "status",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23route%3AGET%20%2Fv1%2Fpublic%2Fstatus:route:0",
+      "targetId": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23status:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23route%3AGET%20%2Fv1%2Fpublic%2Fstatus:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/public.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fpublic.py%3Aapp%252Froutes%252Fpublic.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fpublic.py%3Aapp%252Froutes%252Fpublic.py%2523route%253AGET%2520%252Fv1%252Fpublic%252Fstatus%3Aroute%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "GET /v1/public/status",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23route%3AGET%20%2Fv1%2Fpublic%2Fstatus:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23status:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/public.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fpublic.py%3Aapp%252Froutes%252Fpublic.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fpublic.py%3Aapp%252Froutes%252Fpublic.py%2523status%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "status",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23status:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23health:function:0",
+        ],
+        "resolutionPath": [
+          "app/main.py",
+          "app/routes/__init__.py",
+          "app/routes/api.py",
+          "app/routes/content.py",
+          "app/routes/users.py",
+        ],
+        "ruleId": "framework.sanic.reexported-nested-blueprint-group.app-blueprint.decorator.local-function",
+        "stage": "module",
+      },
+      "filePath": "app/routes/users.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%2523route%253AGET%2520%252Fv2%252Fapi%252Fcontent%252Fusers%252Fhealth%3Aroute%3A0:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%2523health%3Afunction%3A0:routes:4:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23route%3AGET%20%2Fv2%2Fapi%2Fcontent%2Fusers%2Fhealth:route:0",
+      "targetId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23health:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23health:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/users.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%2523health%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23health:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23route%3AGET%20%2Fv2%2Fapi%2Fcontent%2Fusers%2Fhealth:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/users.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%2523route%253AGET%2520%252Fv2%252Fapi%252Fcontent%252Fusers%252Fhealth%3Aroute%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "GET /v2/api/content/users/health",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23route%3AGET%20%2Fv2%2Fapi%2Fcontent%2Fusers%2Fhealth:route:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "254ef9ca868350ad1dcc094fb1d3af7d82360c4d956be48c5aebbbf11d2bd1cf",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/main.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "f35b18ebf8fc2607b639af0cf9de7d710dfc7f067eabd8fa57543d540955e9fb",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/routes/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "94fef8bba84e02d4d9b80381ed5ced059a3e4c4cf70b43a13d7baabeba9c4dc3",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/routes/api.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "9cc6ad2e756ce6ddd2b83b2a8d428f0dd4d41ec7382fcb99b4d24bee8ccedac4",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/routes/catalog.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "14a10bdc34bd60712e7ae4075df6faa5e3fe53052e844787390c800e9e6c5501",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/routes/content.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "de64f9abe21ae9252478bdbbe17bd6ee6d6f6961ac859fc07729295b345c3330",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/routes/public.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "7e1b2cdeb90f56ac7e4d761123eaf529d7db2265f640079d149db7a8dfb04721",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/routes/users.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/__init__.py",
+      "id": "symbol:app%2F__init__.py:app%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "app/__init__.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/main.py",
+      "id": "symbol:app%2Fmain.py:app%2Fmain.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "main.py",
+      "qualifiedName": "app/main.py",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/__init__.py",
+      "id": "symbol:app%2Froutes%2F__init__.py:app%2Froutes%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "app/routes/__init__.py",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/api.py",
+      "id": "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py%23route%3AGET%20%2Fv2%2Fapi%2Freports%2Fsummary:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /v2/api/reports/summary",
+      "qualifiedName": "app/routes/api.py#route:GET /v2/api/reports/summary",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/api.py",
+      "id": "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py%23summary:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "summary",
+      "qualifiedName": "app/routes/api.py#summary",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/api.py",
+      "id": "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "api.py",
+      "qualifiedName": "app/routes/api.py",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/catalog.py",
+      "id": "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23items:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "items",
+      "qualifiedName": "app/routes/catalog.py#items",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/catalog.py",
+      "id": "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23route%3AGET%20%2Fv2%2Fapi%2Fcatalog%2Fitems:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /v2/api/catalog/items",
+      "qualifiedName": "app/routes/catalog.py#route:GET /v2/api/catalog/items",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/catalog.py",
+      "id": "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "catalog.py",
+      "qualifiedName": "app/routes/catalog.py",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/content.py",
+      "id": "symbol:app%2Froutes%2Fcontent.py:app%2Froutes%2Fcontent.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "content.py",
+      "qualifiedName": "app/routes/content.py",
+      "range": {
+        "end": {
+          "column": 63,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/public.py",
+      "id": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23route%3AGET%20%2Fv1%2Fpublic%2Fstatus:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /v1/public/status",
+      "qualifiedName": "app/routes/public.py#route:GET /v1/public/status",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/public.py",
+      "id": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23status:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "status",
+      "qualifiedName": "app/routes/public.py#status",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/public.py",
+      "id": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "public.py",
+      "qualifiedName": "app/routes/public.py",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/users.py",
+      "id": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23health:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "health",
+      "qualifiedName": "app/routes/users.py#health",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/users.py",
+      "id": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23route%3AGET%20%2Fv2%2Fapi%2Fcontent%2Fusers%2Fhealth:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /v2/api/content/users/health",
+      "qualifiedName": "app/routes/users.py#route:GET /v2/api/content/users/health",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/users.py",
+      "id": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "users.py",
+      "qualifiedName": "app/routes/users.py",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Sanic Blueprint resolver pre-move parity golden > rejects repeated group mounts without unique literal name prefixes 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23health:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/users.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%2523health%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23health:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "a26e6b46f8a0fa4ee42f9791882bde174ce0aa91b4a2ea382827a5c4d3a28fdb",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/main.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/routes/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "11cca0331b7cd7117f8d3a8eac0addd6aa17c2787c7c652e2215d5917aaed7bd",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/routes/admin.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "b54839d22163b76dcd81a22b684e21e74fdc4c9da8bc5f1b03e72627971ef8cd",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/routes/public.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "7e1b2cdeb90f56ac7e4d761123eaf529d7db2265f640079d149db7a8dfb04721",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "app/routes/users.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/__init__.py",
+      "id": "symbol:app%2F__init__.py:app%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "app/__init__.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/main.py",
+      "id": "symbol:app%2Fmain.py:app%2Fmain.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "main.py",
+      "qualifiedName": "app/main.py",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/__init__.py",
+      "id": "symbol:app%2Froutes%2F__init__.py:app%2Froutes%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "app/routes/__init__.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/admin.py",
+      "id": "symbol:app%2Froutes%2Fadmin.py:app%2Froutes%2Fadmin.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "admin.py",
+      "qualifiedName": "app/routes/admin.py",
+      "range": {
+        "end": {
+          "column": 59,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/public.py",
+      "id": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "public.py",
+      "qualifiedName": "app/routes/public.py",
+      "range": {
+        "end": {
+          "column": 61,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/users.py",
+      "id": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23health:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "health",
+      "qualifiedName": "app/routes/users.py#health",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/users.py",
+      "id": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "users.py",
+      "qualifiedName": "app/routes/users.py",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

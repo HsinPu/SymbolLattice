@@ -1,0 +1,2135 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`document and template complete-output parity before move > 'blade' preserves exact project-local relation 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:resources%2Fviews%2Fcard.blade.php:resources%2Fviews%2Fcard.blade.php:file:0",
+        ],
+        "ruleId": "framework.laravel-blade.include.literal-resources-views.exact-target",
+        "stage": "module",
+      },
+      "filePath": "resources/views/page.blade.php",
+      "id": "edge:symbol%3Aresources%252Fviews%252Fpage.blade.php%3Aresources%252Fviews%252Fpage.blade.php%3Afile%3A0:symbol%3Aresources%252Fviews%252Fcard.blade.php%3Aresources%252Fviews%252Fcard.blade.php%3Afile%3A0:calls:1:0",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 1,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+      "referenceName": "include resources/views/card.blade.php",
+      "resolution": "exact",
+      "sourceId": "symbol:resources%2Fviews%2Fpage.blade.php:resources%2Fviews%2Fpage.blade.php:file:0",
+      "targetId": "symbol:resources%2Fviews%2Fcard.blade.php:resources%2Fviews%2Fcard.blade.php:file:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "32b56e5a45927b1189dfe1f82bfbc59a0c7aa03d0de4f7585cb886631571274d",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "blade",
+      "path": "resources/views/card.blade.php",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "42362d5230815a6bf31bd3a0b7396dd4d36138db86c296613f77cb92af16485e",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "blade",
+      "path": "resources/views/page.blade.php",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "resources/views/card.blade.php",
+      "id": "symbol:resources%2Fviews%2Fcard.blade.php:resources%2Fviews%2Fcard.blade.php:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "card.blade.php",
+      "qualifiedName": "resources/views/card.blade.php",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 1,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "resources/views/page.blade.php",
+      "id": "symbol:resources%2Fviews%2Fpage.blade.php:resources%2Fviews%2Fpage.blade.php:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "page.blade.php",
+      "qualifiedName": "resources/views/page.blade.php",
+      "range": {
+        "end": {
+          "column": 0,
+          "line": 2,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`document and template complete-output parity before move > 'blade' preserves missing target nonclaim 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "framework.laravel-blade.include.literal-resources-views.unresolved-target",
+        "stage": "module",
+      },
+      "filePath": "resources/views/page.blade.php",
+      "id": "edge:symbol%3Aresources%252Fviews%252Fpage.blade.php%3Aresources%252Fviews%252Fpage.blade.php%3Afile%3A0:include%20resources%2Fviews%2Fcard.blade.php:calls:1:0",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 1,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+      "referenceName": "include resources/views/card.blade.php",
+      "resolution": "unresolved",
+      "sourceId": "symbol:resources%2Fviews%2Fpage.blade.php:resources%2Fviews%2Fpage.blade.php:file:0",
+      "targetId": null,
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "42362d5230815a6bf31bd3a0b7396dd4d36138db86c296613f77cb92af16485e",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "blade",
+      "path": "resources/views/page.blade.php",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "resources/views/page.blade.php",
+      "id": "symbol:resources%2Fviews%2Fpage.blade.php:resources%2Fviews%2Fpage.blade.php:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "page.blade.php",
+      "qualifiedName": "resources/views/page.blade.php",
+      "range": {
+        "end": {
+          "column": 0,
+          "line": 2,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`document and template complete-output parity before move > 'jsp' preserves exact project-local relation 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fwebapp%2Fheader.jsp:src%2Fmain%2Fwebapp%2Fheader.jsp%23jsp-element%3Aheader%5B1%5D:resource:0",
+        ],
+        "ruleId": "syntax.jsp.root-resource",
+        "stage": "syntax",
+      },
+      "filePath": "src/main/webapp/header.jsp",
+      "id": "edge:symbol%3Asrc%252Fmain%252Fwebapp%252Fheader.jsp%3Asrc%252Fmain%252Fwebapp%252Fheader.jsp%3Afile%3A0:symbol%3Asrc%252Fmain%252Fwebapp%252Fheader.jsp%3Asrc%252Fmain%252Fwebapp%252Fheader.jsp%2523jsp-element%253Aheader%255B1%255D%3Aresource%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 11,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "header",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain%2Fwebapp%2Fheader.jsp:src%2Fmain%2Fwebapp%2Fheader.jsp:file:0",
+      "targetId": "symbol:src%2Fmain%2Fwebapp%2Fheader.jsp:src%2Fmain%2Fwebapp%2Fheader.jsp%23jsp-element%3Aheader%5B1%5D:resource:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fwebapp%2Fheader.jsp:src%2Fmain%2Fwebapp%2Fheader.jsp:file:0",
+        ],
+        "ruleId": "syntax.jsp.include-directive.literal-project-file.exact-target",
+        "stage": "module",
+      },
+      "filePath": "src/main/webapp/index.jsp",
+      "id": "edge:symbol%3Asrc%252Fmain%252Fwebapp%252Findex.jsp%3Asrc%252Fmain%252Fwebapp%252Findex.jsp%2523jsp-directive%253Ainclude%253A%253A0%3Aresource%3A0:symbol%3Asrc%252Fmain%252Fwebapp%252Fheader.jsp%3Asrc%252Fmain%252Fwebapp%252Fheader.jsp%3Afile%3A0:references:1:1",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "include-directive src/main/webapp/header.jsp",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain%2Fwebapp%2Findex.jsp:src%2Fmain%2Fwebapp%2Findex.jsp%23jsp-directive%3Ainclude%3A%3A0:resource:0",
+      "targetId": "symbol:src%2Fmain%2Fwebapp%2Fheader.jsp:src%2Fmain%2Fwebapp%2Fheader.jsp:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fwebapp%2Findex.jsp:src%2Fmain%2Fwebapp%2Findex.jsp%23jsp-directive%3Ainclude%3A%3A0%23jsp-attribute%3Afile:resource:0",
+        ],
+        "ruleId": "syntax.jsp.static-attribute",
+        "stage": "syntax",
+      },
+      "filePath": "src/main/webapp/index.jsp",
+      "id": "edge:symbol%3Asrc%252Fmain%252Fwebapp%252Findex.jsp%3Asrc%252Fmain%252Fwebapp%252Findex.jsp%2523jsp-directive%253Ainclude%253A%253A0%3Aresource%3A0:symbol%3Asrc%252Fmain%252Fwebapp%252Findex.jsp%3Asrc%252Fmain%252Fwebapp%252Findex.jsp%2523jsp-directive%253Ainclude%253A%253A0%2523jsp-attribute%253Afile%3Aresource%3A0:contains:1:13",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 1,
+        },
+        "start": {
+          "column": 13,
+          "line": 1,
+        },
+      },
+      "referenceName": "attribute:file=header.jsp",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain%2Fwebapp%2Findex.jsp:src%2Fmain%2Fwebapp%2Findex.jsp%23jsp-directive%3Ainclude%3A%3A0:resource:0",
+      "targetId": "symbol:src%2Fmain%2Fwebapp%2Findex.jsp:src%2Fmain%2Fwebapp%2Findex.jsp%23jsp-directive%3Ainclude%3A%3A0%23jsp-attribute%3Afile:resource:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fwebapp%2Findex.jsp:src%2Fmain%2Fwebapp%2Findex.jsp%23jsp-directive%3Ainclude%3A%3A0:resource:0",
+        ],
+        "ruleId": "syntax.jsp.complete-directive",
+        "stage": "syntax",
+      },
+      "filePath": "src/main/webapp/index.jsp",
+      "id": "edge:symbol%3Asrc%252Fmain%252Fwebapp%252Findex.jsp%3Asrc%252Fmain%252Fwebapp%252Findex.jsp%3Afile%3A0:symbol%3Asrc%252Fmain%252Fwebapp%252Findex.jsp%3Asrc%252Fmain%252Fwebapp%252Findex.jsp%2523jsp-directive%253Ainclude%253A%253A0%3Aresource%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "directive:include",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain%2Fwebapp%2Findex.jsp:src%2Fmain%2Fwebapp%2Findex.jsp:file:0",
+      "targetId": "symbol:src%2Fmain%2Fwebapp%2Findex.jsp:src%2Fmain%2Fwebapp%2Findex.jsp%23jsp-directive%3Ainclude%3A%3A0:resource:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "b83b1bcb63737cde6aeabe43635b1eb77c3a393d6f7d3cd6cadb5c974e15318f",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "jsp",
+      "path": "src/main/webapp/header.jsp",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "c52b6f89ca84649f3788b13bacfa8565b5aae351a61b8a8ee41d82a04e3bc68e",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "jsp",
+      "path": "src/main/webapp/index.jsp",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main/webapp/header.jsp",
+      "id": "symbol:src%2Fmain%2Fwebapp%2Fheader.jsp:src%2Fmain%2Fwebapp%2Fheader.jsp%23jsp-element%3Aheader%5B1%5D:resource:0",
+      "isExported": true,
+      "kind": "resource",
+      "name": "header",
+      "qualifiedName": "src/main/webapp/header.jsp#jsp-element:header[1]",
+      "range": {
+        "end": {
+          "column": 11,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main/webapp/header.jsp",
+      "id": "symbol:src%2Fmain%2Fwebapp%2Fheader.jsp:src%2Fmain%2Fwebapp%2Fheader.jsp:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "header.jsp",
+      "qualifiedName": "src/main/webapp/header.jsp",
+      "range": {
+        "end": {
+          "column": 11,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main/webapp/index.jsp",
+      "id": "symbol:src%2Fmain%2Fwebapp%2Findex.jsp:src%2Fmain%2Fwebapp%2Findex.jsp%23jsp-directive%3Ainclude%3A%3A0%23jsp-attribute%3Afile:resource:0",
+      "isExported": false,
+      "kind": "resource",
+      "name": "attribute:file=header.jsp",
+      "qualifiedName": "src/main/webapp/index.jsp#jsp-directive:include::0#jsp-attribute:file",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 1,
+        },
+        "start": {
+          "column": 13,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main/webapp/index.jsp",
+      "id": "symbol:src%2Fmain%2Fwebapp%2Findex.jsp:src%2Fmain%2Fwebapp%2Findex.jsp%23jsp-directive%3Ainclude%3A%3A0:resource:0",
+      "isExported": true,
+      "kind": "resource",
+      "name": "directive:include",
+      "qualifiedName": "src/main/webapp/index.jsp#jsp-directive:include::0",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main/webapp/index.jsp",
+      "id": "symbol:src%2Fmain%2Fwebapp%2Findex.jsp:src%2Fmain%2Fwebapp%2Findex.jsp:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "index.jsp",
+      "qualifiedName": "src/main/webapp/index.jsp",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`document and template complete-output parity before move > 'jsp' preserves missing target nonclaim 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "syntax.jsp.include-directive.literal-project-file.unresolved-target",
+        "stage": "module",
+      },
+      "filePath": "src/main/webapp/index.jsp",
+      "id": "edge:symbol%3Asrc%252Fmain%252Fwebapp%252Findex.jsp%3Asrc%252Fmain%252Fwebapp%252Findex.jsp%2523jsp-directive%253Ainclude%253A%253A0%3Aresource%3A0:include-directive%20src%2Fmain%2Fwebapp%2Fheader.jsp:references:1:1",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "include-directive src/main/webapp/header.jsp",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fmain%2Fwebapp%2Findex.jsp:src%2Fmain%2Fwebapp%2Findex.jsp%23jsp-directive%3Ainclude%3A%3A0:resource:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fwebapp%2Findex.jsp:src%2Fmain%2Fwebapp%2Findex.jsp%23jsp-directive%3Ainclude%3A%3A0%23jsp-attribute%3Afile:resource:0",
+        ],
+        "ruleId": "syntax.jsp.static-attribute",
+        "stage": "syntax",
+      },
+      "filePath": "src/main/webapp/index.jsp",
+      "id": "edge:symbol%3Asrc%252Fmain%252Fwebapp%252Findex.jsp%3Asrc%252Fmain%252Fwebapp%252Findex.jsp%2523jsp-directive%253Ainclude%253A%253A0%3Aresource%3A0:symbol%3Asrc%252Fmain%252Fwebapp%252Findex.jsp%3Asrc%252Fmain%252Fwebapp%252Findex.jsp%2523jsp-directive%253Ainclude%253A%253A0%2523jsp-attribute%253Afile%3Aresource%3A0:contains:1:13",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 1,
+        },
+        "start": {
+          "column": 13,
+          "line": 1,
+        },
+      },
+      "referenceName": "attribute:file=header.jsp",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain%2Fwebapp%2Findex.jsp:src%2Fmain%2Fwebapp%2Findex.jsp%23jsp-directive%3Ainclude%3A%3A0:resource:0",
+      "targetId": "symbol:src%2Fmain%2Fwebapp%2Findex.jsp:src%2Fmain%2Fwebapp%2Findex.jsp%23jsp-directive%3Ainclude%3A%3A0%23jsp-attribute%3Afile:resource:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain%2Fwebapp%2Findex.jsp:src%2Fmain%2Fwebapp%2Findex.jsp%23jsp-directive%3Ainclude%3A%3A0:resource:0",
+        ],
+        "ruleId": "syntax.jsp.complete-directive",
+        "stage": "syntax",
+      },
+      "filePath": "src/main/webapp/index.jsp",
+      "id": "edge:symbol%3Asrc%252Fmain%252Fwebapp%252Findex.jsp%3Asrc%252Fmain%252Fwebapp%252Findex.jsp%3Afile%3A0:symbol%3Asrc%252Fmain%252Fwebapp%252Findex.jsp%3Asrc%252Fmain%252Fwebapp%252Findex.jsp%2523jsp-directive%253Ainclude%253A%253A0%3Aresource%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "directive:include",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain%2Fwebapp%2Findex.jsp:src%2Fmain%2Fwebapp%2Findex.jsp:file:0",
+      "targetId": "symbol:src%2Fmain%2Fwebapp%2Findex.jsp:src%2Fmain%2Fwebapp%2Findex.jsp%23jsp-directive%3Ainclude%3A%3A0:resource:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "c52b6f89ca84649f3788b13bacfa8565b5aae351a61b8a8ee41d82a04e3bc68e",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "jsp",
+      "path": "src/main/webapp/index.jsp",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main/webapp/index.jsp",
+      "id": "symbol:src%2Fmain%2Fwebapp%2Findex.jsp:src%2Fmain%2Fwebapp%2Findex.jsp%23jsp-directive%3Ainclude%3A%3A0%23jsp-attribute%3Afile:resource:0",
+      "isExported": false,
+      "kind": "resource",
+      "name": "attribute:file=header.jsp",
+      "qualifiedName": "src/main/webapp/index.jsp#jsp-directive:include::0#jsp-attribute:file",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 1,
+        },
+        "start": {
+          "column": 13,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main/webapp/index.jsp",
+      "id": "symbol:src%2Fmain%2Fwebapp%2Findex.jsp:src%2Fmain%2Fwebapp%2Findex.jsp%23jsp-directive%3Ainclude%3A%3A0:resource:0",
+      "isExported": true,
+      "kind": "resource",
+      "name": "directive:include",
+      "qualifiedName": "src/main/webapp/index.jsp#jsp-directive:include::0",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main/webapp/index.jsp",
+      "id": "symbol:src%2Fmain%2Fwebapp%2Findex.jsp:src%2Fmain%2Fwebapp%2Findex.jsp:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "index.jsp",
+      "qualifiedName": "src/main/webapp/index.jsp",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`document and template complete-output parity before move > 'liquid' preserves exact project-local relation 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:snippets%2Fcard.liquid:snippets%2Fcard.liquid:file:0",
+        ],
+        "ruleId": "framework.shopify-liquid.render.literal-project-file.exact-target",
+        "stage": "module",
+      },
+      "filePath": "templates/product.liquid",
+      "id": "edge:symbol%3Atemplates%252Fproduct.liquid%3Atemplates%252Fproduct.liquid%3Afile%3A0:symbol%3Asnippets%252Fcard.liquid%3Asnippets%252Fcard.liquid%3Afile%3A0:calls:1:0",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 1,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+      "referenceName": "render snippets/card.liquid",
+      "resolution": "exact",
+      "sourceId": "symbol:templates%2Fproduct.liquid:templates%2Fproduct.liquid:file:0",
+      "targetId": "symbol:snippets%2Fcard.liquid:snippets%2Fcard.liquid:file:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "32b56e5a45927b1189dfe1f82bfbc59a0c7aa03d0de4f7585cb886631571274d",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "liquid",
+      "path": "snippets/card.liquid",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "25a956aab80169a2d00d7d98b0606889bb403e222c01c917487f609f3a25d6bf",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "liquid",
+      "path": "templates/product.liquid",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "snippets/card.liquid",
+      "id": "symbol:snippets%2Fcard.liquid:snippets%2Fcard.liquid:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "card.liquid",
+      "qualifiedName": "snippets/card.liquid",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 1,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "templates/product.liquid",
+      "id": "symbol:templates%2Fproduct.liquid:templates%2Fproduct.liquid:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "product.liquid",
+      "qualifiedName": "templates/product.liquid",
+      "range": {
+        "end": {
+          "column": 0,
+          "line": 2,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`document and template complete-output parity before move > 'liquid' preserves missing target nonclaim 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "framework.shopify-liquid.render.literal-project-file.unresolved-target",
+        "stage": "module",
+      },
+      "filePath": "templates/product.liquid",
+      "id": "edge:symbol%3Atemplates%252Fproduct.liquid%3Atemplates%252Fproduct.liquid%3Afile%3A0:render%20snippets%2Fcard.liquid:calls:1:0",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 1,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+      "referenceName": "render snippets/card.liquid",
+      "resolution": "unresolved",
+      "sourceId": "symbol:templates%2Fproduct.liquid:templates%2Fproduct.liquid:file:0",
+      "targetId": null,
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "25a956aab80169a2d00d7d98b0606889bb403e222c01c917487f609f3a25d6bf",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "liquid",
+      "path": "templates/product.liquid",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "templates/product.liquid",
+      "id": "symbol:templates%2Fproduct.liquid:templates%2Fproduct.liquid:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "product.liquid",
+      "qualifiedName": "templates/product.liquid",
+      "range": {
+        "end": {
+          "column": 0,
+          "line": 2,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`document and template complete-output parity before move > 'markdown' preserves exact project-local relation 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:docs%2Fapi.md:docs%2Fapi.md:file:0",
+        ],
+        "ruleId": "syntax.markdown.inline-link.literal-project-file.exact-target",
+        "stage": "module",
+      },
+      "filePath": "README.md",
+      "id": "edge:symbol%3AREADME.md%3AREADME.md%2523markdown-heading%253Ah1%253AGuide%255B1%255D%3Aresource%3A0:symbol%3Adocs%252Fapi.md%3Adocs%252Fapi.md%3Afile%3A0:references:2:1",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "docs/api.md",
+      "resolution": "exact",
+      "sourceId": "symbol:README.md:README.md%23markdown-heading%3Ah1%3AGuide%5B1%5D:resource:0",
+      "targetId": "symbol:docs%2Fapi.md:docs%2Fapi.md:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:README.md:README.md%23markdown-heading%3Ah1%3AGuide%5B1%5D:resource:0",
+        ],
+        "ruleId": "syntax.markdown.heading-hierarchy",
+        "stage": "syntax",
+      },
+      "filePath": "README.md",
+      "id": "edge:symbol%3AREADME.md%3AREADME.md%3Afile%3A0:symbol%3AREADME.md%3AREADME.md%2523markdown-heading%253Ah1%253AGuide%255B1%255D%3Aresource%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 8,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Guide",
+      "resolution": "exact",
+      "sourceId": "symbol:README.md:README.md:file:0",
+      "targetId": "symbol:README.md:README.md%23markdown-heading%3Ah1%3AGuide%5B1%5D:resource:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:docs%2Fapi.md:docs%2Fapi.md%23markdown-heading%3Ah1%3AAPI%5B1%5D:resource:0",
+        ],
+        "ruleId": "syntax.markdown.heading-hierarchy",
+        "stage": "syntax",
+      },
+      "filePath": "docs/api.md",
+      "id": "edge:symbol%3Adocs%252Fapi.md%3Adocs%252Fapi.md%3Afile%3A0:symbol%3Adocs%252Fapi.md%3Adocs%252Fapi.md%2523markdown-heading%253Ah1%253AAPI%255B1%255D%3Aresource%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "API",
+      "resolution": "exact",
+      "sourceId": "symbol:docs%2Fapi.md:docs%2Fapi.md:file:0",
+      "targetId": "symbol:docs%2Fapi.md:docs%2Fapi.md%23markdown-heading%3Ah1%3AAPI%5B1%5D:resource:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "c1aaa96f30582d85db8e4e120f5f29c256dccc9d52ebc8c330b1a62c559566b5",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "markdown",
+      "path": "README.md",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "06886e8bb04f52881e06ac404cdcf597afb41f8ea306120b75881ed214954f98",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "markdown",
+      "path": "docs/api.md",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "README.md",
+      "id": "symbol:README.md:README.md%23markdown-heading%3Ah1%3AGuide%5B1%5D:resource:0",
+      "isExported": true,
+      "kind": "resource",
+      "name": "Guide",
+      "qualifiedName": "README.md#markdown-heading:h1:Guide[1]",
+      "range": {
+        "end": {
+          "column": 8,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "README.md",
+      "id": "symbol:README.md:README.md:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "README.md",
+      "qualifiedName": "README.md",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "docs/api.md",
+      "id": "symbol:docs%2Fapi.md:docs%2Fapi.md%23markdown-heading%3Ah1%3AAPI%5B1%5D:resource:0",
+      "isExported": true,
+      "kind": "resource",
+      "name": "API",
+      "qualifiedName": "docs/api.md#markdown-heading:h1:API[1]",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "docs/api.md",
+      "id": "symbol:docs%2Fapi.md:docs%2Fapi.md:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "api.md",
+      "qualifiedName": "docs/api.md",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`document and template complete-output parity before move > 'markdown' preserves missing target nonclaim 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "syntax.markdown.inline-link.literal-project-file.unresolved-target",
+        "stage": "module",
+      },
+      "filePath": "README.md",
+      "id": "edge:symbol%3AREADME.md%3AREADME.md%2523markdown-heading%253Ah1%253AGuide%255B1%255D%3Aresource%3A0:docs%2Fapi.md:references:2:1",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "docs/api.md",
+      "resolution": "unresolved",
+      "sourceId": "symbol:README.md:README.md%23markdown-heading%3Ah1%3AGuide%5B1%5D:resource:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:README.md:README.md%23markdown-heading%3Ah1%3AGuide%5B1%5D:resource:0",
+        ],
+        "ruleId": "syntax.markdown.heading-hierarchy",
+        "stage": "syntax",
+      },
+      "filePath": "README.md",
+      "id": "edge:symbol%3AREADME.md%3AREADME.md%3Afile%3A0:symbol%3AREADME.md%3AREADME.md%2523markdown-heading%253Ah1%253AGuide%255B1%255D%3Aresource%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 8,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Guide",
+      "resolution": "exact",
+      "sourceId": "symbol:README.md:README.md:file:0",
+      "targetId": "symbol:README.md:README.md%23markdown-heading%3Ah1%3AGuide%5B1%5D:resource:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "c1aaa96f30582d85db8e4e120f5f29c256dccc9d52ebc8c330b1a62c559566b5",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "markdown",
+      "path": "README.md",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "README.md",
+      "id": "symbol:README.md:README.md%23markdown-heading%3Ah1%3AGuide%5B1%5D:resource:0",
+      "isExported": true,
+      "kind": "resource",
+      "name": "Guide",
+      "qualifiedName": "README.md#markdown-heading:h1:Guide[1]",
+      "range": {
+        "end": {
+          "column": 8,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "README.md",
+      "id": "symbol:README.md:README.md:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "README.md",
+      "qualifiedName": "README.md",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`document and template complete-output parity before move > 'razor' preserves exact project-local relation 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Pages%2FIndex.cshtml.cs:Pages%2FIndex.cshtml.cs%23IndexModel:class:0",
+        ],
+        "resolutionPath": [
+          "Pages/Index.cshtml",
+          "Pages/Index.cshtml.cs",
+        ],
+        "ruleId": "framework.razor-pages.direct-model.conventional-companion",
+        "stage": "module",
+      },
+      "filePath": "Pages/Index.cshtml",
+      "id": "edge:symbol%3APages%252FIndex.cshtml%3APages%252FIndex.cshtml%2523default%3Avariable%3A0:symbol%3APages%252FIndex.cshtml.cs%3APages%252FIndex.cshtml.cs%2523IndexModel%3Aclass%3A0:references:2:7",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 2,
+        },
+        "start": {
+          "column": 7,
+          "line": 2,
+        },
+      },
+      "referenceName": "IndexModel",
+      "resolution": "exact",
+      "sourceId": "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml%23default:variable:0",
+      "targetId": "symbol:Pages%2FIndex.cshtml.cs:Pages%2FIndex.cshtml.cs%23IndexModel:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Pages%2FIndex.cshtml.cs:Pages%2FIndex.cshtml.cs%23IndexModel.OnPostSave:method:0",
+        ],
+        "resolutionPath": [
+          "Pages/Index.cshtml",
+          "Pages/Index.cshtml.cs",
+        ],
+        "ruleId": "framework.razor-pages.literal-post-handler.conventional-companion-method",
+        "stage": "module",
+      },
+      "filePath": "Pages/Index.cshtml",
+      "id": "edge:symbol%3APages%252FIndex.cshtml%3APages%252FIndex.cshtml%2523default%3Avariable%3A0:symbol%3APages%252FIndex.cshtml.cs%3APages%252FIndex.cshtml.cs%2523IndexModel.OnPostSave%3Amethod%3A0:handles:3:38",
+      "kind": "handles",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 3,
+        },
+        "start": {
+          "column": 38,
+          "line": 3,
+        },
+      },
+      "referenceName": "Save",
+      "resolution": "exact",
+      "sourceId": "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml%23default:variable:0",
+      "targetId": "symbol:Pages%2FIndex.cshtml.cs:Pages%2FIndex.cshtml.cs%23IndexModel.OnPostSave:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml%23default:variable:0",
+        ],
+        "ruleId": "framework.blazor.page-directive.local-handler",
+        "stage": "lexical",
+      },
+      "filePath": "Pages/Index.cshtml",
+      "id": "edge:symbol%3APages%252FIndex.cshtml%3APages%252FIndex.cshtml%2523route%253ANAVIGATE%2520%252F%3Aroute%3A0:symbol%3APages%252FIndex.cshtml%3APages%252FIndex.cshtml%2523default%3Avariable%3A0:routes:1:0",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 0,
+          "line": 2,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+      "referenceName": "default",
+      "resolution": "exact",
+      "sourceId": "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml%23route%3ANAVIGATE%20%2F:route:0",
+      "targetId": "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml%23default:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml%23default:variable:0",
+        ],
+        "ruleId": "framework.blazor.razor.convention-component",
+        "stage": "syntax",
+      },
+      "filePath": "Pages/Index.cshtml",
+      "id": "edge:symbol%3APages%252FIndex.cshtml%3APages%252FIndex.cshtml%3Afile%3A0:symbol%3APages%252FIndex.cshtml%3APages%252FIndex.cshtml%2523default%3Avariable%3A0:contains:1:0",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 3,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+      "referenceName": "default",
+      "resolution": "exact",
+      "sourceId": "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml:file:0",
+      "targetId": "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml%23default:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml%23route%3ANAVIGATE%20%2F:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Pages/Index.cshtml",
+      "id": "edge:symbol%3APages%252FIndex.cshtml%3APages%252FIndex.cshtml%3Afile%3A0:symbol%3APages%252FIndex.cshtml%3APages%252FIndex.cshtml%2523route%253ANAVIGATE%2520%252F%3Aroute%3A0:contains:1:0",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 0,
+          "line": 2,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+      "referenceName": "NAVIGATE /",
+      "resolution": "exact",
+      "sourceId": "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml:file:0",
+      "targetId": "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml%23route%3ANAVIGATE%20%2F:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Pages%2FIndex.cshtml.cs:Pages%2FIndex.cshtml.cs%23IndexModel.OnPostSave:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Pages/Index.cshtml.cs",
+      "id": "edge:symbol%3APages%252FIndex.cshtml.cs%3APages%252FIndex.cshtml.cs%2523IndexModel%3Aclass%3A0:symbol%3APages%252FIndex.cshtml.cs%3APages%252FIndex.cshtml.cs%2523IndexModel.OnPostSave%3Amethod%3A0:contains:1:75",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 102,
+          "line": 1,
+        },
+        "start": {
+          "column": 75,
+          "line": 1,
+        },
+      },
+      "referenceName": "OnPostSave",
+      "resolution": "exact",
+      "sourceId": "symbol:Pages%2FIndex.cshtml.cs:Pages%2FIndex.cshtml.cs%23IndexModel:class:0",
+      "targetId": "symbol:Pages%2FIndex.cshtml.cs:Pages%2FIndex.cshtml.cs%23IndexModel.OnPostSave:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Pages%2FIndex.cshtml.cs:Pages%2FIndex.cshtml.cs%23IndexModel:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Pages/Index.cshtml.cs",
+      "id": "edge:symbol%3APages%252FIndex.cshtml.cs%3APages%252FIndex.cshtml.cs%3Afile%3A0:symbol%3APages%252FIndex.cshtml.cs%3APages%252FIndex.cshtml.cs%2523IndexModel%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 104,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "IndexModel",
+      "resolution": "exact",
+      "sourceId": "symbol:Pages%2FIndex.cshtml.cs:Pages%2FIndex.cshtml.cs:file:0",
+      "targetId": "symbol:Pages%2FIndex.cshtml.cs:Pages%2FIndex.cshtml.cs%23IndexModel:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "7d4c052d13831bfa1185efa46af9801a8c1e543002f908704f2f366cf0e71f1a",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "razor",
+      "path": "Pages/Index.cshtml",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "c5d27bc7b20629710b4ff74dc968807b450f4e20faa6d6738f207d76702c18d2",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "csharp",
+      "path": "Pages/Index.cshtml.cs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Pages/Index.cshtml.cs",
+      "id": "symbol:Pages%2FIndex.cshtml.cs:Pages%2FIndex.cshtml.cs%23IndexModel.OnPostSave:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "OnPostSave",
+      "qualifiedName": "Pages/Index.cshtml.cs#IndexModel.OnPostSave",
+      "range": {
+        "end": {
+          "column": 102,
+          "line": 1,
+        },
+        "start": {
+          "column": 75,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Pages/Index.cshtml.cs",
+      "id": "symbol:Pages%2FIndex.cshtml.cs:Pages%2FIndex.cshtml.cs%23IndexModel:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "IndexModel",
+      "qualifiedName": "Pages/Index.cshtml.cs#IndexModel",
+      "range": {
+        "end": {
+          "column": 104,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Pages/Index.cshtml.cs",
+      "id": "symbol:Pages%2FIndex.cshtml.cs:Pages%2FIndex.cshtml.cs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Index.cshtml.cs",
+      "qualifiedName": "Pages/Index.cshtml.cs",
+      "range": {
+        "end": {
+          "column": 104,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Pages/Index.cshtml",
+      "id": "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml%23default:variable:0",
+      "isExported": true,
+      "kind": "variable",
+      "name": "default",
+      "qualifiedName": "Pages/Index.cshtml#default",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 3,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Pages/Index.cshtml",
+      "id": "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml%23route%3ANAVIGATE%20%2F:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "NAVIGATE /",
+      "qualifiedName": "Pages/Index.cshtml#route:NAVIGATE /",
+      "range": {
+        "end": {
+          "column": 0,
+          "line": 2,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Pages/Index.cshtml",
+      "id": "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Index.cshtml",
+      "qualifiedName": "Pages/Index.cshtml",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 3,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`document and template complete-output parity before move > 'razor' preserves missing target nonclaim 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml%23default:variable:0",
+        ],
+        "ruleId": "framework.blazor.page-directive.local-handler",
+        "stage": "lexical",
+      },
+      "filePath": "Pages/Index.cshtml",
+      "id": "edge:symbol%3APages%252FIndex.cshtml%3APages%252FIndex.cshtml%2523route%253ANAVIGATE%2520%252F%3Aroute%3A0:symbol%3APages%252FIndex.cshtml%3APages%252FIndex.cshtml%2523default%3Avariable%3A0:routes:1:0",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 0,
+          "line": 2,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+      "referenceName": "default",
+      "resolution": "exact",
+      "sourceId": "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml%23route%3ANAVIGATE%20%2F:route:0",
+      "targetId": "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml%23default:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml%23default:variable:0",
+        ],
+        "ruleId": "framework.blazor.razor.convention-component",
+        "stage": "syntax",
+      },
+      "filePath": "Pages/Index.cshtml",
+      "id": "edge:symbol%3APages%252FIndex.cshtml%3APages%252FIndex.cshtml%3Afile%3A0:symbol%3APages%252FIndex.cshtml%3APages%252FIndex.cshtml%2523default%3Avariable%3A0:contains:1:0",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 3,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+      "referenceName": "default",
+      "resolution": "exact",
+      "sourceId": "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml:file:0",
+      "targetId": "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml%23default:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml%23route%3ANAVIGATE%20%2F:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "Pages/Index.cshtml",
+      "id": "edge:symbol%3APages%252FIndex.cshtml%3APages%252FIndex.cshtml%3Afile%3A0:symbol%3APages%252FIndex.cshtml%3APages%252FIndex.cshtml%2523route%253ANAVIGATE%2520%252F%3Aroute%3A0:contains:1:0",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 0,
+          "line": 2,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+      "referenceName": "NAVIGATE /",
+      "resolution": "exact",
+      "sourceId": "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml:file:0",
+      "targetId": "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml%23route%3ANAVIGATE%20%2F:route:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "7d4c052d13831bfa1185efa46af9801a8c1e543002f908704f2f366cf0e71f1a",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "razor",
+      "path": "Pages/Index.cshtml",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Pages/Index.cshtml",
+      "id": "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml%23default:variable:0",
+      "isExported": true,
+      "kind": "variable",
+      "name": "default",
+      "qualifiedName": "Pages/Index.cshtml#default",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 3,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Pages/Index.cshtml",
+      "id": "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml%23route%3ANAVIGATE%20%2F:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "NAVIGATE /",
+      "qualifiedName": "Pages/Index.cshtml#route:NAVIGATE /",
+      "range": {
+        "end": {
+          "column": 0,
+          "line": 2,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Pages/Index.cshtml",
+      "id": "symbol:Pages%2FIndex.cshtml:Pages%2FIndex.cshtml:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Index.cshtml",
+      "qualifiedName": "Pages/Index.cshtml",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 3,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`document and template complete-output parity before move > 'solidity' preserves exact project-local relation 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Base.sol:Base.sol%23contract%3ABase:class:0",
+        ],
+        "ruleId": "language.solidity.contract.top-level",
+        "stage": "syntax",
+      },
+      "filePath": "Base.sol",
+      "id": "edge:symbol%3ABase.sol%3ABase.sol%3Afile%3A0:symbol%3ABase.sol%3ABase.sol%2523contract%253ABase%3Aclass%3A0:contains:1:0",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 1,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:Base.sol:Base.sol:file:0",
+      "targetId": "symbol:Base.sol:Base.sol%23contract%3ABase:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Child.sol:Child.sol%23contract%3ABase:class:0",
+        ],
+        "ruleId": "language.solidity.same-file.class.extends",
+        "stage": "module",
+      },
+      "filePath": "Child.sol",
+      "id": "edge:symbol%3AChild.sol%3AChild.sol%2523contract%253AChild%3Aclass%3A0:symbol%3AChild.sol%3AChild.sol%2523contract%253ABase%3Aclass%3A0:extends:2:18",
+      "kind": "extends",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 2,
+        },
+        "start": {
+          "column": 18,
+          "line": 2,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:Child.sol:Child.sol%23contract%3AChild:class:0",
+      "targetId": "symbol:Child.sol:Child.sol%23contract%3ABase:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Child.sol:Child.sol%23contract%3ABase:class:0",
+        ],
+        "ruleId": "language.solidity.contract.top-level",
+        "stage": "syntax",
+      },
+      "filePath": "Child.sol",
+      "id": "edge:symbol%3AChild.sol%3AChild.sol%3Afile%3A0:symbol%3AChild.sol%3AChild.sol%2523contract%253ABase%3Aclass%3A0:contains:1:0",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 1,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:Child.sol:Child.sol:file:0",
+      "targetId": "symbol:Child.sol:Child.sol%23contract%3ABase:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Child.sol:Child.sol%23contract%3AChild:class:0",
+        ],
+        "ruleId": "language.solidity.contract.top-level",
+        "stage": "syntax",
+      },
+      "filePath": "Child.sol",
+      "id": "edge:symbol%3AChild.sol%3AChild.sol%3Afile%3A0:symbol%3AChild.sol%3AChild.sol%2523contract%253AChild%3Aclass%3A0:contains:2:0",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 2,
+        },
+        "start": {
+          "column": 0,
+          "line": 2,
+        },
+      },
+      "referenceName": "Child",
+      "resolution": "exact",
+      "sourceId": "symbol:Child.sol:Child.sol:file:0",
+      "targetId": "symbol:Child.sol:Child.sol%23contract%3AChild:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "650d3dd0edaae06a541700f9018ba3f0f72fcf03cf09953133997f1a377c5675",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "solidity",
+      "path": "Base.sol",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "229c087672be2affa8d38895f5e8f36dbbe4ef96fee7aac526fc28af3069866c",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "solidity",
+      "path": "Child.sol",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Base.sol",
+      "id": "symbol:Base.sol:Base.sol%23contract%3ABase:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Base",
+      "qualifiedName": "Base.sol#contract:Base",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 1,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Base.sol",
+      "id": "symbol:Base.sol:Base.sol:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Base.sol",
+      "qualifiedName": "Base.sol",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 1,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Child.sol",
+      "id": "symbol:Child.sol:Child.sol%23contract%3ABase:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Base",
+      "qualifiedName": "Child.sol#contract:Base",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 1,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Child.sol",
+      "id": "symbol:Child.sol:Child.sol%23contract%3AChild:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Child",
+      "qualifiedName": "Child.sol#contract:Child",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 2,
+        },
+        "start": {
+          "column": 0,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Child.sol",
+      "id": "symbol:Child.sol:Child.sol:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Child.sol",
+      "qualifiedName": "Child.sol",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 2,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`document and template complete-output parity before move > 'solidity' preserves missing target nonclaim 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:Child.sol:Child.sol%23contract%3AChild:class:0",
+        ],
+        "ruleId": "language.solidity.contract.top-level",
+        "stage": "syntax",
+      },
+      "filePath": "Child.sol",
+      "id": "edge:symbol%3AChild.sol%3AChild.sol%3Afile%3A0:symbol%3AChild.sol%3AChild.sol%2523contract%253AChild%3Aclass%3A0:contains:1:0",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 1,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+      "referenceName": "Child",
+      "resolution": "exact",
+      "sourceId": "symbol:Child.sol:Child.sol:file:0",
+      "targetId": "symbol:Child.sol:Child.sol%23contract%3AChild:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "99f7c1f64a8e9d6ac8f6298703e01e69dde6c518d85fb773e7bc6411a81ef1a8",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "solidity",
+      "path": "Child.sol",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Child.sol",
+      "id": "symbol:Child.sol:Child.sol%23contract%3AChild:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Child",
+      "qualifiedName": "Child.sol#contract:Child",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 1,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "Child.sol",
+      "id": "symbol:Child.sol:Child.sol:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Child.sol",
+      "qualifiedName": "Child.sol",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 1,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`document and template complete-output parity before move > 'twig' preserves exact project-local relation 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:templates%2Fcard.twig:templates%2Fcard.twig:file:0",
+        ],
+        "ruleId": "framework.twig.include.literal-templates-root.exact-target",
+        "stage": "module",
+      },
+      "filePath": "templates/page.twig",
+      "id": "edge:symbol%3Atemplates%252Fpage.twig%3Atemplates%252Fpage.twig%3Afile%3A0:symbol%3Atemplates%252Fcard.twig%3Atemplates%252Fcard.twig%3Afile%3A0:calls:1:0",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 1,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+      "referenceName": "include templates/card.twig",
+      "resolution": "exact",
+      "sourceId": "symbol:templates%2Fpage.twig:templates%2Fpage.twig:file:0",
+      "targetId": "symbol:templates%2Fcard.twig:templates%2Fcard.twig:file:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "32b56e5a45927b1189dfe1f82bfbc59a0c7aa03d0de4f7585cb886631571274d",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "twig",
+      "path": "templates/card.twig",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "0336d1a174f0b95f2a6ccf5ef365c03967adf31e6555475b5b971394a6e558a0",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "twig",
+      "path": "templates/page.twig",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "templates/card.twig",
+      "id": "symbol:templates%2Fcard.twig:templates%2Fcard.twig:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "card.twig",
+      "qualifiedName": "templates/card.twig",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 1,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "templates/page.twig",
+      "id": "symbol:templates%2Fpage.twig:templates%2Fpage.twig:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "page.twig",
+      "qualifiedName": "templates/page.twig",
+      "range": {
+        "end": {
+          "column": 0,
+          "line": 2,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`document and template complete-output parity before move > 'twig' preserves missing target nonclaim 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "framework.twig.include.literal-templates-root.unresolved-target",
+        "stage": "module",
+      },
+      "filePath": "templates/page.twig",
+      "id": "edge:symbol%3Atemplates%252Fpage.twig%3Atemplates%252Fpage.twig%3Afile%3A0:include%20templates%2Fcard.twig:calls:1:0",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 1,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+      "referenceName": "include templates/card.twig",
+      "resolution": "unresolved",
+      "sourceId": "symbol:templates%2Fpage.twig:templates%2Fpage.twig:file:0",
+      "targetId": null,
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "0336d1a174f0b95f2a6ccf5ef365c03967adf31e6555475b5b971394a6e558a0",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "twig",
+      "path": "templates/page.twig",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "templates/page.twig",
+      "id": "symbol:templates%2Fpage.twig:templates%2Fpage.twig:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "page.twig",
+      "qualifiedName": "templates/page.twig",
+      "range": {
+        "end": {
+          "column": 0,
+          "line": 2,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

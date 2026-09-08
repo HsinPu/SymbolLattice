@@ -1,0 +1,3170 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`framework route/Nest resolver complete-output parity before move > keeps dynamic, duplicate, and ambiguous receiver paths non-exact 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "reference.unresolved",
+        "stage": "unresolved",
+      },
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%2523AppModule%3Aclass%3A0:NestModule:calls:4:2",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 4,
+        },
+        "start": {
+          "column": 2,
+          "line": 4,
+        },
+      },
+      "referenceName": "NestModule",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts%23AppModule:class:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "syntax.typescript.proven-receiver-member-call.unresolved-target",
+        "stage": "unresolved",
+      },
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%2523AppModule%3Aclass%3A0:register:calls:5:24",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 5,
+        },
+        "start": {
+          "column": 24,
+          "line": 5,
+        },
+      },
+      "referenceName": "register",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts%23AppModule:class:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%3Afile%3A0:%40nestjs%2Fcommon:imports:1:38",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 54,
+          "line": 1,
+        },
+        "start": {
+          "column": 38,
+          "line": 1,
+        },
+      },
+      "referenceName": "@nestjs/common",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%3Afile%3A0:%40nestjs%2Fcore:imports:2:44",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 2,
+        },
+        "start": {
+          "column": 44,
+          "line": 2,
+        },
+      },
+      "referenceName": "@nestjs/core",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%3Afile%3A0:.%2Fcats.module:imports:3:28",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 3,
+        },
+        "start": {
+          "column": 28,
+          "line": 3,
+        },
+      },
+      "referenceName": "./cats.module",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts%23AppModule:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%3Afile%3A0:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%2523AppModule%3Aclass%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 26,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "AppModule",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts:file:0",
+      "targetId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts%23AppModule:class:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "reference.unresolved",
+        "stage": "unresolved",
+      },
+      "filePath": "src/cats.controller.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%2523CatsController%3Aclass%3A0:Controller:calls:2:2",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 2,
+        },
+        "start": {
+          "column": 2,
+          "line": 2,
+        },
+      },
+      "referenceName": "Controller",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController:class:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController.findOne:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/cats.controller.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%2523CatsController%3Aclass%3A0:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%2523CatsController.findOne%3Amethod%3A0:contains:4:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "findOne",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController:class:0",
+      "targetId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController.findOne:method:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "reference.unresolved",
+        "stage": "unresolved",
+      },
+      "filePath": "src/cats.controller.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%2523CatsController.findOne%3Amethod%3A0:Get:calls:4:4",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 7,
+          "line": 4,
+        },
+        "start": {
+          "column": 4,
+          "line": 4,
+        },
+      },
+      "referenceName": "Get",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController.findOne:method:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController.findOne:method:0",
+        ],
+        "ruleId": "framework.nestjs.decorator-route.local-method",
+        "stage": "syntax",
+      },
+      "filePath": "src/cats.controller.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%2523route%253AGET%2520%252Fcats%252F%253Aid%3Aroute%3A0:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%2523CatsController.findOne%3Amethod%3A0:routes:4:3",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "findOne",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23route%3AGET%20%2Fcats%2F%3Aid:route:0",
+      "targetId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController.findOne:method:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/cats.controller.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%3Afile%3A0:%40nestjs%2Fcommon:imports:1:33",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 49,
+          "line": 1,
+        },
+        "start": {
+          "column": 33,
+          "line": 1,
+        },
+      },
+      "referenceName": "@nestjs/common",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/cats.controller.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%3Afile%3A0:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%2523CatsController%3Aclass%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "CatsController",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts:file:0",
+      "targetId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23route%3AGET%20%2Fcats%2F%3Aid:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/cats.controller.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%3Afile%3A0:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%2523route%253AGET%2520%252Fcats%252F%253Aid%3Aroute%3A0:contains:4:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "GET /cats/:id",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts:file:0",
+      "targetId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23route%3AGET%20%2Fcats%2F%3Aid:route:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "ddd6bb052321dd570d3963ddcb792212b0330128c186a528317d8a53555c0d56",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/app.module.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "57754e624873e016cec1b17c885baa235f666aeb4066135c3529bcfef7e11638",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/cats.controller.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [
+    {
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%2523AppModule%3Aclass%3A0:NestModule:calls:4:2",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 4,
+        },
+        "start": {
+          "column": 2,
+          "line": 4,
+        },
+      },
+      "referenceName": "NestModule",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts%23AppModule:class:0",
+    },
+    {
+      "callReceiverBindingSpace": "value",
+      "callReceiverMemberKind": "static",
+      "callReceiverTypeName": "NestRouter",
+      "callSemantics": "typescript-proven-receiver-member-call",
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%2523AppModule%3Aclass%3A0:register:calls:5:24",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 5,
+        },
+        "start": {
+          "column": 24,
+          "line": 5,
+        },
+      },
+      "referenceName": "register",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts%23AppModule:class:0",
+    },
+    {
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%3Afile%3A0:%40nestjs%2Fcommon:imports:1:38",
+      "range": {
+        "end": {
+          "column": 54,
+          "line": 1,
+        },
+        "start": {
+          "column": 38,
+          "line": 1,
+        },
+      },
+      "referenceName": "@nestjs/common",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts:file:0",
+    },
+    {
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%3Afile%3A0:%40nestjs%2Fcore:imports:2:44",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 2,
+        },
+        "start": {
+          "column": 44,
+          "line": 2,
+        },
+      },
+      "referenceName": "@nestjs/core",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts:file:0",
+    },
+    {
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%3Afile%3A0:.%2Fcats.module:imports:3:28",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 3,
+        },
+        "start": {
+          "column": 28,
+          "line": 3,
+        },
+      },
+      "referenceName": "./cats.module",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts:file:0",
+    },
+    {
+      "filePath": "src/cats.controller.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%2523CatsController%3Aclass%3A0:Controller:calls:2:2",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 2,
+        },
+        "start": {
+          "column": 2,
+          "line": 2,
+        },
+      },
+      "referenceName": "Controller",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController:class:0",
+    },
+    {
+      "filePath": "src/cats.controller.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%2523CatsController.findOne%3Amethod%3A0:Get:calls:4:4",
+      "range": {
+        "end": {
+          "column": 7,
+          "line": 4,
+        },
+        "start": {
+          "column": 4,
+          "line": 4,
+        },
+      },
+      "referenceName": "Get",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController.findOne:method:0",
+    },
+    {
+      "filePath": "src/cats.controller.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%3Afile%3A0:%40nestjs%2Fcommon:imports:1:33",
+      "range": {
+        "end": {
+          "column": 49,
+          "line": 1,
+        },
+        "start": {
+          "column": 33,
+          "line": 1,
+        },
+      },
+      "referenceName": "@nestjs/common",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts:file:0",
+    },
+  ],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.module.ts",
+      "id": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts%23AppModule:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "AppModule",
+      "qualifiedName": "src/app.module.ts#AppModule",
+      "range": {
+        "end": {
+          "column": 26,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.module.ts",
+      "id": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "app.module.ts",
+      "qualifiedName": "src/app.module.ts",
+      "range": {
+        "end": {
+          "column": 26,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/cats.controller.ts",
+      "id": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController.findOne:method:0",
+      "isExported": false,
+      "kind": "method",
+      "name": "findOne",
+      "qualifiedName": "src/cats.controller.ts#CatsController.findOne",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/cats.controller.ts",
+      "id": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "CatsController",
+      "qualifiedName": "src/cats.controller.ts#CatsController",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/cats.controller.ts",
+      "id": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23route%3AGET%20%2Fcats%2F%3Aid:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /cats/:id",
+      "qualifiedName": "src/cats.controller.ts#route:GET /cats/:id",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/cats.controller.ts",
+      "id": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "cats.controller.ts",
+      "qualifiedName": "src/cats.controller.ts",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`framework route/Nest resolver complete-output parity before move > preserves Fastify imported plugin routes while the projector owns only route expansion 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts%23listUsers:function:0",
+        ],
+        "ruleId": "framework.fastify.imported-plugin-prefix.imported-handler",
+        "stage": "module",
+      },
+      "filePath": "src/api.ts",
+      "id": "edge:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%2523route%253AGET%2520%252Fapi%252Fusers%3Aroute%3A0:symbol%3Asrc%252Fhandlers.ts%3Asrc%252Fhandlers.ts%2523listUsers%3Afunction%3A0:routes:4:24",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 4,
+        },
+        "start": {
+          "column": 24,
+          "line": 4,
+        },
+      },
+      "referenceName": "listUsers",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ts:src%2Fapi.ts%23route%3AGET%20%2Fapi%2Fusers:route:0",
+      "targetId": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts%23listUsers:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.ts:src%2Fapi.ts%23api:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.ts",
+      "id": "edge:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%3Afile%3A0:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%2523api%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+      "targetId": "symbol:src%2Fapi.ts:src%2Fapi.ts%23api:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.ts:src%2Fapi.ts%23route%3AGET%20%2Fapi%2Fusers:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.ts",
+      "id": "edge:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%3Afile%3A0:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%2523route%253AGET%2520%252Fapi%252Fusers%3Aroute%3A0:contains:4:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "GET /api/users",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+      "targetId": "symbol:src%2Fapi.ts:src%2Fapi.ts%23route%3AGET%20%2Fapi%2Fusers:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/api.ts",
+      "id": "edge:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%3Afile%3A0:symbol%3Asrc%252Fhandlers.ts%3Asrc%252Fhandlers.ts%3Afile%3A0:imports:1:27",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 1,
+        },
+        "start": {
+          "column": 27,
+          "line": 1,
+        },
+      },
+      "referenceName": "./handlers.js",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+      "targetId": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/api.ts",
+      "id": "edge:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%3Afile%3A0:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%3Afile%3A0:imports:2:28",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 39,
+          "line": 2,
+        },
+        "start": {
+          "column": 28,
+          "line": 2,
+        },
+      },
+      "referenceName": "./jobs.js",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+      "targetId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/barrel.ts",
+      "id": "edge:symbol%3Asrc%252Fbarrel.ts%3Asrc%252Fbarrel.ts%3Afile%3A0:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%3Afile%3A0:exports:1:21",
+      "kind": "exports",
+      "range": {
+        "end": {
+          "column": 31,
+          "line": 1,
+        },
+        "start": {
+          "column": 21,
+          "line": 1,
+        },
+      },
+      "referenceName": "./api.js",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fbarrel.ts:src%2Fbarrel.ts:file:0",
+      "targetId": "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts%23listUsers:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/handlers.ts",
+      "id": "edge:symbol%3Asrc%252Fhandlers.ts%3Asrc%252Fhandlers.ts%3Afile%3A0:symbol%3Asrc%252Fhandlers.ts%3Asrc%252Fhandlers.ts%2523listUsers%3Afunction%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "listUsers",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts:file:0",
+      "targetId": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts%23listUsers:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts%23listUsers:function:0",
+        ],
+        "ruleId": "framework.fastify.imported-plugin-prefix.imported-handler",
+        "stage": "module",
+      },
+      "filePath": "src/jobs.ts",
+      "id": "edge:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%2523route%253AGET%2520%252Fapi%252Fv1%252Fjobs%3Aroute%3A0:symbol%3Asrc%252Fhandlers.ts%3Asrc%252Fhandlers.ts%2523listUsers%3Afunction%3A0:routes:3:23",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 3,
+        },
+        "start": {
+          "column": 23,
+          "line": 3,
+        },
+      },
+      "referenceName": "listUsers",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts%23route%3AGET%20%2Fapi%2Fv1%2Fjobs:route:0",
+      "targetId": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts%23listUsers:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/jobs.ts",
+      "id": "edge:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%3Afile%3A0:symbol%3Asrc%252Fhandlers.ts%3Asrc%252Fhandlers.ts%3Afile%3A0:imports:1:27",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 1,
+        },
+        "start": {
+          "column": 27,
+          "line": 1,
+        },
+      },
+      "referenceName": "./handlers.js",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+      "targetId": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fjobs.ts:src%2Fjobs.ts%23jobsPlugin:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/jobs.ts",
+      "id": "edge:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%3Afile%3A0:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%2523jobsPlugin%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "jobsPlugin",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+      "targetId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts%23jobsPlugin:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fjobs.ts:src%2Fjobs.ts%23route%3AGET%20%2Fapi%2Fv1%2Fjobs:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/jobs.ts",
+      "id": "edge:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%3Afile%3A0:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%2523route%253AGET%2520%252Fapi%252Fv1%252Fjobs%3Aroute%3A0:contains:3:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 3,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+      "referenceName": "GET /api/v1/jobs",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+      "targetId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts%23route%3AGET%20%2Fapi%2Fv1%2Fjobs:route:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "reference.unresolved",
+        "stage": "unresolved",
+      },
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%2523app%3Avariable%3A0:Fastify:calls:3:13",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 3,
+        },
+        "start": {
+          "column": 13,
+          "line": 3,
+        },
+      },
+      "referenceName": "Fastify",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts%23app:variable:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%3Afile%3A0:fastify:imports:1:21",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 1,
+        },
+        "start": {
+          "column": 21,
+          "line": 1,
+        },
+      },
+      "referenceName": "fastify",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fbarrel.ts:src%2Fbarrel.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%3Afile%3A0:symbol%3Asrc%252Fbarrel.ts%3Asrc%252Fbarrel.ts%3Afile%3A0:imports:2:21",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 2,
+        },
+        "start": {
+          "column": 21,
+          "line": 2,
+        },
+      },
+      "referenceName": "./barrel.js",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+      "targetId": "symbol:src%2Fbarrel.ts:src%2Fbarrel.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain.ts:src%2Fmain.ts%23app:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%3Afile%3A0:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%2523app%3Avariable%3A0:contains:3:7",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 3,
+        },
+        "start": {
+          "column": 7,
+          "line": 3,
+        },
+      },
+      "referenceName": "app",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+      "targetId": "symbol:src%2Fmain.ts:src%2Fmain.ts%23app:variable:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "e3f65603dbd2761221ce2046b74192a644af91a002dd9a50d912dd3b95d73dd5",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/api.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "af6c6865e8c1707760c4330b8fc97b685bcd659ed4b26ca5b52d755f52bc45a3",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/barrel.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "5bc696d6b82fc2d3961937d63c9cbd55c85c21120ef420bce095783df57a822e",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/handlers.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "93379dbc6bdb6499b5dbd08d8ce2ecec9ca0d1cf5c4b226c6f63a2bd2c057990",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/jobs.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "36d45913d20227a7df9f3cae345e41e3d0cc02cff815e8f3c6bd4ef5e2969ce5",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/main.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [
+    {
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%2523app%3Avariable%3A0:Fastify:calls:3:13",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 3,
+        },
+        "start": {
+          "column": 13,
+          "line": 3,
+        },
+      },
+      "referenceName": "Fastify",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts%23app:variable:0",
+    },
+    {
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%3Afile%3A0:fastify:imports:1:21",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 1,
+        },
+        "start": {
+          "column": 21,
+          "line": 1,
+        },
+      },
+      "referenceName": "fastify",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+    },
+  ],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.ts",
+      "id": "symbol:src%2Fapi.ts:src%2Fapi.ts%23api:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "api",
+      "qualifiedName": "src/api.ts#api",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.ts",
+      "id": "symbol:src%2Fapi.ts:src%2Fapi.ts%23route%3AGET%20%2Fapi%2Fusers:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /api/users",
+      "qualifiedName": "src/api.ts#route:GET /api/users",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.ts",
+      "id": "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "api.ts",
+      "qualifiedName": "src/api.ts",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/barrel.ts",
+      "id": "symbol:src%2Fbarrel.ts:src%2Fbarrel.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "barrel.ts",
+      "qualifiedName": "src/barrel.ts",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/handlers.ts",
+      "id": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts%23listUsers:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "listUsers",
+      "qualifiedName": "src/handlers.ts#listUsers",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/handlers.ts",
+      "id": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "handlers.ts",
+      "qualifiedName": "src/handlers.ts",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/jobs.ts",
+      "id": "symbol:src%2Fjobs.ts:src%2Fjobs.ts%23jobsPlugin:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "jobsPlugin",
+      "qualifiedName": "src/jobs.ts#jobsPlugin",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/jobs.ts",
+      "id": "symbol:src%2Fjobs.ts:src%2Fjobs.ts%23route%3AGET%20%2Fapi%2Fv1%2Fjobs:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /api/v1/jobs",
+      "qualifiedName": "src/jobs.ts#route:GET /api/v1/jobs",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 3,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/jobs.ts",
+      "id": "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "jobs.ts",
+      "qualifiedName": "src/jobs.ts",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main.ts",
+      "id": "symbol:src%2Fmain.ts:src%2Fmain.ts%23app:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "app",
+      "qualifiedName": "src/main.ts#app",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 3,
+        },
+        "start": {
+          "column": 7,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main.ts",
+      "id": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "main.ts",
+      "qualifiedName": "src/main.ts",
+      "range": {
+        "end": {
+          "column": 39,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`framework route/Nest resolver complete-output parity before move > preserves Nest controller/module RouterModule projection through a re-export 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "reference.unresolved",
+        "stage": "unresolved",
+      },
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%2523AppModule%3Aclass%3A0:NestModule:calls:4:2",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 4,
+        },
+        "start": {
+          "column": 2,
+          "line": 4,
+        },
+      },
+      "referenceName": "NestModule",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts%23AppModule:class:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "syntax.typescript.proven-receiver-member-call.unresolved-target",
+        "stage": "unresolved",
+      },
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%2523AppModule%3Aclass%3A0:register:calls:5:24",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 5,
+        },
+        "start": {
+          "column": 24,
+          "line": 5,
+        },
+      },
+      "referenceName": "register",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts%23AppModule:class:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%3Afile%3A0:%40nestjs%2Fcommon:imports:1:38",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 54,
+          "line": 1,
+        },
+        "start": {
+          "column": 38,
+          "line": 1,
+        },
+      },
+      "referenceName": "@nestjs/common",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%3Afile%3A0:%40nestjs%2Fcore:imports:2:44",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 2,
+        },
+        "start": {
+          "column": 44,
+          "line": 2,
+        },
+      },
+      "referenceName": "@nestjs/core",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts%23AppModule:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%3Afile%3A0:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%2523AppModule%3Aclass%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 26,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "AppModule",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts:file:0",
+      "targetId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts%23AppModule:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcats.module.ts:src%2Fcats.module.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%3Afile%3A0:symbol%3Asrc%252Fcats.module.ts%3Asrc%252Fcats.module.ts%3Afile%3A0:imports:3:28",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 3,
+        },
+        "start": {
+          "column": 28,
+          "line": 3,
+        },
+      },
+      "referenceName": "./cats.module",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts:file:0",
+      "targetId": "symbol:src%2Fcats.module.ts:src%2Fcats.module.ts:file:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "reference.unresolved",
+        "stage": "unresolved",
+      },
+      "filePath": "src/cats.controller.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%2523CatsController%3Aclass%3A0:Controller:calls:2:2",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 2,
+        },
+        "start": {
+          "column": 2,
+          "line": 2,
+        },
+      },
+      "referenceName": "Controller",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController:class:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController.findOne:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/cats.controller.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%2523CatsController%3Aclass%3A0:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%2523CatsController.findOne%3Amethod%3A0:contains:4:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "findOne",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController:class:0",
+      "targetId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController.findOne:method:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "reference.unresolved",
+        "stage": "unresolved",
+      },
+      "filePath": "src/cats.controller.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%2523CatsController.findOne%3Amethod%3A0:Get:calls:4:4",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 7,
+          "line": 4,
+        },
+        "start": {
+          "column": 4,
+          "line": 4,
+        },
+      },
+      "referenceName": "Get",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController.findOne:method:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController.findOne:method:0",
+          "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController:class:0",
+          "symbol:src%2Fcats.module.ts:src%2Fcats.module.ts%23CatsModule:class:0",
+        ],
+        "ruleId": "framework.nestjs.router-module.exact-prefix",
+        "stage": "module",
+      },
+      "filePath": "src/cats.controller.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%2523route%253AGET%2520%252Fadmin%252Fcats%252F%253Aid%3Aroute%3A0:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%2523CatsController.findOne%3Amethod%3A0:routes:4:3",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "findOne",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23route%3AGET%20%2Fadmin%2Fcats%2F%3Aid:route:0",
+      "targetId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController.findOne:method:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/cats.controller.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%3Afile%3A0:%40nestjs%2Fcommon:imports:1:33",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 49,
+          "line": 1,
+        },
+        "start": {
+          "column": 33,
+          "line": 1,
+        },
+      },
+      "referenceName": "@nestjs/common",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/cats.controller.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%3Afile%3A0:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%2523CatsController%3Aclass%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "CatsController",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts:file:0",
+      "targetId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23route%3AGET%20%2Fadmin%2Fcats%2F%3Aid:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/cats.controller.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%3Afile%3A0:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%2523route%253AGET%2520%252Fadmin%252Fcats%252F%253Aid%3Aroute%3A0:contains:4:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "GET /admin/cats/:id",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts:file:0",
+      "targetId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23route%3AGET%20%2Fadmin%2Fcats%2F%3Aid:route:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "reference.unresolved",
+        "stage": "unresolved",
+      },
+      "filePath": "src/cats.module.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.module.ts%3Asrc%252Fcats.module.ts%2523CatsModule%3Aclass%3A0:Module:calls:3:2",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 8,
+          "line": 3,
+        },
+        "start": {
+          "column": 2,
+          "line": 3,
+        },
+      },
+      "referenceName": "Module",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fcats.module.ts:src%2Fcats.module.ts%23CatsModule:class:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/cats.module.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.module.ts%3Asrc%252Fcats.module.ts%3Afile%3A0:%40nestjs%2Fcommon:imports:1:24",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 40,
+          "line": 1,
+        },
+        "start": {
+          "column": 24,
+          "line": 1,
+        },
+      },
+      "referenceName": "@nestjs/common",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fcats.module.ts:src%2Fcats.module.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcats.module.ts:src%2Fcats.module.ts%23CatsModule:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/cats.module.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.module.ts%3Asrc%252Fcats.module.ts%3Afile%3A0:symbol%3Asrc%252Fcats.module.ts%3Asrc%252Fcats.module.ts%2523CatsModule%3Aclass%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "CatsModule",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcats.module.ts:src%2Fcats.module.ts:file:0",
+      "targetId": "symbol:src%2Fcats.module.ts:src%2Fcats.module.ts%23CatsModule:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcontrollers.ts:src%2Fcontrollers.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/cats.module.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.module.ts%3Asrc%252Fcats.module.ts%3Afile%3A0:symbol%3Asrc%252Fcontrollers.ts%3Asrc%252Fcontrollers.ts%3Afile%3A0:imports:2:32",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 47,
+          "line": 2,
+        },
+        "start": {
+          "column": 32,
+          "line": 2,
+        },
+      },
+      "referenceName": "./controllers",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcats.module.ts:src%2Fcats.module.ts:file:0",
+      "targetId": "symbol:src%2Fcontrollers.ts:src%2Fcontrollers.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/controllers.ts",
+      "id": "edge:symbol%3Asrc%252Fcontrollers.ts%3Asrc%252Fcontrollers.ts%3Afile%3A0:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%3Afile%3A0:exports:1:32",
+      "kind": "exports",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 1,
+        },
+        "start": {
+          "column": 32,
+          "line": 1,
+        },
+      },
+      "referenceName": "./cats.controller",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcontrollers.ts:src%2Fcontrollers.ts:file:0",
+      "targetId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts:file:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "ddd6bb052321dd570d3963ddcb792212b0330128c186a528317d8a53555c0d56",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/app.module.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "57754e624873e016cec1b17c885baa235f666aeb4066135c3529bcfef7e11638",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/cats.controller.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "847f0386413768d340b02c1989bf5c8753f901ea287257047ec28ec0f104ea2d",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/cats.module.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "ae514d0a8c39d12cb701684be6353de13933bb60d3c8bc47cfe3037131e4011f",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/controllers.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [
+    {
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%2523AppModule%3Aclass%3A0:NestModule:calls:4:2",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 4,
+        },
+        "start": {
+          "column": 2,
+          "line": 4,
+        },
+      },
+      "referenceName": "NestModule",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts%23AppModule:class:0",
+    },
+    {
+      "callReceiverBindingSpace": "value",
+      "callReceiverMemberKind": "static",
+      "callReceiverTypeName": "NestRouter",
+      "callSemantics": "typescript-proven-receiver-member-call",
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%2523AppModule%3Aclass%3A0:register:calls:5:24",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 5,
+        },
+        "start": {
+          "column": 24,
+          "line": 5,
+        },
+      },
+      "referenceName": "register",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts%23AppModule:class:0",
+    },
+    {
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%3Afile%3A0:%40nestjs%2Fcommon:imports:1:38",
+      "range": {
+        "end": {
+          "column": 54,
+          "line": 1,
+        },
+        "start": {
+          "column": 38,
+          "line": 1,
+        },
+      },
+      "referenceName": "@nestjs/common",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts:file:0",
+    },
+    {
+      "filePath": "src/app.module.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.module.ts%3Asrc%252Fapp.module.ts%3Afile%3A0:%40nestjs%2Fcore:imports:2:44",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 2,
+        },
+        "start": {
+          "column": 44,
+          "line": 2,
+        },
+      },
+      "referenceName": "@nestjs/core",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts:file:0",
+    },
+    {
+      "filePath": "src/cats.controller.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%2523CatsController%3Aclass%3A0:Controller:calls:2:2",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 2,
+        },
+        "start": {
+          "column": 2,
+          "line": 2,
+        },
+      },
+      "referenceName": "Controller",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController:class:0",
+    },
+    {
+      "filePath": "src/cats.controller.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%2523CatsController.findOne%3Amethod%3A0:Get:calls:4:4",
+      "range": {
+        "end": {
+          "column": 7,
+          "line": 4,
+        },
+        "start": {
+          "column": 4,
+          "line": 4,
+        },
+      },
+      "referenceName": "Get",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController.findOne:method:0",
+    },
+    {
+      "filePath": "src/cats.controller.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.controller.ts%3Asrc%252Fcats.controller.ts%3Afile%3A0:%40nestjs%2Fcommon:imports:1:33",
+      "range": {
+        "end": {
+          "column": 49,
+          "line": 1,
+        },
+        "start": {
+          "column": 33,
+          "line": 1,
+        },
+      },
+      "referenceName": "@nestjs/common",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts:file:0",
+    },
+    {
+      "filePath": "src/cats.module.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.module.ts%3Asrc%252Fcats.module.ts%2523CatsModule%3Aclass%3A0:Module:calls:3:2",
+      "range": {
+        "end": {
+          "column": 8,
+          "line": 3,
+        },
+        "start": {
+          "column": 2,
+          "line": 3,
+        },
+      },
+      "referenceName": "Module",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fcats.module.ts:src%2Fcats.module.ts%23CatsModule:class:0",
+    },
+    {
+      "filePath": "src/cats.module.ts",
+      "id": "edge:symbol%3Asrc%252Fcats.module.ts%3Asrc%252Fcats.module.ts%3Afile%3A0:%40nestjs%2Fcommon:imports:1:24",
+      "range": {
+        "end": {
+          "column": 40,
+          "line": 1,
+        },
+        "start": {
+          "column": 24,
+          "line": 1,
+        },
+      },
+      "referenceName": "@nestjs/common",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fcats.module.ts:src%2Fcats.module.ts:file:0",
+    },
+  ],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.module.ts",
+      "id": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts%23AppModule:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "AppModule",
+      "qualifiedName": "src/app.module.ts#AppModule",
+      "range": {
+        "end": {
+          "column": 26,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.module.ts",
+      "id": "symbol:src%2Fapp.module.ts:src%2Fapp.module.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "app.module.ts",
+      "qualifiedName": "src/app.module.ts",
+      "range": {
+        "end": {
+          "column": 26,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/cats.controller.ts",
+      "id": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController.findOne:method:0",
+      "isExported": false,
+      "kind": "method",
+      "name": "findOne",
+      "qualifiedName": "src/cats.controller.ts#CatsController.findOne",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/cats.controller.ts",
+      "id": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23CatsController:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "CatsController",
+      "qualifiedName": "src/cats.controller.ts#CatsController",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/cats.controller.ts",
+      "id": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts%23route%3AGET%20%2Fadmin%2Fcats%2F%3Aid:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /admin/cats/:id",
+      "qualifiedName": "src/cats.controller.ts#route:GET /admin/cats/:id",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/cats.controller.ts",
+      "id": "symbol:src%2Fcats.controller.ts:src%2Fcats.controller.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "cats.controller.ts",
+      "qualifiedName": "src/cats.controller.ts",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/cats.module.ts",
+      "id": "symbol:src%2Fcats.module.ts:src%2Fcats.module.ts%23CatsModule:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "CatsModule",
+      "qualifiedName": "src/cats.module.ts#CatsModule",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/cats.module.ts",
+      "id": "symbol:src%2Fcats.module.ts:src%2Fcats.module.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "cats.module.ts",
+      "qualifiedName": "src/cats.module.ts",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/controllers.ts",
+      "id": "symbol:src%2Fcontrollers.ts:src%2Fcontrollers.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "controllers.ts",
+      "qualifiedName": "src/controllers.ts",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`framework route/Nest resolver complete-output parity before move > preserves a re-exported framework receiver and ordered imported mount chain 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "syntax.new-expression.unresolved-class-target",
+        "stage": "unresolved",
+      },
+      "filePath": "src/app.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.ts%3Asrc%252Fapp.ts%2523app%3Avariable%3A0:Router:instantiates:3:17",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 3,
+        },
+        "start": {
+          "column": 17,
+          "line": 3,
+        },
+      },
+      "referenceName": "Router",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fapp.ts:src%2Fapp.ts%23app:variable:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/app.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.ts%3Asrc%252Fapp.ts%3Afile%3A0:%40acme%2Flattice-router:imports:1:24",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 46,
+          "line": 1,
+        },
+        "start": {
+          "column": 24,
+          "line": 1,
+        },
+      },
+      "referenceName": "@acme/lattice-router",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fapp.ts:src%2Fapp.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "syntax.typescript.proven-receiver-member-call.unresolved-target",
+        "stage": "unresolved",
+      },
+      "filePath": "src/app.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.ts%3Asrc%252Fapp.ts%3Afile%3A0:mount:calls:4:5",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 10,
+          "line": 4,
+        },
+        "start": {
+          "column": 5,
+          "line": 4,
+        },
+      },
+      "referenceName": "mount",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fapp.ts:src%2Fapp.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.ts:src%2Fapp.ts%23app:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.ts%3Asrc%252Fapp.ts%3Afile%3A0:symbol%3Asrc%252Fapp.ts%3Asrc%252Fapp.ts%2523app%3Avariable%3A0:contains:3:7",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 3,
+        },
+        "start": {
+          "column": 7,
+          "line": 3,
+        },
+      },
+      "referenceName": "app",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.ts:src%2Fapp.ts:file:0",
+      "targetId": "symbol:src%2Fapp.ts:src%2Fapp.ts%23app:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes.ts:src%2Froutes.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/app.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.ts%3Asrc%252Fapp.ts%3Afile%3A0:symbol%3Asrc%252Froutes.ts%3Asrc%252Froutes.ts%3Afile%3A0:imports:2:44",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 57,
+          "line": 2,
+        },
+        "start": {
+          "column": 44,
+          "line": 2,
+        },
+      },
+      "referenceName": "./routes.js",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.ts:src%2Fapp.ts:file:0",
+      "targetId": "symbol:src%2Froutes.ts:src%2Froutes.ts:file:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "syntax.new-expression.unresolved-class-target",
+        "stage": "unresolved",
+      },
+      "filePath": "src/child.ts",
+      "id": "edge:symbol%3Asrc%252Fchild.ts%3Asrc%252Fchild.ts%2523child%3Avariable%3A0:Router:instantiates:2:26",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 2,
+        },
+        "start": {
+          "column": 26,
+          "line": 2,
+        },
+      },
+      "referenceName": "Router",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fchild.ts:src%2Fchild.ts%23child:variable:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fchild.ts:src%2Fchild.ts%23health:function:0",
+        ],
+        "resolutionPath": [
+          "src/app.ts",
+          "src/routes.ts",
+          "src/mid.ts",
+          "src/child.ts",
+        ],
+        "routePrefixChain": [
+          {
+            "childReceiver": "mountedRoutes",
+            "filePath": "src/app.ts",
+            "mountMethod": "mount",
+            "parentReceiver": "app",
+            "prefix": "/api",
+            "range": {
+              "end": {
+                "column": 33,
+                "line": 4,
+              },
+              "start": {
+                "column": 1,
+                "line": 4,
+              },
+            },
+          },
+          {
+            "childReceiver": "child",
+            "filePath": "src/mid.ts",
+            "mountMethod": "mount",
+            "parentReceiver": "versioned",
+            "prefix": "/v1",
+            "range": {
+              "end": {
+                "column": 30,
+                "line": 4,
+              },
+              "start": {
+                "column": 1,
+                "line": 4,
+              },
+            },
+          },
+        ],
+        "ruleId": "framework.plugin.acme.lattice-router.imported-literal-prefix-chain.local-handler",
+        "stage": "lexical",
+      },
+      "filePath": "src/child.ts",
+      "id": "edge:symbol%3Asrc%252Fchild.ts%3Asrc%252Fchild.ts%2523route%253AGET%2520%252Fapi%252Fv1%252Fhealth%3Aroute%3A0:symbol%3Asrc%252Fchild.ts%3Asrc%252Fchild.ts%2523health%3Afunction%3A0:routes:4:22",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 28,
+          "line": 4,
+        },
+        "start": {
+          "column": 22,
+          "line": 4,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fchild.ts:src%2Fchild.ts%23route%3AGET%20%2Fapi%2Fv1%2Fhealth:route:0",
+      "targetId": "symbol:src%2Fchild.ts:src%2Fchild.ts%23health:function:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/child.ts",
+      "id": "edge:symbol%3Asrc%252Fchild.ts%3Asrc%252Fchild.ts%3Afile%3A0:%40acme%2Flattice-router:imports:1:24",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 46,
+          "line": 1,
+        },
+        "start": {
+          "column": 24,
+          "line": 1,
+        },
+      },
+      "referenceName": "@acme/lattice-router",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fchild.ts:src%2Fchild.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "syntax.typescript.proven-receiver-member-call.unresolved-target",
+        "stage": "unresolved",
+      },
+      "filePath": "src/child.ts",
+      "id": "edge:symbol%3Asrc%252Fchild.ts%3Asrc%252Fchild.ts%3Afile%3A0:get:calls:4:7",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 10,
+          "line": 4,
+        },
+        "start": {
+          "column": 7,
+          "line": 4,
+        },
+      },
+      "referenceName": "get",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fchild.ts:src%2Fchild.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fchild.ts:src%2Fchild.ts%23child:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/child.ts",
+      "id": "edge:symbol%3Asrc%252Fchild.ts%3Asrc%252Fchild.ts%3Afile%3A0:symbol%3Asrc%252Fchild.ts%3Asrc%252Fchild.ts%2523child%3Avariable%3A0:contains:2:14",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 2,
+        },
+        "start": {
+          "column": 14,
+          "line": 2,
+        },
+      },
+      "referenceName": "child",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fchild.ts:src%2Fchild.ts:file:0",
+      "targetId": "symbol:src%2Fchild.ts:src%2Fchild.ts%23child:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fchild.ts:src%2Fchild.ts%23health:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/child.ts",
+      "id": "edge:symbol%3Asrc%252Fchild.ts%3Asrc%252Fchild.ts%3Afile%3A0:symbol%3Asrc%252Fchild.ts%3Asrc%252Fchild.ts%2523health%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fchild.ts:src%2Fchild.ts:file:0",
+      "targetId": "symbol:src%2Fchild.ts:src%2Fchild.ts%23health:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fchild.ts:src%2Fchild.ts%23route%3AGET%20%2Fapi%2Fv1%2Fhealth:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/child.ts",
+      "id": "edge:symbol%3Asrc%252Fchild.ts%3Asrc%252Fchild.ts%3Afile%3A0:symbol%3Asrc%252Fchild.ts%3Asrc%252Fchild.ts%2523route%253AGET%2520%252Fapi%252Fv1%252Fhealth%3Aroute%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "GET /api/v1/health",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fchild.ts:src%2Fchild.ts:file:0",
+      "targetId": "symbol:src%2Fchild.ts:src%2Fchild.ts%23route%3AGET%20%2Fapi%2Fv1%2Fhealth:route:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "syntax.new-expression.unresolved-class-target",
+        "stage": "unresolved",
+      },
+      "filePath": "src/mid.ts",
+      "id": "edge:symbol%3Asrc%252Fmid.ts%3Asrc%252Fmid.ts%2523versioned%3Avariable%3A0:Router:instantiates:3:30",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 3,
+        },
+        "start": {
+          "column": 30,
+          "line": 3,
+        },
+      },
+      "referenceName": "Router",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fmid.ts:src%2Fmid.ts%23versioned:variable:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/mid.ts",
+      "id": "edge:symbol%3Asrc%252Fmid.ts%3Asrc%252Fmid.ts%3Afile%3A0:%40acme%2Flattice-router:imports:1:24",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 46,
+          "line": 1,
+        },
+        "start": {
+          "column": 24,
+          "line": 1,
+        },
+      },
+      "referenceName": "@acme/lattice-router",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fmid.ts:src%2Fmid.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "syntax.typescript.proven-receiver-member-call.unresolved-target",
+        "stage": "unresolved",
+      },
+      "filePath": "src/mid.ts",
+      "id": "edge:symbol%3Asrc%252Fmid.ts%3Asrc%252Fmid.ts%3Afile%3A0:mount:calls:4:11",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 4,
+        },
+        "start": {
+          "column": 11,
+          "line": 4,
+        },
+      },
+      "referenceName": "mount",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fmid.ts:src%2Fmid.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fchild.ts:src%2Fchild.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/mid.ts",
+      "id": "edge:symbol%3Asrc%252Fmid.ts%3Asrc%252Fmid.ts%3Afile%3A0:symbol%3Asrc%252Fchild.ts%3Asrc%252Fchild.ts%3Afile%3A0:imports:2:23",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 35,
+          "line": 2,
+        },
+        "start": {
+          "column": 23,
+          "line": 2,
+        },
+      },
+      "referenceName": "./child.js",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmid.ts:src%2Fmid.ts:file:0",
+      "targetId": "symbol:src%2Fchild.ts:src%2Fchild.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmid.ts:src%2Fmid.ts%23versioned:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/mid.ts",
+      "id": "edge:symbol%3Asrc%252Fmid.ts%3Asrc%252Fmid.ts%3Afile%3A0:symbol%3Asrc%252Fmid.ts%3Asrc%252Fmid.ts%2523versioned%3Avariable%3A0:contains:3:14",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 3,
+        },
+        "start": {
+          "column": 14,
+          "line": 3,
+        },
+      },
+      "referenceName": "versioned",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmid.ts:src%2Fmid.ts:file:0",
+      "targetId": "symbol:src%2Fmid.ts:src%2Fmid.ts%23versioned:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmid.ts:src%2Fmid.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/routes.ts",
+      "id": "edge:symbol%3Asrc%252Froutes.ts%3Asrc%252Froutes.ts%3Afile%3A0:symbol%3Asrc%252Fmid.ts%3Asrc%252Fmid.ts%3Afile%3A0:exports:1:40",
+      "kind": "exports",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 1,
+        },
+        "start": {
+          "column": 40,
+          "line": 1,
+        },
+      },
+      "referenceName": "./mid.js",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes.ts:src%2Froutes.ts:file:0",
+      "targetId": "symbol:src%2Fmid.ts:src%2Fmid.ts:file:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "86b72386f67171b16724f998a5d3e3c207d8d0fa8a9a19012c0b475e4864d1e1",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/app.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "b0da6a51d2f2524e98c2f4067f9d2c7461ca647156cbb5ca7c42740b6c3373dd",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/child.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "c31d427e9ba1e1da9489f4191b364af2f6730e23fc3eb9e01cd8ed5f9ee1e079",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/mid.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "437f980d25a61030d19893696d30533563b0b6615a192099574c59d47924465e",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/routes.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [
+    {
+      "filePath": "src/app.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.ts%3Asrc%252Fapp.ts%2523app%3Avariable%3A0:Router:instantiates:3:17",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 3,
+        },
+        "start": {
+          "column": 17,
+          "line": 3,
+        },
+      },
+      "referenceName": "Router",
+      "relationKind": "instantiates",
+      "sourceId": "symbol:src%2Fapp.ts:src%2Fapp.ts%23app:variable:0",
+    },
+    {
+      "filePath": "src/app.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.ts%3Asrc%252Fapp.ts%3Afile%3A0:%40acme%2Flattice-router:imports:1:24",
+      "range": {
+        "end": {
+          "column": 46,
+          "line": 1,
+        },
+        "start": {
+          "column": 24,
+          "line": 1,
+        },
+      },
+      "referenceName": "@acme/lattice-router",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fapp.ts:src%2Fapp.ts:file:0",
+    },
+    {
+      "callReceiverBindingSpace": "value",
+      "callReceiverMemberKind": "instance",
+      "callReceiverTypeName": "Router",
+      "callSemantics": "typescript-proven-receiver-member-call",
+      "filePath": "src/app.ts",
+      "id": "edge:symbol%3Asrc%252Fapp.ts%3Asrc%252Fapp.ts%3Afile%3A0:mount:calls:4:5",
+      "range": {
+        "end": {
+          "column": 10,
+          "line": 4,
+        },
+        "start": {
+          "column": 5,
+          "line": 4,
+        },
+      },
+      "referenceName": "mount",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fapp.ts:src%2Fapp.ts:file:0",
+    },
+    {
+      "filePath": "src/child.ts",
+      "id": "edge:symbol%3Asrc%252Fchild.ts%3Asrc%252Fchild.ts%2523child%3Avariable%3A0:Router:instantiates:2:26",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 2,
+        },
+        "start": {
+          "column": 26,
+          "line": 2,
+        },
+      },
+      "referenceName": "Router",
+      "relationKind": "instantiates",
+      "sourceId": "symbol:src%2Fchild.ts:src%2Fchild.ts%23child:variable:0",
+    },
+    {
+      "filePath": "src/child.ts",
+      "id": "edge:symbol%3Asrc%252Fchild.ts%3Asrc%252Fchild.ts%3Afile%3A0:%40acme%2Flattice-router:imports:1:24",
+      "range": {
+        "end": {
+          "column": 46,
+          "line": 1,
+        },
+        "start": {
+          "column": 24,
+          "line": 1,
+        },
+      },
+      "referenceName": "@acme/lattice-router",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fchild.ts:src%2Fchild.ts:file:0",
+    },
+    {
+      "callReceiverBindingSpace": "value",
+      "callReceiverMemberKind": "instance",
+      "callReceiverTypeName": "Router",
+      "callSemantics": "typescript-proven-receiver-member-call",
+      "filePath": "src/child.ts",
+      "id": "edge:symbol%3Asrc%252Fchild.ts%3Asrc%252Fchild.ts%3Afile%3A0:get:calls:4:7",
+      "range": {
+        "end": {
+          "column": 10,
+          "line": 4,
+        },
+        "start": {
+          "column": 7,
+          "line": 4,
+        },
+      },
+      "referenceName": "get",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fchild.ts:src%2Fchild.ts:file:0",
+    },
+    {
+      "filePath": "src/mid.ts",
+      "id": "edge:symbol%3Asrc%252Fmid.ts%3Asrc%252Fmid.ts%2523versioned%3Avariable%3A0:Router:instantiates:3:30",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 3,
+        },
+        "start": {
+          "column": 30,
+          "line": 3,
+        },
+      },
+      "referenceName": "Router",
+      "relationKind": "instantiates",
+      "sourceId": "symbol:src%2Fmid.ts:src%2Fmid.ts%23versioned:variable:0",
+    },
+    {
+      "filePath": "src/mid.ts",
+      "id": "edge:symbol%3Asrc%252Fmid.ts%3Asrc%252Fmid.ts%3Afile%3A0:%40acme%2Flattice-router:imports:1:24",
+      "range": {
+        "end": {
+          "column": 46,
+          "line": 1,
+        },
+        "start": {
+          "column": 24,
+          "line": 1,
+        },
+      },
+      "referenceName": "@acme/lattice-router",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fmid.ts:src%2Fmid.ts:file:0",
+    },
+    {
+      "callReceiverBindingSpace": "value",
+      "callReceiverMemberKind": "instance",
+      "callReceiverTypeName": "Router",
+      "callSemantics": "typescript-proven-receiver-member-call",
+      "filePath": "src/mid.ts",
+      "id": "edge:symbol%3Asrc%252Fmid.ts%3Asrc%252Fmid.ts%3Afile%3A0:mount:calls:4:11",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 4,
+        },
+        "start": {
+          "column": 11,
+          "line": 4,
+        },
+      },
+      "referenceName": "mount",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fmid.ts:src%2Fmid.ts:file:0",
+    },
+  ],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.ts",
+      "id": "symbol:src%2Fapp.ts:src%2Fapp.ts%23app:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "app",
+      "qualifiedName": "src/app.ts#app",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 3,
+        },
+        "start": {
+          "column": 7,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.ts",
+      "id": "symbol:src%2Fapp.ts:src%2Fapp.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "app.ts",
+      "qualifiedName": "src/app.ts",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/child.ts",
+      "id": "symbol:src%2Fchild.ts:src%2Fchild.ts%23child:variable:0",
+      "isExported": true,
+      "kind": "variable",
+      "name": "child",
+      "qualifiedName": "src/child.ts#child",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 2,
+        },
+        "start": {
+          "column": 14,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/child.ts",
+      "id": "symbol:src%2Fchild.ts:src%2Fchild.ts%23health:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "health",
+      "qualifiedName": "src/child.ts#health",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/child.ts",
+      "id": "symbol:src%2Fchild.ts:src%2Fchild.ts%23route%3AGET%20%2Fapi%2Fv1%2Fhealth:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /api/v1/health",
+      "qualifiedName": "src/child.ts#route:GET /api/v1/health",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/child.ts",
+      "id": "symbol:src%2Fchild.ts:src%2Fchild.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "child.ts",
+      "qualifiedName": "src/child.ts",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/mid.ts",
+      "id": "symbol:src%2Fmid.ts:src%2Fmid.ts%23versioned:variable:0",
+      "isExported": true,
+      "kind": "variable",
+      "name": "versioned",
+      "qualifiedName": "src/mid.ts#versioned",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 3,
+        },
+        "start": {
+          "column": 14,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/mid.ts",
+      "id": "symbol:src%2Fmid.ts:src%2Fmid.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "mid.ts",
+      "qualifiedName": "src/mid.ts",
+      "range": {
+        "end": {
+          "column": 31,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/routes.ts",
+      "id": "symbol:src%2Froutes.ts:src%2Froutes.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "routes.ts",
+      "qualifiedName": "src/routes.ts",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

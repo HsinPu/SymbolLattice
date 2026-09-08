@@ -1,0 +1,951 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`FastAPI router resolver pre-move parity golden > does not cross a missing regular-package boundary 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23health:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/routers/catalog.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fcatalog.py%3Aapi%252Frouters%252Fcatalog.py%3Afile%3A0:symbol%3Aapi%252Frouters%252Fcatalog.py%3Aapi%252Frouters%252Fcatalog.py%2523health%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py:file:0",
+      "targetId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23health:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "132c9f869f7691143867499ec613435240b6129f4f107950e04eac257e67853b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "api/main.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "api/routers/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "1f339ca072812e2a13fb35cec3600efda3a7fadd90396f6c7b7ed3f921481d5a",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "api/routers/catalog.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/main.py",
+      "id": "symbol:api%2Fmain.py:api%2Fmain.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "main.py",
+      "qualifiedName": "api/main.py",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/__init__.py",
+      "id": "symbol:api%2Frouters%2F__init__.py:api%2Frouters%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "api/routers/__init__.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/catalog.py",
+      "id": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23health:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "health",
+      "qualifiedName": "api/routers/catalog.py#health",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/catalog.py",
+      "id": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "catalog.py",
+      "qualifiedName": "api/routers/catalog.py",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`FastAPI router resolver pre-move parity golden > keeps missing and unsupported router targets unresolved 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py%23dynamic:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/routers/dynamic.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fdynamic.py%3Aapi%252Frouters%252Fdynamic.py%3Afile%3A0:symbol%3Aapi%252Frouters%252Fdynamic.py%3Aapi%252Frouters%252Fdynamic.py%2523dynamic%3Afunction%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "dynamic",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py:file:0",
+      "targetId": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py%23dynamic:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "api/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "b00078e02bede2a4ea74eff426e59d24248853b7901b6ebfe8cbcc794ec60d04",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "api/main.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "433f984895f97126cf29519233d8988156364761d78470ef138da4a59806c63f",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "api/routers/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "0f21e468209129fba29b7620c64ae2dd7d49494bbf5c53e437db7ae60f85c953",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "api/routers/dynamic.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/__init__.py",
+      "id": "symbol:api%2F__init__.py:api%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "api/__init__.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/main.py",
+      "id": "symbol:api%2Fmain.py:api%2Fmain.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "main.py",
+      "qualifiedName": "api/main.py",
+      "range": {
+        "end": {
+          "column": 54,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/__init__.py",
+      "id": "symbol:api%2Frouters%2F__init__.py:api%2Frouters%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "api/routers/__init__.py",
+      "range": {
+        "end": {
+          "column": 46,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/dynamic.py",
+      "id": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py%23dynamic:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "dynamic",
+      "qualifiedName": "api/routers/dynamic.py#dynamic",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/dynamic.py",
+      "id": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "dynamic.py",
+      "qualifiedName": "api/routers/dynamic.py",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`FastAPI router resolver pre-move parity golden > preserves direct, project-absolute, and initializer re-export routes 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23ready:function:0",
+        ],
+        "resolutionPath": [
+          "api/main.py",
+          "api/routers/admin.py",
+        ],
+        "ruleId": "framework.fastapi.project-absolute-router.include-router.decorator.local-function",
+        "stage": "module",
+      },
+      "filePath": "api/routers/admin.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fadmin.py%3Aapi%252Frouters%252Fadmin.py%2523route%253APOST%2520%252Fabsolute%252Fadmin%252Fready%3Aroute%3A0:symbol%3Aapi%252Frouters%252Fadmin.py%3Aapi%252Frouters%252Fadmin.py%2523ready%3Afunction%3A0:routes:4:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "ready",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23route%3APOST%20%2Fabsolute%2Fadmin%2Fready:route:0",
+      "targetId": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23ready:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23ready:function:0",
+        ],
+        "resolutionPath": [
+          "api/main.py",
+          "api/routers/__init__.py",
+          "api/routers/admin.py",
+        ],
+        "ruleId": "framework.fastapi.project-absolute-reexported-router.include-router.decorator.local-function",
+        "stage": "module",
+      },
+      "filePath": "api/routers/admin.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fadmin.py%3Aapi%252Frouters%252Fadmin.py%2523route%253APOST%2520%252Fabsolute-reexport%252Fadmin%252Fready%3Aroute%3A0:symbol%3Aapi%252Frouters%252Fadmin.py%3Aapi%252Frouters%252Fadmin.py%2523ready%3Afunction%3A0:routes:4:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "ready",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23route%3APOST%20%2Fabsolute-reexport%2Fadmin%2Fready:route:0",
+      "targetId": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23ready:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23ready:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/routers/admin.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fadmin.py%3Aapi%252Frouters%252Fadmin.py%3Afile%3A0:symbol%3Aapi%252Frouters%252Fadmin.py%3Aapi%252Frouters%252Fadmin.py%2523ready%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "ready",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py:file:0",
+      "targetId": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23ready:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23route%3APOST%20%2Fabsolute%2Fadmin%2Fready:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/routers/admin.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fadmin.py%3Aapi%252Frouters%252Fadmin.py%3Afile%3A0:symbol%3Aapi%252Frouters%252Fadmin.py%3Aapi%252Frouters%252Fadmin.py%2523route%253APOST%2520%252Fabsolute%252Fadmin%252Fready%3Aroute%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "POST /absolute/admin/ready",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py:file:0",
+      "targetId": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23route%3APOST%20%2Fabsolute%2Fadmin%2Fready:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23route%3APOST%20%2Fabsolute-reexport%2Fadmin%2Fready:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/routers/admin.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fadmin.py%3Aapi%252Frouters%252Fadmin.py%3Afile%3A0:symbol%3Aapi%252Frouters%252Fadmin.py%3Aapi%252Frouters%252Fadmin.py%2523route%253APOST%2520%252Fabsolute-reexport%252Fadmin%252Fready%3Aroute%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "POST /absolute-reexport/admin/ready",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py:file:0",
+      "targetId": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23route%3APOST%20%2Fabsolute-reexport%2Fadmin%2Fready:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23health:function:0",
+        ],
+        "resolutionPath": [
+          "api/main.py",
+          "api/routers/catalog.py",
+        ],
+        "ruleId": "framework.fastapi.imported-router.include-router.decorator.local-function",
+        "stage": "module",
+      },
+      "filePath": "api/routers/catalog.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fcatalog.py%3Aapi%252Frouters%252Fcatalog.py%2523route%253AGET%2520%252Fdirect%252Fcatalog%252Fhealth%3Aroute%3A0:symbol%3Aapi%252Frouters%252Fcatalog.py%3Aapi%252Frouters%252Fcatalog.py%2523health%3Afunction%3A0:routes:4:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23route%3AGET%20%2Fdirect%2Fcatalog%2Fhealth:route:0",
+      "targetId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23health:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23health:function:0",
+        ],
+        "resolutionPath": [
+          "api/main.py",
+          "api/routers/__init__.py",
+          "api/routers/catalog.py",
+        ],
+        "ruleId": "framework.fastapi.reexported-router.include-router.decorator.local-function",
+        "stage": "module",
+      },
+      "filePath": "api/routers/catalog.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fcatalog.py%3Aapi%252Frouters%252Fcatalog.py%2523route%253AGET%2520%252Frelative-reexport%252Fcatalog%252Fhealth%3Aroute%3A0:symbol%3Aapi%252Frouters%252Fcatalog.py%3Aapi%252Frouters%252Fcatalog.py%2523health%3Afunction%3A0:routes:4:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23route%3AGET%20%2Frelative-reexport%2Fcatalog%2Fhealth:route:0",
+      "targetId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23health:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23health:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/routers/catalog.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fcatalog.py%3Aapi%252Frouters%252Fcatalog.py%3Afile%3A0:symbol%3Aapi%252Frouters%252Fcatalog.py%3Aapi%252Frouters%252Fcatalog.py%2523health%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py:file:0",
+      "targetId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23health:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23route%3AGET%20%2Fdirect%2Fcatalog%2Fhealth:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/routers/catalog.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fcatalog.py%3Aapi%252Frouters%252Fcatalog.py%3Afile%3A0:symbol%3Aapi%252Frouters%252Fcatalog.py%3Aapi%252Frouters%252Fcatalog.py%2523route%253AGET%2520%252Fdirect%252Fcatalog%252Fhealth%3Aroute%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "GET /direct/catalog/health",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py:file:0",
+      "targetId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23route%3AGET%20%2Fdirect%2Fcatalog%2Fhealth:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23route%3AGET%20%2Frelative-reexport%2Fcatalog%2Fhealth:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/routers/catalog.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fcatalog.py%3Aapi%252Frouters%252Fcatalog.py%3Afile%3A0:symbol%3Aapi%252Frouters%252Fcatalog.py%3Aapi%252Frouters%252Fcatalog.py%2523route%253AGET%2520%252Frelative-reexport%252Fcatalog%252Fhealth%3Aroute%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "GET /relative-reexport/catalog/health",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py:file:0",
+      "targetId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23route%3AGET%20%2Frelative-reexport%2Fcatalog%2Fhealth:route:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "api/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "32be079c8c204ac0aa36f8d36f067d37d7eac390563ea759d59078b22bd1517c",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "api/main.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "cec63fa3ca573e37d3cbaaa9f7990313560105e970f318b5bbdfb19b002b8cb1",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "api/routers/__init__.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "c34045194f47efd0db8c73f55138ddcc5f11eb7a6e54e88a93f192d954178686",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "api/routers/admin.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "f798974a9618e0e06801d02ea4f49e2c716a64c501556f4a2d14d1dbce5b9fee",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "python",
+      "path": "api/routers/catalog.py",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/__init__.py",
+      "id": "symbol:api%2F__init__.py:api%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "api/__init__.py",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/main.py",
+      "id": "symbol:api%2Fmain.py:api%2Fmain.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "main.py",
+      "qualifiedName": "api/main.py",
+      "range": {
+        "end": {
+          "column": 65,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/__init__.py",
+      "id": "symbol:api%2Frouters%2F__init__.py:api%2Frouters%2F__init__.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "__init__.py",
+      "qualifiedName": "api/routers/__init__.py",
+      "range": {
+        "end": {
+          "column": 56,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/admin.py",
+      "id": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23ready:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "ready",
+      "qualifiedName": "api/routers/admin.py#ready",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/admin.py",
+      "id": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23route%3APOST%20%2Fabsolute%2Fadmin%2Fready:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "POST /absolute/admin/ready",
+      "qualifiedName": "api/routers/admin.py#route:POST /absolute/admin/ready",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/admin.py",
+      "id": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23route%3APOST%20%2Fabsolute-reexport%2Fadmin%2Fready:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "POST /absolute-reexport/admin/ready",
+      "qualifiedName": "api/routers/admin.py#route:POST /absolute-reexport/admin/ready",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/admin.py",
+      "id": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "admin.py",
+      "qualifiedName": "api/routers/admin.py",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/catalog.py",
+      "id": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23health:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "health",
+      "qualifiedName": "api/routers/catalog.py#health",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/catalog.py",
+      "id": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23route%3AGET%20%2Fdirect%2Fcatalog%2Fhealth:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /direct/catalog/health",
+      "qualifiedName": "api/routers/catalog.py#route:GET /direct/catalog/health",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/catalog.py",
+      "id": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23route%3AGET%20%2Frelative-reexport%2Fcatalog%2Fhealth:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /relative-reexport/catalog/health",
+      "qualifiedName": "api/routers/catalog.py#route:GET /relative-reexport/catalog/health",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/catalog.py",
+      "id": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "catalog.py",
+      "qualifiedName": "api/routers/catalog.py",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

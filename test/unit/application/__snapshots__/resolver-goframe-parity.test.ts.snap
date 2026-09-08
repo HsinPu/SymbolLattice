@@ -1,0 +1,1178 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`GoFrame complete-output parity before move > preserves missing request metadata nonclaim 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller:type:0",
+        ],
+        "ruleId": "project.go.same-package.unique-struct-instantiation",
+        "stage": "syntax",
+      },
+      "filePath": "api/controller.go",
+      "id": "edge:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523NewController%3Afunction%3A0:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523Controller%3Atype%3A0:instantiates:4:44",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 54,
+          "line": 4,
+        },
+        "start": {
+          "column": 44,
+          "line": 4,
+        },
+      },
+      "referenceName": "Controller",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23NewController:function:0",
+      "targetId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/controller.go",
+      "id": "edge:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%3Afile%3A0:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523Controller%3Atype%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Controller",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go:file:0",
+      "targetId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller.List:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/controller.go",
+      "id": "edge:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%3Afile%3A0:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523Controller.List%3Amethod%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 64,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "List",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go:file:0",
+      "targetId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller.List:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23NewController:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/controller.go",
+      "id": "edge:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%3Afile%3A0:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523NewController%3Afunction%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "NewController",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go:file:0",
+      "targetId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23NewController:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23NewController:function:0",
+        ],
+        "resolutionPath": [
+          "api/register.go",
+          "api/controller.go",
+        ],
+        "ruleId": "project.go.same-package.unique-unconditional-package-function-call",
+        "stage": "module",
+      },
+      "filePath": "api/register.go",
+      "id": "edge:symbol%3Aapi%252Fregister.go%3Aapi%252Fregister.go%2523Register%3Afunction%3A0:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523NewController%3Afunction%3A0:calls:3:48",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 61,
+          "line": 3,
+        },
+        "start": {
+          "column": 48,
+          "line": 3,
+        },
+      },
+      "referenceName": "NewController",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fregister.go:api%2Fregister.go%23Register:function:0",
+      "targetId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23NewController:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fregister.go:api%2Fregister.go%23Register:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/register.go",
+      "id": "edge:symbol%3Aapi%252Fregister.go%3Aapi%252Fregister.go%3Afile%3A0:symbol%3Aapi%252Fregister.go%3Aapi%252Fregister.go%2523Register%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 66,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Register",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fregister.go:api%2Fregister.go:file:0",
+      "targetId": "symbol:api%2Fregister.go:api%2Fregister.go%23Register:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "1678cf48c942b5cae863d5231e2c731877645cf314186fb18fdde5871c50b020",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "go",
+      "path": "api/controller.go",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "838b27610e1d171b40db9f1efb0928982f601878f9c4575dd70e04d299497610",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "go",
+      "path": "api/register.go",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/controller.go",
+      "id": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller.List:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "List",
+      "qualifiedName": "api/controller.go#Controller.List",
+      "range": {
+        "end": {
+          "column": 64,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/controller.go",
+      "id": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "Controller",
+      "qualifiedName": "api/controller.go#Controller",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/controller.go",
+      "id": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23NewController:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "NewController",
+      "qualifiedName": "api/controller.go#NewController",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/controller.go",
+      "id": "symbol:api%2Fcontroller.go:api%2Fcontroller.go:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "controller.go",
+      "qualifiedName": "api/controller.go",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/register.go",
+      "id": "symbol:api%2Fregister.go:api%2Fregister.go%23Register:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "Register",
+      "qualifiedName": "api/register.go#Register",
+      "range": {
+        "end": {
+          "column": 66,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/register.go",
+      "id": "symbol:api%2Fregister.go:api%2Fregister.go:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "register.go",
+      "qualifiedName": "api/register.go",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`GoFrame complete-output parity before move > preserves same-package cross-file factory-bound exact routes 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller:type:0",
+        ],
+        "ruleId": "project.go.same-package.unique-struct-instantiation",
+        "stage": "syntax",
+      },
+      "filePath": "api/controller.go",
+      "id": "edge:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523NewController%3Afunction%3A0:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523Controller%3Atype%3A0:instantiates:4:44",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 54,
+          "line": 4,
+        },
+        "start": {
+          "column": 44,
+          "line": 4,
+        },
+      },
+      "referenceName": "Controller",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23NewController:function:0",
+      "targetId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/controller.go",
+      "id": "edge:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%3Afile%3A0:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523Controller%3Atype%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Controller",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go:file:0",
+      "targetId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller.List:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/controller.go",
+      "id": "edge:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%3Afile%3A0:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523Controller.List%3Amethod%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 64,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "List",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go:file:0",
+      "targetId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller.List:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23NewController:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/controller.go",
+      "id": "edge:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%3Afile%3A0:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523NewController%3Afunction%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "NewController",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go:file:0",
+      "targetId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23NewController:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23NewController:function:0",
+        ],
+        "resolutionPath": [
+          "api/register.go",
+          "api/controller.go",
+        ],
+        "ruleId": "project.go.same-package.unique-unconditional-package-function-call",
+        "stage": "module",
+      },
+      "filePath": "api/register.go",
+      "id": "edge:symbol%3Aapi%252Fregister.go%3Aapi%252Fregister.go%2523Register%3Afunction%3A0:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523NewController%3Afunction%3A0:calls:3:48",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 61,
+          "line": 3,
+        },
+        "start": {
+          "column": 48,
+          "line": 3,
+        },
+      },
+      "referenceName": "NewController",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fregister.go:api%2Fregister.go%23Register:function:0",
+      "targetId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23NewController:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fregister.go:api%2Fregister.go%23Register:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/register.go",
+      "id": "edge:symbol%3Aapi%252Fregister.go%3Aapi%252Fregister.go%3Afile%3A0:symbol%3Aapi%252Fregister.go%3Aapi%252Fregister.go%2523Register%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 66,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Register",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fregister.go:api%2Fregister.go:file:0",
+      "targetId": "symbol:api%2Fregister.go:api%2Fregister.go%23Register:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller.List:method:0",
+        ],
+        "resolutionPath": [
+          "api/requests.go",
+          "api/controller.go",
+          "api/register.go",
+        ],
+        "ruleId": "framework.goframe.standard-router.g-meta.same-package.factory-bind",
+        "stage": "module",
+      },
+      "filePath": "api/requests.go",
+      "id": "edge:symbol%3Aapi%252Frequests.go%3Aapi%252Frequests.go%2523route%253AGET%2520%252Fv1%252Fusers%253Agoframe-standard-router%253Aapi%252Fregister.go%253A3%253A19%253Asymbol%253Aapi%25252Fcontroller.go%253Aapi%25252Fcontroller.go%252523Controller.List%253Amethod%253A0%253Ahostless%3Aroute%3A0:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523Controller.List%3Amethod%3A0:routes:3:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "List",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frequests.go:api%2Frequests.go%23route%3AGET%20%2Fv1%2Fusers%3Agoframe-standard-router%3Aapi%2Fregister.go%3A3%3A19%3Asymbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523Controller.List%3Amethod%3A0%3Ahostless:route:0",
+      "targetId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller.List:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frequests.go:api%2Frequests.go%23ListReq:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/requests.go",
+      "id": "edge:symbol%3Aapi%252Frequests.go%3Aapi%252Frequests.go%3Afile%3A0:symbol%3Aapi%252Frequests.go%3Aapi%252Frequests.go%2523ListReq%3Atype%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "ListReq",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frequests.go:api%2Frequests.go:file:0",
+      "targetId": "symbol:api%2Frequests.go:api%2Frequests.go%23ListReq:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frequests.go:api%2Frequests.go%23route%3AGET%20%2Fv1%2Fusers%3Agoframe-standard-router%3Aapi%2Fregister.go%3A3%3A19%3Asymbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523Controller.List%3Amethod%3A0%3Ahostless:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/requests.go",
+      "id": "edge:symbol%3Aapi%252Frequests.go%3Aapi%252Frequests.go%3Afile%3A0:symbol%3Aapi%252Frequests.go%3Aapi%252Frequests.go%2523route%253AGET%2520%252Fv1%252Fusers%253Agoframe-standard-router%253Aapi%252Fregister.go%253A3%253A19%253Asymbol%253Aapi%25252Fcontroller.go%253Aapi%25252Fcontroller.go%252523Controller.List%253Amethod%253A0%253Ahostless%3Aroute%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "GET /v1/users",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frequests.go:api%2Frequests.go:file:0",
+      "targetId": "symbol:api%2Frequests.go:api%2Frequests.go%23route%3AGET%20%2Fv1%2Fusers%3Agoframe-standard-router%3Aapi%2Fregister.go%3A3%3A19%3Asymbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523Controller.List%3Amethod%3A0%3Ahostless:route:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "1678cf48c942b5cae863d5231e2c731877645cf314186fb18fdde5871c50b020",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "go",
+      "path": "api/controller.go",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "838b27610e1d171b40db9f1efb0928982f601878f9c4575dd70e04d299497610",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "go",
+      "path": "api/register.go",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "472dc8b48908900db7f20d918ea25b81754e7844bd2b40d841bb20da6a8221e8",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "go",
+      "path": "api/requests.go",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/controller.go",
+      "id": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller.List:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "List",
+      "qualifiedName": "api/controller.go#Controller.List",
+      "range": {
+        "end": {
+          "column": 64,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/controller.go",
+      "id": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "Controller",
+      "qualifiedName": "api/controller.go#Controller",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/controller.go",
+      "id": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23NewController:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "NewController",
+      "qualifiedName": "api/controller.go#NewController",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/controller.go",
+      "id": "symbol:api%2Fcontroller.go:api%2Fcontroller.go:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "controller.go",
+      "qualifiedName": "api/controller.go",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/register.go",
+      "id": "symbol:api%2Fregister.go:api%2Fregister.go%23Register:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "Register",
+      "qualifiedName": "api/register.go#Register",
+      "range": {
+        "end": {
+          "column": 66,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/register.go",
+      "id": "symbol:api%2Fregister.go:api%2Fregister.go:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "register.go",
+      "qualifiedName": "api/register.go",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/requests.go",
+      "id": "symbol:api%2Frequests.go:api%2Frequests.go%23ListReq:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "ListReq",
+      "qualifiedName": "api/requests.go#ListReq",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/requests.go",
+      "id": "symbol:api%2Frequests.go:api%2Frequests.go%23route%3AGET%20%2Fv1%2Fusers%3Agoframe-standard-router%3Aapi%2Fregister.go%3A3%3A19%3Asymbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523Controller.List%3Amethod%3A0%3Ahostless:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /v1/users",
+      "qualifiedName": "api/requests.go#route:GET /v1/users:goframe-standard-router:api/register.go:3:19:symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller.List:method:0:hostless",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/requests.go",
+      "id": "symbol:api%2Frequests.go:api%2Frequests.go:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "requests.go",
+      "qualifiedName": "api/requests.go",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`GoFrame complete-output parity before move > preserves unbound request/controller heuristic without exact routes 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller:type:0",
+        ],
+        "ruleId": "project.go.same-package.unique-struct-instantiation",
+        "stage": "syntax",
+      },
+      "filePath": "api/controller.go",
+      "id": "edge:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523NewController%3Afunction%3A0:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523Controller%3Atype%3A0:instantiates:4:44",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 54,
+          "line": 4,
+        },
+        "start": {
+          "column": 44,
+          "line": 4,
+        },
+      },
+      "referenceName": "Controller",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23NewController:function:0",
+      "targetId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/controller.go",
+      "id": "edge:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%3Afile%3A0:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523Controller%3Atype%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Controller",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go:file:0",
+      "targetId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller.List:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/controller.go",
+      "id": "edge:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%3Afile%3A0:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523Controller.List%3Amethod%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 64,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "List",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go:file:0",
+      "targetId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller.List:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23NewController:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/controller.go",
+      "id": "edge:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%3Afile%3A0:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523NewController%3Afunction%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "NewController",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go:file:0",
+      "targetId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23NewController:function:0",
+    },
+    {
+      "confidence": 0.7,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller.List:method:0",
+        ],
+        "resolutionPath": [
+          "api/requests.go",
+          "api/controller.go",
+        ],
+        "ruleId": "framework.goframe.standard-router.g-meta.unique-request-signature.unbound",
+        "stage": "heuristic",
+      },
+      "filePath": "api/requests.go",
+      "id": "edge:symbol%3Aapi%252Frequests.go%3Aapi%252Frequests.go%2523route%253AGET%2520%252Fusers%253Agoframe-standard-router%253Aheuristic-unbound%253Asymbol%253Aapi%25252Fcontroller.go%253Aapi%25252Fcontroller.go%252523Controller.List%253Amethod%253A0%3Aroute%3A0:symbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523Controller.List%3Amethod%3A0:routes:3:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "List",
+      "resolution": "heuristic",
+      "sourceId": "symbol:api%2Frequests.go:api%2Frequests.go%23route%3AGET%20%2Fusers%3Agoframe-standard-router%3Aheuristic-unbound%3Asymbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523Controller.List%3Amethod%3A0:route:0",
+      "targetId": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller.List:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frequests.go:api%2Frequests.go%23ListReq:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/requests.go",
+      "id": "edge:symbol%3Aapi%252Frequests.go%3Aapi%252Frequests.go%3Afile%3A0:symbol%3Aapi%252Frequests.go%3Aapi%252Frequests.go%2523ListReq%3Atype%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "ListReq",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frequests.go:api%2Frequests.go:file:0",
+      "targetId": "symbol:api%2Frequests.go:api%2Frequests.go%23ListReq:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frequests.go:api%2Frequests.go%23route%3AGET%20%2Fusers%3Agoframe-standard-router%3Aheuristic-unbound%3Asymbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523Controller.List%3Amethod%3A0:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/requests.go",
+      "id": "edge:symbol%3Aapi%252Frequests.go%3Aapi%252Frequests.go%3Afile%3A0:symbol%3Aapi%252Frequests.go%3Aapi%252Frequests.go%2523route%253AGET%2520%252Fusers%253Agoframe-standard-router%253Aheuristic-unbound%253Asymbol%253Aapi%25252Fcontroller.go%253Aapi%25252Fcontroller.go%252523Controller.List%253Amethod%253A0%3Aroute%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "GET /users",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frequests.go:api%2Frequests.go:file:0",
+      "targetId": "symbol:api%2Frequests.go:api%2Frequests.go%23route%3AGET%20%2Fusers%3Agoframe-standard-router%3Aheuristic-unbound%3Asymbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523Controller.List%3Amethod%3A0:route:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "1678cf48c942b5cae863d5231e2c731877645cf314186fb18fdde5871c50b020",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "go",
+      "path": "api/controller.go",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "472dc8b48908900db7f20d918ea25b81754e7844bd2b40d841bb20da6a8221e8",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "go",
+      "path": "api/requests.go",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/controller.go",
+      "id": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller.List:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "List",
+      "qualifiedName": "api/controller.go#Controller.List",
+      "range": {
+        "end": {
+          "column": 64,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/controller.go",
+      "id": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "Controller",
+      "qualifiedName": "api/controller.go#Controller",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/controller.go",
+      "id": "symbol:api%2Fcontroller.go:api%2Fcontroller.go%23NewController:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "NewController",
+      "qualifiedName": "api/controller.go#NewController",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/controller.go",
+      "id": "symbol:api%2Fcontroller.go:api%2Fcontroller.go:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "controller.go",
+      "qualifiedName": "api/controller.go",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/requests.go",
+      "id": "symbol:api%2Frequests.go:api%2Frequests.go%23ListReq:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "ListReq",
+      "qualifiedName": "api/requests.go#ListReq",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/requests.go",
+      "id": "symbol:api%2Frequests.go:api%2Frequests.go%23route%3AGET%20%2Fusers%3Agoframe-standard-router%3Aheuristic-unbound%3Asymbol%3Aapi%252Fcontroller.go%3Aapi%252Fcontroller.go%2523Controller.List%3Amethod%3A0:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /users",
+      "qualifiedName": "api/requests.go#route:GET /users:goframe-standard-router:heuristic-unbound:symbol:api%2Fcontroller.go:api%2Fcontroller.go%23Controller.List:method:0",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/requests.go",
+      "id": "symbol:api%2Frequests.go:api%2Frequests.go:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "requests.go",
+      "qualifiedName": "api/requests.go",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

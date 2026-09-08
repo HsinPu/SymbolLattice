@@ -1,0 +1,2419 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Zig, Objective-C, and Ruby resolver pre-move parity golden > 'objc' keeps consumer-only imports and cross-file relations unresolved 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FConsumer.m:src%2FConsumer.m%23Consumer.make%3A:method:0",
+        ],
+        "ruleId": "language.objc.method.direct-implementation",
+        "stage": "syntax",
+      },
+      "filePath": "src/Consumer.m",
+      "id": "edge:symbol%3Asrc%252FConsumer.m%3Asrc%252FConsumer.m%2523Consumer%3Aclass%3A0:symbol%3Asrc%252FConsumer.m%3Asrc%252FConsumer.m%2523Consumer.make%253A%3Amethod%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 97,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "make:",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FConsumer.m:src%2FConsumer.m%23Consumer:class:0",
+      "targetId": "symbol:src%2FConsumer.m:src%2FConsumer.m%23Consumer.make%3A:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FConsumer.m:src%2FConsumer.m%23Consumer:class:0",
+        ],
+        "ruleId": "language.objc.interface.direct",
+        "stage": "syntax",
+      },
+      "filePath": "src/Consumer.m",
+      "id": "edge:symbol%3Asrc%252FConsumer.m%3Asrc%252FConsumer.m%3Afile%3A0:symbol%3Asrc%252FConsumer.m%3Asrc%252FConsumer.m%2523Consumer%3Aclass%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Consumer",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FConsumer.m:src%2FConsumer.m:file:0",
+      "targetId": "symbol:src%2FConsumer.m:src%2FConsumer.m%23Consumer:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "7c8d3cd1622a7a45c4a999cc446440a5ec34d2083e9f414288fdabe5d121fb17",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "objc",
+      "path": "src/Consumer.m",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Consumer.m",
+      "id": "symbol:src%2FConsumer.m:src%2FConsumer.m%23Consumer.make%3A:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "make:",
+      "qualifiedName": "src/Consumer.m#Consumer.make:",
+      "range": {
+        "end": {
+          "column": 97,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Consumer.m",
+      "id": "symbol:src%2FConsumer.m:src%2FConsumer.m%23Consumer:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Consumer",
+      "qualifiedName": "src/Consumer.m#Consumer",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Consumer.m",
+      "id": "symbol:src%2FConsumer.m:src%2FConsumer.m:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Consumer.m",
+      "qualifiedName": "src/Consumer.m",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Zig, Objective-C, and Ruby resolver pre-move parity golden > 'objc' preserves complete cross-file and local output 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FConsumer.m:src%2FConsumer.m%23Consumer.make%3A:method:0",
+        ],
+        "ruleId": "language.objc.method.direct-implementation",
+        "stage": "syntax",
+      },
+      "filePath": "src/Consumer.m",
+      "id": "edge:symbol%3Asrc%252FConsumer.m%3Asrc%252FConsumer.m%2523Consumer%3Aclass%3A0:symbol%3Asrc%252FConsumer.m%3Asrc%252FConsumer.m%2523Consumer.make%253A%3Amethod%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 97,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "make:",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FConsumer.m:src%2FConsumer.m%23Consumer:class:0",
+      "targetId": "symbol:src%2FConsumer.m:src%2FConsumer.m%23Consumer.make%3A:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FFactory.h:src%2FFactory.h%23protocol%3AHealthChecking:interface:0",
+        ],
+        "resolutionPath": [
+          "src/Consumer.m",
+          "src/Factory.h",
+        ],
+        "ruleId": "syntax.objc.unique-interface-protocol",
+        "stage": "module",
+      },
+      "filePath": "src/Consumer.m",
+      "id": "edge:symbol%3Asrc%252FConsumer.m%3Asrc%252FConsumer.m%2523Consumer%3Aclass%3A0:symbol%3Asrc%252FFactory.h%3Asrc%252FFactory.h%2523protocol%253AHealthChecking%3Ainterface%3A0:implements:2:33",
+      "kind": "implements",
+      "range": {
+        "end": {
+          "column": 47,
+          "line": 2,
+        },
+        "start": {
+          "column": 33,
+          "line": 2,
+        },
+      },
+      "referenceName": "HealthChecking",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FConsumer.m:src%2FConsumer.m%23Consumer:class:0",
+      "targetId": "symbol:src%2FFactory.h:src%2FFactory.h%23protocol%3AHealthChecking:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FFactory.h:src%2FFactory.h%23Factory:class:0",
+        ],
+        "resolutionPath": [
+          "src/Consumer.m",
+          "src/Factory.h",
+        ],
+        "ruleId": "syntax.objc.unique-signature-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/Consumer.m",
+      "id": "edge:symbol%3Asrc%252FConsumer.m%3Asrc%252FConsumer.m%2523Consumer.make%253A%3Amethod%3A0:symbol%3Asrc%252FFactory.h%3Asrc%252FFactory.h%2523Factory%3Aclass%3A0:accepts:6:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 97,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "Factory",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FConsumer.m:src%2FConsumer.m%23Consumer.make%3A:method:0",
+      "targetId": "symbol:src%2FFactory.h:src%2FFactory.h%23Factory:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FFactory.h:src%2FFactory.h%23Factory:class:0",
+        ],
+        "resolutionPath": [
+          "src/Consumer.m",
+          "src/Factory.h",
+        ],
+        "ruleId": "module.objc.unique-imported-alloc-init",
+        "stage": "module",
+      },
+      "filePath": "src/Consumer.m",
+      "id": "edge:symbol%3Asrc%252FConsumer.m%3Asrc%252FConsumer.m%2523Consumer.make%253A%3Amethod%3A0:symbol%3Asrc%252FFactory.h%3Asrc%252FFactory.h%2523Factory%3Aclass%3A0:instantiates:6:56",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 78,
+          "line": 6,
+        },
+        "start": {
+          "column": 56,
+          "line": 6,
+        },
+      },
+      "referenceName": "Factory",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FConsumer.m:src%2FConsumer.m%23Consumer.make%3A:method:0",
+      "targetId": "symbol:src%2FFactory.h:src%2FFactory.h%23Factory:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FFactory.h:src%2FFactory.h%23Factory:class:0",
+        ],
+        "resolutionPath": [
+          "src/Consumer.m",
+          "src/Factory.h",
+        ],
+        "ruleId": "syntax.objc.unique-signature-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/Consumer.m",
+      "id": "edge:symbol%3Asrc%252FConsumer.m%3Asrc%252FConsumer.m%2523Consumer.make%253A%3Amethod%3A0:symbol%3Asrc%252FFactory.h%3Asrc%252FFactory.h%2523Factory%3Aclass%3A0:returns:6:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 97,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "Factory",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FConsumer.m:src%2FConsumer.m%23Consumer.make%3A:method:0",
+      "targetId": "symbol:src%2FFactory.h:src%2FFactory.h%23Factory:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FFactory.h:src%2FFactory.h%23Factory.ping:method:0",
+        ],
+        "resolutionPath": [
+          "src/Consumer.m",
+          "src/Factory.h",
+        ],
+        "ruleId": "module.objc.unique-imported-class-message",
+        "stage": "module",
+      },
+      "filePath": "src/Consumer.m",
+      "id": "edge:symbol%3Asrc%252FConsumer.m%3Asrc%252FConsumer.m%2523Consumer.make%253A%3Amethod%3A0:symbol%3Asrc%252FFactory.h%3Asrc%252FFactory.h%2523Factory.ping%3Amethod%3A0:calls:6:40",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 54,
+          "line": 6,
+        },
+        "start": {
+          "column": 40,
+          "line": 6,
+        },
+      },
+      "referenceName": "ping",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FConsumer.m:src%2FConsumer.m%23Consumer.make%3A:method:0",
+      "targetId": "symbol:src%2FFactory.h:src%2FFactory.h%23Factory.ping:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FConsumer.m:src%2FConsumer.m%23Consumer:class:0",
+        ],
+        "ruleId": "language.objc.interface.direct",
+        "stage": "syntax",
+      },
+      "filePath": "src/Consumer.m",
+      "id": "edge:symbol%3Asrc%252FConsumer.m%3Asrc%252FConsumer.m%3Afile%3A0:symbol%3Asrc%252FConsumer.m%3Asrc%252FConsumer.m%2523Consumer%3Aclass%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Consumer",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FConsumer.m:src%2FConsumer.m:file:0",
+      "targetId": "symbol:src%2FConsumer.m:src%2FConsumer.m%23Consumer:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FFactory.h:src%2FFactory.h:file:0",
+        ],
+        "resolutionPath": [
+          "src/Consumer.m",
+          "src/Factory.h",
+        ],
+        "ruleId": "module.objc.literal-import.unique-file",
+        "stage": "module",
+      },
+      "filePath": "src/Consumer.m",
+      "id": "edge:symbol%3Asrc%252FConsumer.m%3Asrc%252FConsumer.m%3Afile%3A0:symbol%3Asrc%252FFactory.h%3Asrc%252FFactory.h%3Afile%3A0:imports:1:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Factory.h",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FConsumer.m:src%2FConsumer.m:file:0",
+      "targetId": "symbol:src%2FFactory.h:src%2FFactory.h:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FFactory.h:src%2FFactory.h%23Factory.ping:method:0",
+        ],
+        "ruleId": "language.objc.method.direct-declaration",
+        "stage": "syntax",
+      },
+      "filePath": "src/Factory.h",
+      "id": "edge:symbol%3Asrc%252FFactory.h%3Asrc%252FFactory.h%2523Factory%3Aclass%3A0:symbol%3Asrc%252FFactory.h%3Asrc%252FFactory.h%2523Factory.ping%3Amethod%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "ping",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FFactory.h:src%2FFactory.h%23Factory:class:0",
+      "targetId": "symbol:src%2FFactory.h:src%2FFactory.h%23Factory.ping:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FFactory.h:src%2FFactory.h%23protocol%3AHealthChecking.check:method:0",
+        ],
+        "ruleId": "language.objc.method.direct-declaration",
+        "stage": "syntax",
+      },
+      "filePath": "src/Factory.h",
+      "id": "edge:symbol%3Asrc%252FFactory.h%3Asrc%252FFactory.h%2523protocol%253AHealthChecking%3Ainterface%3A0:symbol%3Asrc%252FFactory.h%3Asrc%252FFactory.h%2523protocol%253AHealthChecking.check%3Amethod%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 15,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "check",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FFactory.h:src%2FFactory.h%23protocol%3AHealthChecking:interface:0",
+      "targetId": "symbol:src%2FFactory.h:src%2FFactory.h%23protocol%3AHealthChecking.check:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FFactory.h:src%2FFactory.h%23Factory:class:0",
+        ],
+        "ruleId": "language.objc.interface.direct",
+        "stage": "syntax",
+      },
+      "filePath": "src/Factory.h",
+      "id": "edge:symbol%3Asrc%252FFactory.h%3Asrc%252FFactory.h%3Afile%3A0:symbol%3Asrc%252FFactory.h%3Asrc%252FFactory.h%2523Factory%3Aclass%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "Factory",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FFactory.h:src%2FFactory.h:file:0",
+      "targetId": "symbol:src%2FFactory.h:src%2FFactory.h%23Factory:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FFactory.h:src%2FFactory.h%23protocol%3AHealthChecking:interface:0",
+        ],
+        "ruleId": "language.objc.protocol.direct",
+        "stage": "syntax",
+      },
+      "filePath": "src/Factory.h",
+      "id": "edge:symbol%3Asrc%252FFactory.h%3Asrc%252FFactory.h%3Afile%3A0:symbol%3Asrc%252FFactory.h%3Asrc%252FFactory.h%2523protocol%253AHealthChecking%3Ainterface%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "HealthChecking",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FFactory.h:src%2FFactory.h:file:0",
+      "targetId": "symbol:src%2FFactory.h:src%2FFactory.h%23protocol%3AHealthChecking:interface:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "7c8d3cd1622a7a45c4a999cc446440a5ec34d2083e9f414288fdabe5d121fb17",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "objc",
+      "path": "src/Consumer.m",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "2b7159da66550f54a474e89ebab4ec033eb72c66bfe51541b659a0269a685052",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "objc",
+      "path": "src/Factory.h",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Consumer.m",
+      "id": "symbol:src%2FConsumer.m:src%2FConsumer.m%23Consumer.make%3A:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "make:",
+      "qualifiedName": "src/Consumer.m#Consumer.make:",
+      "range": {
+        "end": {
+          "column": 97,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Consumer.m",
+      "id": "symbol:src%2FConsumer.m:src%2FConsumer.m%23Consumer:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Consumer",
+      "qualifiedName": "src/Consumer.m#Consumer",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Consumer.m",
+      "id": "symbol:src%2FConsumer.m:src%2FConsumer.m:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Consumer.m",
+      "qualifiedName": "src/Consumer.m",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Factory.h",
+      "id": "symbol:src%2FFactory.h:src%2FFactory.h%23Factory.ping:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "ping",
+      "qualifiedName": "src/Factory.h#Factory.ping",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Factory.h",
+      "id": "symbol:src%2FFactory.h:src%2FFactory.h%23Factory:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Factory",
+      "qualifiedName": "src/Factory.h#Factory",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Factory.h",
+      "id": "symbol:src%2FFactory.h:src%2FFactory.h%23protocol%3AHealthChecking.check:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "check",
+      "qualifiedName": "src/Factory.h#protocol:HealthChecking.check",
+      "range": {
+        "end": {
+          "column": 15,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Factory.h",
+      "id": "symbol:src%2FFactory.h:src%2FFactory.h%23protocol%3AHealthChecking:interface:0",
+      "isExported": true,
+      "kind": "interface",
+      "name": "HealthChecking",
+      "qualifiedName": "src/Factory.h#protocol:HealthChecking",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Factory.h",
+      "id": "symbol:src%2FFactory.h:src%2FFactory.h:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Factory.h",
+      "qualifiedName": "src/Factory.h",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Zig, Objective-C, and Ruby resolver pre-move parity golden > 'ruby' keeps consumer-only imports and cross-file relations unresolved 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fchild.rb:src%2Fchild.rb%23Child.run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/child.rb",
+      "id": "edge:symbol%3Asrc%252Fchild.rb%3Asrc%252Fchild.rb%2523Child%3Aclass%3A0:symbol%3Asrc%252Fchild.rb%3Asrc%252Fchild.rb%2523Child.run%3Amethod%3A0:contains:3:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fchild.rb:src%2Fchild.rb%23Child:class:0",
+      "targetId": "symbol:src%2Fchild.rb:src%2Fchild.rb%23Child.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fchild.rb:src%2Fchild.rb%23Child:class:0",
+        ],
+        "ruleId": "language.ruby.v1_6.direct-declaration.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/child.rb",
+      "id": "edge:symbol%3Asrc%252Fchild.rb%3Asrc%252Fchild.rb%3Afile%3A0:symbol%3Asrc%252Fchild.rb%3Asrc%252Fchild.rb%2523Child%3Aclass%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Child",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fchild.rb:src%2Fchild.rb:file:0",
+      "targetId": "symbol:src%2Fchild.rb:src%2Fchild.rb%23Child:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "127e42dd150a7c4cb91abf333356a382dafdb3ca8d8b1de97e43771f44d9c90a",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "ruby",
+      "path": "src/child.rb",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/child.rb",
+      "id": "symbol:src%2Fchild.rb:src%2Fchild.rb%23Child.run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "src/child.rb#Child.run",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/child.rb",
+      "id": "symbol:src%2Fchild.rb:src%2Fchild.rb%23Child:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Child",
+      "qualifiedName": "src/child.rb#Child",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/child.rb",
+      "id": "symbol:src%2Fchild.rb:src%2Fchild.rb:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "child.rb",
+      "qualifiedName": "src/child.rb",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Zig, Objective-C, and Ruby resolver pre-move parity golden > 'ruby' preserves complete cross-file and local output 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fchild.rb:src%2Fchild.rb%23Child.run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/child.rb",
+      "id": "edge:symbol%3Asrc%252Fchild.rb%3Asrc%252Fchild.rb%2523Child%3Aclass%3A0:symbol%3Asrc%252Fchild.rb%3Asrc%252Fchild.rb%2523Child.run%3Amethod%3A0:contains:3:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fchild.rb:src%2Fchild.rb%23Child:class:0",
+      "targetId": "symbol:src%2Fchild.rb:src%2Fchild.rb%23Child.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fparent.rb:src%2Fparent.rb%23Parent:class:0",
+        ],
+        "resolutionPath": [
+          "src/child.rb",
+          "src/parent.rb",
+        ],
+        "ruleId": "syntax.ruby.unique-class-superclass",
+        "stage": "module",
+      },
+      "filePath": "src/child.rb",
+      "id": "edge:symbol%3Asrc%252Fchild.rb%3Asrc%252Fchild.rb%2523Child%3Aclass%3A0:symbol%3Asrc%252Fparent.rb%3Asrc%252Fparent.rb%2523Parent%3Aclass%3A0:extends:2:15",
+      "kind": "extends",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 2,
+        },
+        "start": {
+          "column": 15,
+          "line": 2,
+        },
+      },
+      "referenceName": "Parent",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fchild.rb:src%2Fchild.rb%23Child:class:0",
+      "targetId": "symbol:src%2Fparent.rb:src%2Fparent.rb%23Parent:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fparent.rb:src%2Fparent.rb%23Parent.ping:method:0",
+        ],
+        "resolutionPath": [
+          "src/child.rb",
+          "src/parent.rb",
+        ],
+        "ruleId": "module.ruby.unique-required-constant-singleton-call",
+        "stage": "module",
+      },
+      "filePath": "src/child.rb",
+      "id": "edge:symbol%3Asrc%252Fchild.rb%3Asrc%252Fchild.rb%2523Child.run%3Amethod%3A0:symbol%3Asrc%252Fparent.rb%3Asrc%252Fparent.rb%2523Parent.ping%3Amethod%3A0:calls:4:5",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 4,
+        },
+        "start": {
+          "column": 5,
+          "line": 4,
+        },
+      },
+      "referenceName": "ping",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fchild.rb:src%2Fchild.rb%23Child.run:method:0",
+      "targetId": "symbol:src%2Fparent.rb:src%2Fparent.rb%23Parent.ping:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fchild.rb:src%2Fchild.rb%23Child:class:0",
+        ],
+        "ruleId": "language.ruby.v1_6.direct-declaration.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/child.rb",
+      "id": "edge:symbol%3Asrc%252Fchild.rb%3Asrc%252Fchild.rb%3Afile%3A0:symbol%3Asrc%252Fchild.rb%3Asrc%252Fchild.rb%2523Child%3Aclass%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Child",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fchild.rb:src%2Fchild.rb:file:0",
+      "targetId": "symbol:src%2Fchild.rb:src%2Fchild.rb%23Child:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fparent.rb:src%2Fparent.rb:file:0",
+        ],
+        "resolutionPath": [
+          "src/child.rb",
+          "src/parent.rb",
+        ],
+        "ruleId": "module.ruby.literal-require-relative.unique-file",
+        "stage": "module",
+      },
+      "filePath": "src/child.rb",
+      "id": "edge:symbol%3Asrc%252Fchild.rb%3Asrc%252Fchild.rb%3Afile%3A0:symbol%3Asrc%252Fparent.rb%3Asrc%252Fparent.rb%3Afile%3A0:imports:1:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 28,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "./parent",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fchild.rb:src%2Fchild.rb:file:0",
+      "targetId": "symbol:src%2Fparent.rb:src%2Fparent.rb:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fparent.rb:src%2Fparent.rb%23Parent.ping:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/parent.rb",
+      "id": "edge:symbol%3Asrc%252Fparent.rb%3Asrc%252Fparent.rb%2523Parent%3Aclass%3A0:symbol%3Asrc%252Fparent.rb%3Asrc%252Fparent.rb%2523Parent.ping%3Amethod%3A0:contains:2:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 2,
+        },
+      },
+      "referenceName": "ping",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fparent.rb:src%2Fparent.rb%23Parent:class:0",
+      "targetId": "symbol:src%2Fparent.rb:src%2Fparent.rb%23Parent.ping:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fparent.rb:src%2Fparent.rb%23Parent:class:0",
+        ],
+        "ruleId": "language.ruby.v1_6.direct-declaration.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/parent.rb",
+      "id": "edge:symbol%3Asrc%252Fparent.rb%3Asrc%252Fparent.rb%3Afile%3A0:symbol%3Asrc%252Fparent.rb%3Asrc%252Fparent.rb%2523Parent%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Parent",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fparent.rb:src%2Fparent.rb:file:0",
+      "targetId": "symbol:src%2Fparent.rb:src%2Fparent.rb%23Parent:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "127e42dd150a7c4cb91abf333356a382dafdb3ca8d8b1de97e43771f44d9c90a",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "ruby",
+      "path": "src/child.rb",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "33d24b220c4cdc6a8bfdf54f99fc3b0a8b7e742f94ecdd20b8a2493360d8ebc7",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "ruby",
+      "path": "src/parent.rb",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/child.rb",
+      "id": "symbol:src%2Fchild.rb:src%2Fchild.rb%23Child.run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "src/child.rb#Child.run",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/child.rb",
+      "id": "symbol:src%2Fchild.rb:src%2Fchild.rb%23Child:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Child",
+      "qualifiedName": "src/child.rb#Child",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/child.rb",
+      "id": "symbol:src%2Fchild.rb:src%2Fchild.rb:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "child.rb",
+      "qualifiedName": "src/child.rb",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/parent.rb",
+      "id": "symbol:src%2Fparent.rb:src%2Fparent.rb%23Parent.ping:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "ping",
+      "qualifiedName": "src/parent.rb#Parent.ping",
+      "range": {
+        "end": {
+          "column": 6,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/parent.rb",
+      "id": "symbol:src%2Fparent.rb:src%2Fparent.rb%23Parent:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Parent",
+      "qualifiedName": "src/parent.rb#Parent",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/parent.rb",
+      "id": "symbol:src%2Fparent.rb:src%2Fparent.rb:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "parent.rb",
+      "qualifiedName": "src/parent.rb",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Zig, Objective-C, and Ruby resolver pre-move parity golden > 'zig' keeps consumer-only imports and cross-file relations unresolved 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+        ],
+        "ruleId": "syntax.zig.top-level-container",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.zig",
+      "id": "edge:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig%3Afile%3A0:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.Local%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.zig:src%2Flocal.zig:file:0",
+      "targetId": "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.zig:src%2Flocal.zig.caller:function:0",
+        ],
+        "ruleId": "syntax.zig.top-level-function",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.zig",
+      "id": "edge:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig%3Afile%3A0:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.caller%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 60,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "caller",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.zig:src%2Flocal.zig:file:0",
+      "targetId": "symbol:src%2Flocal.zig:src%2Flocal.zig.caller:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.zig:src%2Flocal.zig.helper:function:0",
+        ],
+        "ruleId": "syntax.zig.top-level-function",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.zig",
+      "id": "edge:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig%3Afile%3A0:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.helper%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.zig:src%2Flocal.zig:file:0",
+      "targetId": "symbol:src%2Flocal.zig:src%2Flocal.zig.helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+        ],
+        "ruleId": "syntax.zig.unique-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.zig",
+      "id": "edge:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.caller%3Afunction%3A0:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.Local%3Aclass%3A0:accepts:3:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 60,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.zig:src%2Flocal.zig.caller:function:0",
+      "targetId": "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+        ],
+        "ruleId": "syntax.zig.unique-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.zig",
+      "id": "edge:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.caller%3Afunction%3A0:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.Local%3Aclass%3A0:returns:3:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 60,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.zig:src%2Flocal.zig.caller:function:0",
+      "targetId": "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.zig:src%2Flocal.zig.helper:function:0",
+        ],
+        "ruleId": "syntax.zig.same-file.unique-direct-function-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.zig",
+      "id": "edge:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.caller%3Afunction%3A0:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.helper%3Afunction%3A0:calls:3:44",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 3,
+        },
+        "start": {
+          "column": 44,
+          "line": 3,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.zig:src%2Flocal.zig.caller:function:0",
+      "targetId": "symbol:src%2Flocal.zig:src%2Flocal.zig.helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+        ],
+        "ruleId": "syntax.zig.unique-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.zig",
+      "id": "edge:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.helper%3Afunction%3A0:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.Local%3Aclass%3A0:accepts:2:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.zig:src%2Flocal.zig.helper:function:0",
+      "targetId": "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+        ],
+        "ruleId": "syntax.zig.unique-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.zig",
+      "id": "edge:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.helper%3Afunction%3A0:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.Local%3Aclass%3A0:returns:2:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.zig:src%2Flocal.zig.helper:function:0",
+      "targetId": "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "d49b6e9970d8523d39d602e1b687df07a66f81b57d0ce3f6c586917f2bcd17b6",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "zig",
+      "path": "src/local.zig",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.zig",
+      "id": "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+      "isExported": false,
+      "kind": "class",
+      "name": "Local",
+      "qualifiedName": "src/local.zig.Local",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.zig",
+      "id": "symbol:src%2Flocal.zig:src%2Flocal.zig.caller:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "caller",
+      "qualifiedName": "src/local.zig.caller",
+      "range": {
+        "end": {
+          "column": 60,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.zig",
+      "id": "symbol:src%2Flocal.zig:src%2Flocal.zig.helper:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "src/local.zig.helper",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.zig",
+      "id": "symbol:src%2Flocal.zig:src%2Flocal.zig:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "local.zig",
+      "qualifiedName": "src/local.zig",
+      "range": {
+        "end": {
+          "column": 60,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Zig, Objective-C, and Ruby resolver pre-move parity golden > 'zig' preserves complete cross-file and local output 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.zig:src%2Fapi.zig.Model:class:0",
+        ],
+        "ruleId": "syntax.zig.top-level-container",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.zig",
+      "id": "edge:symbol%3Asrc%252Fapi.zig%3Asrc%252Fapi.zig%3Afile%3A0:symbol%3Asrc%252Fapi.zig%3Asrc%252Fapi.zig.Model%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 28,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.zig:src%2Fapi.zig:file:0",
+      "targetId": "symbol:src%2Fapi.zig:src%2Fapi.zig.Model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.zig:src%2Fapi.zig.build:function:0",
+        ],
+        "ruleId": "syntax.zig.top-level-function",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.zig",
+      "id": "edge:symbol%3Asrc%252Fapi.zig%3Asrc%252Fapi.zig%3Afile%3A0:symbol%3Asrc%252Fapi.zig%3Asrc%252Fapi.zig.build%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 47,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "build",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.zig:src%2Fapi.zig:file:0",
+      "targetId": "symbol:src%2Fapi.zig:src%2Fapi.zig.build:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.zig:src%2Fapi.zig:file:0",
+        ],
+        "resolutionPath": [
+          "src/app.zig",
+          "src/api.zig",
+        ],
+        "ruleId": "module.zig.literal-import.unique-file",
+        "stage": "module",
+      },
+      "filePath": "src/app.zig",
+      "id": "edge:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig%3Afile%3A0:symbol%3Asrc%252Fapi.zig%3Asrc%252Fapi.zig%3Afile%3A0:imports:1:22",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 1,
+        },
+        "start": {
+          "column": 22,
+          "line": 1,
+        },
+      },
+      "referenceName": "api.zig",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.zig:src%2Fapp.zig:file:0",
+      "targetId": "symbol:src%2Fapi.zig:src%2Fapi.zig:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.zig:src%2Fapp.zig.Local:class:0",
+        ],
+        "ruleId": "syntax.zig.top-level-container",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.zig",
+      "id": "edge:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig%3Afile%3A0:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig.Local%3Aclass%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.zig:src%2Fapp.zig:file:0",
+      "targetId": "symbol:src%2Fapp.zig:src%2Fapp.zig.Local:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.zig:src%2Fapp.zig.caller:function:0",
+        ],
+        "ruleId": "syntax.zig.top-level-function",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.zig",
+      "id": "edge:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig%3Afile%3A0:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig.caller%3Afunction%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "caller",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.zig:src%2Fapp.zig:file:0",
+      "targetId": "symbol:src%2Fapp.zig:src%2Fapp.zig.caller:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.zig:src%2Fapp.zig.helper:function:0",
+        ],
+        "ruleId": "syntax.zig.top-level-function",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.zig",
+      "id": "edge:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig%3Afile%3A0:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig.helper%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.zig:src%2Fapp.zig:file:0",
+      "targetId": "symbol:src%2Fapp.zig:src%2Fapp.zig.helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.zig:src%2Fapp.zig.make:function:0",
+        ],
+        "ruleId": "syntax.zig.top-level-function",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.zig",
+      "id": "edge:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig%3Afile%3A0:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig.make%3Afunction%3A0:contains:8:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 68,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+      "referenceName": "make",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.zig:src%2Fapp.zig:file:0",
+      "targetId": "symbol:src%2Fapp.zig:src%2Fapp.zig.make:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.zig:src%2Fapi.zig.build:function:0",
+        ],
+        "resolutionPath": [
+          "src/app.zig",
+          "src/api.zig",
+        ],
+        "ruleId": "module.zig.unique-qualified-call",
+        "stage": "module",
+      },
+      "filePath": "src/app.zig",
+      "id": "edge:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig.caller%3Afunction%3A0:symbol%3Asrc%252Fapi.zig%3Asrc%252Fapi.zig.build%3Afunction%3A0:calls:5:7",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 5,
+        },
+        "start": {
+          "column": 7,
+          "line": 5,
+        },
+      },
+      "referenceName": "api.build",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.zig:src%2Fapp.zig.caller:function:0",
+      "targetId": "symbol:src%2Fapi.zig:src%2Fapi.zig.build:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.zig:src%2Fapp.zig.Local:class:0",
+        ],
+        "ruleId": "syntax.zig.unique-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.zig",
+      "id": "edge:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig.caller%3Afunction%3A0:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig.Local%3Aclass%3A0:accepts:4:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.zig:src%2Fapp.zig.caller:function:0",
+      "targetId": "symbol:src%2Fapp.zig:src%2Fapp.zig.Local:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.zig:src%2Fapp.zig.Local:class:0",
+        ],
+        "ruleId": "syntax.zig.unique-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.zig",
+      "id": "edge:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig.caller%3Afunction%3A0:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig.Local%3Aclass%3A0:returns:4:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.zig:src%2Fapp.zig.caller:function:0",
+      "targetId": "symbol:src%2Fapp.zig:src%2Fapp.zig.Local:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.zig:src%2Fapp.zig.Local:class:0",
+        ],
+        "ruleId": "syntax.zig.unique-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.zig",
+      "id": "edge:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig.helper%3Afunction%3A0:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig.Local%3Aclass%3A0:accepts:3:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.zig:src%2Fapp.zig.helper:function:0",
+      "targetId": "symbol:src%2Fapp.zig:src%2Fapp.zig.Local:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.zig:src%2Fapp.zig.Local:class:0",
+        ],
+        "ruleId": "syntax.zig.unique-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.zig",
+      "id": "edge:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig.helper%3Afunction%3A0:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig.Local%3Aclass%3A0:returns:3:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.zig:src%2Fapp.zig.helper:function:0",
+      "targetId": "symbol:src%2Fapp.zig:src%2Fapp.zig.Local:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.zig:src%2Fapp.zig.Local:class:0",
+        ],
+        "ruleId": "syntax.zig.unique-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.zig",
+      "id": "edge:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig.make%3Afunction%3A0:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig.Local%3Aclass%3A0:accepts:8:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 68,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.zig:src%2Fapp.zig.make:function:0",
+      "targetId": "symbol:src%2Fapp.zig:src%2Fapp.zig.Local:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.zig:src%2Fapp.zig.Local:class:0",
+        ],
+        "ruleId": "syntax.zig.unique-struct-construction",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.zig",
+      "id": "edge:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig.make%3Afunction%3A0:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig.Local%3Aclass%3A0:instantiates:8:42",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 47,
+          "line": 8,
+        },
+        "start": {
+          "column": 42,
+          "line": 8,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.zig:src%2Fapp.zig.make:function:0",
+      "targetId": "symbol:src%2Fapp.zig:src%2Fapp.zig.Local:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.zig:src%2Fapp.zig.Local:class:0",
+        ],
+        "ruleId": "syntax.zig.unique-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.zig",
+      "id": "edge:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig.make%3Afunction%3A0:symbol%3Asrc%252Fapp.zig%3Asrc%252Fapp.zig.Local%3Aclass%3A0:returns:8:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 68,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.zig:src%2Fapp.zig.make:function:0",
+      "targetId": "symbol:src%2Fapp.zig:src%2Fapp.zig.Local:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+        ],
+        "ruleId": "syntax.zig.top-level-container",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.zig",
+      "id": "edge:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig%3Afile%3A0:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.Local%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.zig:src%2Flocal.zig:file:0",
+      "targetId": "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.zig:src%2Flocal.zig.caller:function:0",
+        ],
+        "ruleId": "syntax.zig.top-level-function",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.zig",
+      "id": "edge:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig%3Afile%3A0:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.caller%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 60,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "caller",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.zig:src%2Flocal.zig:file:0",
+      "targetId": "symbol:src%2Flocal.zig:src%2Flocal.zig.caller:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.zig:src%2Flocal.zig.helper:function:0",
+        ],
+        "ruleId": "syntax.zig.top-level-function",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.zig",
+      "id": "edge:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig%3Afile%3A0:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.helper%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.zig:src%2Flocal.zig:file:0",
+      "targetId": "symbol:src%2Flocal.zig:src%2Flocal.zig.helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+        ],
+        "ruleId": "syntax.zig.unique-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.zig",
+      "id": "edge:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.caller%3Afunction%3A0:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.Local%3Aclass%3A0:accepts:3:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 60,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.zig:src%2Flocal.zig.caller:function:0",
+      "targetId": "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+        ],
+        "ruleId": "syntax.zig.unique-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.zig",
+      "id": "edge:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.caller%3Afunction%3A0:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.Local%3Aclass%3A0:returns:3:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 60,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.zig:src%2Flocal.zig.caller:function:0",
+      "targetId": "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.zig:src%2Flocal.zig.helper:function:0",
+        ],
+        "ruleId": "syntax.zig.same-file.unique-direct-function-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.zig",
+      "id": "edge:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.caller%3Afunction%3A0:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.helper%3Afunction%3A0:calls:3:44",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 3,
+        },
+        "start": {
+          "column": 44,
+          "line": 3,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.zig:src%2Flocal.zig.caller:function:0",
+      "targetId": "symbol:src%2Flocal.zig:src%2Flocal.zig.helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+        ],
+        "ruleId": "syntax.zig.unique-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.zig",
+      "id": "edge:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.helper%3Afunction%3A0:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.Local%3Aclass%3A0:accepts:2:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.zig:src%2Flocal.zig.helper:function:0",
+      "targetId": "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+        ],
+        "ruleId": "syntax.zig.unique-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/local.zig",
+      "id": "edge:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.helper%3Afunction%3A0:symbol%3Asrc%252Flocal.zig%3Asrc%252Flocal.zig.Local%3Aclass%3A0:returns:2:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Flocal.zig:src%2Flocal.zig.helper:function:0",
+      "targetId": "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "dcfb45e4ad4bc39d56d7d6a9bd7524b280f264007c20336e6a93130ea340dcaa",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "zig",
+      "path": "src/api.zig",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "1c98b5f0cfa34c71df8dd09d508637e576979e85fde6079d94cbf7561c6f47d0",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "zig",
+      "path": "src/app.zig",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "d49b6e9970d8523d39d602e1b687df07a66f81b57d0ce3f6c586917f2bcd17b6",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "zig",
+      "path": "src/local.zig",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.zig",
+      "id": "symbol:src%2Fapi.zig:src%2Fapi.zig.Model:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Model",
+      "qualifiedName": "src/api.zig.Model",
+      "range": {
+        "end": {
+          "column": 28,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.zig",
+      "id": "symbol:src%2Fapi.zig:src%2Fapi.zig.build:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "build",
+      "qualifiedName": "src/api.zig.build",
+      "range": {
+        "end": {
+          "column": 47,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.zig",
+      "id": "symbol:src%2Fapi.zig:src%2Fapi.zig:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "api.zig",
+      "qualifiedName": "src/api.zig",
+      "range": {
+        "end": {
+          "column": 47,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.zig",
+      "id": "symbol:src%2Fapp.zig:src%2Fapp.zig.Local:class:0",
+      "isExported": false,
+      "kind": "class",
+      "name": "Local",
+      "qualifiedName": "src/app.zig.Local",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.zig",
+      "id": "symbol:src%2Fapp.zig:src%2Fapp.zig.caller:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "caller",
+      "qualifiedName": "src/app.zig.caller",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.zig",
+      "id": "symbol:src%2Fapp.zig:src%2Fapp.zig.helper:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "src/app.zig.helper",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.zig",
+      "id": "symbol:src%2Fapp.zig:src%2Fapp.zig.make:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "make",
+      "qualifiedName": "src/app.zig.make",
+      "range": {
+        "end": {
+          "column": 68,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.zig",
+      "id": "symbol:src%2Fapp.zig:src%2Fapp.zig:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "app.zig",
+      "qualifiedName": "src/app.zig",
+      "range": {
+        "end": {
+          "column": 68,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.zig",
+      "id": "symbol:src%2Flocal.zig:src%2Flocal.zig.Local:class:0",
+      "isExported": false,
+      "kind": "class",
+      "name": "Local",
+      "qualifiedName": "src/local.zig.Local",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.zig",
+      "id": "symbol:src%2Flocal.zig:src%2Flocal.zig.caller:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "caller",
+      "qualifiedName": "src/local.zig.caller",
+      "range": {
+        "end": {
+          "column": 60,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.zig",
+      "id": "symbol:src%2Flocal.zig:src%2Flocal.zig.helper:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "src/local.zig.helper",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/local.zig",
+      "id": "symbol:src%2Flocal.zig:src%2Flocal.zig:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "local.zig",
+      "qualifiedName": "src/local.zig",
+      "range": {
+        "end": {
+          "column": 60,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

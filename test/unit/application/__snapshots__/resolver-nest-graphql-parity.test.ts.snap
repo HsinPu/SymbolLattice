@@ -1,0 +1,996 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Nest GraphQL complete-output parity before move > preserves duplicate schema evidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:duplicate.graphql:duplicate.graphql%23type%3AUser:class:0",
+        ],
+        "ruleId": "language.graphql.type.direct-definition",
+        "stage": "syntax",
+      },
+      "filePath": "duplicate.graphql",
+      "id": "edge:symbol%3Aduplicate.graphql%3Aduplicate.graphql%3Afile%3A0:symbol%3Aduplicate.graphql%3Aduplicate.graphql%2523type%253AUser%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "User",
+      "resolution": "exact",
+      "sourceId": "symbol:duplicate.graphql:duplicate.graphql:file:0",
+      "targetId": "symbol:duplicate.graphql:duplicate.graphql%23type%3AUser:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:schema.graphql:schema.graphql%23type%3AUser:class:0",
+        ],
+        "ruleId": "language.graphql.type.direct-definition",
+        "stage": "syntax",
+      },
+      "filePath": "schema.graphql",
+      "id": "edge:symbol%3Aschema.graphql%3Aschema.graphql%3Afile%3A0:symbol%3Aschema.graphql%3Aschema.graphql%2523type%253AUser%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "User",
+      "resolution": "exact",
+      "sourceId": "symbol:schema.graphql:schema.graphql:file:0",
+      "targetId": "symbol:schema.graphql:schema.graphql%23type%3AUser:class:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "reference.unresolved",
+        "stage": "unresolved",
+      },
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%2523UserResolver%3Aclass%3A0:Resolver:calls:3:2",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 10,
+          "line": 3,
+        },
+        "start": {
+          "column": 2,
+          "line": 3,
+        },
+      },
+      "referenceName": "Resolver",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts%23UserResolver:class:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:duplicate.graphql:duplicate.graphql%23type%3AUser:class:0",
+          "symbol:schema.graphql:schema.graphql%23type%3AUser:class:0",
+        ],
+        "ruleId": "framework.nestjs.graphql.resolver-schema.ambiguous-object-type",
+        "stage": "unresolved",
+      },
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%2523UserResolver%3Aclass%3A0:User:references:3:17",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 3,
+        },
+        "start": {
+          "column": 17,
+          "line": 3,
+        },
+      },
+      "referenceName": "User",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts%23UserResolver:class:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%3Afile%3A0:%40nestjs%2Fgraphql:imports:1:26",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 1,
+        },
+        "start": {
+          "column": 26,
+          "line": 1,
+        },
+      },
+      "referenceName": "@nestjs/graphql",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fuser.ts:src%2Fuser.ts%23User:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%3Afile%3A0:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%2523User%3Aclass%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "User",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts:file:0",
+      "targetId": "symbol:src%2Fuser.ts:src%2Fuser.ts%23User:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fuser.ts:src%2Fuser.ts%23UserResolver:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%3Afile%3A0:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%2523UserResolver%3Aclass%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "UserResolver",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts:file:0",
+      "targetId": "symbol:src%2Fuser.ts:src%2Fuser.ts%23UserResolver:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "b9fc17692061b3d22c303c02420e815724a382152933f0f4ba0847b19c9f5889",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "graphql",
+      "path": "duplicate.graphql",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "b9fc17692061b3d22c303c02420e815724a382152933f0f4ba0847b19c9f5889",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "graphql",
+      "path": "schema.graphql",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "87804742d60632ddf6c1cd3098b02fe4268aa7cb763b3547973837c95d87b6b3",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/user.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [
+    {
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%2523UserResolver%3Aclass%3A0:Resolver:calls:3:2",
+      "range": {
+        "end": {
+          "column": 10,
+          "line": 3,
+        },
+        "start": {
+          "column": 2,
+          "line": 3,
+        },
+      },
+      "referenceName": "Resolver",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts%23UserResolver:class:0",
+    },
+    {
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%3Afile%3A0:%40nestjs%2Fgraphql:imports:1:26",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 1,
+        },
+        "start": {
+          "column": 26,
+          "line": 1,
+        },
+      },
+      "referenceName": "@nestjs/graphql",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts:file:0",
+    },
+  ],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "duplicate.graphql",
+      "id": "symbol:duplicate.graphql:duplicate.graphql%23type%3AUser:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "User",
+      "qualifiedName": "duplicate.graphql#type:User",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "duplicate.graphql",
+      "id": "symbol:duplicate.graphql:duplicate.graphql:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "duplicate.graphql",
+      "qualifiedName": "duplicate.graphql",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "schema.graphql",
+      "id": "symbol:schema.graphql:schema.graphql%23type%3AUser:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "User",
+      "qualifiedName": "schema.graphql#type:User",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "schema.graphql",
+      "id": "symbol:schema.graphql:schema.graphql:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "schema.graphql",
+      "qualifiedName": "schema.graphql",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/user.ts",
+      "id": "symbol:src%2Fuser.ts:src%2Fuser.ts%23User:class:0",
+      "isExported": false,
+      "kind": "class",
+      "name": "User",
+      "qualifiedName": "src/user.ts#User",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/user.ts",
+      "id": "symbol:src%2Fuser.ts:src%2Fuser.ts%23UserResolver:class:0",
+      "isExported": false,
+      "kind": "class",
+      "name": "UserResolver",
+      "qualifiedName": "src/user.ts#UserResolver",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/user.ts",
+      "id": "symbol:src%2Fuser.ts:src%2Fuser.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "user.ts",
+      "qualifiedName": "src/user.ts",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Nest GraphQL complete-output parity before move > preserves missing schema evidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "reference.unresolved",
+        "stage": "unresolved",
+      },
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%2523UserResolver%3Aclass%3A0:Resolver:calls:3:2",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 10,
+          "line": 3,
+        },
+        "start": {
+          "column": 2,
+          "line": 3,
+        },
+      },
+      "referenceName": "Resolver",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts%23UserResolver:class:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "framework.nestjs.graphql.resolver-schema.unresolved-object-type",
+        "stage": "unresolved",
+      },
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%2523UserResolver%3Aclass%3A0:User:references:3:17",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 3,
+        },
+        "start": {
+          "column": 17,
+          "line": 3,
+        },
+      },
+      "referenceName": "User",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts%23UserResolver:class:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%3Afile%3A0:%40nestjs%2Fgraphql:imports:1:26",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 1,
+        },
+        "start": {
+          "column": 26,
+          "line": 1,
+        },
+      },
+      "referenceName": "@nestjs/graphql",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fuser.ts:src%2Fuser.ts%23User:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%3Afile%3A0:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%2523User%3Aclass%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "User",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts:file:0",
+      "targetId": "symbol:src%2Fuser.ts:src%2Fuser.ts%23User:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fuser.ts:src%2Fuser.ts%23UserResolver:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%3Afile%3A0:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%2523UserResolver%3Aclass%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "UserResolver",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts:file:0",
+      "targetId": "symbol:src%2Fuser.ts:src%2Fuser.ts%23UserResolver:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "87804742d60632ddf6c1cd3098b02fe4268aa7cb763b3547973837c95d87b6b3",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/user.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [
+    {
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%2523UserResolver%3Aclass%3A0:Resolver:calls:3:2",
+      "range": {
+        "end": {
+          "column": 10,
+          "line": 3,
+        },
+        "start": {
+          "column": 2,
+          "line": 3,
+        },
+      },
+      "referenceName": "Resolver",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts%23UserResolver:class:0",
+    },
+    {
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%3Afile%3A0:%40nestjs%2Fgraphql:imports:1:26",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 1,
+        },
+        "start": {
+          "column": 26,
+          "line": 1,
+        },
+      },
+      "referenceName": "@nestjs/graphql",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts:file:0",
+    },
+  ],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/user.ts",
+      "id": "symbol:src%2Fuser.ts:src%2Fuser.ts%23User:class:0",
+      "isExported": false,
+      "kind": "class",
+      "name": "User",
+      "qualifiedName": "src/user.ts#User",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/user.ts",
+      "id": "symbol:src%2Fuser.ts:src%2Fuser.ts%23UserResolver:class:0",
+      "isExported": false,
+      "kind": "class",
+      "name": "UserResolver",
+      "qualifiedName": "src/user.ts#UserResolver",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/user.ts",
+      "id": "symbol:src%2Fuser.ts:src%2Fuser.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "user.ts",
+      "qualifiedName": "src/user.ts",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Nest GraphQL complete-output parity before move > preserves unique schema evidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:schema.graphql:schema.graphql%23type%3AUser:class:0",
+        ],
+        "ruleId": "language.graphql.type.direct-definition",
+        "stage": "syntax",
+      },
+      "filePath": "schema.graphql",
+      "id": "edge:symbol%3Aschema.graphql%3Aschema.graphql%3Afile%3A0:symbol%3Aschema.graphql%3Aschema.graphql%2523type%253AUser%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "User",
+      "resolution": "exact",
+      "sourceId": "symbol:schema.graphql:schema.graphql:file:0",
+      "targetId": "symbol:schema.graphql:schema.graphql%23type%3AUser:class:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "reference.unresolved",
+        "stage": "unresolved",
+      },
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%2523UserResolver%3Aclass%3A0:Resolver:calls:3:2",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 10,
+          "line": 3,
+        },
+        "start": {
+          "column": 2,
+          "line": 3,
+        },
+      },
+      "referenceName": "Resolver",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts%23UserResolver:class:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0.85,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:schema.graphql:schema.graphql%23type%3AUser:class:0",
+        ],
+        "ruleId": "framework.nestjs.graphql.resolver-schema.unique-object-type",
+        "stage": "heuristic",
+      },
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%2523UserResolver%3Aclass%3A0:symbol%3Aschema.graphql%3Aschema.graphql%2523type%253AUser%3Aclass%3A0:references:3:17",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 3,
+        },
+        "start": {
+          "column": 17,
+          "line": 3,
+        },
+      },
+      "referenceName": "User",
+      "resolution": "heuristic",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts%23UserResolver:class:0",
+      "targetId": "symbol:schema.graphql:schema.graphql%23type%3AUser:class:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%3Afile%3A0:%40nestjs%2Fgraphql:imports:1:26",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 1,
+        },
+        "start": {
+          "column": 26,
+          "line": 1,
+        },
+      },
+      "referenceName": "@nestjs/graphql",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fuser.ts:src%2Fuser.ts%23User:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%3Afile%3A0:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%2523User%3Aclass%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "User",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts:file:0",
+      "targetId": "symbol:src%2Fuser.ts:src%2Fuser.ts%23User:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fuser.ts:src%2Fuser.ts%23UserResolver:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%3Afile%3A0:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%2523UserResolver%3Aclass%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "UserResolver",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts:file:0",
+      "targetId": "symbol:src%2Fuser.ts:src%2Fuser.ts%23UserResolver:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "b9fc17692061b3d22c303c02420e815724a382152933f0f4ba0847b19c9f5889",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "graphql",
+      "path": "schema.graphql",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "87804742d60632ddf6c1cd3098b02fe4268aa7cb763b3547973837c95d87b6b3",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/user.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [
+    {
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%2523UserResolver%3Aclass%3A0:Resolver:calls:3:2",
+      "range": {
+        "end": {
+          "column": 10,
+          "line": 3,
+        },
+        "start": {
+          "column": 2,
+          "line": 3,
+        },
+      },
+      "referenceName": "Resolver",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts%23UserResolver:class:0",
+    },
+    {
+      "filePath": "src/user.ts",
+      "id": "edge:symbol%3Asrc%252Fuser.ts%3Asrc%252Fuser.ts%3Afile%3A0:%40nestjs%2Fgraphql:imports:1:26",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 1,
+        },
+        "start": {
+          "column": 26,
+          "line": 1,
+        },
+      },
+      "referenceName": "@nestjs/graphql",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fuser.ts:src%2Fuser.ts:file:0",
+    },
+  ],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "schema.graphql",
+      "id": "symbol:schema.graphql:schema.graphql%23type%3AUser:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "User",
+      "qualifiedName": "schema.graphql#type:User",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "schema.graphql",
+      "id": "symbol:schema.graphql:schema.graphql:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "schema.graphql",
+      "qualifiedName": "schema.graphql",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/user.ts",
+      "id": "symbol:src%2Fuser.ts:src%2Fuser.ts%23User:class:0",
+      "isExported": false,
+      "kind": "class",
+      "name": "User",
+      "qualifiedName": "src/user.ts#User",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/user.ts",
+      "id": "symbol:src%2Fuser.ts:src%2Fuser.ts%23UserResolver:class:0",
+      "isExported": false,
+      "kind": "class",
+      "name": "UserResolver",
+      "qualifiedName": "src/user.ts#UserResolver",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/user.ts",
+      "id": "symbol:src%2Fuser.ts:src%2Fuser.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "user.ts",
+      "qualifiedName": "src/user.ts",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

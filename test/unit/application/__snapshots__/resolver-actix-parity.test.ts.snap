@@ -1,0 +1,1257 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Actix complete-output parity before move > preserves ambiguous direct-module mount evidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain.rs:src%2Fmain.rs%23bootstrap:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/main.rs",
+      "id": "edge:symbol%3Asrc%252Fmain.rs%3Asrc%252Fmain.rs%3Afile%3A0:symbol%3Asrc%252Fmain.rs%3Asrc%252Fmain.rs%2523bootstrap%3Afunction%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 119,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "bootstrap",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain.rs:src%2Fmain.rs:file:0",
+      "targetId": "symbol:src%2Fmain.rs:src%2Fmain.rs%23bootstrap:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes%2Fmod.rs:src%2Froutes%2Fmod.rs%23ready:function:0",
+        ],
+        "ruleId": "framework.actix-web.attribute-route.literal-path.local-function",
+        "stage": "syntax",
+      },
+      "filePath": "src/routes/mod.rs",
+      "id": "edge:symbol%3Asrc%252Froutes%252Fmod.rs%3Asrc%252Froutes%252Fmod.rs%2523route%253AGET%2520%252Fready%3Aroute%3A0:symbol%3Asrc%252Froutes%252Fmod.rs%3Asrc%252Froutes%252Fmod.rs%2523ready%3Afunction%3A0:routes:3:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "ready",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes%2Fmod.rs:src%2Froutes%2Fmod.rs%23route%3AGET%20%2Fready:route:0",
+      "targetId": "symbol:src%2Froutes%2Fmod.rs:src%2Froutes%2Fmod.rs%23ready:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes%2Fmod.rs:src%2Froutes%2Fmod.rs%23configure:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/routes/mod.rs",
+      "id": "edge:symbol%3Asrc%252Froutes%252Fmod.rs%3Asrc%252Froutes%252Fmod.rs%3Afile%3A0:symbol%3Asrc%252Froutes%252Fmod.rs%3Asrc%252Froutes%252Fmod.rs%2523configure%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 116,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "configure",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes%2Fmod.rs:src%2Froutes%2Fmod.rs:file:0",
+      "targetId": "symbol:src%2Froutes%2Fmod.rs:src%2Froutes%2Fmod.rs%23configure:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes%2Fmod.rs:src%2Froutes%2Fmod.rs%23health:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/routes/mod.rs",
+      "id": "edge:symbol%3Asrc%252Froutes%252Fmod.rs%3Asrc%252Froutes%252Fmod.rs%3Afile%3A0:symbol%3Asrc%252Froutes%252Fmod.rs%3Asrc%252Froutes%252Fmod.rs%2523health%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes%2Fmod.rs:src%2Froutes%2Fmod.rs:file:0",
+      "targetId": "symbol:src%2Froutes%2Fmod.rs:src%2Froutes%2Fmod.rs%23health:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes%2Fmod.rs:src%2Froutes%2Fmod.rs%23ready:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/routes/mod.rs",
+      "id": "edge:symbol%3Asrc%252Froutes%252Fmod.rs%3Asrc%252Froutes%252Fmod.rs%3Afile%3A0:symbol%3Asrc%252Froutes%252Fmod.rs%3Asrc%252Froutes%252Fmod.rs%2523ready%3Afunction%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "ready",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes%2Fmod.rs:src%2Froutes%2Fmod.rs:file:0",
+      "targetId": "symbol:src%2Froutes%2Fmod.rs:src%2Froutes%2Fmod.rs%23ready:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes%2Fmod.rs:src%2Froutes%2Fmod.rs%23route%3AGET%20%2Fready:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/routes/mod.rs",
+      "id": "edge:symbol%3Asrc%252Froutes%252Fmod.rs%3Asrc%252Froutes%252Fmod.rs%3Afile%3A0:symbol%3Asrc%252Froutes%252Fmod.rs%3Asrc%252Froutes%252Fmod.rs%2523route%253AGET%2520%252Fready%3Aroute%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "GET /ready",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes%2Fmod.rs:src%2Froutes%2Fmod.rs:file:0",
+      "targetId": "symbol:src%2Froutes%2Fmod.rs:src%2Froutes%2Fmod.rs%23route%3AGET%20%2Fready:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes.rs:src%2Froutes.rs%23ready:function:0",
+        ],
+        "ruleId": "framework.actix-web.attribute-route.literal-path.local-function",
+        "stage": "syntax",
+      },
+      "filePath": "src/routes.rs",
+      "id": "edge:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523route%253AGET%2520%252Fready%3Aroute%3A0:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523ready%3Afunction%3A0:routes:3:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "ready",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23route%3AGET%20%2Fready:route:0",
+      "targetId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23ready:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes.rs:src%2Froutes.rs%23configure:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/routes.rs",
+      "id": "edge:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%3Afile%3A0:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523configure%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 116,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "configure",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes.rs:src%2Froutes.rs:file:0",
+      "targetId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23configure:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes.rs:src%2Froutes.rs%23health:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/routes.rs",
+      "id": "edge:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%3Afile%3A0:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523health%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes.rs:src%2Froutes.rs:file:0",
+      "targetId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23health:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes.rs:src%2Froutes.rs%23ready:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/routes.rs",
+      "id": "edge:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%3Afile%3A0:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523ready%3Afunction%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "ready",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes.rs:src%2Froutes.rs:file:0",
+      "targetId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23ready:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes.rs:src%2Froutes.rs%23route%3AGET%20%2Fready:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/routes.rs",
+      "id": "edge:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%3Afile%3A0:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523route%253AGET%2520%252Fready%3Aroute%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "GET /ready",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes.rs:src%2Froutes.rs:file:0",
+      "targetId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23route%3AGET%20%2Fready:route:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "40b47248ef93b5dcc7c020f50cb67cb03f2d204acd0ee9b67e299742caaa7bf2",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "rust",
+      "path": "src/main.rs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "269775a13ee56dbfb37a16854ef1cd1e24c78c4c59574bc53d74be22b8d0fa51",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "rust",
+      "path": "src/routes.rs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "269775a13ee56dbfb37a16854ef1cd1e24c78c4c59574bc53d74be22b8d0fa51",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "rust",
+      "path": "src/routes/mod.rs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main.rs",
+      "id": "symbol:src%2Fmain.rs:src%2Fmain.rs%23bootstrap:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "bootstrap",
+      "qualifiedName": "src/main.rs#bootstrap",
+      "range": {
+        "end": {
+          "column": 119,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main.rs",
+      "id": "symbol:src%2Fmain.rs:src%2Fmain.rs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "main.rs",
+      "qualifiedName": "src/main.rs",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/routes/mod.rs",
+      "id": "symbol:src%2Froutes%2Fmod.rs:src%2Froutes%2Fmod.rs%23configure:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "configure",
+      "qualifiedName": "src/routes/mod.rs#configure",
+      "range": {
+        "end": {
+          "column": 116,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/routes/mod.rs",
+      "id": "symbol:src%2Froutes%2Fmod.rs:src%2Froutes%2Fmod.rs%23health:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "health",
+      "qualifiedName": "src/routes/mod.rs#health",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/routes/mod.rs",
+      "id": "symbol:src%2Froutes%2Fmod.rs:src%2Froutes%2Fmod.rs%23ready:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "ready",
+      "qualifiedName": "src/routes/mod.rs#ready",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/routes/mod.rs",
+      "id": "symbol:src%2Froutes%2Fmod.rs:src%2Froutes%2Fmod.rs%23route%3AGET%20%2Fready:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /ready",
+      "qualifiedName": "src/routes/mod.rs#route:GET /ready",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/routes/mod.rs",
+      "id": "symbol:src%2Froutes%2Fmod.rs:src%2Froutes%2Fmod.rs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "mod.rs",
+      "qualifiedName": "src/routes/mod.rs",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/routes.rs",
+      "id": "symbol:src%2Froutes.rs:src%2Froutes.rs%23configure:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "configure",
+      "qualifiedName": "src/routes.rs#configure",
+      "range": {
+        "end": {
+          "column": 116,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/routes.rs",
+      "id": "symbol:src%2Froutes.rs:src%2Froutes.rs%23health:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "health",
+      "qualifiedName": "src/routes.rs#health",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/routes.rs",
+      "id": "symbol:src%2Froutes.rs:src%2Froutes.rs%23ready:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "ready",
+      "qualifiedName": "src/routes.rs#ready",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/routes.rs",
+      "id": "symbol:src%2Froutes.rs:src%2Froutes.rs%23route%3AGET%20%2Fready:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /ready",
+      "qualifiedName": "src/routes.rs#route:GET /ready",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/routes.rs",
+      "id": "symbol:src%2Froutes.rs:src%2Froutes.rs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "routes.rs",
+      "qualifiedName": "src/routes.rs",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Actix complete-output parity before move > preserves missing direct-module mount evidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain.rs:src%2Fmain.rs%23bootstrap:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/main.rs",
+      "id": "edge:symbol%3Asrc%252Fmain.rs%3Asrc%252Fmain.rs%3Afile%3A0:symbol%3Asrc%252Fmain.rs%3Asrc%252Fmain.rs%2523bootstrap%3Afunction%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 119,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "bootstrap",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain.rs:src%2Fmain.rs:file:0",
+      "targetId": "symbol:src%2Fmain.rs:src%2Fmain.rs%23bootstrap:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "40b47248ef93b5dcc7c020f50cb67cb03f2d204acd0ee9b67e299742caaa7bf2",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "rust",
+      "path": "src/main.rs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main.rs",
+      "id": "symbol:src%2Fmain.rs:src%2Fmain.rs%23bootstrap:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "bootstrap",
+      "qualifiedName": "src/main.rs#bootstrap",
+      "range": {
+        "end": {
+          "column": 119,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main.rs",
+      "id": "symbol:src%2Fmain.rs:src%2Fmain.rs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "main.rs",
+      "qualifiedName": "src/main.rs",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Actix complete-output parity before move > preserves unique direct-module mount evidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain.rs:src%2Fmain.rs%23bootstrap:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/main.rs",
+      "id": "edge:symbol%3Asrc%252Fmain.rs%3Asrc%252Fmain.rs%3Afile%3A0:symbol%3Asrc%252Fmain.rs%3Asrc%252Fmain.rs%2523bootstrap%3Afunction%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 119,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "bootstrap",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain.rs:src%2Fmain.rs:file:0",
+      "targetId": "symbol:src%2Fmain.rs:src%2Fmain.rs%23bootstrap:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes.rs:src%2Froutes.rs%23configure:function:0",
+          "symbol:src%2Froutes.rs:src%2Froutes.rs%23health:function:0",
+        ],
+        "resolutionPath": [
+          "src/main.rs",
+          "src/routes.rs",
+        ],
+        "ruleId": "framework.actix-web.imported-service-config.web-scope.configure.direct-module.local-function",
+        "stage": "module",
+      },
+      "filePath": "src/routes.rs",
+      "id": "edge:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523route%253AGET%2520%252Fapi%252Fhealth%3Aroute%3A0:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523health%3Afunction%3A0:routes:5:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 116,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23route%3AGET%20%2Fapi%2Fhealth:route:0",
+      "targetId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23health:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes.rs:src%2Froutes.rs%23configure:function:0",
+          "symbol:src%2Froutes.rs:src%2Froutes.rs%23ready:function:0",
+        ],
+        "resolutionPath": [
+          "src/main.rs",
+          "src/routes.rs",
+        ],
+        "ruleId": "framework.actix-web.imported-service-config.web-scope.configure.direct-module.local-function",
+        "stage": "module",
+      },
+      "filePath": "src/routes.rs",
+      "id": "edge:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523route%253AGET%2520%252Fapi%252Fready%3Aroute%3A0:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523ready%3Afunction%3A0:routes:5:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 116,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "ready",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23route%3AGET%20%2Fapi%2Fready:route:0",
+      "targetId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23ready:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes.rs:src%2Froutes.rs%23configure:function:0",
+          "symbol:src%2Froutes.rs:src%2Froutes.rs%23health:function:0",
+        ],
+        "resolutionPath": [
+          "src/main.rs",
+          "src/routes.rs",
+        ],
+        "ruleId": "framework.actix-web.imported-service-config.app.configure.direct-module.local-function",
+        "stage": "module",
+      },
+      "filePath": "src/routes.rs",
+      "id": "edge:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523route%253AGET%2520%252Fhealth%3Aroute%3A0:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523health%3Afunction%3A0:routes:5:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 116,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23route%3AGET%20%2Fhealth:route:0",
+      "targetId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23health:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes.rs:src%2Froutes.rs%23configure:function:0",
+          "symbol:src%2Froutes.rs:src%2Froutes.rs%23ready:function:0",
+        ],
+        "resolutionPath": [
+          "src/main.rs",
+          "src/routes.rs",
+        ],
+        "ruleId": "framework.actix-web.imported-service-config.app.configure.direct-module.local-function",
+        "stage": "module",
+      },
+      "filePath": "src/routes.rs",
+      "id": "edge:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523route%253AGET%2520%252Fready%3Aroute%3A0:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523ready%3Afunction%3A0:routes:5:1",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 116,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "ready",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23route%3AGET%20%2Fready:route:0",
+      "targetId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23ready:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes.rs:src%2Froutes.rs%23configure:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/routes.rs",
+      "id": "edge:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%3Afile%3A0:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523configure%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 116,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "configure",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes.rs:src%2Froutes.rs:file:0",
+      "targetId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23configure:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes.rs:src%2Froutes.rs%23health:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/routes.rs",
+      "id": "edge:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%3Afile%3A0:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523health%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "health",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes.rs:src%2Froutes.rs:file:0",
+      "targetId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23health:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes.rs:src%2Froutes.rs%23ready:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/routes.rs",
+      "id": "edge:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%3Afile%3A0:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523ready%3Afunction%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "ready",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes.rs:src%2Froutes.rs:file:0",
+      "targetId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23ready:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes.rs:src%2Froutes.rs%23route%3AGET%20%2Fapi%2Fhealth:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/routes.rs",
+      "id": "edge:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%3Afile%3A0:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523route%253AGET%2520%252Fapi%252Fhealth%3Aroute%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 116,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "GET /api/health",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes.rs:src%2Froutes.rs:file:0",
+      "targetId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23route%3AGET%20%2Fapi%2Fhealth:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes.rs:src%2Froutes.rs%23route%3AGET%20%2Fapi%2Fready:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/routes.rs",
+      "id": "edge:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%3Afile%3A0:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523route%253AGET%2520%252Fapi%252Fready%3Aroute%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 116,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "GET /api/ready",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes.rs:src%2Froutes.rs:file:0",
+      "targetId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23route%3AGET%20%2Fapi%2Fready:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes.rs:src%2Froutes.rs%23route%3AGET%20%2Fhealth:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/routes.rs",
+      "id": "edge:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%3Afile%3A0:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523route%253AGET%2520%252Fhealth%3Aroute%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 116,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "GET /health",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes.rs:src%2Froutes.rs:file:0",
+      "targetId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23route%3AGET%20%2Fhealth:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Froutes.rs:src%2Froutes.rs%23route%3AGET%20%2Fready:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/routes.rs",
+      "id": "edge:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%3Afile%3A0:symbol%3Asrc%252Froutes.rs%3Asrc%252Froutes.rs%2523route%253AGET%2520%252Fready%3Aroute%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 116,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "GET /ready",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Froutes.rs:src%2Froutes.rs:file:0",
+      "targetId": "symbol:src%2Froutes.rs:src%2Froutes.rs%23route%3AGET%20%2Fready:route:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "40b47248ef93b5dcc7c020f50cb67cb03f2d204acd0ee9b67e299742caaa7bf2",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "rust",
+      "path": "src/main.rs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "269775a13ee56dbfb37a16854ef1cd1e24c78c4c59574bc53d74be22b8d0fa51",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "rust",
+      "path": "src/routes.rs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main.rs",
+      "id": "symbol:src%2Fmain.rs:src%2Fmain.rs%23bootstrap:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "bootstrap",
+      "qualifiedName": "src/main.rs#bootstrap",
+      "range": {
+        "end": {
+          "column": 119,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main.rs",
+      "id": "symbol:src%2Fmain.rs:src%2Fmain.rs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "main.rs",
+      "qualifiedName": "src/main.rs",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/routes.rs",
+      "id": "symbol:src%2Froutes.rs:src%2Froutes.rs%23configure:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "configure",
+      "qualifiedName": "src/routes.rs#configure",
+      "range": {
+        "end": {
+          "column": 116,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/routes.rs",
+      "id": "symbol:src%2Froutes.rs:src%2Froutes.rs%23health:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "health",
+      "qualifiedName": "src/routes.rs#health",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/routes.rs",
+      "id": "symbol:src%2Froutes.rs:src%2Froutes.rs%23ready:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "ready",
+      "qualifiedName": "src/routes.rs#ready",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/routes.rs",
+      "id": "symbol:src%2Froutes.rs:src%2Froutes.rs%23route%3AGET%20%2Fapi%2Fhealth:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /api/health",
+      "qualifiedName": "src/routes.rs#route:GET /api/health",
+      "range": {
+        "end": {
+          "column": 116,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/routes.rs",
+      "id": "symbol:src%2Froutes.rs:src%2Froutes.rs%23route%3AGET%20%2Fapi%2Fready:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /api/ready",
+      "qualifiedName": "src/routes.rs#route:GET /api/ready",
+      "range": {
+        "end": {
+          "column": 116,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/routes.rs",
+      "id": "symbol:src%2Froutes.rs:src%2Froutes.rs%23route%3AGET%20%2Fhealth:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /health",
+      "qualifiedName": "src/routes.rs#route:GET /health",
+      "range": {
+        "end": {
+          "column": 116,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/routes.rs",
+      "id": "symbol:src%2Froutes.rs:src%2Froutes.rs%23route%3AGET%20%2Fready:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /ready",
+      "qualifiedName": "src/routes.rs#route:GET /ready",
+      "range": {
+        "end": {
+          "column": 116,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/routes.rs",
+      "id": "symbol:src%2Froutes.rs:src%2Froutes.rs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "routes.rs",
+      "qualifiedName": "src/routes.rs",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

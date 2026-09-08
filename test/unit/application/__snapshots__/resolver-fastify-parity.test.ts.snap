@@ -1,0 +1,1722 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Fastify complete-output parity before move > bounds cyclic child registration without infinite synthetic paths 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts%23listUsers:function:0",
+        ],
+        "ruleId": "framework.fastify.imported-plugin-prefix.imported-handler",
+        "stage": "module",
+      },
+      "filePath": "src/api.ts",
+      "id": "edge:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%2523route%253AGET%2520%252Fapi%252Fusers%3Aroute%3A0:symbol%3Asrc%252Fhandlers.ts%3Asrc%252Fhandlers.ts%2523listUsers%3Afunction%3A0:routes:3:67",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 76,
+          "line": 3,
+        },
+        "start": {
+          "column": 67,
+          "line": 3,
+        },
+      },
+      "referenceName": "listUsers",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ts:src%2Fapi.ts%23route%3AGET%20%2Fapi%2Fusers:route:0",
+      "targetId": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts%23listUsers:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.ts:src%2Fapi.ts%23api:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.ts",
+      "id": "edge:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%3Afile%3A0:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%2523api%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 123,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+      "targetId": "symbol:src%2Fapi.ts:src%2Fapi.ts%23api:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.ts:src%2Fapi.ts%23route%3AGET%20%2Fapi%2Fusers:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.ts",
+      "id": "edge:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%3Afile%3A0:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%2523route%253AGET%2520%252Fapi%252Fusers%3Aroute%3A0:contains:3:46",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 77,
+          "line": 3,
+        },
+        "start": {
+          "column": 46,
+          "line": 3,
+        },
+      },
+      "referenceName": "GET /api/users",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+      "targetId": "symbol:src%2Fapi.ts:src%2Fapi.ts%23route%3AGET%20%2Fapi%2Fusers:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/api.ts",
+      "id": "edge:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%3Afile%3A0:symbol%3Asrc%252Fhandlers.ts%3Asrc%252Fhandlers.ts%3Afile%3A0:imports:1:27",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 1,
+        },
+        "start": {
+          "column": 27,
+          "line": 1,
+        },
+      },
+      "referenceName": "./handlers.js",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+      "targetId": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/api.ts",
+      "id": "edge:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%3Afile%3A0:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%3Afile%3A0:imports:2:28",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 39,
+          "line": 2,
+        },
+        "start": {
+          "column": 28,
+          "line": 2,
+        },
+      },
+      "referenceName": "./jobs.js",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+      "targetId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/api.ts",
+      "id": "edge:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%3Afile%3A0:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%3Afile%3A0:imports:4:23",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 4,
+        },
+        "start": {
+          "column": 23,
+          "line": 4,
+        },
+      },
+      "referenceName": "./jobs.js",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+      "targetId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/barrel.ts",
+      "id": "edge:symbol%3Asrc%252Fbarrel.ts%3Asrc%252Fbarrel.ts%3Afile%3A0:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%3Afile%3A0:exports:1:21",
+      "kind": "exports",
+      "range": {
+        "end": {
+          "column": 31,
+          "line": 1,
+        },
+        "start": {
+          "column": 21,
+          "line": 1,
+        },
+      },
+      "referenceName": "./api.js",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fbarrel.ts:src%2Fbarrel.ts:file:0",
+      "targetId": "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts%23listUsers:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/handlers.ts",
+      "id": "edge:symbol%3Asrc%252Fhandlers.ts%3Asrc%252Fhandlers.ts%3Afile%3A0:symbol%3Asrc%252Fhandlers.ts%3Asrc%252Fhandlers.ts%2523listUsers%3Afunction%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "listUsers",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts:file:0",
+      "targetId": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts%23listUsers:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/jobs.ts",
+      "id": "edge:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%3Afile%3A0:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%3Afile%3A0:imports:3:21",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 31,
+          "line": 3,
+        },
+        "start": {
+          "column": 21,
+          "line": 3,
+        },
+      },
+      "referenceName": "./api.js",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+      "targetId": "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/jobs.ts",
+      "id": "edge:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%3Afile%3A0:symbol%3Asrc%252Fhandlers.ts%3Asrc%252Fhandlers.ts%3Afile%3A0:imports:1:27",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 1,
+        },
+        "start": {
+          "column": 27,
+          "line": 1,
+        },
+      },
+      "referenceName": "./handlers.js",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+      "targetId": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fjobs.ts:src%2Fjobs.ts%23cycle:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/jobs.ts",
+      "id": "edge:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%3Afile%3A0:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%2523cycle%3Afunction%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 93,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "cycle",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+      "targetId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts%23cycle:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fjobs.ts:src%2Fjobs.ts%23jobsPlugin:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/jobs.ts",
+      "id": "edge:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%3Afile%3A0:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%2523jobsPlugin%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 86,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "jobsPlugin",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+      "targetId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts%23jobsPlugin:function:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "reference.unresolved",
+        "stage": "unresolved",
+      },
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%2523app%3Avariable%3A0:Fastify:calls:3:13",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 3,
+        },
+        "start": {
+          "column": 13,
+          "line": 3,
+        },
+      },
+      "referenceName": "Fastify",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts%23app:variable:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%3Afile%3A0:fastify:imports:1:21",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 1,
+        },
+        "start": {
+          "column": 21,
+          "line": 1,
+        },
+      },
+      "referenceName": "fastify",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fbarrel.ts:src%2Fbarrel.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%3Afile%3A0:symbol%3Asrc%252Fbarrel.ts%3Asrc%252Fbarrel.ts%3Afile%3A0:imports:2:21",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 2,
+        },
+        "start": {
+          "column": 21,
+          "line": 2,
+        },
+      },
+      "referenceName": "./barrel.js",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+      "targetId": "symbol:src%2Fbarrel.ts:src%2Fbarrel.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain.ts:src%2Fmain.ts%23app:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%3Afile%3A0:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%2523app%3Avariable%3A0:contains:3:7",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 3,
+        },
+        "start": {
+          "column": 7,
+          "line": 3,
+        },
+      },
+      "referenceName": "app",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+      "targetId": "symbol:src%2Fmain.ts:src%2Fmain.ts%23app:variable:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "db7b5d363fc31f25d9223f35dd056031738ced9a015f9a2b36165714de3dcb00",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/api.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "20207ac971fc338bfd8a18eb243f090fc927dbbac829b1af6e4e5520cdc55e05",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/barrel.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "32d1ed339e007747ce12f1745bf573e0bed67a312e6ca938a79a7a1afc0d497a",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/handlers.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "95c8863e4fcff5b3b558ccfce511921196050c3a70dbe5b9d0491a9f4fba0a8b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/jobs.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "588685afef12353d7630e5c024365f4b6577078dd2078bd17269d81f3c5d7b6b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/main.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [
+    {
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%2523app%3Avariable%3A0:Fastify:calls:3:13",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 3,
+        },
+        "start": {
+          "column": 13,
+          "line": 3,
+        },
+      },
+      "referenceName": "Fastify",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts%23app:variable:0",
+    },
+    {
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%3Afile%3A0:fastify:imports:1:21",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 1,
+        },
+        "start": {
+          "column": 21,
+          "line": 1,
+        },
+      },
+      "referenceName": "fastify",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+    },
+  ],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.ts",
+      "id": "symbol:src%2Fapi.ts:src%2Fapi.ts%23api:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "api",
+      "qualifiedName": "src/api.ts#api",
+      "range": {
+        "end": {
+          "column": 123,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.ts",
+      "id": "symbol:src%2Fapi.ts:src%2Fapi.ts%23route%3AGET%20%2Fapi%2Fusers:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /api/users",
+      "qualifiedName": "src/api.ts#route:GET /api/users",
+      "range": {
+        "end": {
+          "column": 77,
+          "line": 3,
+        },
+        "start": {
+          "column": 46,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.ts",
+      "id": "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "api.ts",
+      "qualifiedName": "src/api.ts",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/barrel.ts",
+      "id": "symbol:src%2Fbarrel.ts:src%2Fbarrel.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "barrel.ts",
+      "qualifiedName": "src/barrel.ts",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/handlers.ts",
+      "id": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts%23listUsers:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "listUsers",
+      "qualifiedName": "src/handlers.ts#listUsers",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/handlers.ts",
+      "id": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "handlers.ts",
+      "qualifiedName": "src/handlers.ts",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/jobs.ts",
+      "id": "symbol:src%2Fjobs.ts:src%2Fjobs.ts%23cycle:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "cycle",
+      "qualifiedName": "src/jobs.ts#cycle",
+      "range": {
+        "end": {
+          "column": 93,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/jobs.ts",
+      "id": "symbol:src%2Fjobs.ts:src%2Fjobs.ts%23jobsPlugin:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "jobsPlugin",
+      "qualifiedName": "src/jobs.ts#jobsPlugin",
+      "range": {
+        "end": {
+          "column": 86,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/jobs.ts",
+      "id": "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "jobs.ts",
+      "qualifiedName": "src/jobs.ts",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main.ts",
+      "id": "symbol:src%2Fmain.ts:src%2Fmain.ts%23app:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "app",
+      "qualifiedName": "src/main.ts#app",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 3,
+        },
+        "start": {
+          "column": 7,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main.ts",
+      "id": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "main.ts",
+      "qualifiedName": "src/main.ts",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Fastify complete-output parity before move > preserves missing plugin nonclaim 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "reference.unresolved",
+        "stage": "unresolved",
+      },
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%2523app%3Avariable%3A0:Fastify:calls:3:13",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 3,
+        },
+        "start": {
+          "column": 13,
+          "line": 3,
+        },
+      },
+      "referenceName": "Fastify",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts%23app:variable:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%3Afile%3A0:.%2Fbarrel.js:imports:2:21",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 2,
+        },
+        "start": {
+          "column": 21,
+          "line": 2,
+        },
+      },
+      "referenceName": "./barrel.js",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%3Afile%3A0:fastify:imports:1:21",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 1,
+        },
+        "start": {
+          "column": 21,
+          "line": 1,
+        },
+      },
+      "referenceName": "fastify",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain.ts:src%2Fmain.ts%23app:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%3Afile%3A0:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%2523app%3Avariable%3A0:contains:3:7",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 3,
+        },
+        "start": {
+          "column": 7,
+          "line": 3,
+        },
+      },
+      "referenceName": "app",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+      "targetId": "symbol:src%2Fmain.ts:src%2Fmain.ts%23app:variable:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "588685afef12353d7630e5c024365f4b6577078dd2078bd17269d81f3c5d7b6b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/main.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [
+    {
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%2523app%3Avariable%3A0:Fastify:calls:3:13",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 3,
+        },
+        "start": {
+          "column": 13,
+          "line": 3,
+        },
+      },
+      "referenceName": "Fastify",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts%23app:variable:0",
+    },
+    {
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%3Afile%3A0:.%2Fbarrel.js:imports:2:21",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 2,
+        },
+        "start": {
+          "column": 21,
+          "line": 2,
+        },
+      },
+      "referenceName": "./barrel.js",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+    },
+    {
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%3Afile%3A0:fastify:imports:1:21",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 1,
+        },
+        "start": {
+          "column": 21,
+          "line": 1,
+        },
+      },
+      "referenceName": "fastify",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+    },
+  ],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main.ts",
+      "id": "symbol:src%2Fmain.ts:src%2Fmain.ts%23app:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "app",
+      "qualifiedName": "src/main.ts#app",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 3,
+        },
+        "start": {
+          "column": 7,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main.ts",
+      "id": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "main.ts",
+      "qualifiedName": "src/main.ts",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Fastify complete-output parity before move > preserves re-exported plugin and nested registration routes 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts%23listUsers:function:0",
+        ],
+        "ruleId": "framework.fastify.imported-plugin-prefix.imported-handler",
+        "stage": "module",
+      },
+      "filePath": "src/api.ts",
+      "id": "edge:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%2523route%253AGET%2520%252Fapi%252Fusers%3Aroute%3A0:symbol%3Asrc%252Fhandlers.ts%3Asrc%252Fhandlers.ts%2523listUsers%3Afunction%3A0:routes:3:67",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 76,
+          "line": 3,
+        },
+        "start": {
+          "column": 67,
+          "line": 3,
+        },
+      },
+      "referenceName": "listUsers",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ts:src%2Fapi.ts%23route%3AGET%20%2Fapi%2Fusers:route:0",
+      "targetId": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts%23listUsers:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.ts:src%2Fapi.ts%23api:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.ts",
+      "id": "edge:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%3Afile%3A0:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%2523api%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 128,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+      "targetId": "symbol:src%2Fapi.ts:src%2Fapi.ts%23api:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.ts:src%2Fapi.ts%23route%3AGET%20%2Fapi%2Fusers:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.ts",
+      "id": "edge:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%3Afile%3A0:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%2523route%253AGET%2520%252Fapi%252Fusers%3Aroute%3A0:contains:3:46",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 77,
+          "line": 3,
+        },
+        "start": {
+          "column": 46,
+          "line": 3,
+        },
+      },
+      "referenceName": "GET /api/users",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+      "targetId": "symbol:src%2Fapi.ts:src%2Fapi.ts%23route%3AGET%20%2Fapi%2Fusers:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/api.ts",
+      "id": "edge:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%3Afile%3A0:symbol%3Asrc%252Fhandlers.ts%3Asrc%252Fhandlers.ts%3Afile%3A0:imports:1:27",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 1,
+        },
+        "start": {
+          "column": 27,
+          "line": 1,
+        },
+      },
+      "referenceName": "./handlers.js",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+      "targetId": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/api.ts",
+      "id": "edge:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%3Afile%3A0:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%3Afile%3A0:imports:2:28",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 39,
+          "line": 2,
+        },
+        "start": {
+          "column": 28,
+          "line": 2,
+        },
+      },
+      "referenceName": "./jobs.js",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+      "targetId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/barrel.ts",
+      "id": "edge:symbol%3Asrc%252Fbarrel.ts%3Asrc%252Fbarrel.ts%3Afile%3A0:symbol%3Asrc%252Fapi.ts%3Asrc%252Fapi.ts%3Afile%3A0:exports:1:21",
+      "kind": "exports",
+      "range": {
+        "end": {
+          "column": 31,
+          "line": 1,
+        },
+        "start": {
+          "column": 21,
+          "line": 1,
+        },
+      },
+      "referenceName": "./api.js",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fbarrel.ts:src%2Fbarrel.ts:file:0",
+      "targetId": "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts%23listUsers:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/handlers.ts",
+      "id": "edge:symbol%3Asrc%252Fhandlers.ts%3Asrc%252Fhandlers.ts%3Afile%3A0:symbol%3Asrc%252Fhandlers.ts%3Asrc%252Fhandlers.ts%2523listUsers%3Afunction%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "listUsers",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts:file:0",
+      "targetId": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts%23listUsers:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts%23listUsers:function:0",
+        ],
+        "ruleId": "framework.fastify.imported-plugin-prefix.imported-handler",
+        "stage": "module",
+      },
+      "filePath": "src/jobs.ts",
+      "id": "edge:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%2523route%253AGET%2520%252Fapi%252Fv1%252Fjobs%3Aroute%3A0:symbol%3Asrc%252Fhandlers.ts%3Asrc%252Fhandlers.ts%2523listUsers%3Afunction%3A0:routes:2:73",
+      "kind": "routes",
+      "range": {
+        "end": {
+          "column": 82,
+          "line": 2,
+        },
+        "start": {
+          "column": 73,
+          "line": 2,
+        },
+      },
+      "referenceName": "listUsers",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts%23route%3AGET%20%2Fapi%2Fv1%2Fjobs:route:0",
+      "targetId": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts%23listUsers:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/jobs.ts",
+      "id": "edge:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%3Afile%3A0:symbol%3Asrc%252Fhandlers.ts%3Asrc%252Fhandlers.ts%3Afile%3A0:imports:1:27",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 1,
+        },
+        "start": {
+          "column": 27,
+          "line": 1,
+        },
+      },
+      "referenceName": "./handlers.js",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+      "targetId": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fjobs.ts:src%2Fjobs.ts%23jobsPlugin:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/jobs.ts",
+      "id": "edge:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%3Afile%3A0:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%2523jobsPlugin%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 86,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "jobsPlugin",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+      "targetId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts%23jobsPlugin:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fjobs.ts:src%2Fjobs.ts%23route%3AGET%20%2Fapi%2Fv1%2Fjobs:route:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/jobs.ts",
+      "id": "edge:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%3Afile%3A0:symbol%3Asrc%252Fjobs.ts%3Asrc%252Fjobs.ts%2523route%253AGET%2520%252Fapi%252Fv1%252Fjobs%3Aroute%3A0:contains:2:53",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 83,
+          "line": 2,
+        },
+        "start": {
+          "column": 53,
+          "line": 2,
+        },
+      },
+      "referenceName": "GET /api/v1/jobs",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+      "targetId": "symbol:src%2Fjobs.ts:src%2Fjobs.ts%23route%3AGET%20%2Fapi%2Fv1%2Fjobs:route:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "reference.unresolved",
+        "stage": "unresolved",
+      },
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%2523app%3Avariable%3A0:Fastify:calls:3:13",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 3,
+        },
+        "start": {
+          "column": 13,
+          "line": 3,
+        },
+      },
+      "referenceName": "Fastify",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts%23app:variable:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%3Afile%3A0:fastify:imports:1:21",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 1,
+        },
+        "start": {
+          "column": 21,
+          "line": 1,
+        },
+      },
+      "referenceName": "fastify",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fbarrel.ts:src%2Fbarrel.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%3Afile%3A0:symbol%3Asrc%252Fbarrel.ts%3Asrc%252Fbarrel.ts%3Afile%3A0:imports:2:21",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 2,
+        },
+        "start": {
+          "column": 21,
+          "line": 2,
+        },
+      },
+      "referenceName": "./barrel.js",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+      "targetId": "symbol:src%2Fbarrel.ts:src%2Fbarrel.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fmain.ts:src%2Fmain.ts%23app:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%3Afile%3A0:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%2523app%3Avariable%3A0:contains:3:7",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 3,
+        },
+        "start": {
+          "column": 7,
+          "line": 3,
+        },
+      },
+      "referenceName": "app",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+      "targetId": "symbol:src%2Fmain.ts:src%2Fmain.ts%23app:variable:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "32d625e82e181e7cff987c0de8ceefc695c883d317aa10b2b33cf023179bfa58",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/api.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "20207ac971fc338bfd8a18eb243f090fc927dbbac829b1af6e4e5520cdc55e05",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/barrel.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "32d1ed339e007747ce12f1745bf573e0bed67a312e6ca938a79a7a1afc0d497a",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/handlers.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "24e32a520d227ec1ee734888dd6fcf0de2cf194d1eeeee73bced8a617b686714",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/jobs.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "588685afef12353d7630e5c024365f4b6577078dd2078bd17269d81f3c5d7b6b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/main.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [
+    {
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%2523app%3Avariable%3A0:Fastify:calls:3:13",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 3,
+        },
+        "start": {
+          "column": 13,
+          "line": 3,
+        },
+      },
+      "referenceName": "Fastify",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts%23app:variable:0",
+    },
+    {
+      "filePath": "src/main.ts",
+      "id": "edge:symbol%3Asrc%252Fmain.ts%3Asrc%252Fmain.ts%3Afile%3A0:fastify:imports:1:21",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 1,
+        },
+        "start": {
+          "column": 21,
+          "line": 1,
+        },
+      },
+      "referenceName": "fastify",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+    },
+  ],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.ts",
+      "id": "symbol:src%2Fapi.ts:src%2Fapi.ts%23api:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "api",
+      "qualifiedName": "src/api.ts#api",
+      "range": {
+        "end": {
+          "column": 128,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.ts",
+      "id": "symbol:src%2Fapi.ts:src%2Fapi.ts%23route%3AGET%20%2Fapi%2Fusers:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /api/users",
+      "qualifiedName": "src/api.ts#route:GET /api/users",
+      "range": {
+        "end": {
+          "column": 77,
+          "line": 3,
+        },
+        "start": {
+          "column": 46,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.ts",
+      "id": "symbol:src%2Fapi.ts:src%2Fapi.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "api.ts",
+      "qualifiedName": "src/api.ts",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/barrel.ts",
+      "id": "symbol:src%2Fbarrel.ts:src%2Fbarrel.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "barrel.ts",
+      "qualifiedName": "src/barrel.ts",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/handlers.ts",
+      "id": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts%23listUsers:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "listUsers",
+      "qualifiedName": "src/handlers.ts#listUsers",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/handlers.ts",
+      "id": "symbol:src%2Fhandlers.ts:src%2Fhandlers.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "handlers.ts",
+      "qualifiedName": "src/handlers.ts",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/jobs.ts",
+      "id": "symbol:src%2Fjobs.ts:src%2Fjobs.ts%23jobsPlugin:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "jobsPlugin",
+      "qualifiedName": "src/jobs.ts#jobsPlugin",
+      "range": {
+        "end": {
+          "column": 86,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/jobs.ts",
+      "id": "symbol:src%2Fjobs.ts:src%2Fjobs.ts%23route%3AGET%20%2Fapi%2Fv1%2Fjobs:route:0",
+      "isExported": false,
+      "kind": "route",
+      "name": "GET /api/v1/jobs",
+      "qualifiedName": "src/jobs.ts#route:GET /api/v1/jobs",
+      "range": {
+        "end": {
+          "column": 83,
+          "line": 2,
+        },
+        "start": {
+          "column": 53,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/jobs.ts",
+      "id": "symbol:src%2Fjobs.ts:src%2Fjobs.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "jobs.ts",
+      "qualifiedName": "src/jobs.ts",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main.ts",
+      "id": "symbol:src%2Fmain.ts:src%2Fmain.ts%23app:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "app",
+      "qualifiedName": "src/main.ts#app",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 3,
+        },
+        "start": {
+          "column": 7,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/main.ts",
+      "id": "symbol:src%2Fmain.ts:src%2Fmain.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "main.ts",
+      "qualifiedName": "src/main.ts",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

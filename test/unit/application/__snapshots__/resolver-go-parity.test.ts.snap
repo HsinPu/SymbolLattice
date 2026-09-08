@@ -1,0 +1,1282 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Go resolver behavior parity before module extraction > preserves complete cross-file call, receiver, construction and import output 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:service.go:service.go%23Service:type:0",
+        ],
+        "resolutionPath": [
+          "caller.go",
+          "service.go",
+        ],
+        "ruleId": "project.go.same-package.unique-struct-instantiation",
+        "stage": "module",
+      },
+      "filePath": "caller.go",
+      "id": "edge:symbol%3Acaller.go%3Acaller.go%2523Caller%3Afunction%3A0:symbol%3Aservice.go%3Aservice.go%2523Service%3Atype%3A0:instantiates:3:54",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 61,
+          "line": 3,
+        },
+        "start": {
+          "column": 54,
+          "line": 3,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:caller.go:caller.go%23Caller:function:0",
+      "targetId": "symbol:service.go:service.go%23Service:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:service.go:service.go%23Service.Run:method:0",
+        ],
+        "resolutionPath": [
+          "caller.go",
+          "service.go",
+        ],
+        "ruleId": "project.go.same-package.unique-concrete-receiver-method-call",
+        "stage": "module",
+      },
+      "filePath": "caller.go",
+      "id": "edge:symbol%3Acaller.go%3Acaller.go%2523Caller%3Afunction%3A0:symbol%3Aservice.go%3Aservice.go%2523Service.Run%3Amethod%3A0:calls:3:39",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 3,
+        },
+        "start": {
+          "column": 39,
+          "line": 3,
+        },
+      },
+      "referenceName": "Run",
+      "resolution": "exact",
+      "sourceId": "symbol:caller.go:caller.go%23Caller:function:0",
+      "targetId": "symbol:service.go:service.go%23Service.Run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:service.go:service.go%23helper:function:0",
+        ],
+        "resolutionPath": [
+          "caller.go",
+          "service.go",
+        ],
+        "ruleId": "project.go.same-package.unique-unconditional-package-function-call",
+        "stage": "module",
+      },
+      "filePath": "caller.go",
+      "id": "edge:symbol%3Acaller.go%3Acaller.go%2523Caller%3Afunction%3A0:symbol%3Aservice.go%3Aservice.go%2523helper%3Afunction%3A0:calls:3:27",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 3,
+        },
+        "start": {
+          "column": 27,
+          "line": 3,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:caller.go:caller.go%23Caller:function:0",
+      "targetId": "symbol:service.go:service.go%23helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:caller.go:caller.go%23Caller:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "caller.go",
+      "id": "edge:symbol%3Acaller.go%3Acaller.go%3Afile%3A0:symbol%3Acaller.go%3Acaller.go%2523Caller%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 64,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Caller",
+      "resolution": "exact",
+      "sourceId": "symbol:caller.go:caller.go:file:0",
+      "targetId": "symbol:caller.go:caller.go%23Caller:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Flib.go:lib%2Flib.go:file:0",
+        ],
+        "configurationPaths": [
+          "go.mod",
+        ],
+        "resolutionPath": [
+          "caller.go",
+          "lib/lib.go",
+        ],
+        "ruleId": "project.go.root-module.local-package-import-representative-file",
+        "stage": "module",
+      },
+      "filePath": "caller.go",
+      "id": "edge:symbol%3Acaller.go%3Acaller.go%3Afile%3A0:symbol%3Alib%252Flib.go%3Alib%252Flib.go%3Afile%3A0:imports:2:8",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 2,
+        },
+        "start": {
+          "column": 8,
+          "line": 2,
+        },
+      },
+      "referenceName": "example.test/local/lib",
+      "resolution": "exact",
+      "sourceId": "symbol:caller.go:caller.go:file:0",
+      "targetId": "symbol:lib%2Flib.go:lib%2Flib.go:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:lib%2Flib.go:lib%2Flib.go%23Exported:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "lib/lib.go",
+      "id": "edge:symbol%3Alib%252Flib.go%3Alib%252Flib.go%3Afile%3A0:symbol%3Alib%252Flib.go%3Alib%252Flib.go%2523Exported%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Exported",
+      "resolution": "exact",
+      "sourceId": "symbol:lib%2Flib.go:lib%2Flib.go:file:0",
+      "targetId": "symbol:lib%2Flib.go:lib%2Flib.go%23Exported:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:service.go:service.go%23Service:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "service.go",
+      "id": "edge:symbol%3Aservice.go%3Aservice.go%3Afile%3A0:symbol%3Aservice.go%3Aservice.go%2523Service%3Atype%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:service.go:service.go:file:0",
+      "targetId": "symbol:service.go:service.go%23Service:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:service.go:service.go%23Service.Run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "service.go",
+      "id": "edge:symbol%3Aservice.go%3Aservice.go%3Afile%3A0:symbol%3Aservice.go%3Aservice.go%2523Service.Run%3Amethod%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "Run",
+      "resolution": "exact",
+      "sourceId": "symbol:service.go:service.go:file:0",
+      "targetId": "symbol:service.go:service.go%23Service.Run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:service.go:service.go%23helper:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "service.go",
+      "id": "edge:symbol%3Aservice.go%3Aservice.go%3Afile%3A0:symbol%3Aservice.go%3Aservice.go%2523helper%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:service.go:service.go:file:0",
+      "targetId": "symbol:service.go:service.go%23helper:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "8bbf373f1197887a655d80d8452f92fb997e7637d707b20bad658630e7c4f6f2",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "go",
+      "path": "caller.go",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "dccb98b2c3fdc6eececff4caea37c432e43e6033bccde6d18a80cc788ba58a81",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "go",
+      "path": "lib/lib.go",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "aee6d95861044e28be81f70493416abbe597933e8f09568e9c0654d69c70c205",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "go",
+      "path": "service.go",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "caller.go",
+      "id": "symbol:caller.go:caller.go%23Caller:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "Caller",
+      "qualifiedName": "caller.go#Caller",
+      "range": {
+        "end": {
+          "column": 64,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "caller.go",
+      "id": "symbol:caller.go:caller.go:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "caller.go",
+      "qualifiedName": "caller.go",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/lib.go",
+      "id": "symbol:lib%2Flib.go:lib%2Flib.go%23Exported:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "Exported",
+      "qualifiedName": "lib/lib.go#Exported",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "lib/lib.go",
+      "id": "symbol:lib%2Flib.go:lib%2Flib.go:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "lib.go",
+      "qualifiedName": "lib/lib.go",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "service.go",
+      "id": "symbol:service.go:service.go%23Service.Run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Run",
+      "qualifiedName": "service.go#Service.Run",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "service.go",
+      "id": "symbol:service.go:service.go%23Service:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "Service",
+      "qualifiedName": "service.go#Service",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "service.go",
+      "id": "symbol:service.go:service.go%23helper:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "service.go#helper",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "service.go",
+      "id": "symbol:service.go:service.go:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "service.go",
+      "qualifiedName": "service.go",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Go resolver behavior parity before module extraction > preserves conditional nonclaims and all pending evidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:caller.go:caller.go%23Caller:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "caller.go",
+      "id": "edge:symbol%3Acaller.go%3Acaller.go%3Afile%3A0:symbol%3Acaller.go%3Acaller.go%2523Caller%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Caller",
+      "resolution": "exact",
+      "sourceId": "symbol:caller.go:caller.go:file:0",
+      "targetId": "symbol:caller.go:caller.go%23Caller:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:target.go:target.go%23helper:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "target.go",
+      "id": "edge:symbol%3Atarget.go%3Atarget.go%3Afile%3A0:symbol%3Atarget.go%3Atarget.go%2523helper%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:target.go:target.go:file:0",
+      "targetId": "symbol:target.go:target.go%23helper:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "059bbfdf60d8e46eeeeac004da770cdb80ac9bd097333f900f2a6c2194046ef9",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "go",
+      "path": "caller.go",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "74d0e17564d9fb66bdd081ba53cba0b5ef7cac274d17960f547df1d5bc2fb23a",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "go",
+      "path": "target.go",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "caller.go",
+      "id": "symbol:caller.go:caller.go%23Caller:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "Caller",
+      "qualifiedName": "caller.go#Caller",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "caller.go",
+      "id": "symbol:caller.go:caller.go:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "caller.go",
+      "qualifiedName": "caller.go",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "target.go",
+      "id": "symbol:target.go:target.go%23helper:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "target.go#helper",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "target.go",
+      "id": "symbol:target.go:target.go:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "target.go",
+      "qualifiedName": "target.go",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Go resolver behavior parity before module extraction > preserves different-package nonclaims and all pending evidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:caller.go:caller.go%23Caller:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "caller.go",
+      "id": "edge:symbol%3Acaller.go%3Acaller.go%3Afile%3A0:symbol%3Acaller.go%3Acaller.go%2523Caller%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Caller",
+      "resolution": "exact",
+      "sourceId": "symbol:caller.go:caller.go:file:0",
+      "targetId": "symbol:caller.go:caller.go%23Caller:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:target.go:target.go%23helper:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "target.go",
+      "id": "edge:symbol%3Atarget.go%3Atarget.go%3Afile%3A0:symbol%3Atarget.go%3Atarget.go%2523helper%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:target.go:target.go:file:0",
+      "targetId": "symbol:target.go:target.go%23helper:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "059bbfdf60d8e46eeeeac004da770cdb80ac9bd097333f900f2a6c2194046ef9",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "go",
+      "path": "caller.go",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "cdd06ab16922bc2516c85b311bf9102c3a592bc606af71c69a27a0684c98ca2d",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "go",
+      "path": "target.go",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "caller.go",
+      "id": "symbol:caller.go:caller.go%23Caller:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "Caller",
+      "qualifiedName": "caller.go#Caller",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "caller.go",
+      "id": "symbol:caller.go:caller.go:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "caller.go",
+      "qualifiedName": "caller.go",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "target.go",
+      "id": "symbol:target.go:target.go%23helper:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "target.go#helper",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "target.go",
+      "id": "symbol:target.go:target.go:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "target.go",
+      "qualifiedName": "target.go",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Go resolver behavior parity before module extraction > preserves duplicate nonclaims and all pending evidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:caller.go:caller.go%23Caller:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "caller.go",
+      "id": "edge:symbol%3Acaller.go%3Acaller.go%3Afile%3A0:symbol%3Acaller.go%3Acaller.go%2523Caller%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Caller",
+      "resolution": "exact",
+      "sourceId": "symbol:caller.go:caller.go:file:0",
+      "targetId": "symbol:caller.go:caller.go%23Caller:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:target.go:target.go%23helper:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "target.go",
+      "id": "edge:symbol%3Atarget.go%3Atarget.go%3Afile%3A0:symbol%3Atarget.go%3Atarget.go%2523helper%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:target.go:target.go:file:0",
+      "targetId": "symbol:target.go:target.go%23helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:target.go:target.go%23helper:function:1",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "target.go",
+      "id": "edge:symbol%3Atarget.go%3Atarget.go%3Afile%3A0:symbol%3Atarget.go%3Atarget.go%2523helper%3Afunction%3A1:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:target.go:target.go:file:0",
+      "targetId": "symbol:target.go:target.go%23helper:function:1",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "059bbfdf60d8e46eeeeac004da770cdb80ac9bd097333f900f2a6c2194046ef9",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "go",
+      "path": "caller.go",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "7d80f776c025f624eb1e7335b4d223a22b9c6d8aebdadf307653c51642e86ead",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "go",
+      "path": "target.go",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "caller.go",
+      "id": "symbol:caller.go:caller.go%23Caller:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "Caller",
+      "qualifiedName": "caller.go#Caller",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "caller.go",
+      "id": "symbol:caller.go:caller.go:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "caller.go",
+      "qualifiedName": "caller.go",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "target.go",
+      "id": "symbol:target.go:target.go%23helper:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "target.go#helper",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 1,
+      "filePath": "target.go",
+      "id": "symbol:target.go:target.go%23helper:function:1",
+      "isExported": false,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "target.go#helper",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "target.go",
+      "id": "symbol:target.go:target.go:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "target.go",
+      "qualifiedName": "target.go",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Go resolver behavior parity before module extraction > preserves same-file syntax evidence and nested bare-range calls 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:local.go:local.go%23Service.Run:method:0",
+        ],
+        "ruleId": "project.go.same-package.unique-concrete-receiver-method-call",
+        "stage": "syntax",
+      },
+      "filePath": "local.go",
+      "id": "edge:symbol%3Alocal.go%3Alocal.go%2523Caller%3Afunction%3A0:symbol%3Alocal.go%3Alocal.go%2523Service.Run%3Amethod%3A0:calls:5:52",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 55,
+          "line": 5,
+        },
+        "start": {
+          "column": 52,
+          "line": 5,
+        },
+      },
+      "referenceName": "Run",
+      "resolution": "exact",
+      "sourceId": "symbol:local.go:local.go%23Caller:function:0",
+      "targetId": "symbol:local.go:local.go%23Service.Run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:local.go:local.go%23helper:function:0",
+        ],
+        "ruleId": "syntax.go.same-file.unique-package-function-call",
+        "stage": "syntax",
+      },
+      "filePath": "local.go",
+      "id": "edge:symbol%3Alocal.go%3Alocal.go%2523Caller%3Afunction%3A0:symbol%3Alocal.go%3Alocal.go%2523helper%3Afunction%3A0:calls:5:40",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 46,
+          "line": 5,
+        },
+        "start": {
+          "column": 40,
+          "line": 5,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:local.go:local.go%23Caller:function:0",
+      "targetId": "symbol:local.go:local.go%23helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:local.go:local.go%23Caller:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "local.go",
+      "id": "edge:symbol%3Alocal.go%3Alocal.go%3Afile%3A0:symbol%3Alocal.go%3Alocal.go%2523Caller%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 76,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "Caller",
+      "resolution": "exact",
+      "sourceId": "symbol:local.go:local.go:file:0",
+      "targetId": "symbol:local.go:local.go%23Caller:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:local.go:local.go%23Service.Run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "local.go",
+      "id": "edge:symbol%3Alocal.go%3Alocal.go%3Afile%3A0:symbol%3Alocal.go%3Alocal.go%2523Service.Run%3Amethod%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 26,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "Run",
+      "resolution": "exact",
+      "sourceId": "symbol:local.go:local.go:file:0",
+      "targetId": "symbol:local.go:local.go%23Service.Run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:local.go:local.go%23helper:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "local.go",
+      "id": "edge:symbol%3Alocal.go%3Alocal.go%3Afile%3A0:symbol%3Alocal.go%3Alocal.go%2523helper%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:local.go:local.go:file:0",
+      "targetId": "symbol:local.go:local.go%23helper:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "abf213e6c3767ab8d7aee8dc5955086ae8f001f8748880b33248d1a6509d69b9",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "go",
+      "path": "local.go",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "local.go",
+      "id": "symbol:local.go:local.go%23Caller:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "Caller",
+      "qualifiedName": "local.go#Caller",
+      "range": {
+        "end": {
+          "column": 76,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "local.go",
+      "id": "symbol:local.go:local.go%23Service.Run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Run",
+      "qualifiedName": "local.go#Service.Run",
+      "range": {
+        "end": {
+          "column": 26,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "local.go",
+      "id": "symbol:local.go:local.go%23helper:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "local.go#helper",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "local.go",
+      "id": "symbol:local.go:local.go:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "local.go",
+      "qualifiedName": "local.go",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

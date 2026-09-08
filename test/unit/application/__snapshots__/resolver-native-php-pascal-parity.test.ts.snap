@@ -1,0 +1,2491 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`C, PHP, C++, and Pascal resolver pre-move parity golden > 'c' keeps consumer-only imports and cross-file relations unresolved 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.c:src%2Fapp.c%23run:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.c",
+      "id": "edge:symbol%3Asrc%252Fapp.c%3Asrc%252Fapp.c%3Afile%3A0:symbol%3Asrc%252Fapp.c%3Asrc%252Fapp.c%2523run%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 62,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.c:src%2Fapp.c:file:0",
+      "targetId": "symbol:src%2Fapp.c:src%2Fapp.c%23run:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "f1e94986e512efd74f88cd1ad98e711712c16c4c5b2cfcf43027ba68fe6c954b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "c",
+      "path": "src/app.c",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.c",
+      "id": "symbol:src%2Fapp.c:src%2Fapp.c%23run:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "run",
+      "qualifiedName": "src/app.c#run",
+      "range": {
+        "end": {
+          "column": 62,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.c",
+      "id": "symbol:src%2Fapp.c:src%2Fapp.c:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "app.c",
+      "qualifiedName": "src/app.c",
+      "range": {
+        "end": {
+          "column": 62,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`C, PHP, C++, and Pascal resolver pre-move parity golden > 'c' preserves complete cross-file and local output 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.h:src%2Fapi.h%23Model:type:0",
+        ],
+        "ruleId": "syntax.c.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.h",
+      "id": "edge:symbol%3Asrc%252Fapi.h%3Asrc%252Fapi.h%2523build%3Afunction%3A0:symbol%3Asrc%252Fapi.h%3Asrc%252Fapi.h%2523Model%3Atype%3A0:accepts:2:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 57,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.h:src%2Fapi.h%23build:function:0",
+      "targetId": "symbol:src%2Fapi.h:src%2Fapi.h%23Model:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.h:src%2Fapi.h%23Model:type:0",
+        ],
+        "ruleId": "syntax.c.unique-signature-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.h",
+      "id": "edge:symbol%3Asrc%252Fapi.h%3Asrc%252Fapi.h%2523build%3Afunction%3A0:symbol%3Asrc%252Fapi.h%3Asrc%252Fapi.h%2523Model%3Atype%3A0:returns:2:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 57,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.h:src%2Fapi.h%23build:function:0",
+      "targetId": "symbol:src%2Fapi.h:src%2Fapi.h%23Model:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.h:src%2Fapi.h%23Model:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.h",
+      "id": "edge:symbol%3Asrc%252Fapi.h%3Asrc%252Fapi.h%3Afile%3A0:symbol%3Asrc%252Fapi.h%3Asrc%252Fapi.h%2523Model%3Atype%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 28,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.h:src%2Fapi.h:file:0",
+      "targetId": "symbol:src%2Fapi.h:src%2Fapi.h%23Model:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.h:src%2Fapi.h%23build:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.h",
+      "id": "edge:symbol%3Asrc%252Fapi.h%3Asrc%252Fapi.h%3Afile%3A0:symbol%3Asrc%252Fapi.h%3Asrc%252Fapi.h%2523build%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 57,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "build",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.h:src%2Fapi.h:file:0",
+      "targetId": "symbol:src%2Fapi.h:src%2Fapi.h%23build:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.h:src%2Fapi.h%23Model:type:0",
+        ],
+        "resolutionPath": [
+          "src/app.c",
+          "src/api.h",
+        ],
+        "ruleId": "syntax.c.unique-signature-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/app.c",
+      "id": "edge:symbol%3Asrc%252Fapp.c%3Asrc%252Fapp.c%2523run%3Afunction%3A0:symbol%3Asrc%252Fapi.h%3Asrc%252Fapi.h%2523Model%3Atype%3A0:accepts:2:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 62,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.c:src%2Fapp.c%23run:function:0",
+      "targetId": "symbol:src%2Fapi.h:src%2Fapi.h%23Model:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.h:src%2Fapi.h%23Model:type:0",
+        ],
+        "resolutionPath": [
+          "src/app.c",
+          "src/api.h",
+        ],
+        "ruleId": "syntax.c.unique-signature-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/app.c",
+      "id": "edge:symbol%3Asrc%252Fapp.c%3Asrc%252Fapp.c%2523run%3Afunction%3A0:symbol%3Asrc%252Fapi.h%3Asrc%252Fapi.h%2523Model%3Atype%3A0:returns:2:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 62,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.c:src%2Fapp.c%23run:function:0",
+      "targetId": "symbol:src%2Fapi.h:src%2Fapi.h%23Model:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.h:src%2Fapi.h%23build:function:0",
+        ],
+        "resolutionPath": [
+          "src/app.c",
+          "src/api.h",
+        ],
+        "ruleId": "module.c.unique-included-function-call",
+        "stage": "module",
+      },
+      "filePath": "src/app.c",
+      "id": "edge:symbol%3Asrc%252Fapp.c%3Asrc%252Fapp.c%2523run%3Afunction%3A0:symbol%3Asrc%252Fapi.h%3Asrc%252Fapi.h%2523build%3Afunction%3A0:calls:2:47",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 59,
+          "line": 2,
+        },
+        "start": {
+          "column": 47,
+          "line": 2,
+        },
+      },
+      "referenceName": "build",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.c:src%2Fapp.c%23run:function:0",
+      "targetId": "symbol:src%2Fapi.h:src%2Fapi.h%23build:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.h:src%2Fapi.h:file:0",
+        ],
+        "resolutionPath": [
+          "src/app.c",
+          "src/api.h",
+        ],
+        "ruleId": "module.c.literal-include.unique-file",
+        "stage": "module",
+      },
+      "filePath": "src/app.c",
+      "id": "edge:symbol%3Asrc%252Fapp.c%3Asrc%252Fapp.c%3Afile%3A0:symbol%3Asrc%252Fapi.h%3Asrc%252Fapi.h%3Afile%3A0:imports:1:11",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 1,
+        },
+        "start": {
+          "column": 11,
+          "line": 1,
+        },
+      },
+      "referenceName": "api.h",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.c:src%2Fapp.c:file:0",
+      "targetId": "symbol:src%2Fapi.h:src%2Fapi.h:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.c:src%2Fapp.c%23run:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.c",
+      "id": "edge:symbol%3Asrc%252Fapp.c%3Asrc%252Fapp.c%3Afile%3A0:symbol%3Asrc%252Fapp.c%3Asrc%252Fapp.c%2523run%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 62,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.c:src%2Fapp.c:file:0",
+      "targetId": "symbol:src%2Fapp.c:src%2Fapp.c%23run:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "486de0aac16fc38dd7c41acaa8ad2e690eaff7b2ddf2952c1123dc5df08caa84",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "c",
+      "path": "src/api.h",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "f1e94986e512efd74f88cd1ad98e711712c16c4c5b2cfcf43027ba68fe6c954b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "c",
+      "path": "src/app.c",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.h",
+      "id": "symbol:src%2Fapi.h:src%2Fapi.h%23Model:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "Model",
+      "qualifiedName": "src/api.h#Model",
+      "range": {
+        "end": {
+          "column": 28,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.h",
+      "id": "symbol:src%2Fapi.h:src%2Fapi.h%23build:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "build",
+      "qualifiedName": "src/api.h#build",
+      "range": {
+        "end": {
+          "column": 57,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.h",
+      "id": "symbol:src%2Fapi.h:src%2Fapi.h:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "api.h",
+      "qualifiedName": "src/api.h",
+      "range": {
+        "end": {
+          "column": 57,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.c",
+      "id": "symbol:src%2Fapp.c:src%2Fapp.c%23run:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "run",
+      "qualifiedName": "src/app.c#run",
+      "range": {
+        "end": {
+          "column": 62,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.c",
+      "id": "symbol:src%2Fapp.c:src%2Fapp.c:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "app.c",
+      "qualifiedName": "src/app.c",
+      "range": {
+        "end": {
+          "column": 62,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`C, PHP, C++, and Pascal resolver pre-move parity golden > 'cpp' keeps consumer-only imports and cross-file relations unresolved 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.cpp:src%2Fapp.cpp%23invoke:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.cpp",
+      "id": "edge:symbol%3Asrc%252Fapp.cpp%3Asrc%252Fapp.cpp%3Afile%3A0:symbol%3Asrc%252Fapp.cpp%3Asrc%252Fapp.cpp%2523invoke%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "invoke",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.cpp:src%2Fapp.cpp:file:0",
+      "targetId": "symbol:src%2Fapp.cpp:src%2Fapp.cpp%23invoke:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.cpp:src%2Fapp.cpp%23run:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.cpp",
+      "id": "edge:symbol%3Asrc%252Fapp.cpp%3Asrc%252Fapp.cpp%3Afile%3A0:symbol%3Asrc%252Fapp.cpp%3Asrc%252Fapp.cpp%2523run%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 55,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.cpp:src%2Fapp.cpp:file:0",
+      "targetId": "symbol:src%2Fapp.cpp:src%2Fapp.cpp%23run:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "7280bdf9b4cf2c7cc5cc8d70efd9eddc37b25c9de142ecf2ff607492fb383b6c",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "cpp",
+      "path": "src/app.cpp",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.cpp",
+      "id": "symbol:src%2Fapp.cpp:src%2Fapp.cpp%23invoke:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "invoke",
+      "qualifiedName": "src/app.cpp#invoke",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.cpp",
+      "id": "symbol:src%2Fapp.cpp:src%2Fapp.cpp%23run:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "run",
+      "qualifiedName": "src/app.cpp#run",
+      "range": {
+        "end": {
+          "column": 55,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.cpp",
+      "id": "symbol:src%2Fapp.cpp:src%2Fapp.cpp:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "app.cpp",
+      "qualifiedName": "src/app.cpp",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`C, PHP, C++, and Pascal resolver pre-move parity golden > 'cpp' preserves complete cross-file and local output 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Box.caller:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.hpp",
+      "id": "edge:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%2523Box%3Aclass%3A0:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%2523Box.caller%3Amethod%3A0:contains:5:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 63,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+      "referenceName": "caller",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Box:class:0",
+      "targetId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Box.caller:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Box.helper:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.hpp",
+      "id": "edge:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%2523Box%3Aclass%3A0:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%2523Box.helper%3Amethod%3A0:contains:4:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Box:class:0",
+      "targetId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Box.helper:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Box.helper:method:0",
+        ],
+        "ruleId": "syntax.cpp.unique-this-member-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.hpp",
+      "id": "edge:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%2523Box.caller%3Amethod%3A0:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%2523Box.helper%3Amethod%3A0:calls:5:33",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 39,
+          "line": 5,
+        },
+        "start": {
+          "column": 33,
+          "line": 5,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Box.caller:method:0",
+      "targetId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Box.helper:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Model:class:0",
+        ],
+        "ruleId": "syntax.cpp.unique-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.hpp",
+      "id": "edge:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%2523build%3Afunction%3A0:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%2523Model%3Aclass%3A0:accepts:2:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23build:function:0",
+      "targetId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Model:class:0",
+        ],
+        "ruleId": "syntax.cpp.unique-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.hpp",
+      "id": "edge:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%2523build%3Afunction%3A0:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%2523Model%3Aclass%3A0:returns:2:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23build:function:0",
+      "targetId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Box:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.hpp",
+      "id": "edge:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%3Afile%3A0:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%2523Box%3Aclass%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Box",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp:file:0",
+      "targetId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Box:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Model:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.hpp",
+      "id": "edge:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%3Afile%3A0:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%2523Model%3Aclass%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp:file:0",
+      "targetId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23build:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.hpp",
+      "id": "edge:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%3Afile%3A0:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%2523build%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "build",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp:file:0",
+      "targetId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23build:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Model:class:0",
+        ],
+        "resolutionPath": [
+          "src/app.cpp",
+          "src/api.hpp",
+        ],
+        "ruleId": "syntax.cpp.unique-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/app.cpp",
+      "id": "edge:symbol%3Asrc%252Fapp.cpp%3Asrc%252Fapp.cpp%2523invoke%3Afunction%3A0:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%2523Model%3Aclass%3A0:accepts:3:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.cpp:src%2Fapp.cpp%23invoke:function:0",
+      "targetId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Model:class:0",
+        ],
+        "resolutionPath": [
+          "src/app.cpp",
+          "src/api.hpp",
+        ],
+        "ruleId": "syntax.cpp.unique-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/app.cpp",
+      "id": "edge:symbol%3Asrc%252Fapp.cpp%3Asrc%252Fapp.cpp%2523invoke%3Afunction%3A0:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%2523Model%3Aclass%3A0:returns:3:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.cpp:src%2Fapp.cpp%23invoke:function:0",
+      "targetId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23build:function:0",
+        ],
+        "resolutionPath": [
+          "src/app.cpp",
+          "src/api.hpp",
+        ],
+        "ruleId": "syntax.cpp.unique-direct-call",
+        "stage": "module",
+      },
+      "filePath": "src/app.cpp",
+      "id": "edge:symbol%3Asrc%252Fapp.cpp%3Asrc%252Fapp.cpp%2523invoke%3Afunction%3A0:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%2523build%3Afunction%3A0:calls:3:43",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 55,
+          "line": 3,
+        },
+        "start": {
+          "column": 43,
+          "line": 3,
+        },
+      },
+      "referenceName": "build",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.cpp:src%2Fapp.cpp%23invoke:function:0",
+      "targetId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23build:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Model:class:0",
+        ],
+        "resolutionPath": [
+          "src/app.cpp",
+          "src/api.hpp",
+        ],
+        "ruleId": "syntax.cpp.unique-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/app.cpp",
+      "id": "edge:symbol%3Asrc%252Fapp.cpp%3Asrc%252Fapp.cpp%2523run%3Afunction%3A0:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%2523Model%3Aclass%3A0:accepts:2:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 55,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.cpp:src%2Fapp.cpp%23run:function:0",
+      "targetId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Model:class:0",
+        ],
+        "resolutionPath": [
+          "src/app.cpp",
+          "src/api.hpp",
+        ],
+        "ruleId": "syntax.cpp.unique-new-construction",
+        "stage": "module",
+      },
+      "filePath": "src/app.cpp",
+      "id": "edge:symbol%3Asrc%252Fapp.cpp%3Asrc%252Fapp.cpp%2523run%3Afunction%3A0:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%2523Model%3Aclass%3A0:instantiates:2:45",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 2,
+        },
+        "start": {
+          "column": 45,
+          "line": 2,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.cpp:src%2Fapp.cpp%23run:function:0",
+      "targetId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Model:class:0",
+        ],
+        "resolutionPath": [
+          "src/app.cpp",
+          "src/api.hpp",
+        ],
+        "ruleId": "syntax.cpp.unique-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/app.cpp",
+      "id": "edge:symbol%3Asrc%252Fapp.cpp%3Asrc%252Fapp.cpp%2523run%3Afunction%3A0:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%2523Model%3Aclass%3A0:returns:2:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 55,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.cpp:src%2Fapp.cpp%23run:function:0",
+      "targetId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.hpp:src%2Fapi.hpp:file:0",
+        ],
+        "resolutionPath": [
+          "src/app.cpp",
+          "src/api.hpp",
+        ],
+        "ruleId": "module.cpp.literal-include.unique-file",
+        "stage": "module",
+      },
+      "filePath": "src/app.cpp",
+      "id": "edge:symbol%3Asrc%252Fapp.cpp%3Asrc%252Fapp.cpp%3Afile%3A0:symbol%3Asrc%252Fapi.hpp%3Asrc%252Fapi.hpp%3Afile%3A0:imports:1:11",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 1,
+        },
+        "start": {
+          "column": 11,
+          "line": 1,
+        },
+      },
+      "referenceName": "api.hpp",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.cpp:src%2Fapp.cpp:file:0",
+      "targetId": "symbol:src%2Fapi.hpp:src%2Fapi.hpp:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.cpp:src%2Fapp.cpp%23invoke:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.cpp",
+      "id": "edge:symbol%3Asrc%252Fapp.cpp%3Asrc%252Fapp.cpp%3Afile%3A0:symbol%3Asrc%252Fapp.cpp%3Asrc%252Fapp.cpp%2523invoke%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "invoke",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.cpp:src%2Fapp.cpp:file:0",
+      "targetId": "symbol:src%2Fapp.cpp:src%2Fapp.cpp%23invoke:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapp.cpp:src%2Fapp.cpp%23run:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/app.cpp",
+      "id": "edge:symbol%3Asrc%252Fapp.cpp%3Asrc%252Fapp.cpp%3Afile%3A0:symbol%3Asrc%252Fapp.cpp%3Asrc%252Fapp.cpp%2523run%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 55,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapp.cpp:src%2Fapp.cpp:file:0",
+      "targetId": "symbol:src%2Fapp.cpp:src%2Fapp.cpp%23run:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "4c30dda63ccdf1ad4ba73fd27eeaec039990fb99fab3d0425ccbb8999aef7cde",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "cpp",
+      "path": "src/api.hpp",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "7280bdf9b4cf2c7cc5cc8d70efd9eddc37b25c9de142ecf2ff607492fb383b6c",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "cpp",
+      "path": "src/app.cpp",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.hpp",
+      "id": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Box.caller:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "caller",
+      "qualifiedName": "src/api.hpp#Box.caller",
+      "range": {
+        "end": {
+          "column": 63,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.hpp",
+      "id": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Box.helper:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "helper",
+      "qualifiedName": "src/api.hpp#Box.helper",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.hpp",
+      "id": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Box:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Box",
+      "qualifiedName": "src/api.hpp#Box",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.hpp",
+      "id": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23Model:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Model",
+      "qualifiedName": "src/api.hpp#Model",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.hpp",
+      "id": "symbol:src%2Fapi.hpp:src%2Fapi.hpp%23build:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "build",
+      "qualifiedName": "src/api.hpp#build",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.hpp",
+      "id": "symbol:src%2Fapi.hpp:src%2Fapi.hpp:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "api.hpp",
+      "qualifiedName": "src/api.hpp",
+      "range": {
+        "end": {
+          "column": 3,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.cpp",
+      "id": "symbol:src%2Fapp.cpp:src%2Fapp.cpp%23invoke:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "invoke",
+      "qualifiedName": "src/app.cpp#invoke",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.cpp",
+      "id": "symbol:src%2Fapp.cpp:src%2Fapp.cpp%23run:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "run",
+      "qualifiedName": "src/app.cpp#run",
+      "range": {
+        "end": {
+          "column": 55,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/app.cpp",
+      "id": "symbol:src%2Fapp.cpp:src%2Fapp.cpp:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "app.cpp",
+      "qualifiedName": "src/app.cpp",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`C, PHP, C++, and Pascal resolver pre-move parity golden > 'pascal' keeps consumer-only imports and cross-file relations unresolved 1`] = `
+{
+  "edges": [],
+  "files": [
+    {
+      "contentHash": "c34ccde247da0ab351d6220f49b09afeb133f42f79fbbe1a6e6032cba686c409",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "pascal",
+      "path": "main.pas",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "main.pas",
+      "id": "symbol:main.pas:main.pas:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "main.pas",
+      "qualifiedName": "main.pas",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`C, PHP, C++, and Pascal resolver pre-move parity golden > 'pascal' preserves complete cross-file and local output 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:helper.pas:helper.pas%23Helper:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "helper.pas",
+      "id": "edge:symbol%3Ahelper.pas%3Ahelper.pas%3Afile%3A0:symbol%3Ahelper.pas%3Ahelper.pas%2523Helper%3Afunction%3A0:contains:9:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 11,
+        },
+        "start": {
+          "column": 1,
+          "line": 9,
+        },
+      },
+      "referenceName": "Helper",
+      "resolution": "exact",
+      "sourceId": "symbol:helper.pas:helper.pas:file:0",
+      "targetId": "symbol:helper.pas:helper.pas%23Helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:helper.pas:helper.pas%23Helper:function:0",
+        ],
+        "ruleId": "project.pascal.unit-uses.unique-exported-zero-argument-call",
+        "stage": "module",
+      },
+      "filePath": "main.pas",
+      "id": "edge:symbol%3Amain.pas%3Amain.pas%3Afile%3A0:symbol%3Ahelper.pas%3Ahelper.pas%2523Helper%3Afunction%3A0:calls:6:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 9,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+      "referenceName": "Helper",
+      "resolution": "exact",
+      "sourceId": "symbol:main.pas:main.pas:file:0",
+      "targetId": "symbol:helper.pas:helper.pas%23Helper:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "cf9a6b38a3e657e66258b270d8154c360039a8c5df88944692564238f6fc573b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "pascal",
+      "path": "helper.pas",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "c34ccde247da0ab351d6220f49b09afeb133f42f79fbbe1a6e6032cba686c409",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "pascal",
+      "path": "main.pas",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "helper.pas",
+      "id": "symbol:helper.pas:helper.pas%23Helper:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "Helper",
+      "qualifiedName": "helper.pas#Helper",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 11,
+        },
+        "start": {
+          "column": 1,
+          "line": 9,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "helper.pas",
+      "id": "symbol:helper.pas:helper.pas:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "helper.pas",
+      "qualifiedName": "helper.pas",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 14,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "main.pas",
+      "id": "symbol:main.pas:main.pas:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "main.pas",
+      "qualifiedName": "main.pas",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`C, PHP, C++, and Pascal resolver pre-move parity golden > 'php' keeps consumer-only imports and cross-file relations unresolved 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.php:src%2FApp.php%23Child.run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.php",
+      "id": "edge:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%2523Child%3Aclass%3A0:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%2523Child.run%3Amethod%3A0:contains:6:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 75,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.php:src%2FApp.php%23Child:class:0",
+      "targetId": "symbol:src%2FApp.php:src%2FApp.php%23Child.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.php:src%2FApp.php%23Child:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.php",
+      "id": "edge:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%3Afile%3A0:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%2523Child%3Aclass%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "Child",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.php:src%2FApp.php:file:0",
+      "targetId": "symbol:src%2FApp.php:src%2FApp.php%23Child:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.php:src%2FApp.php%23execute:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.php",
+      "id": "edge:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%3Afile%3A0:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%2523execute%3Afunction%3A0:contains:8:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 69,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+      "referenceName": "execute",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.php:src%2FApp.php:file:0",
+      "targetId": "symbol:src%2FApp.php:src%2FApp.php%23execute:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "98ead59bfc7b9eda3f2c93087f44011d1ad6309fac7e9ce80e4a46b632be81ab",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "php",
+      "path": "src/App.php",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.php",
+      "id": "symbol:src%2FApp.php:src%2FApp.php%23Child.run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "src/App.php#Child.run",
+      "range": {
+        "end": {
+          "column": 75,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.php",
+      "id": "symbol:src%2FApp.php:src%2FApp.php%23Child:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Child",
+      "qualifiedName": "src/App.php#Child",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.php",
+      "id": "symbol:src%2FApp.php:src%2FApp.php%23execute:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "execute",
+      "qualifiedName": "src/App.php#execute",
+      "range": {
+        "end": {
+          "column": 69,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.php",
+      "id": "symbol:src%2FApp.php:src%2FApp.php:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "App.php",
+      "qualifiedName": "src/App.php",
+      "range": {
+        "end": {
+          "column": 69,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`C, PHP, C++, and Pascal resolver pre-move parity golden > 'php' preserves complete cross-file and local output 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.php:src%2FApp.php%23Child.run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.php",
+      "id": "edge:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%2523Child%3Aclass%3A0:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%2523Child.run%3Amethod%3A0:contains:6:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 75,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.php:src%2FApp.php%23Child:class:0",
+      "targetId": "symbol:src%2FApp.php:src%2FApp.php%23Child.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.php",
+          "src/Domain.php",
+        ],
+        "ruleId": "syntax.php.unique-extends",
+        "stage": "module",
+      },
+      "filePath": "src/App.php",
+      "id": "edge:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%2523Child%3Aclass%3A0:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523Model%3Aclass%3A0:extends:5:21",
+      "kind": "extends",
+      "range": {
+        "end": {
+          "column": 26,
+          "line": 5,
+        },
+        "start": {
+          "column": 21,
+          "line": 5,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.php:src%2FApp.php%23Child:class:0",
+      "targetId": "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.php",
+          "src/Domain.php",
+        ],
+        "ruleId": "syntax.php.unique-signature-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.php",
+      "id": "edge:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%2523Child.run%3Amethod%3A0:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523Model%3Aclass%3A0:accepts:6:3",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 75,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.php:src%2FApp.php%23Child.run:method:0",
+      "targetId": "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.php",
+          "src/Domain.php",
+        ],
+        "ruleId": "syntax.php.unique-signature-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.php",
+      "id": "edge:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%2523Child.run%3Amethod%3A0:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523Model%3Aclass%3A0:returns:6:3",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 75,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.php:src%2FApp.php%23Child.run:method:0",
+      "targetId": "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FDomain.php:src%2FDomain.php%23Model.make:method:0",
+        ],
+        "resolutionPath": [
+          "src/App.php",
+          "src/Domain.php",
+        ],
+        "ruleId": "syntax.php.unique-static-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.php",
+      "id": "edge:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%2523Child.run%3Amethod%3A0:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523Model.make%3Amethod%3A0:calls:6:53",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 72,
+          "line": 6,
+        },
+        "start": {
+          "column": 53,
+          "line": 6,
+        },
+      },
+      "referenceName": "Model::make",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.php:src%2FApp.php%23Child.run:method:0",
+      "targetId": "symbol:src%2FDomain.php:src%2FDomain.php%23Model.make:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.php",
+          "src/Domain.php",
+        ],
+        "ruleId": "syntax.php.unique-signature-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.php",
+      "id": "edge:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%2523execute%3Afunction%3A0:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523Model%3Aclass%3A0:accepts:8:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 69,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.php:src%2FApp.php%23execute:function:0",
+      "targetId": "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.php",
+          "src/Domain.php",
+        ],
+        "ruleId": "syntax.php.unique-signature-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.php",
+      "id": "edge:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%2523execute%3Afunction%3A0:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523Model%3Aclass%3A0:returns:8:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 69,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.php:src%2FApp.php%23execute:function:0",
+      "targetId": "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FDomain.php:src%2FDomain.php%23build:function:0",
+        ],
+        "resolutionPath": [
+          "src/App.php",
+          "src/Domain.php",
+        ],
+        "ruleId": "syntax.php.unique-direct-function-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.php",
+      "id": "edge:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%2523execute%3Afunction%3A0:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523build%3Afunction%3A0:calls:8:48",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 66,
+          "line": 8,
+        },
+        "start": {
+          "column": 48,
+          "line": 8,
+        },
+      },
+      "referenceName": "buildModel",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.php:src%2FApp.php%23execute:function:0",
+      "targetId": "symbol:src%2FDomain.php:src%2FDomain.php%23build:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.php:src%2FApp.php%23Child:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.php",
+      "id": "edge:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%3Afile%3A0:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%2523Child%3Aclass%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "Child",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.php:src%2FApp.php:file:0",
+      "targetId": "symbol:src%2FApp.php:src%2FApp.php%23Child:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.php:src%2FApp.php%23execute:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.php",
+      "id": "edge:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%3Afile%3A0:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%2523execute%3Afunction%3A0:contains:8:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 69,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+      "referenceName": "execute",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.php:src%2FApp.php:file:0",
+      "targetId": "symbol:src%2FApp.php:src%2FApp.php%23execute:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FDomain.php:src%2FDomain.php:file:0",
+        ],
+        "resolutionPath": [
+          "src/App.php",
+          "src/Domain.php",
+        ],
+        "ruleId": "module.php.explicit-use.unique-file",
+        "stage": "module",
+      },
+      "filePath": "src/App.php",
+      "id": "edge:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%3Afile%3A0:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%3Afile%3A0:imports:3:5",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 3,
+        },
+        "start": {
+          "column": 5,
+          "line": 3,
+        },
+      },
+      "referenceName": "Domain\\Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.php:src%2FApp.php:file:0",
+      "targetId": "symbol:src%2FDomain.php:src%2FDomain.php:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FDomain.php:src%2FDomain.php:file:0",
+        ],
+        "resolutionPath": [
+          "src/App.php",
+          "src/Domain.php",
+        ],
+        "ruleId": "module.php.explicit-use.unique-file",
+        "stage": "module",
+      },
+      "filePath": "src/App.php",
+      "id": "edge:symbol%3Asrc%252FApp.php%3Asrc%252FApp.php%3Afile%3A0:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%3Afile%3A0:imports:4:14",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 26,
+          "line": 4,
+        },
+        "start": {
+          "column": 14,
+          "line": 4,
+        },
+      },
+      "referenceName": "Domain\\build",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.php:src%2FApp.php:file:0",
+      "targetId": "symbol:src%2FDomain.php:src%2FDomain.php:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FDomain.php:src%2FDomain.php%23Model.make:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Domain.php",
+      "id": "edge:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523Model%3Aclass%3A0:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523Model.make%3Amethod%3A0:contains:4:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 75,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "make",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+      "targetId": "symbol:src%2FDomain.php:src%2FDomain.php%23Model.make:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+        ],
+        "ruleId": "syntax.php.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Domain.php",
+      "id": "edge:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523Model.make%3Amethod%3A0:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523Model%3Aclass%3A0:accepts:4:3",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 75,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FDomain.php:src%2FDomain.php%23Model.make:method:0",
+      "targetId": "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+        ],
+        "ruleId": "syntax.php.unique-class-instantiation",
+        "stage": "syntax",
+      },
+      "filePath": "src/Domain.php",
+      "id": "edge:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523Model.make%3Amethod%3A0:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523Model%3Aclass%3A0:instantiates:4:61",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 72,
+          "line": 4,
+        },
+        "start": {
+          "column": 61,
+          "line": 4,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FDomain.php:src%2FDomain.php%23Model.make:method:0",
+      "targetId": "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+        ],
+        "ruleId": "syntax.php.unique-signature-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Domain.php",
+      "id": "edge:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523Model.make%3Amethod%3A0:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523Model%3Aclass%3A0:returns:4:3",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 75,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FDomain.php:src%2FDomain.php%23Model.make:method:0",
+      "targetId": "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+        ],
+        "ruleId": "syntax.php.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Domain.php",
+      "id": "edge:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523build%3Afunction%3A0:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523Model%3Aclass%3A0:accepts:6:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 55,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FDomain.php:src%2FDomain.php%23build:function:0",
+      "targetId": "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+        ],
+        "ruleId": "syntax.php.unique-signature-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Domain.php",
+      "id": "edge:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523build%3Afunction%3A0:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523Model%3Aclass%3A0:returns:6:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 55,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FDomain.php:src%2FDomain.php%23build:function:0",
+      "targetId": "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Domain.php",
+      "id": "edge:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%3Afile%3A0:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523Model%3Aclass%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Model",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FDomain.php:src%2FDomain.php:file:0",
+      "targetId": "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FDomain.php:src%2FDomain.php%23build:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Domain.php",
+      "id": "edge:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%3Afile%3A0:symbol%3Asrc%252FDomain.php%3Asrc%252FDomain.php%2523build%3Afunction%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 55,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "build",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FDomain.php:src%2FDomain.php:file:0",
+      "targetId": "symbol:src%2FDomain.php:src%2FDomain.php%23build:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "98ead59bfc7b9eda3f2c93087f44011d1ad6309fac7e9ce80e4a46b632be81ab",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "php",
+      "path": "src/App.php",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "b91dba1b7907848b9de7d9027e91a793b6d5f04bc9a3d4384590494b28b0c72a",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "php",
+      "path": "src/Domain.php",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.php",
+      "id": "symbol:src%2FApp.php:src%2FApp.php%23Child.run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "src/App.php#Child.run",
+      "range": {
+        "end": {
+          "column": 75,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.php",
+      "id": "symbol:src%2FApp.php:src%2FApp.php%23Child:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Child",
+      "qualifiedName": "src/App.php#Child",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.php",
+      "id": "symbol:src%2FApp.php:src%2FApp.php%23execute:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "execute",
+      "qualifiedName": "src/App.php#execute",
+      "range": {
+        "end": {
+          "column": 69,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.php",
+      "id": "symbol:src%2FApp.php:src%2FApp.php:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "App.php",
+      "qualifiedName": "src/App.php",
+      "range": {
+        "end": {
+          "column": 69,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Domain.php",
+      "id": "symbol:src%2FDomain.php:src%2FDomain.php%23Model.make:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "make",
+      "qualifiedName": "src/Domain.php#Model.make",
+      "range": {
+        "end": {
+          "column": 75,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Domain.php",
+      "id": "symbol:src%2FDomain.php:src%2FDomain.php%23Model:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Model",
+      "qualifiedName": "src/Domain.php#Model",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Domain.php",
+      "id": "symbol:src%2FDomain.php:src%2FDomain.php%23build:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "build",
+      "qualifiedName": "src/Domain.php#build",
+      "range": {
+        "end": {
+          "column": 55,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Domain.php",
+      "id": "symbol:src%2FDomain.php:src%2FDomain.php:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Domain.php",
+      "qualifiedName": "src/Domain.php",
+      "range": {
+        "end": {
+          "column": 55,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

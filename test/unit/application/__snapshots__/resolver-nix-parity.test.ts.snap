@@ -1,0 +1,1100 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Nix complete-output parity before resolver move > preserves duplicate import binding nonclaim 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Aremote:function:0",
+        ],
+        "ruleId": "language.nix.returned-attrset.binding",
+        "stage": "syntax",
+      },
+      "filePath": "src/default.nix",
+      "id": "edge:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%3Afile%3A0:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%2523function%253Aremote%3Afunction%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "remote",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix:file:0",
+      "targetId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Aremote:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23variable%3Aimported:variable:0",
+        ],
+        "ruleId": "language.nix.returned-attrset.binding",
+        "stage": "syntax",
+      },
+      "filePath": "src/default.nix",
+      "id": "edge:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%3Afile%3A0:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%2523variable%253Aimported%3Avariable%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "imported",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix:file:0",
+      "targetId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23variable%3Aimported:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23variable%3Aimported:variable:1",
+        ],
+        "ruleId": "language.nix.returned-attrset.binding",
+        "stage": "syntax",
+      },
+      "filePath": "src/default.nix",
+      "id": "edge:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%3Afile%3A0:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%2523variable%253Aimported%3Avariable%3A1:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "imported",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix:file:0",
+      "targetId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23variable%3Aimported:variable:1",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fone.nix:src%2Fone.nix:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/default.nix",
+      "id": "edge:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%3Afile%3A0:symbol%3Asrc%252Fone.nix%3Asrc%252Fone.nix%3Afile%3A0:imports:2:19",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 28,
+          "line": 2,
+        },
+        "start": {
+          "column": 19,
+          "line": 2,
+        },
+      },
+      "referenceName": "./one.nix",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix:file:0",
+      "targetId": "symbol:src%2Fone.nix:src%2Fone.nix:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Ftwo.nix:src%2Ftwo.nix:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/default.nix",
+      "id": "edge:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%3Afile%3A0:symbol%3Asrc%252Ftwo.nix%3Asrc%252Ftwo.nix%3Afile%3A0:imports:3:19",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 28,
+          "line": 3,
+        },
+        "start": {
+          "column": 19,
+          "line": 3,
+        },
+      },
+      "referenceName": "./two.nix",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix:file:0",
+      "targetId": "symbol:src%2Ftwo.nix:src%2Ftwo.nix:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fone.nix:src%2Fone.nix%23function%3Abuild:function:0",
+        ],
+        "ruleId": "language.nix.returned-attrset.binding",
+        "stage": "syntax",
+      },
+      "filePath": "src/one.nix",
+      "id": "edge:symbol%3Asrc%252Fone.nix%3Asrc%252Fone.nix%3Afile%3A0:symbol%3Asrc%252Fone.nix%3Asrc%252Fone.nix%2523function%253Abuild%3Afunction%3A0:contains:1:2",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 1,
+        },
+        "start": {
+          "column": 2,
+          "line": 1,
+        },
+      },
+      "referenceName": "build",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fone.nix:src%2Fone.nix:file:0",
+      "targetId": "symbol:src%2Fone.nix:src%2Fone.nix%23function%3Abuild:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Ftwo.nix:src%2Ftwo.nix%23function%3Abuild:function:0",
+        ],
+        "ruleId": "language.nix.returned-attrset.binding",
+        "stage": "syntax",
+      },
+      "filePath": "src/two.nix",
+      "id": "edge:symbol%3Asrc%252Ftwo.nix%3Asrc%252Ftwo.nix%3Afile%3A0:symbol%3Asrc%252Ftwo.nix%3Asrc%252Ftwo.nix%2523function%253Abuild%3Afunction%3A0:contains:1:2",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 1,
+        },
+        "start": {
+          "column": 2,
+          "line": 1,
+        },
+      },
+      "referenceName": "build",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Ftwo.nix:src%2Ftwo.nix:file:0",
+      "targetId": "symbol:src%2Ftwo.nix:src%2Ftwo.nix%23function%3Abuild:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "4b07a3de30c4853389b9efc7eb483ba8c446d106c25bb86c2c0801d81ed9e98e",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "nix",
+      "path": "src/default.nix",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "ce65799234ece8be5343af58600f1737bbe521ffd266a5b2a4fcfa8283b4493f",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "nix",
+      "path": "src/one.nix",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "ce65799234ece8be5343af58600f1737bbe521ffd266a5b2a4fcfa8283b4493f",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "nix",
+      "path": "src/two.nix",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/default.nix",
+      "id": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Aremote:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "remote",
+      "qualifiedName": "src/default.nix#function:remote",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/default.nix",
+      "id": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23variable%3Aimported:variable:0",
+      "isExported": true,
+      "kind": "variable",
+      "name": "imported",
+      "qualifiedName": "src/default.nix#variable:imported",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 1,
+      "filePath": "src/default.nix",
+      "id": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23variable%3Aimported:variable:1",
+      "isExported": true,
+      "kind": "variable",
+      "name": "imported",
+      "qualifiedName": "src/default.nix#variable:imported",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/default.nix",
+      "id": "symbol:src%2Fdefault.nix:src%2Fdefault.nix:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "default.nix",
+      "qualifiedName": "src/default.nix",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 5,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/one.nix",
+      "id": "symbol:src%2Fone.nix:src%2Fone.nix%23function%3Abuild:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "build",
+      "qualifiedName": "src/one.nix#function:build",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 1,
+        },
+        "start": {
+          "column": 2,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/one.nix",
+      "id": "symbol:src%2Fone.nix:src%2Fone.nix:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "one.nix",
+      "qualifiedName": "src/one.nix",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 1,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/two.nix",
+      "id": "symbol:src%2Ftwo.nix:src%2Ftwo.nix%23function%3Abuild:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "build",
+      "qualifiedName": "src/two.nix#function:build",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 1,
+        },
+        "start": {
+          "column": 2,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/two.nix",
+      "id": "symbol:src%2Ftwo.nix:src%2Ftwo.nix:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "two.nix",
+      "qualifiedName": "src/two.nix",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 1,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Nix complete-output parity before resolver move > preserves imported attribute and local calls 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.nix:src%2Fapi.nix%23function%3Abuild:function:0",
+        ],
+        "ruleId": "language.nix.returned-attrset.binding",
+        "stage": "syntax",
+      },
+      "filePath": "src/api.nix",
+      "id": "edge:symbol%3Asrc%252Fapi.nix%3Asrc%252Fapi.nix%3Afile%3A0:symbol%3Asrc%252Fapi.nix%3Asrc%252Fapi.nix%2523function%253Abuild%3Afunction%3A0:contains:1:2",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 1,
+        },
+        "start": {
+          "column": 2,
+          "line": 1,
+        },
+      },
+      "referenceName": "build",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fapi.nix:src%2Fapi.nix:file:0",
+      "targetId": "symbol:src%2Fapi.nix:src%2Fapi.nix%23function%3Abuild:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Ahelper:function:0",
+        ],
+        "ruleId": "syntax.nix.unique-local-function-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/default.nix",
+      "id": "edge:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%2523function%253Alocal%3Afunction%3A0:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%2523function%253Ahelper%3Afunction%3A0:calls:4:16",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 4,
+        },
+        "start": {
+          "column": 16,
+          "line": 4,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Alocal:function:0",
+      "targetId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Ahelper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.nix:src%2Fapi.nix%23function%3Abuild:function:0",
+        ],
+        "resolutionPath": [
+          "src/default.nix",
+          "src/api.nix",
+        ],
+        "ruleId": "module.nix.literal-imported-attribute-call",
+        "stage": "module",
+      },
+      "filePath": "src/default.nix",
+      "id": "edge:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%2523function%253Aremote%3Afunction%3A0:symbol%3Asrc%252Fapi.nix%3Asrc%252Fapi.nix%2523function%253Abuild%3Afunction%3A0:calls:5:17",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 31,
+          "line": 5,
+        },
+        "start": {
+          "column": 17,
+          "line": 5,
+        },
+      },
+      "referenceName": "imported.build",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Aremote:function:0",
+      "targetId": "symbol:src%2Fapi.nix:src%2Fapi.nix%23function%3Abuild:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fapi.nix:src%2Fapi.nix:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/default.nix",
+      "id": "edge:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%3Afile%3A0:symbol%3Asrc%252Fapi.nix%3Asrc%252Fapi.nix%3Afile%3A0:imports:3:19",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 28,
+          "line": 3,
+        },
+        "start": {
+          "column": 19,
+          "line": 3,
+        },
+      },
+      "referenceName": "./api.nix",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix:file:0",
+      "targetId": "symbol:src%2Fapi.nix:src%2Fapi.nix:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Ahelper:function:0",
+        ],
+        "ruleId": "language.nix.returned-attrset.binding",
+        "stage": "syntax",
+      },
+      "filePath": "src/default.nix",
+      "id": "edge:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%3Afile%3A0:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%2523function%253Ahelper%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix:file:0",
+      "targetId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Ahelper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Alocal:function:0",
+        ],
+        "ruleId": "language.nix.returned-attrset.binding",
+        "stage": "syntax",
+      },
+      "filePath": "src/default.nix",
+      "id": "edge:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%3Afile%3A0:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%2523function%253Alocal%3Afunction%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix:file:0",
+      "targetId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Alocal:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Aremote:function:0",
+        ],
+        "ruleId": "language.nix.returned-attrset.binding",
+        "stage": "syntax",
+      },
+      "filePath": "src/default.nix",
+      "id": "edge:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%3Afile%3A0:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%2523function%253Aremote%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "remote",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix:file:0",
+      "targetId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Aremote:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23variable%3Aimported:variable:0",
+        ],
+        "ruleId": "language.nix.returned-attrset.binding",
+        "stage": "syntax",
+      },
+      "filePath": "src/default.nix",
+      "id": "edge:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%3Afile%3A0:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%2523variable%253Aimported%3Avariable%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "imported",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix:file:0",
+      "targetId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23variable%3Aimported:variable:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "e402a8f58009c0826aa99a919755d9a81d6211c0a45258e54b10e7b518f0de58",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "nix",
+      "path": "src/api.nix",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "ee63ad22bd0d25ae21a6e58b287157c50cbb273c134b7fbca19622ad20fd8c4b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "nix",
+      "path": "src/default.nix",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.nix",
+      "id": "symbol:src%2Fapi.nix:src%2Fapi.nix%23function%3Abuild:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "build",
+      "qualifiedName": "src/api.nix#function:build",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 1,
+        },
+        "start": {
+          "column": 2,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/api.nix",
+      "id": "symbol:src%2Fapi.nix:src%2Fapi.nix:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "api.nix",
+      "qualifiedName": "src/api.nix",
+      "range": {
+        "end": {
+          "column": 0,
+          "line": 2,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/default.nix",
+      "id": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Ahelper:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "src/default.nix#function:helper",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/default.nix",
+      "id": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Alocal:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "local",
+      "qualifiedName": "src/default.nix#function:local",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/default.nix",
+      "id": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Aremote:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "remote",
+      "qualifiedName": "src/default.nix#function:remote",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/default.nix",
+      "id": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23variable%3Aimported:variable:0",
+      "isExported": true,
+      "kind": "variable",
+      "name": "imported",
+      "qualifiedName": "src/default.nix#variable:imported",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/default.nix",
+      "id": "symbol:src%2Fdefault.nix:src%2Fdefault.nix:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "default.nix",
+      "qualifiedName": "src/default.nix",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 6,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`Nix complete-output parity before resolver move > preserves missing target nonclaim and local call 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Ahelper:function:0",
+        ],
+        "ruleId": "syntax.nix.unique-local-function-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/default.nix",
+      "id": "edge:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%2523function%253Alocal%3Afunction%3A0:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%2523function%253Ahelper%3Afunction%3A0:calls:4:16",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 4,
+        },
+        "start": {
+          "column": 16,
+          "line": 4,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Alocal:function:0",
+      "targetId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Ahelper:function:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/default.nix",
+      "id": "edge:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%3Afile%3A0:.%2Fapi.nix:imports:3:19",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 28,
+          "line": 3,
+        },
+        "start": {
+          "column": 19,
+          "line": 3,
+        },
+      },
+      "referenceName": "./api.nix",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Ahelper:function:0",
+        ],
+        "ruleId": "language.nix.returned-attrset.binding",
+        "stage": "syntax",
+      },
+      "filePath": "src/default.nix",
+      "id": "edge:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%3Afile%3A0:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%2523function%253Ahelper%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix:file:0",
+      "targetId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Ahelper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Alocal:function:0",
+        ],
+        "ruleId": "language.nix.returned-attrset.binding",
+        "stage": "syntax",
+      },
+      "filePath": "src/default.nix",
+      "id": "edge:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%3Afile%3A0:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%2523function%253Alocal%3Afunction%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix:file:0",
+      "targetId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Alocal:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Aremote:function:0",
+        ],
+        "ruleId": "language.nix.returned-attrset.binding",
+        "stage": "syntax",
+      },
+      "filePath": "src/default.nix",
+      "id": "edge:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%3Afile%3A0:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%2523function%253Aremote%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "remote",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix:file:0",
+      "targetId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Aremote:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23variable%3Aimported:variable:0",
+        ],
+        "ruleId": "language.nix.returned-attrset.binding",
+        "stage": "syntax",
+      },
+      "filePath": "src/default.nix",
+      "id": "edge:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%3Afile%3A0:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%2523variable%253Aimported%3Avariable%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "imported",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix:file:0",
+      "targetId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23variable%3Aimported:variable:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "ee63ad22bd0d25ae21a6e58b287157c50cbb273c134b7fbca19622ad20fd8c4b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "nix",
+      "path": "src/default.nix",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [
+    {
+      "filePath": "src/default.nix",
+      "id": "edge:symbol%3Asrc%252Fdefault.nix%3Asrc%252Fdefault.nix%3Afile%3A0:.%2Fapi.nix:imports:3:19",
+      "range": {
+        "end": {
+          "column": 28,
+          "line": 3,
+        },
+        "start": {
+          "column": 19,
+          "line": 3,
+        },
+      },
+      "referenceName": "./api.nix",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fdefault.nix:src%2Fdefault.nix:file:0",
+    },
+  ],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/default.nix",
+      "id": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Ahelper:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "src/default.nix#function:helper",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/default.nix",
+      "id": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Alocal:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "local",
+      "qualifiedName": "src/default.nix#function:local",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/default.nix",
+      "id": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23function%3Aremote:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "remote",
+      "qualifiedName": "src/default.nix#function:remote",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/default.nix",
+      "id": "symbol:src%2Fdefault.nix:src%2Fdefault.nix%23variable%3Aimported:variable:0",
+      "isExported": true,
+      "kind": "variable",
+      "name": "imported",
+      "qualifiedName": "src/default.nix#variable:imported",
+      "range": {
+        "end": {
+          "column": 29,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/default.nix",
+      "id": "symbol:src%2Fdefault.nix:src%2Fdefault.nix:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "default.nix",
+      "qualifiedName": "src/default.nix",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 6,
+        },
+        "start": {
+          "column": 0,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

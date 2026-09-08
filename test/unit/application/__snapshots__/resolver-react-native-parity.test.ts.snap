@@ -1,0 +1,2924 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`React Native bridge resolver pre-move parity golden > keeps missing bridge implementations unresolved without exact targets 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:ios%2FMissingBridgeExport.m:ios%2FMissingBridgeExport.m%23extern%3AMissingBridge.missing:method:0",
+        ],
+        "ruleId": "framework.react-native.objc.rct-extern-method",
+        "stage": "syntax",
+      },
+      "filePath": "ios/MissingBridgeExport.m",
+      "id": "edge:symbol%3Aios%252FMissingBridgeExport.m%3Aios%252FMissingBridgeExport.m%2523extern%253AMissingBridge%3Aclass%3A0:symbol%3Aios%252FMissingBridgeExport.m%3Aios%252FMissingBridgeExport.m%2523extern%253AMissingBridge.missing%3Amethod%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 44,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "missing",
+      "resolution": "exact",
+      "sourceId": "symbol:ios%2FMissingBridgeExport.m:ios%2FMissingBridgeExport.m%23extern%3AMissingBridge:class:0",
+      "targetId": "symbol:ios%2FMissingBridgeExport.m:ios%2FMissingBridgeExport.m%23extern%3AMissingBridge.missing:method:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "framework.react-native.swift-extern.direct-objc-class-and-selector.unresolved-target",
+        "stage": "unresolved",
+      },
+      "filePath": "ios/MissingBridgeExport.m",
+      "id": "edge:symbol%3Aios%252FMissingBridgeExport.m%3Aios%252FMissingBridgeExport.m%2523extern%253AMissingBridge.missing%3Amethod%3A0:MissingBridge.missing%3A:references:3:1",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 44,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "MissingBridge.missing:",
+      "resolution": "unresolved",
+      "sourceId": "symbol:ios%2FMissingBridgeExport.m:ios%2FMissingBridgeExport.m%23extern%3AMissingBridge.missing:method:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:ios%2FMissingBridgeExport.m:ios%2FMissingBridgeExport.m%23extern%3AMissingBridge:class:0",
+        ],
+        "ruleId": "framework.react-native.objc.rct-extern-module",
+        "stage": "syntax",
+      },
+      "filePath": "ios/MissingBridgeExport.m",
+      "id": "edge:symbol%3Aios%252FMissingBridgeExport.m%3Aios%252FMissingBridgeExport.m%3Afile%3A0:symbol%3Aios%252FMissingBridgeExport.m%3Aios%252FMissingBridgeExport.m%2523extern%253AMissingBridge%3Aclass%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "MissingBridge",
+      "resolution": "exact",
+      "sourceId": "symbol:ios%2FMissingBridgeExport.m:ios%2FMissingBridgeExport.m:file:0",
+      "targetId": "symbol:ios%2FMissingBridgeExport.m:ios%2FMissingBridgeExport.m%23extern%3AMissingBridge:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcalendar-barrel.ts:src%2Fcalendar-barrel.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/calendar-api.ts",
+      "id": "edge:symbol%3Asrc%252Fcalendar-api.ts%3Asrc%252Fcalendar-api.ts%3Afile%3A0:symbol%3Asrc%252Fcalendar-barrel.ts%3Asrc%252Fcalendar-barrel.ts%3Afile%3A0:imports:1:21",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 40,
+          "line": 1,
+        },
+        "start": {
+          "column": 21,
+          "line": 1,
+        },
+      },
+      "referenceName": "./calendar-barrel",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcalendar-api.ts:src%2Fcalendar-api.ts:file:0",
+      "targetId": "symbol:src%2Fcalendar-barrel.ts:src%2Fcalendar-barrel.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/calendar-barrel.ts",
+      "id": "edge:symbol%3Asrc%252Fcalendar-barrel.ts%3Asrc%252Fcalendar-barrel.ts%3Afile%3A0:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%3Afile%3A0:exports:1:25",
+      "kind": "exports",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 1,
+        },
+        "start": {
+          "column": 25,
+          "line": 1,
+        },
+      },
+      "referenceName": "./turbo-contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcalendar-barrel.ts:src%2Fcalendar-barrel.ts:file:0",
+      "targetId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "framework.react-native.native-modules.direct-module-and-method.any.unresolved-target",
+        "stage": "module",
+      },
+      "filePath": "src/native-bridge.ts",
+      "id": "edge:symbol%3Asrc%252Fnative-bridge.ts%3Asrc%252Fnative-bridge.ts%2523nativeSchedule%3Afunction%3A0:MissingModule.missing:calls:2:36",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 71,
+          "line": 2,
+        },
+        "start": {
+          "column": 36,
+          "line": 2,
+        },
+      },
+      "referenceName": "MissingModule.missing",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fnative-bridge.ts:src%2Fnative-bridge.ts%23nativeSchedule:function:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/native-bridge.ts",
+      "id": "edge:symbol%3Asrc%252Fnative-bridge.ts%3Asrc%252Fnative-bridge.ts%3Afile%3A0:react-native:imports:1:31",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 1,
+        },
+        "start": {
+          "column": 31,
+          "line": 1,
+        },
+      },
+      "referenceName": "react-native",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fnative-bridge.ts:src%2Fnative-bridge.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fnative-bridge.ts:src%2Fnative-bridge.ts%23nativeSchedule:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/native-bridge.ts",
+      "id": "edge:symbol%3Asrc%252Fnative-bridge.ts%3Asrc%252Fnative-bridge.ts%3Afile%3A0:symbol%3Asrc%252Fnative-bridge.ts%3Asrc%252Fnative-bridge.ts%2523nativeSchedule%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 76,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "nativeSchedule",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fnative-bridge.ts:src%2Fnative-bridge.ts:file:0",
+      "targetId": "symbol:src%2Fnative-bridge.ts:src%2Fnative-bridge.ts%23nativeSchedule:function:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "syntax.typescript.proven-receiver-member-call.unresolved-target",
+        "stage": "unresolved",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523Missing%3Avariable%3A0:getEnforcing:calls:4:37",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 49,
+          "line": 4,
+        },
+        "start": {
+          "column": 37,
+          "line": 4,
+        },
+      },
+      "referenceName": "getEnforcing",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23Missing:variable:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "heritage.extends.unresolved-target",
+        "stage": "unresolved",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523MissingSpec%3Ainterface%3A0:TurboModule:extends:3:38",
+      "kind": "extends",
+      "range": {
+        "end": {
+          "column": 49,
+          "line": 3,
+        },
+        "start": {
+          "column": 38,
+          "line": 3,
+        },
+      },
+      "referenceName": "TurboModule",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23MissingSpec:interface:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23MissingSpec.missing:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523MissingSpec%3Ainterface%3A0:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523MissingSpec.missing%3Amethod%3A0:contains:3:52",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 68,
+          "line": 3,
+        },
+        "start": {
+          "column": 52,
+          "line": 3,
+        },
+      },
+      "referenceName": "missing",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23MissingSpec:interface:0",
+      "targetId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23MissingSpec.missing:method:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "framework.react-native.turbo-modules.spec-contract.literal-module-and-method.any.unresolved-target",
+        "stage": "module",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523MissingSpec.missing%3Amethod%3A0:MissingModule.missing:calls:3:52",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 68,
+          "line": 3,
+        },
+        "start": {
+          "column": 52,
+          "line": 3,
+        },
+      },
+      "referenceName": "MissingModule.missing",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23MissingSpec.missing:method:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "framework.react-native.turbo-modules.direct-registry.literal-module-and-method.any.unresolved-target",
+        "stage": "module",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523turboSchedule%3Afunction%3A0:MissingModule.missing:calls:5:35",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 5,
+        },
+        "start": {
+          "column": 35,
+          "line": 5,
+        },
+      },
+      "referenceName": "MissingModule.missing",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23turboSchedule:function:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%3Afile%3A0:react-native:imports:1:37",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 1,
+        },
+        "start": {
+          "column": 37,
+          "line": 1,
+        },
+      },
+      "referenceName": "react-native",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%3Afile%3A0:react-native:imports:2:34",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 2,
+        },
+        "start": {
+          "column": 34,
+          "line": 2,
+        },
+      },
+      "referenceName": "react-native",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23Missing:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%3Afile%3A0:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523Missing%3Avariable%3A0:contains:4:7",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 79,
+          "line": 4,
+        },
+        "start": {
+          "column": 7,
+          "line": 4,
+        },
+      },
+      "referenceName": "Missing",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+      "targetId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23Missing:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23MissingSpec:interface:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%3Afile%3A0:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523MissingSpec%3Ainterface%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 70,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "MissingSpec",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+      "targetId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23MissingSpec:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23turboSchedule:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%3Afile%3A0:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523turboSchedule%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 55,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "turboSchedule",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+      "targetId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23turboSchedule:function:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "resolutionPath": [
+          "src/calendar-api.ts",
+          "src/calendar-barrel.ts",
+          "src/turbo-contract.ts",
+        ],
+        "ruleId": "framework.react-native.turbo-modules.default-re-export.literal-module-and-method.any.unresolved-target",
+        "stage": "module",
+      },
+      "filePath": "src/use-calendar-reexport.ts",
+      "id": "edge:symbol%3Asrc%252Fuse-calendar-reexport.ts%3Asrc%252Fuse-calendar-reexport.ts%2523reexportSchedule%3Afunction%3A0:MissingModule.missing:calls:2:38",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 2,
+        },
+        "start": {
+          "column": 38,
+          "line": 2,
+        },
+      },
+      "referenceName": "MissingModule.missing",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fuse-calendar-reexport.ts:src%2Fuse-calendar-reexport.ts%23reexportSchedule:function:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcalendar-api.ts:src%2Fcalendar-api.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/use-calendar-reexport.ts",
+      "id": "edge:symbol%3Asrc%252Fuse-calendar-reexport.ts%3Asrc%252Fuse-calendar-reexport.ts%3Afile%3A0:symbol%3Asrc%252Fcalendar-api.ts%3Asrc%252Fcalendar-api.ts%3Afile%3A0:imports:1:21",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 1,
+        },
+        "start": {
+          "column": 21,
+          "line": 1,
+        },
+      },
+      "referenceName": "./calendar-api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fuse-calendar-reexport.ts:src%2Fuse-calendar-reexport.ts:file:0",
+      "targetId": "symbol:src%2Fcalendar-api.ts:src%2Fcalendar-api.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fuse-calendar-reexport.ts:src%2Fuse-calendar-reexport.ts%23reexportSchedule:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/use-calendar-reexport.ts",
+      "id": "edge:symbol%3Asrc%252Fuse-calendar-reexport.ts%3Asrc%252Fuse-calendar-reexport.ts%3Afile%3A0:symbol%3Asrc%252Fuse-calendar-reexport.ts%3Asrc%252Fuse-calendar-reexport.ts%2523reexportSchedule%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "reexportSchedule",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fuse-calendar-reexport.ts:src%2Fuse-calendar-reexport.ts:file:0",
+      "targetId": "symbol:src%2Fuse-calendar-reexport.ts:src%2Fuse-calendar-reexport.ts%23reexportSchedule:function:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "framework.react-native.turbo-modules.default-import.literal-module-and-method.any.unresolved-target",
+        "stage": "module",
+      },
+      "filePath": "src/use-calendar.ts",
+      "id": "edge:symbol%3Asrc%252Fuse-calendar.ts%3Asrc%252Fuse-calendar.ts%2523importedSchedule%3Afunction%3A0:MissingModule.missing:calls:2:38",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 2,
+        },
+        "start": {
+          "column": 38,
+          "line": 2,
+        },
+      },
+      "referenceName": "MissingModule.missing",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fuse-calendar.ts:src%2Fuse-calendar.ts%23importedSchedule:function:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/use-calendar.ts",
+      "id": "edge:symbol%3Asrc%252Fuse-calendar.ts%3Asrc%252Fuse-calendar.ts%3Afile%3A0:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%3Afile%3A0:imports:1:21",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 39,
+          "line": 1,
+        },
+        "start": {
+          "column": 21,
+          "line": 1,
+        },
+      },
+      "referenceName": "./turbo-contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fuse-calendar.ts:src%2Fuse-calendar.ts:file:0",
+      "targetId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fuse-calendar.ts:src%2Fuse-calendar.ts%23importedSchedule:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/use-calendar.ts",
+      "id": "edge:symbol%3Asrc%252Fuse-calendar.ts%3Asrc%252Fuse-calendar.ts%3Afile%3A0:symbol%3Asrc%252Fuse-calendar.ts%3Asrc%252Fuse-calendar.ts%2523importedSchedule%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "importedSchedule",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fuse-calendar.ts:src%2Fuse-calendar.ts:file:0",
+      "targetId": "symbol:src%2Fuse-calendar.ts:src%2Fuse-calendar.ts%23importedSchedule:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "363c84e0d36a810b9e54fdba303bede4c521cd5ea975b6d3a0152cda8e4360ec",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "objc",
+      "path": "ios/MissingBridgeExport.m",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "fc444506b5e727974ce019cc4a4b1b9fb9910e18e57fecd5db20b839105428f6",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/calendar-api.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "4acca63a5550552befc45d76f4c495c1cce1955b488e4ccfc5e480810fdb269b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/calendar-barrel.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "763d8f6269affc00f1aaabccb4bf5a80834cf2d6897caa9231c70f02a7869ba0",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/native-bridge.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "1040b0a1f4066ad9456394eb9203d2da86a3c43328a29e70bbc63979deb3d903",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/turbo-contract.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "363fd81e6c7ef998a00e1eb9c96082e0d2a352adfd66209b4beede63f3a667f2",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/use-calendar-reexport.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "3a4677961ef574a75430487929f43403ebaa489123e1c4d81ac9b693ce86424b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/use-calendar.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [
+    {
+      "filePath": "src/native-bridge.ts",
+      "id": "edge:symbol%3Asrc%252Fnative-bridge.ts%3Asrc%252Fnative-bridge.ts%3Afile%3A0:react-native:imports:1:31",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 1,
+        },
+        "start": {
+          "column": 31,
+          "line": 1,
+        },
+      },
+      "referenceName": "react-native",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fnative-bridge.ts:src%2Fnative-bridge.ts:file:0",
+    },
+    {
+      "callReceiverBindingSpace": "value",
+      "callReceiverMemberKind": "static",
+      "callReceiverTypeName": "TurboModuleRegistry",
+      "callSemantics": "typescript-proven-receiver-member-call",
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523Missing%3Avariable%3A0:getEnforcing:calls:4:37",
+      "range": {
+        "end": {
+          "column": 49,
+          "line": 4,
+        },
+        "start": {
+          "column": 37,
+          "line": 4,
+        },
+      },
+      "referenceName": "getEnforcing",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23Missing:variable:0",
+    },
+    {
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523MissingSpec%3Ainterface%3A0:TurboModule:extends:3:38",
+      "range": {
+        "end": {
+          "column": 49,
+          "line": 3,
+        },
+        "start": {
+          "column": 38,
+          "line": 3,
+        },
+      },
+      "referenceName": "TurboModule",
+      "relationKind": "extends",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23MissingSpec:interface:0",
+    },
+    {
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%3Afile%3A0:react-native:imports:1:37",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 1,
+        },
+        "start": {
+          "column": 37,
+          "line": 1,
+        },
+      },
+      "referenceName": "react-native",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+    },
+    {
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%3Afile%3A0:react-native:imports:2:34",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 2,
+        },
+        "start": {
+          "column": 34,
+          "line": 2,
+        },
+      },
+      "referenceName": "react-native",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+    },
+  ],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "ios/MissingBridgeExport.m",
+      "id": "symbol:ios%2FMissingBridgeExport.m:ios%2FMissingBridgeExport.m%23extern%3AMissingBridge.missing:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "missing",
+      "qualifiedName": "ios/MissingBridgeExport.m#extern:MissingBridge.missing",
+      "range": {
+        "end": {
+          "column": 44,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "ios/MissingBridgeExport.m",
+      "id": "symbol:ios%2FMissingBridgeExport.m:ios%2FMissingBridgeExport.m%23extern%3AMissingBridge:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "MissingBridge",
+      "qualifiedName": "ios/MissingBridgeExport.m#extern:MissingBridge",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "ios/MissingBridgeExport.m",
+      "id": "symbol:ios%2FMissingBridgeExport.m:ios%2FMissingBridgeExport.m:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "MissingBridgeExport.m",
+      "qualifiedName": "ios/MissingBridgeExport.m",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/calendar-api.ts",
+      "id": "symbol:src%2Fcalendar-api.ts:src%2Fcalendar-api.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "calendar-api.ts",
+      "qualifiedName": "src/calendar-api.ts",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/calendar-barrel.ts",
+      "id": "symbol:src%2Fcalendar-barrel.ts:src%2Fcalendar-barrel.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "calendar-barrel.ts",
+      "qualifiedName": "src/calendar-barrel.ts",
+      "range": {
+        "end": {
+          "column": 44,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/native-bridge.ts",
+      "id": "symbol:src%2Fnative-bridge.ts:src%2Fnative-bridge.ts%23nativeSchedule:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "nativeSchedule",
+      "qualifiedName": "src/native-bridge.ts#nativeSchedule",
+      "range": {
+        "end": {
+          "column": 76,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/native-bridge.ts",
+      "id": "symbol:src%2Fnative-bridge.ts:src%2Fnative-bridge.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "native-bridge.ts",
+      "qualifiedName": "src/native-bridge.ts",
+      "range": {
+        "end": {
+          "column": 76,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/turbo-contract.ts",
+      "id": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23Missing:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "Missing",
+      "qualifiedName": "src/turbo-contract.ts#Missing",
+      "range": {
+        "end": {
+          "column": 79,
+          "line": 4,
+        },
+        "start": {
+          "column": 7,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/turbo-contract.ts",
+      "id": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23MissingSpec.missing:method:0",
+      "isExported": false,
+      "kind": "method",
+      "name": "missing",
+      "qualifiedName": "src/turbo-contract.ts#MissingSpec.missing",
+      "range": {
+        "end": {
+          "column": 68,
+          "line": 3,
+        },
+        "start": {
+          "column": 52,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/turbo-contract.ts",
+      "id": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23MissingSpec:interface:0",
+      "isExported": true,
+      "kind": "interface",
+      "name": "MissingSpec",
+      "qualifiedName": "src/turbo-contract.ts#MissingSpec",
+      "range": {
+        "end": {
+          "column": 70,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/turbo-contract.ts",
+      "id": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23turboSchedule:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "turboSchedule",
+      "qualifiedName": "src/turbo-contract.ts#turboSchedule",
+      "range": {
+        "end": {
+          "column": 55,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/turbo-contract.ts",
+      "id": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "turbo-contract.ts",
+      "qualifiedName": "src/turbo-contract.ts",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/use-calendar-reexport.ts",
+      "id": "symbol:src%2Fuse-calendar-reexport.ts:src%2Fuse-calendar-reexport.ts%23reexportSchedule:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "reexportSchedule",
+      "qualifiedName": "src/use-calendar-reexport.ts#reexportSchedule",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/use-calendar-reexport.ts",
+      "id": "symbol:src%2Fuse-calendar-reexport.ts:src%2Fuse-calendar-reexport.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "use-calendar-reexport.ts",
+      "qualifiedName": "src/use-calendar-reexport.ts",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/use-calendar.ts",
+      "id": "symbol:src%2Fuse-calendar.ts:src%2Fuse-calendar.ts%23importedSchedule:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "importedSchedule",
+      "qualifiedName": "src/use-calendar.ts#importedSchedule",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/use-calendar.ts",
+      "id": "symbol:src%2Fuse-calendar.ts:src%2Fuse-calendar.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "use-calendar.ts",
+      "qualifiedName": "src/use-calendar.ts",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`React Native bridge resolver pre-move parity golden > preserves all six bridge projectors and their exact evidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule.createEvent:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "android/CalendarModule.java",
+      "id": "edge:symbol%3Aandroid%252FCalendarModule.java%3Aandroid%252FCalendarModule.java%2523CalendarModule%3Aclass%3A0:symbol%3Aandroid%252FCalendarModule.java%3Aandroid%252FCalendarModule.java%2523CalendarModule.createEvent%3Amethod%3A0:contains:5:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 44,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+      "referenceName": "createEvent",
+      "resolution": "exact",
+      "sourceId": "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule:class:0",
+      "targetId": "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule.createEvent:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule.getName:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "android/CalendarModule.java",
+      "id": "edge:symbol%3Aandroid%252FCalendarModule.java%3Aandroid%252FCalendarModule.java%2523CalendarModule%3Aclass%3A0:symbol%3Aandroid%252FCalendarModule.java%3Aandroid%252FCalendarModule.java%2523CalendarModule.getName%3Amethod%3A0:contains:4:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 55,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "getName",
+      "resolution": "exact",
+      "sourceId": "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule:class:0",
+      "targetId": "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule.getName:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "android/CalendarModule.java",
+      "id": "edge:symbol%3Aandroid%252FCalendarModule.java%3Aandroid%252FCalendarModule.java%3Afile%3A0:symbol%3Aandroid%252FCalendarModule.java%3Aandroid%252FCalendarModule.java%2523CalendarModule%3Aclass%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "CalendarModule",
+      "resolution": "exact",
+      "sourceId": "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java:file:0",
+      "targetId": "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:ios%2FCalendarBridge.swift:ios%2FCalendarBridge.swift%23extension%3ACalendarBridge.writeEvent:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "ios/CalendarBridge.swift",
+      "id": "edge:symbol%3Aios%252FCalendarBridge.swift%3Aios%252FCalendarBridge.swift%2523extension%253ACalendarBridge%3Aclass%3A0:symbol%3Aios%252FCalendarBridge.swift%3Aios%252FCalendarBridge.swift%2523extension%253ACalendarBridge.writeEvent%3Amethod%3A0:contains:5:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 35,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+      "referenceName": "writeEvent",
+      "resolution": "exact",
+      "sourceId": "symbol:ios%2FCalendarBridge.swift:ios%2FCalendarBridge.swift%23extension%3ACalendarBridge:class:0",
+      "targetId": "symbol:ios%2FCalendarBridge.swift:ios%2FCalendarBridge.swift%23extension%3ACalendarBridge.writeEvent:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:ios%2FCalendarBridge.swift:ios%2FCalendarBridge.swift%23CalendarBridge:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "ios/CalendarBridge.swift",
+      "id": "edge:symbol%3Aios%252FCalendarBridge.swift%3Aios%252FCalendarBridge.swift%3Afile%3A0:symbol%3Aios%252FCalendarBridge.swift%3Aios%252FCalendarBridge.swift%2523CalendarBridge%3Aclass%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 40,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "CalendarBridge",
+      "resolution": "exact",
+      "sourceId": "symbol:ios%2FCalendarBridge.swift:ios%2FCalendarBridge.swift:file:0",
+      "targetId": "symbol:ios%2FCalendarBridge.swift:ios%2FCalendarBridge.swift%23CalendarBridge:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:ios%2FCalendarBridge.swift:ios%2FCalendarBridge.swift%23extension%3ACalendarBridge:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "ios/CalendarBridge.swift",
+      "id": "edge:symbol%3Aios%252FCalendarBridge.swift%3Aios%252FCalendarBridge.swift%3Afile%3A0:symbol%3Aios%252FCalendarBridge.swift%3Aios%252FCalendarBridge.swift%2523extension%253ACalendarBridge%3Aclass%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "extension CalendarBridge",
+      "resolution": "exact",
+      "sourceId": "symbol:ios%2FCalendarBridge.swift:ios%2FCalendarBridge.swift:file:0",
+      "targetId": "symbol:ios%2FCalendarBridge.swift:ios%2FCalendarBridge.swift%23extension%3ACalendarBridge:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:ios%2FCalendarBridgeExport.m:ios%2FCalendarBridgeExport.m%23extern%3ACalendarBridge.createEvent:method:0",
+        ],
+        "ruleId": "framework.react-native.objc.rct-extern-method",
+        "stage": "syntax",
+      },
+      "filePath": "ios/CalendarBridgeExport.m",
+      "id": "edge:symbol%3Aios%252FCalendarBridgeExport.m%3Aios%252FCalendarBridgeExport.m%2523extern%253ACalendarBridge%3Aclass%3A0:symbol%3Aios%252FCalendarBridgeExport.m%3Aios%252FCalendarBridgeExport.m%2523extern%253ACalendarBridge.createEvent%3Amethod%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "createEvent",
+      "resolution": "exact",
+      "sourceId": "symbol:ios%2FCalendarBridgeExport.m:ios%2FCalendarBridgeExport.m%23extern%3ACalendarBridge:class:0",
+      "targetId": "symbol:ios%2FCalendarBridgeExport.m:ios%2FCalendarBridgeExport.m%23extern%3ACalendarBridge.createEvent:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:ios%2FCalendarBridge.swift:ios%2FCalendarBridge.swift%23extension%3ACalendarBridge.writeEvent:method:0",
+        ],
+        "ruleId": "framework.react-native.swift-extern.direct-objc-class-and-selector.exact-target",
+        "stage": "module",
+      },
+      "filePath": "ios/CalendarBridgeExport.m",
+      "id": "edge:symbol%3Aios%252FCalendarBridgeExport.m%3Aios%252FCalendarBridgeExport.m%2523extern%253ACalendarBridge.createEvent%3Amethod%3A0:symbol%3Aios%252FCalendarBridge.swift%3Aios%252FCalendarBridge.swift%2523extension%253ACalendarBridge.writeEvent%3Amethod%3A0:references:3:1",
+      "kind": "references",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "CalendarBridge.createEvent:",
+      "resolution": "exact",
+      "sourceId": "symbol:ios%2FCalendarBridgeExport.m:ios%2FCalendarBridgeExport.m%23extern%3ACalendarBridge.createEvent:method:0",
+      "targetId": "symbol:ios%2FCalendarBridge.swift:ios%2FCalendarBridge.swift%23extension%3ACalendarBridge.writeEvent:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:ios%2FCalendarBridgeExport.m:ios%2FCalendarBridgeExport.m%23extern%3ACalendarBridge:class:0",
+        ],
+        "ruleId": "framework.react-native.objc.rct-extern-module",
+        "stage": "syntax",
+      },
+      "filePath": "ios/CalendarBridgeExport.m",
+      "id": "edge:symbol%3Aios%252FCalendarBridgeExport.m%3Aios%252FCalendarBridgeExport.m%3Afile%3A0:symbol%3Aios%252FCalendarBridgeExport.m%3Aios%252FCalendarBridgeExport.m%2523extern%253ACalendarBridge%3Aclass%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "CalendarBridge",
+      "resolution": "exact",
+      "sourceId": "symbol:ios%2FCalendarBridgeExport.m:ios%2FCalendarBridgeExport.m:file:0",
+      "targetId": "symbol:ios%2FCalendarBridgeExport.m:ios%2FCalendarBridgeExport.m%23extern%3ACalendarBridge:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:ios%2FCalendarModule.m:ios%2FCalendarModule.m%23CalendarModule.createEvent:method:0",
+        ],
+        "ruleId": "framework.react-native.objc.rct-export-method",
+        "stage": "syntax",
+      },
+      "filePath": "ios/CalendarModule.m",
+      "id": "edge:symbol%3Aios%252FCalendarModule.m%3Aios%252FCalendarModule.m%2523CalendarModule%3Aclass%3A0:symbol%3Aios%252FCalendarModule.m%3Aios%252FCalendarModule.m%2523CalendarModule.createEvent%3Amethod%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "createEvent",
+      "resolution": "exact",
+      "sourceId": "symbol:ios%2FCalendarModule.m:ios%2FCalendarModule.m%23CalendarModule:class:0",
+      "targetId": "symbol:ios%2FCalendarModule.m:ios%2FCalendarModule.m%23CalendarModule.createEvent:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:ios%2FCalendarModule.m:ios%2FCalendarModule.m%23CalendarModule:class:0",
+        ],
+        "ruleId": "language.objc.implementation.direct",
+        "stage": "syntax",
+      },
+      "filePath": "ios/CalendarModule.m",
+      "id": "edge:symbol%3Aios%252FCalendarModule.m%3Aios%252FCalendarModule.m%3Afile%3A0:symbol%3Aios%252FCalendarModule.m%3Aios%252FCalendarModule.m%2523CalendarModule%3Aclass%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "CalendarModule",
+      "resolution": "exact",
+      "sourceId": "symbol:ios%2FCalendarModule.m:ios%2FCalendarModule.m:file:0",
+      "targetId": "symbol:ios%2FCalendarModule.m:ios%2FCalendarModule.m%23CalendarModule:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcalendar-barrel.ts:src%2Fcalendar-barrel.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/calendar-api.ts",
+      "id": "edge:symbol%3Asrc%252Fcalendar-api.ts%3Asrc%252Fcalendar-api.ts%3Afile%3A0:symbol%3Asrc%252Fcalendar-barrel.ts%3Asrc%252Fcalendar-barrel.ts%3Afile%3A0:imports:1:22",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 41,
+          "line": 1,
+        },
+        "start": {
+          "column": 22,
+          "line": 1,
+        },
+      },
+      "referenceName": "./calendar-barrel",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcalendar-api.ts:src%2Fcalendar-api.ts:file:0",
+      "targetId": "symbol:src%2Fcalendar-barrel.ts:src%2Fcalendar-barrel.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/calendar-barrel.ts",
+      "id": "edge:symbol%3Asrc%252Fcalendar-barrel.ts%3Asrc%252Fcalendar-barrel.ts%3Afile%3A0:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%3Afile%3A0:exports:1:25",
+      "kind": "exports",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 1,
+        },
+        "start": {
+          "column": 25,
+          "line": 1,
+        },
+      },
+      "referenceName": "./turbo-contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fcalendar-barrel.ts:src%2Fcalendar-barrel.ts:file:0",
+      "targetId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule.createEvent:method:0",
+        ],
+        "ruleId": "framework.react-native.native-modules.direct-module-and-method.android.exact-target",
+        "stage": "module",
+      },
+      "filePath": "src/native-bridge.ts",
+      "id": "edge:symbol%3Asrc%252Fnative-bridge.ts%3Asrc%252Fnative-bridge.ts%2523nativeSchedule%3Afunction%3A0:symbol%3Aandroid%252FCalendarModule.java%3Aandroid%252FCalendarModule.java%2523CalendarModule.createEvent%3Amethod%3A0:calls:3:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 3,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+      "referenceName": "CalendarModule.createEvent",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fnative-bridge.ts:src%2Fnative-bridge.ts%23nativeSchedule:function:0",
+      "targetId": "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule.createEvent:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:ios%2FCalendarModule.m:ios%2FCalendarModule.m%23CalendarModule.createEvent:method:0",
+        ],
+        "ruleId": "framework.react-native.native-modules.direct-module-and-method.ios.exact-target",
+        "stage": "module",
+      },
+      "filePath": "src/native-bridge.ts",
+      "id": "edge:symbol%3Asrc%252Fnative-bridge.ts%3Asrc%252Fnative-bridge.ts%2523nativeSchedule%3Afunction%3A0:symbol%3Aios%252FCalendarModule.m%3Aios%252FCalendarModule.m%2523CalendarModule.createEvent%3Amethod%3A0:calls:3:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 3,
+        },
+        "start": {
+          "column": 3,
+          "line": 3,
+        },
+      },
+      "referenceName": "CalendarModule.createEvent",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fnative-bridge.ts:src%2Fnative-bridge.ts%23nativeSchedule:function:0",
+      "targetId": "symbol:ios%2FCalendarModule.m:ios%2FCalendarModule.m%23CalendarModule.createEvent:method:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/native-bridge.ts",
+      "id": "edge:symbol%3Asrc%252Fnative-bridge.ts%3Asrc%252Fnative-bridge.ts%3Afile%3A0:react-native:imports:1:31",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 1,
+        },
+        "start": {
+          "column": 31,
+          "line": 1,
+        },
+      },
+      "referenceName": "react-native",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fnative-bridge.ts:src%2Fnative-bridge.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fnative-bridge.ts:src%2Fnative-bridge.ts%23nativeSchedule:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/native-bridge.ts",
+      "id": "edge:symbol%3Asrc%252Fnative-bridge.ts%3Asrc%252Fnative-bridge.ts%3Afile%3A0:symbol%3Asrc%252Fnative-bridge.ts%3Asrc%252Fnative-bridge.ts%2523nativeSchedule%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "nativeSchedule",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fnative-bridge.ts:src%2Fnative-bridge.ts:file:0",
+      "targetId": "symbol:src%2Fnative-bridge.ts:src%2Fnative-bridge.ts%23nativeSchedule:function:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "syntax.typescript.proven-receiver-member-call.unresolved-target",
+        "stage": "unresolved",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523Calendar%3Avariable%3A0:getEnforcing:calls:6:38",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 6,
+        },
+        "start": {
+          "column": 38,
+          "line": 6,
+        },
+      },
+      "referenceName": "getEnforcing",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23Calendar:variable:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "heritage.extends.unresolved-target",
+        "stage": "unresolved",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523CalendarSpec%3Ainterface%3A0:TurboModule:extends:3:39",
+      "kind": "extends",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 3,
+        },
+        "start": {
+          "column": 39,
+          "line": 3,
+        },
+      },
+      "referenceName": "TurboModule",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23CalendarSpec:interface:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23CalendarSpec.createEvent:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523CalendarSpec%3Ainterface%3A0:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523CalendarSpec.createEvent%3Amethod%3A0:contains:4:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "createEvent",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23CalendarSpec:interface:0",
+      "targetId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23CalendarSpec.createEvent:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule.createEvent:method:0",
+        ],
+        "ruleId": "framework.react-native.turbo-modules.spec-contract.literal-module-and-method.android.exact-target",
+        "stage": "module",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523CalendarSpec.createEvent%3Amethod%3A0:symbol%3Aandroid%252FCalendarModule.java%3Aandroid%252FCalendarModule.java%2523CalendarModule.createEvent%3Amethod%3A0:calls:4:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "CalendarModule.createEvent",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23CalendarSpec.createEvent:method:0",
+      "targetId": "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule.createEvent:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:ios%2FCalendarModule.m:ios%2FCalendarModule.m%23CalendarModule.createEvent:method:0",
+        ],
+        "ruleId": "framework.react-native.turbo-modules.spec-contract.literal-module-and-method.ios.exact-target",
+        "stage": "module",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523CalendarSpec.createEvent%3Amethod%3A0:symbol%3Aios%252FCalendarModule.m%3Aios%252FCalendarModule.m%2523CalendarModule.createEvent%3Amethod%3A0:calls:4:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+      "referenceName": "CalendarModule.createEvent",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23CalendarSpec.createEvent:method:0",
+      "targetId": "symbol:ios%2FCalendarModule.m:ios%2FCalendarModule.m%23CalendarModule.createEvent:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule.createEvent:method:0",
+        ],
+        "ruleId": "framework.react-native.turbo-modules.direct-registry.literal-module-and-method.android.exact-target",
+        "stage": "module",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523turboSchedule%3Afunction%3A0:symbol%3Aandroid%252FCalendarModule.java%3Aandroid%252FCalendarModule.java%2523CalendarModule.createEvent%3Amethod%3A0:calls:8:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 8,
+        },
+        "start": {
+          "column": 3,
+          "line": 8,
+        },
+      },
+      "referenceName": "CalendarModule.createEvent",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23turboSchedule:function:0",
+      "targetId": "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule.createEvent:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:ios%2FCalendarModule.m:ios%2FCalendarModule.m%23CalendarModule.createEvent:method:0",
+        ],
+        "ruleId": "framework.react-native.turbo-modules.direct-registry.literal-module-and-method.ios.exact-target",
+        "stage": "module",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523turboSchedule%3Afunction%3A0:symbol%3Aios%252FCalendarModule.m%3Aios%252FCalendarModule.m%2523CalendarModule.createEvent%3Amethod%3A0:calls:8:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 8,
+        },
+        "start": {
+          "column": 3,
+          "line": 8,
+        },
+      },
+      "referenceName": "CalendarModule.createEvent",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23turboSchedule:function:0",
+      "targetId": "symbol:ios%2FCalendarModule.m:ios%2FCalendarModule.m%23CalendarModule.createEvent:method:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%3Afile%3A0:react-native:imports:1:37",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 1,
+        },
+        "start": {
+          "column": 37,
+          "line": 1,
+        },
+      },
+      "referenceName": "react-native",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "module.unresolved-specifier",
+        "stage": "unresolved",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%3Afile%3A0:react-native:imports:2:34",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 2,
+        },
+        "start": {
+          "column": 34,
+          "line": 2,
+        },
+      },
+      "referenceName": "react-native",
+      "resolution": "unresolved",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23Calendar:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%3Afile%3A0:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523Calendar%3Avariable%3A0:contains:6:7",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 82,
+          "line": 6,
+        },
+        "start": {
+          "column": 7,
+          "line": 6,
+        },
+      },
+      "referenceName": "Calendar",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+      "targetId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23Calendar:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23CalendarSpec:interface:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%3Afile%3A0:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523CalendarSpec%3Ainterface%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "CalendarSpec",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+      "targetId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23CalendarSpec:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23turboSchedule:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%3Afile%3A0:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523turboSchedule%3Afunction%3A0:contains:7:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "turboSchedule",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+      "targetId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23turboSchedule:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule.createEvent:method:0",
+        ],
+        "resolutionPath": [
+          "src/calendar-api.ts",
+          "src/calendar-barrel.ts",
+          "src/turbo-contract.ts",
+        ],
+        "ruleId": "framework.react-native.turbo-modules.default-re-export.literal-module-and-method.android.exact-target",
+        "stage": "module",
+      },
+      "filePath": "src/use-calendar-reexport.ts",
+      "id": "edge:symbol%3Asrc%252Fuse-calendar-reexport.ts%3Asrc%252Fuse-calendar-reexport.ts%2523reexportSchedule%3Afunction%3A0:symbol%3Aandroid%252FCalendarModule.java%3Aandroid%252FCalendarModule.java%2523CalendarModule.createEvent%3Amethod%3A0:calls:2:38",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 2,
+        },
+        "start": {
+          "column": 38,
+          "line": 2,
+        },
+      },
+      "referenceName": "CalendarModule.createEvent",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fuse-calendar-reexport.ts:src%2Fuse-calendar-reexport.ts%23reexportSchedule:function:0",
+      "targetId": "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule.createEvent:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:ios%2FCalendarModule.m:ios%2FCalendarModule.m%23CalendarModule.createEvent:method:0",
+        ],
+        "resolutionPath": [
+          "src/calendar-api.ts",
+          "src/calendar-barrel.ts",
+          "src/turbo-contract.ts",
+        ],
+        "ruleId": "framework.react-native.turbo-modules.default-re-export.literal-module-and-method.ios.exact-target",
+        "stage": "module",
+      },
+      "filePath": "src/use-calendar-reexport.ts",
+      "id": "edge:symbol%3Asrc%252Fuse-calendar-reexport.ts%3Asrc%252Fuse-calendar-reexport.ts%2523reexportSchedule%3Afunction%3A0:symbol%3Aios%252FCalendarModule.m%3Aios%252FCalendarModule.m%2523CalendarModule.createEvent%3Amethod%3A0:calls:2:38",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 2,
+        },
+        "start": {
+          "column": 38,
+          "line": 2,
+        },
+      },
+      "referenceName": "CalendarModule.createEvent",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fuse-calendar-reexport.ts:src%2Fuse-calendar-reexport.ts%23reexportSchedule:function:0",
+      "targetId": "symbol:ios%2FCalendarModule.m:ios%2FCalendarModule.m%23CalendarModule.createEvent:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fcalendar-api.ts:src%2Fcalendar-api.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/use-calendar-reexport.ts",
+      "id": "edge:symbol%3Asrc%252Fuse-calendar-reexport.ts%3Asrc%252Fuse-calendar-reexport.ts%3Afile%3A0:symbol%3Asrc%252Fcalendar-api.ts%3Asrc%252Fcalendar-api.ts%3Afile%3A0:imports:1:22",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 1,
+        },
+        "start": {
+          "column": 22,
+          "line": 1,
+        },
+      },
+      "referenceName": "./calendar-api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fuse-calendar-reexport.ts:src%2Fuse-calendar-reexport.ts:file:0",
+      "targetId": "symbol:src%2Fcalendar-api.ts:src%2Fcalendar-api.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fuse-calendar-reexport.ts:src%2Fuse-calendar-reexport.ts%23reexportSchedule:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/use-calendar-reexport.ts",
+      "id": "edge:symbol%3Asrc%252Fuse-calendar-reexport.ts%3Asrc%252Fuse-calendar-reexport.ts%3Afile%3A0:symbol%3Asrc%252Fuse-calendar-reexport.ts%3Asrc%252Fuse-calendar-reexport.ts%2523reexportSchedule%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 63,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "reexportSchedule",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fuse-calendar-reexport.ts:src%2Fuse-calendar-reexport.ts:file:0",
+      "targetId": "symbol:src%2Fuse-calendar-reexport.ts:src%2Fuse-calendar-reexport.ts%23reexportSchedule:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule.createEvent:method:0",
+        ],
+        "ruleId": "framework.react-native.turbo-modules.default-import.literal-module-and-method.android.exact-target",
+        "stage": "module",
+      },
+      "filePath": "src/use-calendar.ts",
+      "id": "edge:symbol%3Asrc%252Fuse-calendar.ts%3Asrc%252Fuse-calendar.ts%2523importedSchedule%3Afunction%3A0:symbol%3Aandroid%252FCalendarModule.java%3Aandroid%252FCalendarModule.java%2523CalendarModule.createEvent%3Amethod%3A0:calls:2:38",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 2,
+        },
+        "start": {
+          "column": 38,
+          "line": 2,
+        },
+      },
+      "referenceName": "CalendarModule.createEvent",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fuse-calendar.ts:src%2Fuse-calendar.ts%23importedSchedule:function:0",
+      "targetId": "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule.createEvent:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:ios%2FCalendarModule.m:ios%2FCalendarModule.m%23CalendarModule.createEvent:method:0",
+        ],
+        "ruleId": "framework.react-native.turbo-modules.default-import.literal-module-and-method.ios.exact-target",
+        "stage": "module",
+      },
+      "filePath": "src/use-calendar.ts",
+      "id": "edge:symbol%3Asrc%252Fuse-calendar.ts%3Asrc%252Fuse-calendar.ts%2523importedSchedule%3Afunction%3A0:symbol%3Aios%252FCalendarModule.m%3Aios%252FCalendarModule.m%2523CalendarModule.createEvent%3Amethod%3A0:calls:2:38",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 58,
+          "line": 2,
+        },
+        "start": {
+          "column": 38,
+          "line": 2,
+        },
+      },
+      "referenceName": "CalendarModule.createEvent",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fuse-calendar.ts:src%2Fuse-calendar.ts%23importedSchedule:function:0",
+      "targetId": "symbol:ios%2FCalendarModule.m:ios%2FCalendarModule.m%23CalendarModule.createEvent:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+        ],
+        "ruleId": "module.relative-specifier",
+        "stage": "module",
+      },
+      "filePath": "src/use-calendar.ts",
+      "id": "edge:symbol%3Asrc%252Fuse-calendar.ts%3Asrc%252Fuse-calendar.ts%3Afile%3A0:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%3Afile%3A0:imports:1:22",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 40,
+          "line": 1,
+        },
+        "start": {
+          "column": 22,
+          "line": 1,
+        },
+      },
+      "referenceName": "./turbo-contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fuse-calendar.ts:src%2Fuse-calendar.ts:file:0",
+      "targetId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2Fuse-calendar.ts:src%2Fuse-calendar.ts%23importedSchedule:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/use-calendar.ts",
+      "id": "edge:symbol%3Asrc%252Fuse-calendar.ts%3Asrc%252Fuse-calendar.ts%3Afile%3A0:symbol%3Asrc%252Fuse-calendar.ts%3Asrc%252Fuse-calendar.ts%2523importedSchedule%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 63,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "importedSchedule",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2Fuse-calendar.ts:src%2Fuse-calendar.ts:file:0",
+      "targetId": "symbol:src%2Fuse-calendar.ts:src%2Fuse-calendar.ts%23importedSchedule:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "7f6eae7d353000934a91701cc40732b430628de34f03d5482aa656b41a924374",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "java",
+      "path": "android/CalendarModule.java",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "a9508572fb102c29097edca6ba51b9d6b4bd711481141a682537e0b1119f49fe",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "swift",
+      "path": "ios/CalendarBridge.swift",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "bb5460ba568686b6e4e8cd5153f330946f40768c25fcd940674072ea446fe2d4",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "objc",
+      "path": "ios/CalendarBridgeExport.m",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "4f4d3b6c2da9ab58d6e90cff0a423a81caa8d8af0acdf0cb10947ffdd9d78784",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "objc",
+      "path": "ios/CalendarModule.m",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "7b689e3fdb51eb37f9ff9fdebe3b942982bdf61d61e0a7df05f353953b3f7477",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/calendar-api.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "4acca63a5550552befc45d76f4c495c1cce1955b488e4ccfc5e480810fdb269b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/calendar-barrel.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "3ca52c8dbf7091039ee8d497a875efc1e36172916356c14959a1acd9e3f6cacd",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/native-bridge.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "bf26d8598bb92d547030f2d5fb92dcb7b56b93cf678f402340930f2154548e7b",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/turbo-contract.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "fe8a48b37b3e2ee5df86c6879bf5333b2777f62f83741d2f27521a4b0e72c728",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/use-calendar-reexport.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "1bb29081cf9ca5c511acad8b7ef8ed48d253a5946430ccf6177478dbabe56e16",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "typescript",
+      "path": "src/use-calendar.ts",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [
+    {
+      "filePath": "src/native-bridge.ts",
+      "id": "edge:symbol%3Asrc%252Fnative-bridge.ts%3Asrc%252Fnative-bridge.ts%3Afile%3A0:react-native:imports:1:31",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 1,
+        },
+        "start": {
+          "column": 31,
+          "line": 1,
+        },
+      },
+      "referenceName": "react-native",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fnative-bridge.ts:src%2Fnative-bridge.ts:file:0",
+    },
+    {
+      "callReceiverBindingSpace": "value",
+      "callReceiverMemberKind": "static",
+      "callReceiverTypeName": "TurboModuleRegistry",
+      "callSemantics": "typescript-proven-receiver-member-call",
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523Calendar%3Avariable%3A0:getEnforcing:calls:6:38",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 6,
+        },
+        "start": {
+          "column": 38,
+          "line": 6,
+        },
+      },
+      "referenceName": "getEnforcing",
+      "relationKind": "calls",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23Calendar:variable:0",
+    },
+    {
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%2523CalendarSpec%3Ainterface%3A0:TurboModule:extends:3:39",
+      "range": {
+        "end": {
+          "column": 50,
+          "line": 3,
+        },
+        "start": {
+          "column": 39,
+          "line": 3,
+        },
+      },
+      "referenceName": "TurboModule",
+      "relationKind": "extends",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23CalendarSpec:interface:0",
+    },
+    {
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%3Afile%3A0:react-native:imports:1:37",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 1,
+        },
+        "start": {
+          "column": 37,
+          "line": 1,
+        },
+      },
+      "referenceName": "react-native",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+    },
+    {
+      "filePath": "src/turbo-contract.ts",
+      "id": "edge:symbol%3Asrc%252Fturbo-contract.ts%3Asrc%252Fturbo-contract.ts%3Afile%3A0:react-native:imports:2:34",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 2,
+        },
+        "start": {
+          "column": 34,
+          "line": 2,
+        },
+      },
+      "referenceName": "react-native",
+      "relationKind": "imports",
+      "sourceId": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+    },
+  ],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "android/CalendarModule.java",
+      "id": "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule.createEvent:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "createEvent",
+      "qualifiedName": "android/CalendarModule.java#CalendarModule.createEvent",
+      "range": {
+        "end": {
+          "column": 44,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "android/CalendarModule.java",
+      "id": "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule.getName:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "getName",
+      "qualifiedName": "android/CalendarModule.java#CalendarModule.getName",
+      "range": {
+        "end": {
+          "column": 55,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "android/CalendarModule.java",
+      "id": "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java%23CalendarModule:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "CalendarModule",
+      "qualifiedName": "android/CalendarModule.java#CalendarModule",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "android/CalendarModule.java",
+      "id": "symbol:android%2FCalendarModule.java:android%2FCalendarModule.java:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "CalendarModule.java",
+      "qualifiedName": "android/CalendarModule.java",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "ios/CalendarBridge.swift",
+      "id": "symbol:ios%2FCalendarBridge.swift:ios%2FCalendarBridge.swift%23CalendarBridge:class:0",
+      "isExported": false,
+      "kind": "class",
+      "name": "CalendarBridge",
+      "qualifiedName": "ios/CalendarBridge.swift#CalendarBridge",
+      "range": {
+        "end": {
+          "column": 40,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "ios/CalendarBridge.swift",
+      "id": "symbol:ios%2FCalendarBridge.swift:ios%2FCalendarBridge.swift%23extension%3ACalendarBridge.writeEvent:method:0",
+      "isExported": false,
+      "kind": "method",
+      "name": "writeEvent",
+      "qualifiedName": "ios/CalendarBridge.swift#extension:CalendarBridge.writeEvent",
+      "range": {
+        "end": {
+          "column": 35,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "ios/CalendarBridge.swift",
+      "id": "symbol:ios%2FCalendarBridge.swift:ios%2FCalendarBridge.swift%23extension%3ACalendarBridge:class:0",
+      "isExported": false,
+      "kind": "class",
+      "name": "extension CalendarBridge",
+      "qualifiedName": "ios/CalendarBridge.swift#extension:CalendarBridge",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "ios/CalendarBridge.swift",
+      "id": "symbol:ios%2FCalendarBridge.swift:ios%2FCalendarBridge.swift:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "CalendarBridge.swift",
+      "qualifiedName": "ios/CalendarBridge.swift",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "ios/CalendarBridgeExport.m",
+      "id": "symbol:ios%2FCalendarBridgeExport.m:ios%2FCalendarBridgeExport.m%23extern%3ACalendarBridge.createEvent:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "createEvent",
+      "qualifiedName": "ios/CalendarBridgeExport.m#extern:CalendarBridge.createEvent",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "ios/CalendarBridgeExport.m",
+      "id": "symbol:ios%2FCalendarBridgeExport.m:ios%2FCalendarBridgeExport.m%23extern%3ACalendarBridge:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "CalendarBridge",
+      "qualifiedName": "ios/CalendarBridgeExport.m#extern:CalendarBridge",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "ios/CalendarBridgeExport.m",
+      "id": "symbol:ios%2FCalendarBridgeExport.m:ios%2FCalendarBridgeExport.m:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "CalendarBridgeExport.m",
+      "qualifiedName": "ios/CalendarBridgeExport.m",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "ios/CalendarModule.m",
+      "id": "symbol:ios%2FCalendarModule.m:ios%2FCalendarModule.m%23CalendarModule.createEvent:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "createEvent",
+      "qualifiedName": "ios/CalendarModule.m#CalendarModule.createEvent",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "ios/CalendarModule.m",
+      "id": "symbol:ios%2FCalendarModule.m:ios%2FCalendarModule.m%23CalendarModule:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "CalendarModule",
+      "qualifiedName": "ios/CalendarModule.m#CalendarModule",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "ios/CalendarModule.m",
+      "id": "symbol:ios%2FCalendarModule.m:ios%2FCalendarModule.m:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "CalendarModule.m",
+      "qualifiedName": "ios/CalendarModule.m",
+      "range": {
+        "end": {
+          "column": 5,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/calendar-api.ts",
+      "id": "symbol:src%2Fcalendar-api.ts:src%2Fcalendar-api.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "calendar-api.ts",
+      "qualifiedName": "src/calendar-api.ts",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/calendar-barrel.ts",
+      "id": "symbol:src%2Fcalendar-barrel.ts:src%2Fcalendar-barrel.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "calendar-barrel.ts",
+      "qualifiedName": "src/calendar-barrel.ts",
+      "range": {
+        "end": {
+          "column": 44,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/native-bridge.ts",
+      "id": "symbol:src%2Fnative-bridge.ts:src%2Fnative-bridge.ts%23nativeSchedule:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "nativeSchedule",
+      "qualifiedName": "src/native-bridge.ts#nativeSchedule",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/native-bridge.ts",
+      "id": "symbol:src%2Fnative-bridge.ts:src%2Fnative-bridge.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "native-bridge.ts",
+      "qualifiedName": "src/native-bridge.ts",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/turbo-contract.ts",
+      "id": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23Calendar:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "Calendar",
+      "qualifiedName": "src/turbo-contract.ts#Calendar",
+      "range": {
+        "end": {
+          "column": 82,
+          "line": 6,
+        },
+        "start": {
+          "column": 7,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/turbo-contract.ts",
+      "id": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23CalendarSpec.createEvent:method:0",
+      "isExported": false,
+      "kind": "method",
+      "name": "createEvent",
+      "qualifiedName": "src/turbo-contract.ts#CalendarSpec.createEvent",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 4,
+        },
+        "start": {
+          "column": 3,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/turbo-contract.ts",
+      "id": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23CalendarSpec:interface:0",
+      "isExported": true,
+      "kind": "interface",
+      "name": "CalendarSpec",
+      "qualifiedName": "src/turbo-contract.ts#CalendarSpec",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/turbo-contract.ts",
+      "id": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts%23turboSchedule:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "turboSchedule",
+      "qualifiedName": "src/turbo-contract.ts#turboSchedule",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/turbo-contract.ts",
+      "id": "symbol:src%2Fturbo-contract.ts:src%2Fturbo-contract.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "turbo-contract.ts",
+      "qualifiedName": "src/turbo-contract.ts",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/use-calendar-reexport.ts",
+      "id": "symbol:src%2Fuse-calendar-reexport.ts:src%2Fuse-calendar-reexport.ts%23reexportSchedule:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "reexportSchedule",
+      "qualifiedName": "src/use-calendar-reexport.ts#reexportSchedule",
+      "range": {
+        "end": {
+          "column": 63,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/use-calendar-reexport.ts",
+      "id": "symbol:src%2Fuse-calendar-reexport.ts:src%2Fuse-calendar-reexport.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "use-calendar-reexport.ts",
+      "qualifiedName": "src/use-calendar-reexport.ts",
+      "range": {
+        "end": {
+          "column": 63,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/use-calendar.ts",
+      "id": "symbol:src%2Fuse-calendar.ts:src%2Fuse-calendar.ts%23importedSchedule:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "importedSchedule",
+      "qualifiedName": "src/use-calendar.ts#importedSchedule",
+      "range": {
+        "end": {
+          "column": 63,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/use-calendar.ts",
+      "id": "symbol:src%2Fuse-calendar.ts:src%2Fuse-calendar.ts:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "use-calendar.ts",
+      "qualifiedName": "src/use-calendar.ts",
+      "range": {
+        "end": {
+          "column": 63,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

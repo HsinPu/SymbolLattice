@@ -1,0 +1,6055 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`functional-language resolver output parity > 'fsharp' preserves consumer-only nonclaims and local relations 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.localA:function:0",
+        ],
+        "ruleId": "syntax.fsharp.unique-pipeline-function-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.fs",
+      "id": "edge:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%2523Demo.App.execute%3Afunction%3A0:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%2523Demo.App.localA%3Afunction%3A0:calls:11:10",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 11,
+        },
+        "start": {
+          "column": 10,
+          "line": 11,
+        },
+      },
+      "referenceName": "localA",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.execute:function:0",
+      "targetId": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.localA:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.execute:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.fs",
+      "id": "edge:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%3Afile%3A0:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%2523Demo.App.execute%3Afunction%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "execute",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.fs:src%2FApp.fs:file:0",
+      "targetId": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.execute:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.localA:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.fs",
+      "id": "edge:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%3Afile%3A0:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%2523Demo.App.localA%3Afunction%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "localA",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.fs:src%2FApp.fs:file:0",
+      "targetId": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.localA:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.fs:src%2FApp.fs%23module%3ADemo.App:module:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.fs",
+      "id": "edge:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%3Afile%3A0:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%2523module%253ADemo.App%3Amodule%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Demo.App",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.fs:src%2FApp.fs:file:0",
+      "targetId": "symbol:src%2FApp.fs:src%2FApp.fs%23module%3ADemo.App:module:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "706ee42aaeffc874297fbd8d1dc22d9da6f2295f167b0d88f2c49317446c262c",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "fsharp",
+      "path": "src/App.fs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.fs",
+      "id": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.execute:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "execute",
+      "qualifiedName": "src/App.fs#Demo.App.execute",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.fs",
+      "id": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.localA:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "localA",
+      "qualifiedName": "src/App.fs#Demo.App.localA",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.fs",
+      "id": "symbol:src%2FApp.fs:src%2FApp.fs%23module%3ADemo.App:module:0",
+      "isExported": true,
+      "kind": "module",
+      "name": "Demo.App",
+      "qualifiedName": "src/App.fs#module:Demo.App",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.fs",
+      "id": "symbol:src%2FApp.fs:src%2FApp.fs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "App.fs",
+      "qualifiedName": "src/App.fs",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 12,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`functional-language resolver output parity > 'fsharp' preserves multi-file relations and complete evidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Base.Base:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Base%3Aclass%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Base.Base%3Amethod%3A0:contains:7:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Base:class:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Base.Base:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Base.Run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Base%3Aclass%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Base.Run%3Amethod%3A0:contains:8:5",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 8,
+        },
+        "start": {
+          "column": 5,
+          "line": 8,
+        },
+      },
+      "referenceName": "Run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Base:class:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Base.Run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+        ],
+        "ruleId": "syntax.fsharp.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Base.Run%3Amethod%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Point%3Aclass%3A0:accepts:8:5",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 8,
+        },
+        "start": {
+          "column": 5,
+          "line": 8,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Base.Run:method:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+        ],
+        "ruleId": "syntax.fsharp.unique-signature-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Base.Run%3Amethod%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Point%3Aclass%3A0:returns:8:5",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 8,
+        },
+        "start": {
+          "column": 5,
+          "line": 8,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Base.Run:method:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+        ],
+        "ruleId": "syntax.fsharp.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Helpers.helper%3Afunction%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Point%3Aclass%3A0:accepts:17:5",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 17,
+        },
+        "start": {
+          "column": 5,
+          "line": 17,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Helpers.helper:function:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+        ],
+        "ruleId": "syntax.fsharp.unique-signature-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Helpers.helper%3Afunction%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Point%3Aclass%3A0:returns:17:5",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 17,
+        },
+        "start": {
+          "column": 5,
+          "line": 17,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Helpers.helper:function:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point.Magnitude:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Point%3Aclass%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Point.Magnitude%3Amethod%3A0:contains:4:5",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 39,
+          "line": 4,
+        },
+        "start": {
+          "column": 5,
+          "line": 4,
+        },
+      },
+      "referenceName": "Magnitude",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point.Magnitude:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point.Point:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Point%3Aclass%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Point.Point%3Amethod%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point.Point:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Base:class:0",
+        ],
+        "ruleId": "syntax.fsharp.unique-extends-target",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Service%3Aclass%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Base%3Aclass%3A0:extends:10:1",
+      "kind": "extends",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 10,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service:class:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Base:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.IContract:interface:0",
+        ],
+        "ruleId": "syntax.fsharp.unique-interface-target",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Service%3Aclass%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.IContract%3Ainterface%3A0:implements:10:1",
+      "kind": "implements",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 10,
+        },
+      },
+      "referenceName": "IContract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service:class:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.IContract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service.Act:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Service%3Aclass%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Service.Act%3Amethod%3A0:contains:13:9",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 13,
+        },
+        "start": {
+          "column": 9,
+          "line": 13,
+        },
+      },
+      "referenceName": "Act",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service:class:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service.Act:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service.Run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Service%3Aclass%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Service.Run%3Amethod%3A0:contains:14:5",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 41,
+          "line": 14,
+        },
+        "start": {
+          "column": 5,
+          "line": 14,
+        },
+      },
+      "referenceName": "Run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service:class:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service.Run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service.Service:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Service%3Aclass%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Service.Service%3Amethod%3A0:contains:10:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 10,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service:class:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service.Service:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+        ],
+        "ruleId": "syntax.fsharp.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Service.Act%3Amethod%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Point%3Aclass%3A0:accepts:13:9",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 13,
+        },
+        "start": {
+          "column": 9,
+          "line": 13,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service.Act:method:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+        ],
+        "ruleId": "syntax.fsharp.unique-signature-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Service.Act%3Amethod%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Point%3Aclass%3A0:returns:13:9",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 13,
+        },
+        "start": {
+          "column": 9,
+          "line": 13,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service.Act:method:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Base.Run:method:0",
+        ],
+        "ruleId": "syntax.fsharp.explicit-direct-base-method",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Service.Run%3Amethod%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Base.Run%3Amethod%3A0:overrides:14:5",
+      "kind": "overrides",
+      "range": {
+        "end": {
+          "column": 41,
+          "line": 14,
+        },
+        "start": {
+          "column": 5,
+          "line": 14,
+        },
+      },
+      "referenceName": "Run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service.Run:method:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Base.Run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+        ],
+        "ruleId": "syntax.fsharp.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Service.Run%3Amethod%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Point%3Aclass%3A0:accepts:14:5",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 41,
+          "line": 14,
+        },
+        "start": {
+          "column": 5,
+          "line": 14,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service.Run:method:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+        ],
+        "ruleId": "syntax.fsharp.unique-signature-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Service.Run%3Amethod%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Point%3Aclass%3A0:returns:14:5",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 41,
+          "line": 14,
+        },
+        "start": {
+          "column": 5,
+          "line": 14,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service.Run:method:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Base:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523module%253ADemo.Api%3Amodule%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Base%3Aclass%3A0:contains:7:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23module%3ADemo.Api:module:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Base:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.IContract:interface:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523module%253ADemo.Api%3Amodule%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.IContract%3Ainterface%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 46,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "IContract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23module%3ADemo.Api:module:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.IContract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523module%253ADemo.Api%3Amodule%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Point%3Aclass%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23module%3ADemo.Api:module:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523module%253ADemo.Api%3Amodule%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Service%3Aclass%3A0:contains:10:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 10,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23module%3ADemo.Api:module:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23module%3ADemo.Api.Helpers:module:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523module%253ADemo.Api%3Amodule%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523module%253ADemo.Api.Helpers%3Amodule%3A0:contains:16:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 16,
+        },
+        "start": {
+          "column": 1,
+          "line": 16,
+        },
+      },
+      "referenceName": "Demo.Api.Helpers",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs%23module%3ADemo.Api:module:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23module%3ADemo.Api.Helpers:module:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Helpers.helper:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%3Afile%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Helpers.helper%3Afunction%3A0:contains:17:5",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 17,
+        },
+        "start": {
+          "column": 5,
+          "line": 17,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs:file:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Helpers.helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23module%3ADemo.Api:module:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.fs",
+      "id": "edge:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%3Afile%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523module%253ADemo.Api%3Amodule%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Demo.Api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.fs:src%2FApi.fs:file:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23module%3ADemo.Api:module:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Helpers.helper:function:0",
+        ],
+        "resolutionPath": [
+          "src/App.fs",
+          "src/Api.fs",
+        ],
+        "ruleId": "module.fsharp.unique-module-function-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.fs",
+      "id": "edge:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%2523Demo.App.execute%3Afunction%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Helpers.helper%3Afunction%3A0:calls:10:5",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 10,
+        },
+        "start": {
+          "column": 5,
+          "line": 10,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.execute:function:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Helpers.helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.fs",
+          "src/Api.fs",
+        ],
+        "ruleId": "syntax.fsharp.unique-signature-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.fs",
+      "id": "edge:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%2523Demo.App.execute%3Afunction%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Point%3Aclass%3A0:accepts:6:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.execute:function:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.fs",
+          "src/Api.fs",
+        ],
+        "ruleId": "syntax.fsharp.unique-constructor-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.fs",
+      "id": "edge:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%2523Demo.App.execute%3Afunction%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Point%3Aclass%3A0:instantiates:12:5",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 12,
+        },
+        "start": {
+          "column": 5,
+          "line": 12,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.execute:function:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.fs",
+          "src/Api.fs",
+        ],
+        "ruleId": "syntax.fsharp.unique-constructor-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.fs",
+      "id": "edge:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%2523Demo.App.execute%3Afunction%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Point%3Aclass%3A0:instantiates:7:24",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 7,
+        },
+        "start": {
+          "column": 24,
+          "line": 7,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.execute:function:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.fs",
+          "src/Api.fs",
+        ],
+        "ruleId": "syntax.fsharp.unique-signature-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.fs",
+      "id": "edge:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%2523Demo.App.execute%3Afunction%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Point%3Aclass%3A0:returns:6:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.execute:function:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point.Magnitude:method:0",
+        ],
+        "resolutionPath": [
+          "src/App.fs",
+          "src/Api.fs",
+        ],
+        "ruleId": "syntax.fsharp.unique-member-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.fs",
+      "id": "edge:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%2523Demo.App.execute%3Afunction%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Point.Magnitude%3Amethod%3A0:calls:9:5",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 9,
+        },
+        "start": {
+          "column": 5,
+          "line": 9,
+        },
+      },
+      "referenceName": "Magnitude",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.execute:function:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point.Magnitude:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.fs",
+          "src/Api.fs",
+        ],
+        "ruleId": "syntax.fsharp.unique-signature-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.fs",
+      "id": "edge:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%2523Demo.App.execute%3Afunction%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Service%3Aclass%3A0:accepts:6:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.execute:function:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service.Run:method:0",
+        ],
+        "resolutionPath": [
+          "src/App.fs",
+          "src/Api.fs",
+        ],
+        "ruleId": "syntax.fsharp.unique-member-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.fs",
+      "id": "edge:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%2523Demo.App.execute%3Afunction%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Service.Run%3Amethod%3A0:calls:8:5",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 8,
+        },
+        "start": {
+          "column": 5,
+          "line": 8,
+        },
+      },
+      "referenceName": "Run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.execute:function:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service.Run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.localA:function:0",
+        ],
+        "ruleId": "syntax.fsharp.unique-pipeline-function-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.fs",
+      "id": "edge:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%2523Demo.App.execute%3Afunction%3A0:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%2523Demo.App.localA%3Afunction%3A0:calls:11:10",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 11,
+        },
+        "start": {
+          "column": 10,
+          "line": 11,
+        },
+      },
+      "referenceName": "localA",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.execute:function:0",
+      "targetId": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.localA:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.fs",
+          "src/Api.fs",
+        ],
+        "ruleId": "syntax.fsharp.unique-signature-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.fs",
+      "id": "edge:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%2523Demo.App.localA%3Afunction%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Point%3Aclass%3A0:accepts:4:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.localA:function:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.fs",
+          "src/Api.fs",
+        ],
+        "ruleId": "syntax.fsharp.unique-signature-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.fs",
+      "id": "edge:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%2523Demo.App.localA%3Afunction%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%2523Demo.Api.Point%3Aclass%3A0:returns:4:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.localA:function:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.fs:src%2FApi.fs:file:0",
+        ],
+        "resolutionPath": [
+          "src/App.fs",
+          "src/Api.fs",
+        ],
+        "ruleId": "module.fsharp.explicit-open.unique-module",
+        "stage": "module",
+      },
+      "filePath": "src/App.fs",
+      "id": "edge:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%3Afile%3A0:symbol%3Asrc%252FApi.fs%3Asrc%252FApi.fs%3Afile%3A0:imports:2:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Demo.Api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.fs:src%2FApp.fs:file:0",
+      "targetId": "symbol:src%2FApi.fs:src%2FApi.fs:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.execute:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.fs",
+      "id": "edge:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%3Afile%3A0:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%2523Demo.App.execute%3Afunction%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "execute",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.fs:src%2FApp.fs:file:0",
+      "targetId": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.execute:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.localA:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.fs",
+      "id": "edge:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%3Afile%3A0:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%2523Demo.App.localA%3Afunction%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "localA",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.fs:src%2FApp.fs:file:0",
+      "targetId": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.localA:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.fs:src%2FApp.fs%23module%3ADemo.App:module:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.fs",
+      "id": "edge:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%3Afile%3A0:symbol%3Asrc%252FApp.fs%3Asrc%252FApp.fs%2523module%253ADemo.App%3Amodule%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Demo.App",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.fs:src%2FApp.fs:file:0",
+      "targetId": "symbol:src%2FApp.fs:src%2FApp.fs%23module%3ADemo.App:module:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "aad3c6390a36ee3ef1eb1dd13709e198a766d6ad4045826fa2418d03b5f262c1",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "fsharp",
+      "path": "src/Api.fs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "706ee42aaeffc874297fbd8d1dc22d9da6f2295f167b0d88f2c49317446c262c",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "fsharp",
+      "path": "src/App.fs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.fs",
+      "id": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Base.Base:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Base",
+      "qualifiedName": "src/Api.fs#Demo.Api.Base.Base",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.fs",
+      "id": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Base.Run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Run",
+      "qualifiedName": "src/Api.fs#Demo.Api.Base.Run",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 8,
+        },
+        "start": {
+          "column": 5,
+          "line": 8,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.fs",
+      "id": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Base:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Base",
+      "qualifiedName": "src/Api.fs#Demo.Api.Base",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.fs",
+      "id": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Helpers.helper:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "src/Api.fs#Demo.Api.Helpers.helper",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 17,
+        },
+        "start": {
+          "column": 5,
+          "line": 17,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.fs",
+      "id": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.IContract:interface:0",
+      "isExported": true,
+      "kind": "interface",
+      "name": "IContract",
+      "qualifiedName": "src/Api.fs#Demo.Api.IContract",
+      "range": {
+        "end": {
+          "column": 46,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.fs",
+      "id": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point.Magnitude:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Magnitude",
+      "qualifiedName": "src/Api.fs#Demo.Api.Point.Magnitude",
+      "range": {
+        "end": {
+          "column": 39,
+          "line": 4,
+        },
+        "start": {
+          "column": 5,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.fs",
+      "id": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point.Point:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Point",
+      "qualifiedName": "src/Api.fs#Demo.Api.Point.Point",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.fs",
+      "id": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Point:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Point",
+      "qualifiedName": "src/Api.fs#Demo.Api.Point",
+      "range": {
+        "end": {
+          "column": 25,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.fs",
+      "id": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service.Act:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Act",
+      "qualifiedName": "src/Api.fs#Demo.Api.Service.Act",
+      "range": {
+        "end": {
+          "column": 43,
+          "line": 13,
+        },
+        "start": {
+          "column": 9,
+          "line": 13,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.fs",
+      "id": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service.Run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Run",
+      "qualifiedName": "src/Api.fs#Demo.Api.Service.Run",
+      "range": {
+        "end": {
+          "column": 41,
+          "line": 14,
+        },
+        "start": {
+          "column": 5,
+          "line": 14,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.fs",
+      "id": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service.Service:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "Service",
+      "qualifiedName": "src/Api.fs#Demo.Api.Service.Service",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 10,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.fs",
+      "id": "symbol:src%2FApi.fs:src%2FApi.fs%23Demo.Api.Service:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Service",
+      "qualifiedName": "src/Api.fs#Demo.Api.Service",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 10,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.fs",
+      "id": "symbol:src%2FApi.fs:src%2FApi.fs%23module%3ADemo.Api.Helpers:module:0",
+      "isExported": true,
+      "kind": "module",
+      "name": "Demo.Api.Helpers",
+      "qualifiedName": "src/Api.fs#module:Demo.Api.Helpers",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 16,
+        },
+        "start": {
+          "column": 1,
+          "line": 16,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.fs",
+      "id": "symbol:src%2FApi.fs:src%2FApi.fs%23module%3ADemo.Api:module:0",
+      "isExported": true,
+      "kind": "module",
+      "name": "Demo.Api",
+      "qualifiedName": "src/Api.fs#module:Demo.Api",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.fs",
+      "id": "symbol:src%2FApi.fs:src%2FApi.fs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Api.fs",
+      "qualifiedName": "src/Api.fs",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 17,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.fs",
+      "id": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.execute:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "execute",
+      "qualifiedName": "src/App.fs#Demo.App.execute",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.fs",
+      "id": "symbol:src%2FApp.fs:src%2FApp.fs%23Demo.App.localA:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "localA",
+      "qualifiedName": "src/App.fs#Demo.App.localA",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.fs",
+      "id": "symbol:src%2FApp.fs:src%2FApp.fs%23module%3ADemo.App:module:0",
+      "isExported": true,
+      "kind": "module",
+      "name": "Demo.App",
+      "qualifiedName": "src/App.fs#module:Demo.App",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.fs",
+      "id": "symbol:src%2FApp.fs:src%2FApp.fs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "App.fs",
+      "qualifiedName": "src/App.fs",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 12,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`functional-language resolver output parity > 'haskell' preserves consumer-only nonclaims and local relations 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.hs:src%2FApp.hs%23App.local:function:0",
+        ],
+        "ruleId": "syntax.haskell.unique-direct-function-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.hs",
+      "id": "edge:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%2523App.execute%3Afunction%3A0:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%2523App.local%3Afunction%3A0:calls:9:21",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 26,
+          "line": 9,
+        },
+        "start": {
+          "column": 21,
+          "line": 9,
+        },
+      },
+      "referenceName": "local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.hs:src%2FApp.hs%23App.execute:function:0",
+      "targetId": "symbol:src%2FApp.hs:src%2FApp.hs%23App.local:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.hs:src%2FApp.hs%23App.execute:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.hs",
+      "id": "edge:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%3Afile%3A0:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%2523App.execute%3Afunction%3A0:contains:7:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "execute",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.hs:src%2FApp.hs:file:0",
+      "targetId": "symbol:src%2FApp.hs:src%2FApp.hs%23App.execute:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.hs:src%2FApp.hs%23App.local:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.hs",
+      "id": "edge:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%3Afile%3A0:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%2523App.local%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.hs:src%2FApp.hs:file:0",
+      "targetId": "symbol:src%2FApp.hs:src%2FApp.hs%23App.local:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.hs:src%2FApp.hs%23module%3AApp:module:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.hs",
+      "id": "edge:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%3Afile%3A0:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%2523module%253AApp%3Amodule%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "App",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.hs:src%2FApp.hs:file:0",
+      "targetId": "symbol:src%2FApp.hs:src%2FApp.hs%23module%3AApp:module:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "3b44072e47185525b0b97eba50fd20f032fe71bccbe702396ff0010c6b029ff9",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "haskell",
+      "path": "src/App.hs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.hs",
+      "id": "symbol:src%2FApp.hs:src%2FApp.hs%23App.execute:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "execute",
+      "qualifiedName": "src/App.hs#App.execute",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.hs",
+      "id": "symbol:src%2FApp.hs:src%2FApp.hs%23App.local:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "local",
+      "qualifiedName": "src/App.hs#App.local",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.hs",
+      "id": "symbol:src%2FApp.hs:src%2FApp.hs%23module%3AApp:module:0",
+      "isExported": true,
+      "kind": "module",
+      "name": "App",
+      "qualifiedName": "src/App.hs#module:App",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.hs",
+      "id": "symbol:src%2FApp.hs:src%2FApp.hs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "App.hs",
+      "qualifiedName": "src/App.hs",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`functional-language resolver output parity > 'haskell' preserves multi-file relations and complete evidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Contract:class:0",
+        ],
+        "ruleId": "syntax.haskell.unique-typeclass-instance",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.hs",
+      "id": "edge:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%2523Api.Point%3Atype%3A0:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%2523Api.Contract%3Aclass%3A0:implements:5:1",
+      "kind": "implements",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Point:type:0",
+      "targetId": "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Contract:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Point:type:0",
+        ],
+        "ruleId": "syntax.haskell.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.hs",
+      "id": "edge:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%2523Api.helper%3Afunction%3A0:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%2523Api.Point%3Atype%3A0:accepts:8:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.hs:src%2FApi.hs%23Api.helper:function:0",
+      "targetId": "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Point:type:0",
+        ],
+        "ruleId": "syntax.haskell.unique-signature-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.hs",
+      "id": "edge:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%2523Api.helper%3Afunction%3A0:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%2523Api.Point%3Atype%3A0:returns:8:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.hs:src%2FApi.hs%23Api.helper:function:0",
+      "targetId": "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Contract:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.hs",
+      "id": "edge:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%2523module%253AApi%3Amodule%3A0:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%2523Api.Contract%3Aclass%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.hs:src%2FApi.hs%23module%3AApi:module:0",
+      "targetId": "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Contract:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Point:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.hs",
+      "id": "edge:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%2523module%253AApi%3Amodule%3A0:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%2523Api.Point%3Atype%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.hs:src%2FApi.hs%23module%3AApi:module:0",
+      "targetId": "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.hs:src%2FApi.hs%23Api.helper:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.hs",
+      "id": "edge:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%3Afile%3A0:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%2523Api.helper%3Afunction%3A0:contains:8:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.hs:src%2FApi.hs:file:0",
+      "targetId": "symbol:src%2FApi.hs:src%2FApi.hs%23Api.helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.hs:src%2FApi.hs%23module%3AApi:module:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.hs",
+      "id": "edge:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%3Afile%3A0:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%2523module%253AApi%3Amodule%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 47,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.hs:src%2FApi.hs:file:0",
+      "targetId": "symbol:src%2FApi.hs:src%2FApi.hs%23module%3AApi:module:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Point:type:0",
+        ],
+        "resolutionPath": [
+          "src/App.hs",
+          "src/Api.hs",
+        ],
+        "ruleId": "syntax.haskell.unique-signature-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.hs",
+      "id": "edge:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%2523App.execute%3Afunction%3A0:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%2523Api.Point%3Atype%3A0:accepts:7:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.hs:src%2FApp.hs%23App.execute:function:0",
+      "targetId": "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Point:type:0",
+        ],
+        "resolutionPath": [
+          "src/App.hs",
+          "src/Api.hs",
+        ],
+        "ruleId": "syntax.haskell.unique-constructor-creation",
+        "stage": "module",
+      },
+      "filePath": "src/App.hs",
+      "id": "edge:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%2523App.execute%3Afunction%3A0:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%2523Api.Point%3Atype%3A0:instantiates:8:17",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 8,
+        },
+        "start": {
+          "column": 17,
+          "line": 8,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.hs:src%2FApp.hs%23App.execute:function:0",
+      "targetId": "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Point:type:0",
+        ],
+        "resolutionPath": [
+          "src/App.hs",
+          "src/Api.hs",
+        ],
+        "ruleId": "syntax.haskell.unique-signature-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.hs",
+      "id": "edge:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%2523App.execute%3Afunction%3A0:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%2523Api.Point%3Atype%3A0:returns:7:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.hs:src%2FApp.hs%23App.execute:function:0",
+      "targetId": "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.hs:src%2FApi.hs%23Api.helper:function:0",
+        ],
+        "resolutionPath": [
+          "src/App.hs",
+          "src/Api.hs",
+        ],
+        "ruleId": "module.haskell.unique-qualified-function-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.hs",
+      "id": "edge:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%2523App.execute%3Afunction%3A0:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%2523Api.helper%3Afunction%3A0:calls:10:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 10,
+        },
+        "start": {
+          "column": 3,
+          "line": 10,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.hs:src%2FApp.hs%23App.execute:function:0",
+      "targetId": "symbol:src%2FApi.hs:src%2FApi.hs%23Api.helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.hs:src%2FApp.hs%23App.local:function:0",
+        ],
+        "ruleId": "syntax.haskell.unique-direct-function-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.hs",
+      "id": "edge:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%2523App.execute%3Afunction%3A0:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%2523App.local%3Afunction%3A0:calls:9:21",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 26,
+          "line": 9,
+        },
+        "start": {
+          "column": 21,
+          "line": 9,
+        },
+      },
+      "referenceName": "local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.hs:src%2FApp.hs%23App.execute:function:0",
+      "targetId": "symbol:src%2FApp.hs:src%2FApp.hs%23App.local:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Point:type:0",
+        ],
+        "resolutionPath": [
+          "src/App.hs",
+          "src/Api.hs",
+        ],
+        "ruleId": "syntax.haskell.unique-signature-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.hs",
+      "id": "edge:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%2523App.local%3Afunction%3A0:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%2523Api.Point%3Atype%3A0:accepts:5:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.hs:src%2FApp.hs%23App.local:function:0",
+      "targetId": "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Point:type:0",
+        ],
+        "resolutionPath": [
+          "src/App.hs",
+          "src/Api.hs",
+        ],
+        "ruleId": "syntax.haskell.unique-signature-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.hs",
+      "id": "edge:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%2523App.local%3Afunction%3A0:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%2523Api.Point%3Atype%3A0:returns:5:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.hs:src%2FApp.hs%23App.local:function:0",
+      "targetId": "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Point:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.hs:src%2FApi.hs%23Api.helper:function:0",
+        ],
+        "resolutionPath": [
+          "src/App.hs",
+          "src/Api.hs",
+        ],
+        "ruleId": "syntax.haskell.unique-direct-function-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.hs",
+      "id": "edge:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%2523App.local%3Afunction%3A0:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%2523Api.helper%3Afunction%3A0:calls:5:11",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 5,
+        },
+        "start": {
+          "column": 11,
+          "line": 5,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.hs:src%2FApp.hs%23App.local:function:0",
+      "targetId": "symbol:src%2FApi.hs:src%2FApi.hs%23Api.helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.hs:src%2FApi.hs:file:0",
+        ],
+        "resolutionPath": [
+          "src/App.hs",
+          "src/Api.hs",
+        ],
+        "ruleId": "module.haskell.explicit-import.unique-module",
+        "stage": "module",
+      },
+      "filePath": "src/App.hs",
+      "id": "edge:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%3Afile%3A0:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%3Afile%3A0:imports:2:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 41,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.hs:src%2FApp.hs:file:0",
+      "targetId": "symbol:src%2FApi.hs:src%2FApi.hs:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.hs:src%2FApi.hs:file:0",
+        ],
+        "resolutionPath": [
+          "src/App.hs",
+          "src/Api.hs",
+        ],
+        "ruleId": "module.haskell.explicit-import.unique-module",
+        "stage": "module",
+      },
+      "filePath": "src/App.hs",
+      "id": "edge:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%3Afile%3A0:symbol%3Asrc%252FApi.hs%3Asrc%252FApi.hs%3Afile%3A0:imports:3:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 26,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.hs:src%2FApp.hs:file:0",
+      "targetId": "symbol:src%2FApi.hs:src%2FApi.hs:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.hs:src%2FApp.hs%23App.execute:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.hs",
+      "id": "edge:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%3Afile%3A0:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%2523App.execute%3Afunction%3A0:contains:7:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "execute",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.hs:src%2FApp.hs:file:0",
+      "targetId": "symbol:src%2FApp.hs:src%2FApp.hs%23App.execute:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.hs:src%2FApp.hs%23App.local:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.hs",
+      "id": "edge:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%3Afile%3A0:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%2523App.local%3Afunction%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.hs:src%2FApp.hs:file:0",
+      "targetId": "symbol:src%2FApp.hs:src%2FApp.hs%23App.local:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.hs:src%2FApp.hs%23module%3AApp:module:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.hs",
+      "id": "edge:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%3Afile%3A0:symbol%3Asrc%252FApp.hs%3Asrc%252FApp.hs%2523module%253AApp%3Amodule%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "App",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.hs:src%2FApp.hs:file:0",
+      "targetId": "symbol:src%2FApp.hs:src%2FApp.hs%23module%3AApp:module:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "42a249c3a893836083e39e47773acc95aab8467d9210b2b3816c6d552906675c",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "haskell",
+      "path": "src/Api.hs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "3b44072e47185525b0b97eba50fd20f032fe71bccbe702396ff0010c6b029ff9",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "haskell",
+      "path": "src/App.hs",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.hs",
+      "id": "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Contract:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Contract",
+      "qualifiedName": "src/Api.hs#Api.Contract",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.hs",
+      "id": "symbol:src%2FApi.hs:src%2FApi.hs%23Api.Point:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "Point",
+      "qualifiedName": "src/Api.hs#Api.Point",
+      "range": {
+        "end": {
+          "column": 23,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.hs",
+      "id": "symbol:src%2FApi.hs:src%2FApi.hs%23Api.helper:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "src/Api.hs#Api.helper",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.hs",
+      "id": "symbol:src%2FApi.hs:src%2FApi.hs%23module%3AApi:module:0",
+      "isExported": true,
+      "kind": "module",
+      "name": "Api",
+      "qualifiedName": "src/Api.hs#module:Api",
+      "range": {
+        "end": {
+          "column": 47,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.hs",
+      "id": "symbol:src%2FApi.hs:src%2FApi.hs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Api.hs",
+      "qualifiedName": "src/Api.hs",
+      "range": {
+        "end": {
+          "column": 13,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.hs",
+      "id": "symbol:src%2FApp.hs:src%2FApp.hs%23App.execute:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "execute",
+      "qualifiedName": "src/App.hs#App.execute",
+      "range": {
+        "end": {
+          "column": 12,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.hs",
+      "id": "symbol:src%2FApp.hs:src%2FApp.hs%23App.local:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "local",
+      "qualifiedName": "src/App.hs#App.local",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.hs",
+      "id": "symbol:src%2FApp.hs:src%2FApp.hs%23module%3AApp:module:0",
+      "isExported": true,
+      "kind": "module",
+      "name": "App",
+      "qualifiedName": "src/App.hs#module:App",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.hs",
+      "id": "symbol:src%2FApp.hs:src%2FApp.hs:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "App.hs",
+      "qualifiedName": "src/App.hs",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`functional-language resolver output parity > 'ocaml' preserves consumer-only nonclaims and local relations 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.ml:src%2FApp.ml%23local_a:function:0",
+        ],
+        "ruleId": "syntax.ocaml.unique-direct-function-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.ml",
+      "id": "edge:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%2523execute%3Afunction%3A0:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%2523local_a%3Afunction%3A0:calls:8:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 10,
+          "line": 8,
+        },
+        "start": {
+          "column": 3,
+          "line": 8,
+        },
+      },
+      "referenceName": "local_a",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.ml:src%2FApp.ml%23execute:function:0",
+      "targetId": "symbol:src%2FApp.ml:src%2FApp.ml%23local_a:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.ml:src%2FApp.ml%23execute:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.ml",
+      "id": "edge:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%3Afile%3A0:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%2523execute%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 54,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "execute",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.ml:src%2FApp.ml:file:0",
+      "targetId": "symbol:src%2FApp.ml:src%2FApp.ml%23execute:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.ml:src%2FApp.ml%23local_a:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.ml",
+      "id": "edge:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%3Afile%3A0:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%2523local_a%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "local_a",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.ml:src%2FApp.ml:file:0",
+      "targetId": "symbol:src%2FApp.ml:src%2FApp.ml%23local_a:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "9bbbee49793b0b7b9c9f594cf96eed333bf2a55858e57903fa6aeed34d41f0be",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "ocaml",
+      "path": "src/App.ml",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.ml",
+      "id": "symbol:src%2FApp.ml:src%2FApp.ml%23execute:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "execute",
+      "qualifiedName": "src/App.ml#execute",
+      "range": {
+        "end": {
+          "column": 54,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.ml",
+      "id": "symbol:src%2FApp.ml:src%2FApp.ml%23local_a:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "local_a",
+      "qualifiedName": "src/App.ml#local_a",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.ml",
+      "id": "symbol:src%2FApp.ml:src%2FApp.ml:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "App.ml",
+      "qualifiedName": "src/App.ml",
+      "range": {
+        "end": {
+          "column": 8,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`functional-language resolver output parity > 'ocaml' preserves multi-file relations and complete evidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.base.base:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.base%3Aclass%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.base.base%3Amethod%3A0:contains:8:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 8,
+        },
+        "start": {
+          "column": 3,
+          "line": 8,
+        },
+      },
+      "referenceName": "base",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.base:class:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.base.base:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.base.run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.base%3Aclass%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.base.run%3Amethod%3A0:contains:9:5",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 40,
+          "line": 9,
+        },
+        "start": {
+          "column": 5,
+          "line": 9,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.base:class:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.base.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+        ],
+        "ruleId": "syntax.ocaml.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.base.run%3Amethod%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.point%3Aclass%3A0:accepts:9:5",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 40,
+          "line": 9,
+        },
+        "start": {
+          "column": 5,
+          "line": 9,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.base.run:method:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+        ],
+        "ruleId": "syntax.ocaml.unique-signature-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.base.run%3Amethod%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.point%3Aclass%3A0:returns:9:5",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 40,
+          "line": 9,
+        },
+        "start": {
+          "column": 5,
+          "line": 9,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.base.run:method:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.contract.act:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.contract%3Ainterface%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.contract.act%3Amethod%3A0:contains:6:5",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 6,
+        },
+        "start": {
+          "column": 5,
+          "line": 6,
+        },
+      },
+      "referenceName": "act",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.contract:interface:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.contract.act:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+        ],
+        "ruleId": "syntax.ocaml.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.contract.act%3Amethod%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.point%3Aclass%3A0:accepts:6:5",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 6,
+        },
+        "start": {
+          "column": 5,
+          "line": 6,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.contract.act:method:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+        ],
+        "ruleId": "syntax.ocaml.unique-signature-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.contract.act%3Amethod%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.point%3Aclass%3A0:returns:6:5",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 6,
+        },
+        "start": {
+          "column": 5,
+          "line": 6,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.contract.act:method:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+        ],
+        "ruleId": "syntax.ocaml.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.helper%3Afunction%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.point%3Aclass%3A0:accepts:15:3",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 15,
+        },
+        "start": {
+          "column": 3,
+          "line": 15,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.helper:function:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+        ],
+        "ruleId": "syntax.ocaml.unique-signature-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.helper%3Afunction%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.point%3Aclass%3A0:returns:15:3",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 15,
+        },
+        "start": {
+          "column": 3,
+          "line": 15,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.helper:function:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point.magnitude:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.point%3Aclass%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.point.magnitude%3Amethod%3A0:contains:3:5",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 35,
+          "line": 3,
+        },
+        "start": {
+          "column": 5,
+          "line": 3,
+        },
+      },
+      "referenceName": "magnitude",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point.magnitude:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point.point:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.point%3Aclass%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.point.point%3Amethod%3A0:contains:2:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 2,
+        },
+        "start": {
+          "column": 3,
+          "line": 2,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point.point:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.base:class:0",
+        ],
+        "ruleId": "syntax.ocaml.unique-extends-target",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.service%3Aclass%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.base%3Aclass%3A0:extends:11:3",
+      "kind": "extends",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 11,
+        },
+        "start": {
+          "column": 3,
+          "line": 11,
+        },
+      },
+      "referenceName": "base",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service:class:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.base:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.contract:interface:0",
+        ],
+        "ruleId": "syntax.ocaml.unique-interface-target",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.service%3Aclass%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.contract%3Ainterface%3A0:implements:11:3",
+      "kind": "implements",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 11,
+        },
+        "start": {
+          "column": 3,
+          "line": 11,
+        },
+      },
+      "referenceName": "contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service:class:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.contract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service.run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.service%3Aclass%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.service.run%3Amethod%3A0:contains:13:5",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 40,
+          "line": 13,
+        },
+        "start": {
+          "column": 5,
+          "line": 13,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service:class:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service.service:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.service%3Aclass%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.service.service%3Amethod%3A0:contains:11:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 11,
+        },
+        "start": {
+          "column": 3,
+          "line": 11,
+        },
+      },
+      "referenceName": "service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service:class:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service.service:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.base.run:method:0",
+        ],
+        "ruleId": "syntax.ocaml.explicit-direct-base-method",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.service.run%3Amethod%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.base.run%3Amethod%3A0:overrides:13:5",
+      "kind": "overrides",
+      "range": {
+        "end": {
+          "column": 40,
+          "line": 13,
+        },
+        "start": {
+          "column": 5,
+          "line": 13,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service.run:method:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.base.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+        ],
+        "ruleId": "syntax.ocaml.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.service.run%3Amethod%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.point%3Aclass%3A0:accepts:13:5",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 40,
+          "line": 13,
+        },
+        "start": {
+          "column": 5,
+          "line": 13,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service.run:method:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+        ],
+        "ruleId": "syntax.ocaml.unique-signature-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.service.run%3Amethod%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.point%3Aclass%3A0:returns:13:5",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 40,
+          "line": 13,
+        },
+        "start": {
+          "column": 5,
+          "line": 13,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service.run:method:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.base:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523module%253AApi%3Amodule%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.base%3Aclass%3A0:contains:8:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 8,
+        },
+        "start": {
+          "column": 3,
+          "line": 8,
+        },
+      },
+      "referenceName": "base",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23module%3AApi:module:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.base:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.contract:interface:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523module%253AApi%3Amodule%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.contract%3Ainterface%3A0:contains:5:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 31,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+      "referenceName": "contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23module%3AApi:module:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.contract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523module%253AApi%3Amodule%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.point%3Aclass%3A0:contains:2:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 2,
+        },
+        "start": {
+          "column": 3,
+          "line": 2,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23module%3AApi:module:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523module%253AApi%3Amodule%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.service%3Aclass%3A0:contains:11:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 11,
+        },
+        "start": {
+          "column": 3,
+          "line": 11,
+        },
+      },
+      "referenceName": "service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml%23module%3AApi:module:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.helper:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%3Afile%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.helper%3Afunction%3A0:contains:15:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 15,
+        },
+        "start": {
+          "column": 3,
+          "line": 15,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml:file:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23module%3AApi:module:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.ml",
+      "id": "edge:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%3Afile%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523module%253AApi%3Amodule%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.ml:src%2FApi.ml:file:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23module%3AApi:module:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.helper:function:0",
+        ],
+        "resolutionPath": [
+          "src/App.ml",
+          "src/Api.ml",
+        ],
+        "ruleId": "module.ocaml.unique-module-function-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.ml",
+      "id": "edge:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%2523execute%3Afunction%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.helper%3Afunction%3A0:calls:7:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 7,
+        },
+        "start": {
+          "column": 3,
+          "line": 7,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.ml:src%2FApp.ml%23execute:function:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.helper:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.ml",
+          "src/Api.ml",
+        ],
+        "ruleId": "syntax.ocaml.unique-signature-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.ml",
+      "id": "edge:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%2523execute%3Afunction%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.point%3Aclass%3A0:accepts:3:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 54,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.ml:src%2FApp.ml%23execute:function:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.ml",
+          "src/Api.ml",
+        ],
+        "ruleId": "syntax.ocaml.unique-constructor-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.ml",
+      "id": "edge:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%2523execute%3Afunction%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.point%3Aclass%3A0:instantiates:4:23",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 4,
+        },
+        "start": {
+          "column": 23,
+          "line": 4,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.ml:src%2FApp.ml%23execute:function:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.ml",
+          "src/Api.ml",
+        ],
+        "ruleId": "syntax.ocaml.unique-signature-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.ml",
+      "id": "edge:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%2523execute%3Afunction%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.point%3Aclass%3A0:returns:3:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 54,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.ml:src%2FApp.ml%23execute:function:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point.magnitude:method:0",
+        ],
+        "resolutionPath": [
+          "src/App.ml",
+          "src/Api.ml",
+        ],
+        "ruleId": "syntax.ocaml.unique-member-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.ml",
+      "id": "edge:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%2523execute%3Afunction%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.point.magnitude%3Amethod%3A0:calls:6:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+      "referenceName": "magnitude",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.ml:src%2FApp.ml%23execute:function:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point.magnitude:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.ml",
+          "src/Api.ml",
+        ],
+        "ruleId": "syntax.ocaml.unique-signature-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.ml",
+      "id": "edge:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%2523execute%3Afunction%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.service%3Aclass%3A0:accepts:3:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 54,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.ml:src%2FApp.ml%23execute:function:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.ml",
+          "src/Api.ml",
+        ],
+        "ruleId": "syntax.ocaml.unique-constructor-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.ml",
+      "id": "edge:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%2523execute%3Afunction%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.service%3Aclass%3A0:instantiates:9:3",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 14,
+          "line": 9,
+        },
+        "start": {
+          "column": 3,
+          "line": 9,
+        },
+      },
+      "referenceName": "service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.ml:src%2FApp.ml%23execute:function:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service.run:method:0",
+        ],
+        "resolutionPath": [
+          "src/App.ml",
+          "src/Api.ml",
+        ],
+        "ruleId": "syntax.ocaml.unique-member-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.ml",
+      "id": "edge:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%2523execute%3Afunction%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.service.run%3Amethod%3A0:calls:5:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.ml:src%2FApp.ml%23execute:function:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.ml:src%2FApp.ml%23local_a:function:0",
+        ],
+        "ruleId": "syntax.ocaml.unique-direct-function-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.ml",
+      "id": "edge:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%2523execute%3Afunction%3A0:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%2523local_a%3Afunction%3A0:calls:8:3",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 10,
+          "line": 8,
+        },
+        "start": {
+          "column": 3,
+          "line": 8,
+        },
+      },
+      "referenceName": "local_a",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.ml:src%2FApp.ml%23execute:function:0",
+      "targetId": "symbol:src%2FApp.ml:src%2FApp.ml%23local_a:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.ml",
+          "src/Api.ml",
+        ],
+        "ruleId": "syntax.ocaml.unique-signature-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.ml",
+      "id": "edge:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%2523local_a%3Afunction%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.point%3Aclass%3A0:accepts:2:1",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.ml:src%2FApp.ml%23local_a:function:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.ml",
+          "src/Api.ml",
+        ],
+        "ruleId": "syntax.ocaml.unique-signature-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.ml",
+      "id": "edge:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%2523local_a%3Afunction%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%2523Api.point%3Aclass%3A0:returns:2:1",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.ml:src%2FApp.ml%23local_a:function:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.ml:src%2FApi.ml:file:0",
+        ],
+        "resolutionPath": [
+          "src/App.ml",
+          "src/Api.ml",
+        ],
+        "ruleId": "module.ocaml.explicit-open.unique-module",
+        "stage": "module",
+      },
+      "filePath": "src/App.ml",
+      "id": "edge:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%3Afile%3A0:symbol%3Asrc%252FApi.ml%3Asrc%252FApi.ml%3Afile%3A0:imports:1:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 9,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "Api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.ml:src%2FApp.ml:file:0",
+      "targetId": "symbol:src%2FApi.ml:src%2FApi.ml:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.ml:src%2FApp.ml%23execute:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.ml",
+      "id": "edge:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%3Afile%3A0:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%2523execute%3Afunction%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 54,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "execute",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.ml:src%2FApp.ml:file:0",
+      "targetId": "symbol:src%2FApp.ml:src%2FApp.ml%23execute:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.ml:src%2FApp.ml%23local_a:function:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.ml",
+      "id": "edge:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%3Afile%3A0:symbol%3Asrc%252FApp.ml%3Asrc%252FApp.ml%2523local_a%3Afunction%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "local_a",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.ml:src%2FApp.ml:file:0",
+      "targetId": "symbol:src%2FApp.ml:src%2FApp.ml%23local_a:function:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "60ef19ee4ca8c4acaa7042be8d7cef6ece7a84be718c8a057d49769dd258a6b6",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "ocaml",
+      "path": "src/Api.ml",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "9bbbee49793b0b7b9c9f594cf96eed333bf2a55858e57903fa6aeed34d41f0be",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "ocaml",
+      "path": "src/App.ml",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.ml",
+      "id": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.base.base:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "base",
+      "qualifiedName": "src/Api.ml#Api.base.base",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 8,
+        },
+        "start": {
+          "column": 3,
+          "line": 8,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.ml",
+      "id": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.base.run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "src/Api.ml#Api.base.run",
+      "range": {
+        "end": {
+          "column": 40,
+          "line": 9,
+        },
+        "start": {
+          "column": 5,
+          "line": 9,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.ml",
+      "id": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.base:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "base",
+      "qualifiedName": "src/Api.ml#Api.base",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 8,
+        },
+        "start": {
+          "column": 3,
+          "line": 8,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.ml",
+      "id": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.contract.act:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "act",
+      "qualifiedName": "src/Api.ml#Api.contract.act",
+      "range": {
+        "end": {
+          "column": 32,
+          "line": 6,
+        },
+        "start": {
+          "column": 5,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.ml",
+      "id": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.contract:interface:0",
+      "isExported": true,
+      "kind": "interface",
+      "name": "contract",
+      "qualifiedName": "src/Api.ml#Api.contract",
+      "range": {
+        "end": {
+          "column": 31,
+          "line": 5,
+        },
+        "start": {
+          "column": 3,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.ml",
+      "id": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.helper:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "helper",
+      "qualifiedName": "src/Api.ml#Api.helper",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 15,
+        },
+        "start": {
+          "column": 3,
+          "line": 15,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.ml",
+      "id": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point.magnitude:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "magnitude",
+      "qualifiedName": "src/Api.ml#Api.point.magnitude",
+      "range": {
+        "end": {
+          "column": 35,
+          "line": 3,
+        },
+        "start": {
+          "column": 5,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.ml",
+      "id": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point.point:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "point",
+      "qualifiedName": "src/Api.ml#Api.point.point",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 2,
+        },
+        "start": {
+          "column": 3,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.ml",
+      "id": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.point:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "point",
+      "qualifiedName": "src/Api.ml#Api.point",
+      "range": {
+        "end": {
+          "column": 37,
+          "line": 2,
+        },
+        "start": {
+          "column": 3,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.ml",
+      "id": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service.run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "src/Api.ml#Api.service.run",
+      "range": {
+        "end": {
+          "column": 40,
+          "line": 13,
+        },
+        "start": {
+          "column": 5,
+          "line": 13,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.ml",
+      "id": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service.service:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "service",
+      "qualifiedName": "src/Api.ml#Api.service.service",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 11,
+        },
+        "start": {
+          "column": 3,
+          "line": 11,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.ml",
+      "id": "symbol:src%2FApi.ml:src%2FApi.ml%23Api.service:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "service",
+      "qualifiedName": "src/Api.ml#Api.service",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 11,
+        },
+        "start": {
+          "column": 3,
+          "line": 11,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.ml",
+      "id": "symbol:src%2FApi.ml:src%2FApi.ml%23module%3AApi:module:0",
+      "isExported": true,
+      "kind": "module",
+      "name": "Api",
+      "qualifiedName": "src/Api.ml#module:Api",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 1,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.ml",
+      "id": "symbol:src%2FApi.ml:src%2FApi.ml:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Api.ml",
+      "qualifiedName": "src/Api.ml",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 16,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.ml",
+      "id": "symbol:src%2FApp.ml:src%2FApp.ml%23execute:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "execute",
+      "qualifiedName": "src/App.ml#execute",
+      "range": {
+        "end": {
+          "column": 54,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.ml",
+      "id": "symbol:src%2FApp.ml:src%2FApp.ml%23local_a:function:0",
+      "isExported": true,
+      "kind": "function",
+      "name": "local_a",
+      "qualifiedName": "src/App.ml#local_a",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.ml",
+      "id": "symbol:src%2FApp.ml:src%2FApp.ml:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "App.ml",
+      "qualifiedName": "src/App.ml",
+      "range": {
+        "end": {
+          "column": 8,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`functional-language resolver output parity > 'scala' preserves consumer-only nonclaims and local relations 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.scala:src%2FApp.scala%23App.execute:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App%3Aclass%3A0:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App.execute%3Amethod%3A0:contains:7:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 15,
+        },
+        "start": {
+          "column": 3,
+          "line": 7,
+        },
+      },
+      "referenceName": "execute",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala%23App:class:0",
+      "targetId": "symbol:src%2FApp.scala:src%2FApp.scala%23App.execute:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.scala:src%2FApp.scala%23App.local:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App%3Aclass%3A0:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App.local%3Amethod%3A0:contains:6:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+      "referenceName": "local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala%23App:class:0",
+      "targetId": "symbol:src%2FApp.scala:src%2FApp.scala%23App.local:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.scala:src%2FApp.scala%23App.local:method:0",
+        ],
+        "ruleId": "syntax.scala.unique-direct-owner-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App.execute%3Amethod%3A0:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App.local%3Amethod%3A0:calls:11:30",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 11,
+        },
+        "start": {
+          "column": 30,
+          "line": 11,
+        },
+      },
+      "referenceName": "local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala%23App.execute:method:0",
+      "targetId": "symbol:src%2FApp.scala:src%2FApp.scala%23App.local:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.scala:src%2FApp.scala%23App:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%3Afile%3A0:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App%3Aclass%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 16,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "App",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala:file:0",
+      "targetId": "symbol:src%2FApp.scala:src%2FApp.scala%23App:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "de49492ab2aa97a5dc45f921e750ec73ac1ebdf8eb9f5738090fb376ff6e25bc",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "scala",
+      "path": "src/App.scala",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.scala",
+      "id": "symbol:src%2FApp.scala:src%2FApp.scala%23App.execute:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "execute",
+      "qualifiedName": "src/App.scala#App.execute",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 15,
+        },
+        "start": {
+          "column": 3,
+          "line": 7,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.scala",
+      "id": "symbol:src%2FApp.scala:src%2FApp.scala%23App.local:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "local",
+      "qualifiedName": "src/App.scala#App.local",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.scala",
+      "id": "symbol:src%2FApp.scala:src%2FApp.scala%23App:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "App",
+      "qualifiedName": "src/App.scala#App",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 16,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.scala",
+      "id": "symbol:src%2FApp.scala:src%2FApp.scala:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "App.scala",
+      "qualifiedName": "src/App.scala",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 16,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`functional-language resolver output parity > 'scala' preserves multi-file relations and complete evidence 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Api.helper:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Api%3Aclass%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Api.helper%3Amethod%3A0:contains:6:14",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 6,
+        },
+        "start": {
+          "column": 14,
+          "line": 6,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala%23Api:class:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Api.helper:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+        ],
+        "ruleId": "syntax.scala.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Api.helper%3Amethod%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Point%3Aclass%3A0:accepts:6:14",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 6,
+        },
+        "start": {
+          "column": 14,
+          "line": 6,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala%23Api.helper:method:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+        ],
+        "ruleId": "syntax.scala.unique-signature-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Api.helper%3Amethod%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Point%3Aclass%3A0:returns:6:14",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 6,
+        },
+        "start": {
+          "column": 14,
+          "line": 6,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala%23Api.helper:method:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Base.run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Base%3Aclass%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Base.run%3Amethod%3A0:contains:3:14",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 46,
+          "line": 3,
+        },
+        "start": {
+          "column": 14,
+          "line": 3,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala%23Base:class:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Base.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Contract.run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Contract%3Ainterface%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Contract.run%3Amethod%3A0:contains:2:18",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 2,
+        },
+        "start": {
+          "column": 18,
+          "line": 2,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala%23Contract:interface:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Contract.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Point.magnitude:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Point%3Aclass%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Point.magnitude%3Amethod%3A0:contains:4:32",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 60,
+          "line": 4,
+        },
+        "start": {
+          "column": 32,
+          "line": 4,
+        },
+      },
+      "referenceName": "magnitude",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Point.magnitude:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Base:class:0",
+        ],
+        "ruleId": "syntax.scala.unique-parent-target",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Service%3Aclass%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Base%3Aclass%3A0:extends:5:33",
+      "kind": "extends",
+      "range": {
+        "end": {
+          "column": 59,
+          "line": 5,
+        },
+        "start": {
+          "column": 33,
+          "line": 5,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala%23Service:class:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Base:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Contract:interface:0",
+        ],
+        "ruleId": "syntax.scala.unique-trait-target",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Service%3Aclass%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Contract%3Ainterface%3A0:implements:5:33",
+      "kind": "implements",
+      "range": {
+        "end": {
+          "column": 59,
+          "line": 5,
+        },
+        "start": {
+          "column": 33,
+          "line": 5,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala%23Service:class:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Contract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Service.execute:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Service%3Aclass%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Service.execute%3Amethod%3A0:contains:5:105",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 157,
+          "line": 5,
+        },
+        "start": {
+          "column": 105,
+          "line": 5,
+        },
+      },
+      "referenceName": "execute",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala%23Service:class:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Service.execute:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Service.run:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Service%3Aclass%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Service.run%3Amethod%3A0:contains:5:62",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 103,
+          "line": 5,
+        },
+        "start": {
+          "column": 62,
+          "line": 5,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala%23Service:class:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Service.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Api.helper:method:0",
+        ],
+        "ruleId": "module.scala.unique-object-method-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Service.execute%3Amethod%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Api.helper%3Amethod%3A0:calls:5:140",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 157,
+          "line": 5,
+        },
+        "start": {
+          "column": 140,
+          "line": 5,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala%23Service.execute:method:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Api.helper:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+        ],
+        "ruleId": "syntax.scala.unique-signature-parameter-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Service.execute%3Amethod%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Point%3Aclass%3A0:accepts:5:105",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 157,
+          "line": 5,
+        },
+        "start": {
+          "column": 105,
+          "line": 5,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala%23Service.execute:method:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+        ],
+        "ruleId": "syntax.scala.unique-signature-return-type",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Service.execute%3Amethod%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Point%3Aclass%3A0:returns:5:105",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 157,
+          "line": 5,
+        },
+        "start": {
+          "column": 105,
+          "line": 5,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala%23Service.execute:method:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Base.run:method:0",
+        ],
+        "ruleId": "syntax.scala.explicit-override.direct-parent-method",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Service.run%3Amethod%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Base.run%3Amethod%3A0:overrides:5:62",
+      "kind": "overrides",
+      "range": {
+        "end": {
+          "column": 103,
+          "line": 5,
+        },
+        "start": {
+          "column": 62,
+          "line": 5,
+        },
+      },
+      "referenceName": "run",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala%23Service.run:method:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Base.run:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Alias:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%3Afile%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Alias%3Atype%3A0:contains:8:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+      "referenceName": "Alias",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala:file:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Alias:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Api:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%3Afile%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Api%3Aclass%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 55,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "Api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala:file:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Api:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Base:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%3Afile%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Base%3Aclass%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "Base",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala:file:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Base:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Color:type:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%3Afile%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Color%3Atype%3A0:contains:7:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "Color",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala:file:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Color:type:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Contract:interface:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%3Afile%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Contract%3Ainterface%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 44,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "Contract",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala:file:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Contract:interface:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%3Afile%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Point%3Aclass%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 62,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala:file:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Service:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/Api.scala",
+      "id": "edge:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%3Afile%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Service%3Aclass%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 159,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApi.scala:src%2FApi.scala:file:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Service:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.scala:src%2FApp.scala%23App.execute:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App%3Aclass%3A0:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App.execute%3Amethod%3A0:contains:7:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 15,
+        },
+        "start": {
+          "column": 3,
+          "line": 7,
+        },
+      },
+      "referenceName": "execute",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala%23App:class:0",
+      "targetId": "symbol:src%2FApp.scala:src%2FApp.scala%23App.execute:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.scala:src%2FApp.scala%23App.local:method:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App%3Aclass%3A0:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App.local%3Amethod%3A0:contains:6:3",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+      "referenceName": "local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala%23App:class:0",
+      "targetId": "symbol:src%2FApp.scala:src%2FApp.scala%23App.local:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Api.helper:method:0",
+        ],
+        "resolutionPath": [
+          "src/App.scala",
+          "src/Api.scala",
+        ],
+        "ruleId": "module.scala.unique-object-method-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App.execute%3Amethod%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Api.helper%3Amethod%3A0:calls:14:5",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 14,
+        },
+        "start": {
+          "column": 5,
+          "line": 14,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala%23App.execute:method:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Api.helper:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.scala",
+          "src/Api.scala",
+        ],
+        "ruleId": "syntax.scala.unique-signature-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App.execute%3Amethod%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Point%3Aclass%3A0:accepts:7:3",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 15,
+        },
+        "start": {
+          "column": 3,
+          "line": 7,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala%23App.execute:method:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.scala",
+          "src/Api.scala",
+        ],
+        "ruleId": "syntax.scala.unique-constructor-creation",
+        "stage": "module",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App.execute%3Amethod%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Point%3Aclass%3A0:instantiates:8:26",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 8,
+        },
+        "start": {
+          "column": 26,
+          "line": 8,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala%23App.execute:method:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.scala",
+          "src/Api.scala",
+        ],
+        "ruleId": "syntax.scala.unique-constructor-creation",
+        "stage": "module",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App.execute%3Amethod%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Point%3Aclass%3A0:instantiates:9:30",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 9,
+        },
+        "start": {
+          "column": 30,
+          "line": 9,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala%23App.execute:method:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.scala",
+          "src/Api.scala",
+        ],
+        "ruleId": "syntax.scala.unique-signature-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App.execute%3Amethod%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Point%3Aclass%3A0:returns:7:3",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 15,
+        },
+        "start": {
+          "column": 3,
+          "line": 7,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala%23App.execute:method:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Point.magnitude:method:0",
+        ],
+        "resolutionPath": [
+          "src/App.scala",
+          "src/Api.scala",
+        ],
+        "ruleId": "syntax.scala.unique-typed-member-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App.execute%3Amethod%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Point.magnitude%3Amethod%3A0:calls:12:29",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 12,
+        },
+        "start": {
+          "column": 29,
+          "line": 12,
+        },
+      },
+      "referenceName": "magnitude",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala%23App.execute:method:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Point.magnitude:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Service:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.scala",
+          "src/Api.scala",
+        ],
+        "ruleId": "syntax.scala.unique-constructor-creation",
+        "stage": "module",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App.execute%3Amethod%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Service%3Aclass%3A0:instantiates:10:28",
+      "kind": "instantiates",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 10,
+        },
+        "start": {
+          "column": 28,
+          "line": 10,
+        },
+      },
+      "referenceName": "Service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala%23App.execute:method:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Service:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Service.execute:method:0",
+        ],
+        "resolutionPath": [
+          "src/App.scala",
+          "src/Api.scala",
+        ],
+        "ruleId": "syntax.scala.unique-typed-member-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App.execute%3Amethod%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Service.execute%3Amethod%3A0:calls:13:32",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 54,
+          "line": 13,
+        },
+        "start": {
+          "column": 32,
+          "line": 13,
+        },
+      },
+      "referenceName": "execute",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala%23App.execute:method:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Service.execute:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.scala:src%2FApp.scala%23App.local:method:0",
+        ],
+        "ruleId": "syntax.scala.unique-direct-owner-call",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App.execute%3Amethod%3A0:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App.local%3Amethod%3A0:calls:11:30",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 11,
+        },
+        "start": {
+          "column": 30,
+          "line": 11,
+        },
+      },
+      "referenceName": "local",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala%23App.execute:method:0",
+      "targetId": "symbol:src%2FApp.scala:src%2FApp.scala%23App.local:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Api.helper:method:0",
+        ],
+        "resolutionPath": [
+          "src/App.scala",
+          "src/Api.scala",
+        ],
+        "ruleId": "module.scala.unique-object-method-call",
+        "stage": "module",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App.local%3Amethod%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Api.helper%3Amethod%3A0:calls:6:36",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 6,
+        },
+        "start": {
+          "column": 36,
+          "line": 6,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala%23App.local:method:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Api.helper:method:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.scala",
+          "src/Api.scala",
+        ],
+        "ruleId": "syntax.scala.unique-signature-parameter-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App.local%3Amethod%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Point%3Aclass%3A0:accepts:6:3",
+      "kind": "accepts",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala%23App.local:method:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+        ],
+        "resolutionPath": [
+          "src/App.scala",
+          "src/Api.scala",
+        ],
+        "ruleId": "syntax.scala.unique-signature-return-type",
+        "stage": "module",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App.local%3Amethod%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%2523Point%3Aclass%3A0:returns:6:3",
+      "kind": "returns",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+      "referenceName": "Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala%23App.local:method:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala:file:0",
+        ],
+        "resolutionPath": [
+          "src/App.scala",
+          "src/Api.scala",
+        ],
+        "ruleId": "module.scala.explicit-import.unique-target",
+        "stage": "module",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%3Afile%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%3Afile%3A0:imports:2:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "demo.api.Api",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala:file:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala:file:0",
+        ],
+        "resolutionPath": [
+          "src/App.scala",
+          "src/Api.scala",
+        ],
+        "ruleId": "module.scala.explicit-import.unique-target",
+        "stage": "module",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%3Afile%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%3Afile%3A0:imports:3:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 22,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "demo.api.Point",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala:file:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApi.scala:src%2FApi.scala:file:0",
+        ],
+        "resolutionPath": [
+          "src/App.scala",
+          "src/Api.scala",
+        ],
+        "ruleId": "module.scala.explicit-import.unique-target",
+        "stage": "module",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%3Afile%3A0:symbol%3Asrc%252FApi.scala%3Asrc%252FApi.scala%3Afile%3A0:imports:4:1",
+      "kind": "imports",
+      "range": {
+        "end": {
+          "column": 24,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "demo.api.Service",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala:file:0",
+      "targetId": "symbol:src%2FApi.scala:src%2FApi.scala:file:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:src%2FApp.scala:src%2FApp.scala%23App:class:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "src/App.scala",
+      "id": "edge:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%3Afile%3A0:symbol%3Asrc%252FApp.scala%3Asrc%252FApp.scala%2523App%3Aclass%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 16,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "App",
+      "resolution": "exact",
+      "sourceId": "symbol:src%2FApp.scala:src%2FApp.scala:file:0",
+      "targetId": "symbol:src%2FApp.scala:src%2FApp.scala%23App:class:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "f984600b0244b28979164487651b48e469fa43bedb2cda87d1a86edd287933b4",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "scala",
+      "path": "src/Api.scala",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "de49492ab2aa97a5dc45f921e750ec73ac1ebdf8eb9f5738090fb376ff6e25bc",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "scala",
+      "path": "src/App.scala",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.scala",
+      "id": "symbol:src%2FApi.scala:src%2FApi.scala%23Alias:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "Alias",
+      "qualifiedName": "src/Api.scala#Alias",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.scala",
+      "id": "symbol:src%2FApi.scala:src%2FApi.scala%23Api.helper:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "helper",
+      "qualifiedName": "src/Api.scala#Api.helper",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 6,
+        },
+        "start": {
+          "column": 14,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.scala",
+      "id": "symbol:src%2FApi.scala:src%2FApi.scala%23Api:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Api",
+      "qualifiedName": "src/Api.scala#Api",
+      "range": {
+        "end": {
+          "column": 55,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.scala",
+      "id": "symbol:src%2FApi.scala:src%2FApi.scala%23Base.run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "src/Api.scala#Base.run",
+      "range": {
+        "end": {
+          "column": 46,
+          "line": 3,
+        },
+        "start": {
+          "column": 14,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.scala",
+      "id": "symbol:src%2FApi.scala:src%2FApi.scala%23Base:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Base",
+      "qualifiedName": "src/Api.scala#Base",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.scala",
+      "id": "symbol:src%2FApi.scala:src%2FApi.scala%23Color:type:0",
+      "isExported": true,
+      "kind": "type",
+      "name": "Color",
+      "qualifiedName": "src/Api.scala#Color",
+      "range": {
+        "end": {
+          "column": 30,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.scala",
+      "id": "symbol:src%2FApi.scala:src%2FApi.scala%23Contract.run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "src/Api.scala#Contract.run",
+      "range": {
+        "end": {
+          "column": 42,
+          "line": 2,
+        },
+        "start": {
+          "column": 18,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.scala",
+      "id": "symbol:src%2FApi.scala:src%2FApi.scala%23Contract:interface:0",
+      "isExported": true,
+      "kind": "interface",
+      "name": "Contract",
+      "qualifiedName": "src/Api.scala#Contract",
+      "range": {
+        "end": {
+          "column": 44,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.scala",
+      "id": "symbol:src%2FApi.scala:src%2FApi.scala%23Point.magnitude:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "magnitude",
+      "qualifiedName": "src/Api.scala#Point.magnitude",
+      "range": {
+        "end": {
+          "column": 60,
+          "line": 4,
+        },
+        "start": {
+          "column": 32,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.scala",
+      "id": "symbol:src%2FApi.scala:src%2FApi.scala%23Point:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Point",
+      "qualifiedName": "src/Api.scala#Point",
+      "range": {
+        "end": {
+          "column": 62,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.scala",
+      "id": "symbol:src%2FApi.scala:src%2FApi.scala%23Service.execute:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "execute",
+      "qualifiedName": "src/Api.scala#Service.execute",
+      "range": {
+        "end": {
+          "column": 157,
+          "line": 5,
+        },
+        "start": {
+          "column": 105,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.scala",
+      "id": "symbol:src%2FApi.scala:src%2FApi.scala%23Service.run:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "run",
+      "qualifiedName": "src/Api.scala#Service.run",
+      "range": {
+        "end": {
+          "column": 103,
+          "line": 5,
+        },
+        "start": {
+          "column": 62,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.scala",
+      "id": "symbol:src%2FApi.scala:src%2FApi.scala%23Service:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "Service",
+      "qualifiedName": "src/Api.scala#Service",
+      "range": {
+        "end": {
+          "column": 159,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/Api.scala",
+      "id": "symbol:src%2FApi.scala:src%2FApi.scala:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Api.scala",
+      "qualifiedName": "src/Api.scala",
+      "range": {
+        "end": {
+          "column": 19,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.scala",
+      "id": "symbol:src%2FApp.scala:src%2FApp.scala%23App.execute:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "execute",
+      "qualifiedName": "src/App.scala#App.execute",
+      "range": {
+        "end": {
+          "column": 4,
+          "line": 15,
+        },
+        "start": {
+          "column": 3,
+          "line": 7,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.scala",
+      "id": "symbol:src%2FApp.scala:src%2FApp.scala%23App.local:method:0",
+      "isExported": true,
+      "kind": "method",
+      "name": "local",
+      "qualifiedName": "src/App.scala#App.local",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 6,
+        },
+        "start": {
+          "column": 3,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.scala",
+      "id": "symbol:src%2FApp.scala:src%2FApp.scala%23App:class:0",
+      "isExported": true,
+      "kind": "class",
+      "name": "App",
+      "qualifiedName": "src/App.scala#App",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 16,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "src/App.scala",
+      "id": "symbol:src%2FApp.scala:src%2FApp.scala:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "App.scala",
+      "qualifiedName": "src/App.scala",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 16,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;

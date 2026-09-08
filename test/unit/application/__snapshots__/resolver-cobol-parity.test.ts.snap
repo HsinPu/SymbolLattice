@@ -1,0 +1,1086 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`COBOL CICS resolver pre-move parity golden > preserves consumer-only transaction nonclaims without owner files 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "framework.cics.literal-transid.unresolved-program-owner",
+        "stage": "unresolved",
+      },
+      "filePath": "cobol/Caller.cbl",
+      "id": "edge:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%2523paragraph%253AAMBIGUOUS-LOGIC%3Afunction%3A0:cics-transid%3ADUP1:calls:9:1",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 9,
+        },
+      },
+      "referenceName": "cics-transid:DUP1",
+      "resolution": "unresolved",
+      "sourceId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AAMBIGUOUS-LOGIC:function:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "framework.cics.literal-transid.unresolved-program-owner",
+        "stage": "unresolved",
+      },
+      "filePath": "cobol/Caller.cbl",
+      "id": "edge:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%2523paragraph%253AMAIN-LOGIC%3Afunction%3A0:cics-transid%3ANXT1:calls:5:1",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "cics-transid:NXT1",
+      "resolution": "unresolved",
+      "sourceId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AMAIN-LOGIC:function:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "framework.cics.literal-transid.unresolved-program-owner",
+        "stage": "unresolved",
+      },
+      "filePath": "cobol/Caller.cbl",
+      "id": "edge:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%2523paragraph%253AMISSING-LOGIC%3Afunction%3A0:cics-transid%3AMISS:calls:11:1",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 11,
+        },
+        "start": {
+          "column": 1,
+          "line": 11,
+        },
+      },
+      "referenceName": "cics-transid:MISS",
+      "resolution": "unresolved",
+      "sourceId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AMISSING-LOGIC:function:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AAMBIGUOUS-LOGIC:function:0",
+        ],
+        "ruleId": "language.cobol.paragraph.direct-procedure-division",
+        "stage": "syntax",
+      },
+      "filePath": "cobol/Caller.cbl",
+      "id": "edge:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%3Amodule%3A0:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%2523paragraph%253AAMBIGUOUS-LOGIC%3Afunction%3A0:contains:8:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+      "referenceName": "AMBIGUOUS-LOGIC",
+      "resolution": "exact",
+      "sourceId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER:module:0",
+      "targetId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AAMBIGUOUS-LOGIC:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AMAIN-LOGIC:function:0",
+        ],
+        "ruleId": "language.cobol.paragraph.direct-procedure-division",
+        "stage": "syntax",
+      },
+      "filePath": "cobol/Caller.cbl",
+      "id": "edge:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%3Amodule%3A0:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%2523paragraph%253AMAIN-LOGIC%3Afunction%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "MAIN-LOGIC",
+      "resolution": "exact",
+      "sourceId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER:module:0",
+      "targetId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AMAIN-LOGIC:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AMISSING-LOGIC:function:0",
+        ],
+        "ruleId": "language.cobol.paragraph.direct-procedure-division",
+        "stage": "syntax",
+      },
+      "filePath": "cobol/Caller.cbl",
+      "id": "edge:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%3Amodule%3A0:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%2523paragraph%253AMISSING-LOGIC%3Afunction%3A0:contains:10:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 12,
+        },
+        "start": {
+          "column": 1,
+          "line": 10,
+        },
+      },
+      "referenceName": "MISSING-LOGIC",
+      "resolution": "exact",
+      "sourceId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER:module:0",
+      "targetId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AMISSING-LOGIC:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER:module:0",
+        ],
+        "ruleId": "language.cobol.program.identification-program-id-procedure",
+        "stage": "syntax",
+      },
+      "filePath": "cobol/Caller.cbl",
+      "id": "edge:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%3Afile%3A0:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%3Amodule%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 12,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "CALLER",
+      "resolution": "exact",
+      "sourceId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl:file:0",
+      "targetId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER:module:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "d51e5cd1783b093acedea678c46272a13f50906c41d0eb793a9d65be9b183722",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "cobol",
+      "path": "cobol/Caller.cbl",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [
+    {
+      "filePath": "cobol/Caller.cbl",
+      "id": "edge:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%2523paragraph%253AAMBIGUOUS-LOGIC%3Afunction%3A0:cics-transid%3ADUP1:calls:9:1",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 9,
+        },
+      },
+      "referenceName": "cics-transid:DUP1",
+      "relationKind": "calls",
+      "sourceId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AAMBIGUOUS-LOGIC:function:0",
+    },
+    {
+      "filePath": "cobol/Caller.cbl",
+      "id": "edge:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%2523paragraph%253AMAIN-LOGIC%3Afunction%3A0:cics-transid%3ANXT1:calls:5:1",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "cics-transid:NXT1",
+      "relationKind": "calls",
+      "sourceId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AMAIN-LOGIC:function:0",
+    },
+    {
+      "filePath": "cobol/Caller.cbl",
+      "id": "edge:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%2523paragraph%253AMISSING-LOGIC%3Afunction%3A0:cics-transid%3AMISS:calls:11:1",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 11,
+        },
+        "start": {
+          "column": 1,
+          "line": 11,
+        },
+      },
+      "referenceName": "cics-transid:MISS",
+      "relationKind": "calls",
+      "sourceId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AMISSING-LOGIC:function:0",
+    },
+  ],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "cobol/Caller.cbl",
+      "id": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AAMBIGUOUS-LOGIC:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "AMBIGUOUS-LOGIC",
+      "qualifiedName": "cobol/Caller.cbl#program:CALLER#paragraph:AMBIGUOUS-LOGIC",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "cobol/Caller.cbl",
+      "id": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AMAIN-LOGIC:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "MAIN-LOGIC",
+      "qualifiedName": "cobol/Caller.cbl#program:CALLER#paragraph:MAIN-LOGIC",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "cobol/Caller.cbl",
+      "id": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AMISSING-LOGIC:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "MISSING-LOGIC",
+      "qualifiedName": "cobol/Caller.cbl#program:CALLER#paragraph:MISSING-LOGIC",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 12,
+        },
+        "start": {
+          "column": 1,
+          "line": 10,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "cobol/Caller.cbl",
+      "id": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER:module:0",
+      "isExported": true,
+      "kind": "module",
+      "name": "CALLER",
+      "qualifiedName": "cobol/Caller.cbl#program:CALLER",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 12,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "cobol/Caller.cbl",
+      "id": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Caller.cbl",
+      "qualifiedName": "cobol/Caller.cbl",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 12,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
+
+exports[`COBOL CICS resolver pre-move parity golden > preserves unique, ambiguous, and missing transaction-owner output 1`] = `
+{
+  "edges": [
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:cobol%2FDuplicateLeft.cbl:cobol%2FDuplicateLeft.cbl%23program%3ADUPLICATE-LEFT:module:0",
+          "symbol:cobol%2FDuplicateRight.cbl:cobol%2FDuplicateRight.cbl%23program%3ADUPLICATE-RIGHT:module:0",
+        ],
+        "ruleId": "framework.cics.literal-transid.unresolved-program-owner",
+        "stage": "unresolved",
+      },
+      "filePath": "cobol/Caller.cbl",
+      "id": "edge:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%2523paragraph%253AAMBIGUOUS-LOGIC%3Afunction%3A0:cics-transid%3ADUP1:calls:9:1",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 9,
+        },
+      },
+      "referenceName": "cics-transid:DUP1",
+      "resolution": "unresolved",
+      "sourceId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AAMBIGUOUS-LOGIC:function:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 0.85,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:cobol%2FNext.cbl:cobol%2FNext.cbl%23program%3ANEXT-PROGRAM:module:0",
+        ],
+        "ruleId": "framework.cics.literal-transid.unique-program-owner",
+        "stage": "heuristic",
+      },
+      "filePath": "cobol/Caller.cbl",
+      "id": "edge:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%2523paragraph%253AMAIN-LOGIC%3Afunction%3A0:symbol%3Acobol%252FNext.cbl%3Acobol%252FNext.cbl%2523program%253ANEXT-PROGRAM%3Amodule%3A0:calls:5:1",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 7,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "cics-transid:NXT1",
+      "resolution": "heuristic",
+      "sourceId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AMAIN-LOGIC:function:0",
+      "targetId": "symbol:cobol%2FNext.cbl:cobol%2FNext.cbl%23program%3ANEXT-PROGRAM:module:0",
+    },
+    {
+      "confidence": 0,
+      "evidence": {
+        "candidateSymbolIds": [],
+        "ruleId": "framework.cics.literal-transid.unresolved-program-owner",
+        "stage": "unresolved",
+      },
+      "filePath": "cobol/Caller.cbl",
+      "id": "edge:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%2523paragraph%253AMISSING-LOGIC%3Afunction%3A0:cics-transid%3AMISS:calls:11:1",
+      "kind": "calls",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 11,
+        },
+        "start": {
+          "column": 1,
+          "line": 11,
+        },
+      },
+      "referenceName": "cics-transid:MISS",
+      "resolution": "unresolved",
+      "sourceId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AMISSING-LOGIC:function:0",
+      "targetId": null,
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AAMBIGUOUS-LOGIC:function:0",
+        ],
+        "ruleId": "language.cobol.paragraph.direct-procedure-division",
+        "stage": "syntax",
+      },
+      "filePath": "cobol/Caller.cbl",
+      "id": "edge:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%3Amodule%3A0:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%2523paragraph%253AAMBIGUOUS-LOGIC%3Afunction%3A0:contains:8:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+      "referenceName": "AMBIGUOUS-LOGIC",
+      "resolution": "exact",
+      "sourceId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER:module:0",
+      "targetId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AAMBIGUOUS-LOGIC:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AMAIN-LOGIC:function:0",
+        ],
+        "ruleId": "language.cobol.paragraph.direct-procedure-division",
+        "stage": "syntax",
+      },
+      "filePath": "cobol/Caller.cbl",
+      "id": "edge:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%3Amodule%3A0:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%2523paragraph%253AMAIN-LOGIC%3Afunction%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "MAIN-LOGIC",
+      "resolution": "exact",
+      "sourceId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER:module:0",
+      "targetId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AMAIN-LOGIC:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AMISSING-LOGIC:function:0",
+        ],
+        "ruleId": "language.cobol.paragraph.direct-procedure-division",
+        "stage": "syntax",
+      },
+      "filePath": "cobol/Caller.cbl",
+      "id": "edge:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%3Amodule%3A0:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%2523paragraph%253AMISSING-LOGIC%3Afunction%3A0:contains:10:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 12,
+        },
+        "start": {
+          "column": 1,
+          "line": 10,
+        },
+      },
+      "referenceName": "MISSING-LOGIC",
+      "resolution": "exact",
+      "sourceId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER:module:0",
+      "targetId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AMISSING-LOGIC:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER:module:0",
+        ],
+        "ruleId": "language.cobol.program.identification-program-id-procedure",
+        "stage": "syntax",
+      },
+      "filePath": "cobol/Caller.cbl",
+      "id": "edge:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%3Afile%3A0:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%3Amodule%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 12,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "CALLER",
+      "resolution": "exact",
+      "sourceId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl:file:0",
+      "targetId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER:module:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:cobol%2FDuplicateLeft.cbl:cobol%2FDuplicateLeft.cbl%23program%3ADUPLICATE-LEFT%23paragraph%3AMAIN-LOGIC:function:0",
+        ],
+        "ruleId": "language.cobol.paragraph.direct-procedure-division",
+        "stage": "syntax",
+      },
+      "filePath": "cobol/DuplicateLeft.cbl",
+      "id": "edge:symbol%3Acobol%252FDuplicateLeft.cbl%3Acobol%252FDuplicateLeft.cbl%2523program%253ADUPLICATE-LEFT%3Amodule%3A0:symbol%3Acobol%252FDuplicateLeft.cbl%3Acobol%252FDuplicateLeft.cbl%2523program%253ADUPLICATE-LEFT%2523paragraph%253AMAIN-LOGIC%3Afunction%3A0:contains:7:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "MAIN-LOGIC",
+      "resolution": "exact",
+      "sourceId": "symbol:cobol%2FDuplicateLeft.cbl:cobol%2FDuplicateLeft.cbl%23program%3ADUPLICATE-LEFT:module:0",
+      "targetId": "symbol:cobol%2FDuplicateLeft.cbl:cobol%2FDuplicateLeft.cbl%23program%3ADUPLICATE-LEFT%23paragraph%3AMAIN-LOGIC:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:cobol%2FDuplicateLeft.cbl:cobol%2FDuplicateLeft.cbl%23program%3ADUPLICATE-LEFT:module:0",
+        ],
+        "ruleId": "language.cobol.program.identification-program-id-procedure",
+        "stage": "syntax",
+      },
+      "filePath": "cobol/DuplicateLeft.cbl",
+      "id": "edge:symbol%3Acobol%252FDuplicateLeft.cbl%3Acobol%252FDuplicateLeft.cbl%3Afile%3A0:symbol%3Acobol%252FDuplicateLeft.cbl%3Acobol%252FDuplicateLeft.cbl%2523program%253ADUPLICATE-LEFT%3Amodule%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 35,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "DUPLICATE-LEFT",
+      "resolution": "exact",
+      "sourceId": "symbol:cobol%2FDuplicateLeft.cbl:cobol%2FDuplicateLeft.cbl:file:0",
+      "targetId": "symbol:cobol%2FDuplicateLeft.cbl:cobol%2FDuplicateLeft.cbl%23program%3ADUPLICATE-LEFT:module:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:cobol%2FDuplicateRight.cbl:cobol%2FDuplicateRight.cbl%23program%3ADUPLICATE-RIGHT%23paragraph%3AMAIN-LOGIC:function:0",
+        ],
+        "ruleId": "language.cobol.paragraph.direct-procedure-division",
+        "stage": "syntax",
+      },
+      "filePath": "cobol/DuplicateRight.cbl",
+      "id": "edge:symbol%3Acobol%252FDuplicateRight.cbl%3Acobol%252FDuplicateRight.cbl%2523program%253ADUPLICATE-RIGHT%3Amodule%3A0:symbol%3Acobol%252FDuplicateRight.cbl%3Acobol%252FDuplicateRight.cbl%2523program%253ADUPLICATE-RIGHT%2523paragraph%253AMAIN-LOGIC%3Afunction%3A0:contains:7:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "MAIN-LOGIC",
+      "resolution": "exact",
+      "sourceId": "symbol:cobol%2FDuplicateRight.cbl:cobol%2FDuplicateRight.cbl%23program%3ADUPLICATE-RIGHT:module:0",
+      "targetId": "symbol:cobol%2FDuplicateRight.cbl:cobol%2FDuplicateRight.cbl%23program%3ADUPLICATE-RIGHT%23paragraph%3AMAIN-LOGIC:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:cobol%2FDuplicateRight.cbl:cobol%2FDuplicateRight.cbl%23program%3ADUPLICATE-RIGHT:module:0",
+        ],
+        "ruleId": "language.cobol.program.identification-program-id-procedure",
+        "stage": "syntax",
+      },
+      "filePath": "cobol/DuplicateRight.cbl",
+      "id": "edge:symbol%3Acobol%252FDuplicateRight.cbl%3Acobol%252FDuplicateRight.cbl%3Afile%3A0:symbol%3Acobol%252FDuplicateRight.cbl%3Acobol%252FDuplicateRight.cbl%2523program%253ADUPLICATE-RIGHT%3Amodule%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "DUPLICATE-RIGHT",
+      "resolution": "exact",
+      "sourceId": "symbol:cobol%2FDuplicateRight.cbl:cobol%2FDuplicateRight.cbl:file:0",
+      "targetId": "symbol:cobol%2FDuplicateRight.cbl:cobol%2FDuplicateRight.cbl%23program%3ADUPLICATE-RIGHT:module:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:cobol%2FNext.cbl:cobol%2FNext.cbl%23program%3ANEXT-PROGRAM%23paragraph%3AMAIN-LOGIC:function:0",
+        ],
+        "ruleId": "language.cobol.paragraph.direct-procedure-division",
+        "stage": "syntax",
+      },
+      "filePath": "cobol/Next.cbl",
+      "id": "edge:symbol%3Acobol%252FNext.cbl%3Acobol%252FNext.cbl%2523program%253ANEXT-PROGRAM%3Amodule%3A0:symbol%3Acobol%252FNext.cbl%3Acobol%252FNext.cbl%2523program%253ANEXT-PROGRAM%2523paragraph%253AMAIN-LOGIC%3Afunction%3A0:contains:7:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+      "referenceName": "MAIN-LOGIC",
+      "resolution": "exact",
+      "sourceId": "symbol:cobol%2FNext.cbl:cobol%2FNext.cbl%23program%3ANEXT-PROGRAM:module:0",
+      "targetId": "symbol:cobol%2FNext.cbl:cobol%2FNext.cbl%23program%3ANEXT-PROGRAM%23paragraph%3AMAIN-LOGIC:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:cobol%2FNext.cbl:cobol%2FNext.cbl%23program%3ANEXT-PROGRAM:module:0",
+        ],
+        "ruleId": "language.cobol.program.identification-program-id-procedure",
+        "stage": "syntax",
+      },
+      "filePath": "cobol/Next.cbl",
+      "id": "edge:symbol%3Acobol%252FNext.cbl%3Acobol%252FNext.cbl%3Afile%3A0:symbol%3Acobol%252FNext.cbl%3Acobol%252FNext.cbl%2523program%253ANEXT-PROGRAM%3Amodule%3A0:contains:1:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+      "referenceName": "NEXT-PROGRAM",
+      "resolution": "exact",
+      "sourceId": "symbol:cobol%2FNext.cbl:cobol%2FNext.cbl:file:0",
+      "targetId": "symbol:cobol%2FNext.cbl:cobol%2FNext.cbl%23program%3ANEXT-PROGRAM:module:0",
+    },
+  ],
+  "files": [
+    {
+      "contentHash": "d51e5cd1783b093acedea678c46272a13f50906c41d0eb793a9d65be9b183722",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "cobol",
+      "path": "cobol/Caller.cbl",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "a99f00954b34e51076212239969d7be4137cc4968519baf141b5338ef37b9b68",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "cobol",
+      "path": "cobol/DuplicateLeft.cbl",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "a0a15513a92351b260df35e2aadafe898f8253fc6cbbb5805fa98ec08ffcb296",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "cobol",
+      "path": "cobol/DuplicateRight.cbl",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+    {
+      "contentHash": "1de6153d738660bacef2c7b2107c64ed6678ecf98fb5d95c7dfb1cd8e571006d",
+      "generated": {
+        "classifierVersion": "generated-evidence-v1",
+        "evidence": [],
+        "generated": false,
+      },
+      "indexedAt": "2026-09-09T00:00:00.000Z",
+      "language": "cobol",
+      "path": "cobol/Next.cbl",
+      "sourceRole": {
+        "classifierVersion": "source-role-evidence-v2",
+        "evidence": [],
+        "role": "production",
+      },
+    },
+  ],
+  "pendingReferences": [
+    {
+      "filePath": "cobol/Caller.cbl",
+      "id": "edge:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%2523paragraph%253AAMBIGUOUS-LOGIC%3Afunction%3A0:cics-transid%3ADUP1:calls:9:1",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 9,
+        },
+      },
+      "referenceName": "cics-transid:DUP1",
+      "relationKind": "calls",
+      "sourceId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AAMBIGUOUS-LOGIC:function:0",
+    },
+    {
+      "filePath": "cobol/Caller.cbl",
+      "id": "edge:symbol%3Acobol%252FCaller.cbl%3Acobol%252FCaller.cbl%2523program%253ACALLER%2523paragraph%253AMISSING-LOGIC%3Afunction%3A0:cics-transid%3AMISS:calls:11:1",
+      "range": {
+        "end": {
+          "column": 53,
+          "line": 11,
+        },
+        "start": {
+          "column": 1,
+          "line": 11,
+        },
+      },
+      "referenceName": "cics-transid:MISS",
+      "relationKind": "calls",
+      "sourceId": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AMISSING-LOGIC:function:0",
+    },
+  ],
+  "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "cobol/Caller.cbl",
+      "id": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AAMBIGUOUS-LOGIC:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "AMBIGUOUS-LOGIC",
+      "qualifiedName": "cobol/Caller.cbl#program:CALLER#paragraph:AMBIGUOUS-LOGIC",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 10,
+        },
+        "start": {
+          "column": 1,
+          "line": 8,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "cobol/Caller.cbl",
+      "id": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AMAIN-LOGIC:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "MAIN-LOGIC",
+      "qualifiedName": "cobol/Caller.cbl#program:CALLER#paragraph:MAIN-LOGIC",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 8,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "cobol/Caller.cbl",
+      "id": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER%23paragraph%3AMISSING-LOGIC:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "MISSING-LOGIC",
+      "qualifiedName": "cobol/Caller.cbl#program:CALLER#paragraph:MISSING-LOGIC",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 12,
+        },
+        "start": {
+          "column": 1,
+          "line": 10,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "cobol/Caller.cbl",
+      "id": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl%23program%3ACALLER:module:0",
+      "isExported": true,
+      "kind": "module",
+      "name": "CALLER",
+      "qualifiedName": "cobol/Caller.cbl#program:CALLER",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 12,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "cobol/Caller.cbl",
+      "id": "symbol:cobol%2FCaller.cbl:cobol%2FCaller.cbl:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Caller.cbl",
+      "qualifiedName": "cobol/Caller.cbl",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 12,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "cobol/DuplicateLeft.cbl",
+      "id": "symbol:cobol%2FDuplicateLeft.cbl:cobol%2FDuplicateLeft.cbl%23program%3ADUPLICATE-LEFT%23paragraph%3AMAIN-LOGIC:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "MAIN-LOGIC",
+      "qualifiedName": "cobol/DuplicateLeft.cbl#program:DUPLICATE-LEFT#paragraph:MAIN-LOGIC",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "cobol/DuplicateLeft.cbl",
+      "id": "symbol:cobol%2FDuplicateLeft.cbl:cobol%2FDuplicateLeft.cbl%23program%3ADUPLICATE-LEFT:module:0",
+      "isExported": true,
+      "kind": "module",
+      "name": "DUPLICATE-LEFT",
+      "qualifiedName": "cobol/DuplicateLeft.cbl#program:DUPLICATE-LEFT",
+      "range": {
+        "end": {
+          "column": 35,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "cobol/DuplicateLeft.cbl",
+      "id": "symbol:cobol%2FDuplicateLeft.cbl:cobol%2FDuplicateLeft.cbl:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "DuplicateLeft.cbl",
+      "qualifiedName": "cobol/DuplicateLeft.cbl",
+      "range": {
+        "end": {
+          "column": 35,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "cobol/DuplicateRight.cbl",
+      "id": "symbol:cobol%2FDuplicateRight.cbl:cobol%2FDuplicateRight.cbl%23program%3ADUPLICATE-RIGHT%23paragraph%3AMAIN-LOGIC:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "MAIN-LOGIC",
+      "qualifiedName": "cobol/DuplicateRight.cbl#program:DUPLICATE-RIGHT#paragraph:MAIN-LOGIC",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "cobol/DuplicateRight.cbl",
+      "id": "symbol:cobol%2FDuplicateRight.cbl:cobol%2FDuplicateRight.cbl%23program%3ADUPLICATE-RIGHT:module:0",
+      "isExported": true,
+      "kind": "module",
+      "name": "DUPLICATE-RIGHT",
+      "qualifiedName": "cobol/DuplicateRight.cbl#program:DUPLICATE-RIGHT",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "cobol/DuplicateRight.cbl",
+      "id": "symbol:cobol%2FDuplicateRight.cbl:cobol%2FDuplicateRight.cbl:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "DuplicateRight.cbl",
+      "qualifiedName": "cobol/DuplicateRight.cbl",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "cobol/Next.cbl",
+      "id": "symbol:cobol%2FNext.cbl:cobol%2FNext.cbl%23program%3ANEXT-PROGRAM%23paragraph%3AMAIN-LOGIC:function:0",
+      "isExported": false,
+      "kind": "function",
+      "name": "MAIN-LOGIC",
+      "qualifiedName": "cobol/Next.cbl#program:NEXT-PROGRAM#paragraph:MAIN-LOGIC",
+      "range": {
+        "end": {
+          "column": 1,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 7,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "cobol/Next.cbl",
+      "id": "symbol:cobol%2FNext.cbl:cobol%2FNext.cbl%23program%3ANEXT-PROGRAM:module:0",
+      "isExported": true,
+      "kind": "module",
+      "name": "NEXT-PROGRAM",
+      "qualifiedName": "cobol/Next.cbl#program:NEXT-PROGRAM",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "cobol/Next.cbl",
+      "id": "symbol:cobol%2FNext.cbl:cobol%2FNext.cbl:file:0",
+      "isExported": true,
+      "kind": "file",
+      "name": "Next.cbl",
+      "qualifiedName": "cobol/Next.cbl",
+      "range": {
+        "end": {
+          "column": 33,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 1,
+        },
+      },
+    },
+  ],
+}
+`;
