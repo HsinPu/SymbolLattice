@@ -23,6 +23,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -44,8 +45,8 @@ jobs:
       - name: Verify source and runtime
         run: |
           npm run check
-          npm test
           npm run build
+          npm test
           npm run verify:mcp-worker-generation
 
       - name: Pack the release artifact
@@ -57,7 +58,8 @@ jobs:
           npm pack --json --silent --pack-destination release > "$RUNNER_TEMP/pack.json"
           node --input-type=module - "$RUNNER_TEMP/pack.json" >> "$GITHUB_OUTPUT" <<'NODE'
           import { readFileSync, renameSync } from "node:fs";
-          const result = JSON.parse(readFileSync(process.argv[2], "utf8"));
+          import { parseFinalJsonArray } from "./scripts/install/github-source-install.mjs";
+          const result = parseFinalJsonArray(readFileSync(process.argv[2], "utf8"));
           if (!Array.isArray(result) || result.length !== 1 || typeof result[0]?.filename !== "string") {
             throw new Error("npm pack did not return exactly one artifact filename.");
           }

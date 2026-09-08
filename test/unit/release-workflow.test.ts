@@ -9,7 +9,7 @@ const workflowText = readFileSync(workflowPath, "utf8");
 const workflow = parse(workflowText) as {
   on?: Record<string, unknown>;
   permissions?: Record<string, string>;
-  jobs?: Record<string, { steps?: Array<{ uses?: string; run?: string }> }>;
+  jobs?: Record<string, { steps?: Array<{ uses?: string; run?: string; with?: Record<string, unknown> }> }>;
 };
 
 describe("GitHub release workflow", () => {
@@ -29,6 +29,7 @@ describe("GitHub release workflow", () => {
       "id-token": "write",
       attestations: "write"
     });
+    expect(workflow.jobs?.release?.steps?.[0]?.with?.["persist-credentials"]).toBe(false);
   });
 
   it("pins every third-party action to an immutable commit", () => {
@@ -48,6 +49,8 @@ describe("GitHub release workflow", () => {
     expect(commands).toContain('git fetch --force --no-tags origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"');
     expect(commands).toContain('git cat-file -t "$GITHUB_REF_NAME"');
     expect(commands).toContain("npm run release:contract");
+    expect(commands).toContain("parseFinalJsonArray");
+    expect(commands).not.toContain('JSON.parse(readFileSync(process.argv[2], "utf8"))');
     expect(commands).toContain('const filename = `SymbolLattice-${version}.tgz`');
     expect(commands).toContain("renameSync(`release/${result[0].filename}`, `release/${filename}`)");
     expect(commands).toContain('tarball_path="$GITHUB_WORKSPACE/release/${{ steps.pack.outputs.filename }}"');

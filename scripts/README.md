@@ -6,7 +6,7 @@ This directory contains repository automation only. Product runtime code belongs
 | --- | --- | --- |
 | `build/` | `copy-shell-parser-assets.mjs`, `copy-lua-parser-assets.mjs` | Verify retained parser manifests, licenses, and provenance, then copy the closed asset sets from `src/assets/` into a clean `dist/assets/` destination. |
 | `install/` | `github-source-install.mjs` | Preview or execute the fixed-ref GitHub source installation used by root `install.ps1`. Apply mode creates temporary workspaces and can update the current user's npm global prefix with rollback protection. |
-| `release/` | `release-contract.mjs`, `verify-mcp-worker-generation.mjs` | Create release checksums/manifests and verify MCP read-worker generation behavior. Release contract execution writes only to the explicit output directory; worker verification uses and removes a unique temporary project. |
+| `release/` | `release-contract.mjs`, `verify-mcp-worker-generation.mjs`, `verify-local-pack.mjs` | Create release checksums/manifests, verify MCP read-worker generations, and test real prepack plus isolated tarball CLI/MCP installation. The pack verifier rebuilds local `dist`, uses and removes a unique temporary installation/cache, optionally writes an explicit JSON report, and never updates the global npm prefix. |
 
 The public bootstrap remains `install.ps1` at the repository root. Keep package-script names stable and update their internal paths when automation files move.
 

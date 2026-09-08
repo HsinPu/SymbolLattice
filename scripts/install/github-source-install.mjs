@@ -814,7 +814,7 @@ async function assertRegularFile(path, label) {
   if (!fileStatus.isFile()) throw new Error(`Required ${label} is not a regular file.`);
 }
 
-async function validatePackResult(stdout, packDirectory, expectedVersion) {
+export async function validatePackResult(stdout, packDirectory, expectedVersion) {
   let payload;
   try {
     payload = parseFinalJsonArray(stdout);
@@ -852,7 +852,7 @@ async function validatePackResult(stdout, packDirectory, expectedVersion) {
   };
 }
 
-function parseFinalJsonArray(stdout) {
+export function parseFinalJsonArray(stdout) {
   const trimmed = stdout.trim();
   const candidateStarts = [];
   for (let index = 0; index < trimmed.length; index += 1) {
@@ -905,7 +905,7 @@ function validateMcpSmoke(mcp) {
   }
 }
 
-async function runExternalProcess(command, args, context = {}) {
+export async function runExternalProcess(command, args, context = {}) {
   const invocation = command === "npm" && process.platform === "win32"
     ? windowsNpmInvocation(args)
     : { command, args };
@@ -948,7 +948,7 @@ function windowsNpmInvocation(args) {
   return { command: process.execPath, args: [npmCli, ...args] };
 }
 
-async function runStdioMcpSmoke({ entryPath, projectPath }) {
+export async function runStdioMcpSmoke({ entryPath, projectPath }) {
   const child = spawn(process.execPath, [
     entryPath,
     "serve",

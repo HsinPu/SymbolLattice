@@ -16,9 +16,9 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.514.0
+Current version: v0.515.0
 
-v0.514.0 replaces empty-file smoke checks with nonempty fixtures for all 58 languages: 55 check declarations or resources, seven of those also check exact calls, and three check raw template references. It also corrects Go/PHP evidence versions and COBOL depth metadata. This release strengthens validation without adding parser semantics or presenting small-fixture success as real-project recall.
+v0.515.0 adds PR/main verification across Windows/Linux and Node 22/24. Packaging keeps prepack enabled, installs the tarball into an isolated prefix, and checks CLI/MCP startup without automatic publication. Language analysis depth is unchanged; nonempty fixtures and real-project evidence remain separate measures of support.
 
 ## Highlights
 
