@@ -16,9 +16,9 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.519.0
+Current version: v0.520.0
 
-v0.519.0 separates language, document, and framework relation resolution into dedicated modules while preserving evidence rules, ambiguity handling, and public interfaces. All 185 differential scenarios match the fixed baseline, including 58 non-empty language inputs and cross-file framework cases. This is a behavior-preserving structural improvement, not an increase in TP, complete language support, or a new performance claim.
+v0.520.0 improves explicit-extension imports from lowercase `.js`/`.mjs`/`.cjs` sources: an existing literal source target is no longer considered ambiguous merely because a sibling JavaScript format exists. Hits across three fixed projects increase from 8,859 to 8,870 contract-eligible candidates, a gain of 11. This set includes declarations and structural relations, not complete language coverage. Scoring now exposes unmeasured precision and the actual number of negative templates, while preserving TypeScript and extensionless ambiguity guards.
 
 ## Highlights
 

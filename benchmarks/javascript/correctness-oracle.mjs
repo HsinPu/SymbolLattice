@@ -330,10 +330,16 @@ function endpointCandidates(snapshot, endpoint_) {
       (symbol.name === endpoint_.name ||
         (endpoint_.kind === "file" && symbol.qualifiedName === endpoint_.filePath))
   );
-  const containing = candidates.filter(
-    (symbol) => symbol.range.start.line <= endpoint_.line && endpoint_.line <= symbol.range.end.line
-  );
-  return containing.length > 0 ? containing : candidates.length === 1 ? candidates : [];
+  // File truth has a synthetic 1:1 anchor, not a declaration occurrence.
+  // Its identity is the unique project-relative path; AST may exclude leading trivia.
+  if (endpoint_.kind === "file") return candidates;
+  return candidates.filter((symbol) => {
+    const { start, end } = symbol.range;
+    return (start.line < endpoint_.line ||
+      (start.line === endpoint_.line && start.column <= endpoint_.column)) &&
+      (endpoint_.line < end.line ||
+        (endpoint_.line === end.line && endpoint_.column < end.column));
+  });
 }
 
 function exactSingleton(edge, targetId) {
@@ -346,10 +352,16 @@ function scorePositive(snapshot, fact) {
   if (fact.kind === "identity") return targets.length === 1 ? { outcome: "tp" } : { outcome: "fn", reason: `target:${targets.length}` };
   const sources = endpointCandidates(snapshot, fact.source);
   if (sources.length !== 1 || targets.length !== 1) return { outcome: "fn", reason: `endpoints:${sources.length}/${targets.length}` };
-  const edges = snapshot.edges.filter((edge) =>
-    edge.kind === fact.kind && edge.sourceId === sources[0].id && edge.targetId === targets[0].id &&
+  const occurrenceEdges = snapshot.edges.filter((edge) =>
+    edge.kind === fact.kind && edge.sourceId === sources[0].id &&
     (fact.kind === "contains" || (edge.filePath === fact.occurrence.filePath && edge.range.start.line === fact.occurrence.line && edge.range.start.column === fact.occurrence.column))
   );
+  // A parent legitimately contains multiple children. Other admitted relations
+  // have one target at the selected occurrence, even if an extra edge has bad evidence.
+  if (fact.kind !== "contains" && occurrenceEdges.some((edge) =>
+    edge.resolution === "exact" && edge.targetId !== targets[0].id
+  )) return { outcome: "invalid", reason: "conflicting-exact-target" };
+  const edges = occurrenceEdges.filter((edge) => edge.targetId === targets[0].id);
   const exact = edges.filter((edge) => exactSingleton(edge, targets[0].id));
   if (exact.length === 1) return { outcome: "tp", ruleId: exact[0].evidence.ruleId };
   if (edges.length > 0) return { outcome: "invalid", reason: `evidence:${edges.length}` };
@@ -361,7 +373,25 @@ export function scoreJavaScriptSelection(selection, snapshots) {
   const tp = positives.filter((fact) => fact.score.outcome === "tp").length;
   const fn = positives.filter((fact) => fact.score.outcome === "fn").length;
   const evidenceInvalid = positives.filter((fact) => fact.score.outcome === "invalid").length;
-  return { positives, scores: { tp, fp: 0, fn, evidenceInvalid } };
+  return {
+    positives,
+    scores: { tp, fp: null, fn, evidenceInvalid },
+    measurement: {
+      recallScope: "selected-positive-truth",
+      precisionScope: "not-measured"
+    }
+  };
+}
+
+export function scoreJavaScriptNegativeSnapshot(snapshot, entryPath) {
+  const entry = snapshot.symbols.find((symbol) => symbol.kind === "file" && symbol.filePath === entryPath);
+  const localTargets = new Set(snapshot.symbols.filter((symbol) =>
+    symbol.kind === "file" && symbol.filePath !== entryPath
+  ).map((symbol) => symbol.id));
+  return snapshot.edges.filter((edge) =>
+    edge.kind === "imports" && edge.sourceId === entry?.id &&
+    edge.targetId !== null && localTargets.has(edge.targetId) && edge.resolution === "exact"
+  );
 }
 
 export function scoreJavaScriptNegativeMatrix() {
@@ -412,22 +442,20 @@ export function scoreJavaScriptNegativeMatrix() {
       })),
       indexedAt: "2026-09-05T00:00:00.000Z"
     });
-    const entry = snapshot.symbols.find((symbol) =>
-      symbol.kind === "file" && symbol.filePath === testCase.entryPath
-    );
-    const localTargets = new Set(snapshot.symbols.filter((symbol) =>
-      symbol.kind === "file" && symbol.filePath !== testCase.entryPath
-    ).map((symbol) => symbol.id));
-    const exact = snapshot.edges.filter((edge) =>
-      edge.kind === "imports" &&
-      edge.sourceId === entry?.id &&
-      edge.targetId !== null &&
-      localTargets.has(edge.targetId) &&
-      exactSingleton(edge, edge.targetId)
-    );
+    const exact = scoreJavaScriptNegativeSnapshot(snapshot, testCase.entryPath);
     if (exact.length > 0) falsePositives.push({ index, category: testCase.category, edges: exact.length });
   });
-  return { total: cases.length, tn: cases.length - falsePositives.length, falsePositives };
+  const templateCounts = new Map();
+  for (const testCase of cases) templateCounts.set(testCase.category, (templateCounts.get(testCase.category) ?? 0) + 1);
+  const repetitionCounts = new Set(templateCounts.values());
+  return {
+    total: cases.length, tn: cases.length - falsePositives.length, falsePositives,
+    coverage: {
+      semanticTemplates: templateCounts.size,
+      repetitionsPerTemplate: repetitionCounts.size === 1 ? [...repetitionCounts][0] : null,
+      scope: "local-module-import-exact-only"
+    }
+  };
 }
 
 function parseArguments(arguments_) {
@@ -487,8 +515,8 @@ async function main() {
     const scored = scoreJavaScriptSelection({ positives }, snapshots);
     const negative = scoreJavaScriptNegativeMatrix();
     const output = {
-      schemaVersion: 1,
-      benchmark: "symbollattice-javascript-large-project-correctness-v2",
+      schemaVersion: 2,
+      benchmark: "symbollattice-javascript-large-project-correctness-v3",
       generatedAt: new Date().toISOString(),
       packageVersion: SYMBOL_LATTICE_VERSION,
       extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION,
@@ -503,9 +531,9 @@ async function main() {
       status: missingStrata.length === 0 ? "complete" : "inconclusive",
       ...scored,
       negative,
+      passedScope: "selected-positive-recall-and-module-negative-contract",
       passed:
         missingStrata.length === 0 &&
-        scored.scores.fp === 0 &&
         scored.scores.fn === 0 &&
         scored.scores.evidenceInvalid === 0 &&
         negative.tn === 150 &&

@@ -150,7 +150,7 @@ function sanitizedCompilerConfigurationText(configuration: LoadedConfiguration):
     : configuration.sourceText;
 }
 
-function modulePathCandidates(fromFilePath: string, moduleSpecifier: string): readonly string[] {
+function modulePathCandidates(fromFilePath: string, moduleSpecifier: string, knownFilePaths: ReadonlySet<string>): readonly string[] {
   if (!moduleSpecifier.startsWith(".")) {
     return [];
   }
@@ -171,6 +171,11 @@ function modulePathCandidates(fromFilePath: string, moduleSpecifier: string): re
   }
 
   const rawPath = parts.join("/");
+  // A literal existing JavaScript file is not ambiguous with a sibling format.
+  // Preserve source substitution for TypeScript importers and missing literals.
+  if (/\.(?:js|mjs|cjs)$/.test(fromFilePath) && /\.(?:js|mjs|cjs)$/.test(moduleSpecifier) && knownFilePaths.has(rawPath)) {
+    return [rawPath];
+  }
   const extensionMatch = /\.(?:[cm]?[jt]sx?|vue|svelte|astro|ets)$/i.exec(rawPath);
   const withoutExtension = extensionMatch === null ? rawPath : rawPath.slice(0, -extensionMatch[0].length);
   const candidates = new Set<string>([rawPath]);
@@ -196,7 +201,7 @@ function exactRelativeTarget(
   fromFilePath: string,
   moduleSpecifier: string
 ): ResolvedModule {
-  const candidates = modulePathCandidates(fromFilePath, moduleSpecifier).filter((candidate) =>
+  const candidates = modulePathCandidates(fromFilePath, moduleSpecifier, knownFilePaths).filter((candidate) =>
     knownFilePaths.has(candidate)
   );
 

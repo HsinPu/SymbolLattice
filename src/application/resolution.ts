@@ -105,13 +105,18 @@ function normalizedParts(fromFilePath: string, moduleSpecifier: string): string[
   return parts;
 }
 
-function modulePathCandidates(fromFilePath: string, moduleSpecifier: string): readonly string[] {
+function modulePathCandidates(fromFilePath: string, moduleSpecifier: string, knownFilePaths: ReadonlySet<string>): readonly string[] {
   const parts = normalizedParts(fromFilePath, moduleSpecifier);
   if (parts === null) {
     return [];
   }
 
   const rawPath = parts.join("/");
+  // A literal existing JavaScript file is not ambiguous with a sibling format.
+  // Preserve source substitution for TypeScript importers and missing literals.
+  if (/\.(?:js|mjs|cjs)$/.test(fromFilePath) && /\.(?:js|mjs|cjs)$/.test(moduleSpecifier) && knownFilePaths.has(rawPath)) {
+    return [rawPath];
+  }
   const extensionMatch = /\.(?:[cm]?[jt]sx?|ets)$/i.exec(rawPath);
   const withoutExtension = extensionMatch === null ? rawPath : rawPath.slice(0, -extensionMatch[0].length);
   const candidates = new Set<string>([rawPath]);
@@ -352,7 +357,7 @@ function fallbackModuleResolution(
   fromFilePath: string,
   moduleSpecifier: string
 ): ResolvedModule {
-  const matchingPaths = modulePathCandidates(fromFilePath, moduleSpecifier).filter((path) =>
+  const matchingPaths = modulePathCandidates(fromFilePath, moduleSpecifier, knownFilePaths).filter((path) =>
     knownFilePaths.has(path)
   );
   if (matchingPaths.length !== 1 || matchingPaths[0] === undefined) {
