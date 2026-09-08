@@ -16,9 +16,9 @@ SymbolLattice scans a local repository, persists files, symbols, and static rela
 
 Every relationship carries a source range, resolution stage, confidence, and rule evidence. Relationships that cannot be proven reliably remain unresolved or pending, or are omitted instead of becoming false exact edges.
 
-Current version: v0.516.0
+Current version: v0.517.0
 
-v0.516.0 admits explicitly referenced hidden TypeScript configuration files as persisted evidence without expanding source discovery. Configuration inheritance and references enforce project, excluded-directory, and physical-path boundaries while preserving access errors. Workspace export names are validated separately from filesystem targets; excluded generated files remain unresolved. A successful large-project scan does not prove complete relation coverage.
+v0.517.0 deepens direct Go method calls on concrete receivers: passing a call result is distinguished from passing the receiver itself, while comments, strings, and equality comparisons no longer imply escape or assignment. Compiler-confirmed method-call TP rises from 103 to 180/581 across four fixed large projects, with 401 misses remaining. All 150 negative contracts pass, but some added edges lack compiler verification: this is neither complete Go support nor a full FP=0 claim. Conservative boundaries for interface dispatch, method values, field arguments, and closures remain.
 
 ## Highlights
 

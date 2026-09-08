@@ -127,7 +127,7 @@ describe("Python B2 regular-package resolution", () => {
         })
       ])
     );
-    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v420");
+    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v421");
     expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v202");
     expect(upgradedStore.getActiveGenerationBundle(projectPath)).toMatchObject({
       extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION,

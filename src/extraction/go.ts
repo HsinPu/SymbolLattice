@@ -1261,6 +1261,40 @@ function staticGoDirectCalls(
   return { callsByName, unsafeBindingNames };
 }
 
+/** Retains token separation and offsets while excluding non-executable text. */
+function goReceiverSafetyText(
+  input: GoExtractFileFactsInput,
+  body: GoSyntaxNode,
+  excludeDirectMethodCallReceivers = false
+): string {
+  const parts: string[] = [];
+  let cursor = body.from;
+  function visit(node: GoSyntaxNode): void {
+    const selector = node.parent;
+    const call = selector?.parent;
+    const directMethodReceiver =
+      excludeDirectMethodCallReceivers &&
+      node.name === "VariableName" &&
+      selector?.name === "SelectorExpr" &&
+      selector.firstChild?.from === node.from &&
+      call?.name === "CallExpr" &&
+      call.firstChild?.from === selector.from &&
+      !hasGoFunctionLiteralAncestor(node, body);
+    if (isGoComment(node) || node.name === "String" || node.name === "Rune" || directMethodReceiver) {
+      parts.push(input.sourceText.slice(cursor, node.from));
+      parts.push(nodeText(input, node).replace(/[^\r\n]/g, " "));
+      cursor = node.to;
+      return;
+    }
+    for (const child of directChildren(node)) {
+      visit(child);
+    }
+  }
+  visit(body);
+  parts.push(input.sourceText.slice(cursor, body.to));
+  return parts.join("");
+}
+
 /**
  * Collects only calls through a named parameter or method receiver whose type
  * is one simple identifier. Passing the receiver to another call or assigning
@@ -1273,21 +1307,54 @@ function staticGoMethodCalls(
 ): readonly StaticGoMethodCall[] {
   const calls: StaticGoMethodCall[] = [];
   const emittedFieldOffsets = new Set<number>();
-  const bodyText = nodeText(input, functionDeclaration.body);
+  const bodyText = goReceiverSafetyText(input, functionDeclaration.body);
+  // A direct call uses the receiver; it does not pass that receiver as an argument.
+  // Method values, field projections, chained receivers and closures are not exempt.
+  const argumentSafetyText = goReceiverSafetyText(input, functionDeclaration.body, true);
+  // Whole-declaration nonclaim is intentional: a same-name local declaration
+  // must not inherit the outer receiver's type, even in a nested block.
+  const shadowedNames = new Set(
+    descendantsNamed(functionDeclaration.body, "DefName")
+      .map(node => identifierText(input, node))
+      .filter((name): name is string => name !== null)
+  );
+  const mutatedNames = new Set<string>();
+  const addressedNames = new Set<string>();
+  for (const unary of descendantsNamed(functionDeclaration.body, "UnaryExp")) {
+    const operator = unary.firstChild;
+    if (operator === null || nodeText(input, operator) !== "&") continue;
+    for (const variable of directChildren(unary).filter(child => child.name === "VariableName")) {
+      const name = identifierText(input, variable);
+      if (name !== null) addressedNames.add(name);
+    }
+  }
+  for (const node of [
+    ...descendantsNamed(functionDeclaration.body, "Assignment"),
+    ...descendantsNamed(functionDeclaration.body, "IncDecStatement"),
+    ...descendantsNamed(functionDeclaration.body, "RangeClause")
+  ]) {
+    for (const child of directChildren(node)) {
+      if (["=", ":=", "UpdateOp", "IncDecOp"].includes(child.name)) break;
+      const name = child.name === "VariableName" ? identifierText(input, child) : null;
+      if (name !== null) mutatedNames.add(name);
+    }
+  }
   const safeReceivers = new Map<string, boolean>();
   for (const receiverName of functionDeclaration.parameterTypes.keys()) {
     const escapedName = escapeRegularExpression(receiverName);
     const bareReceiver = `\\b${escapedName}\\b(?!\\s*\\.)`;
     const reassigned = new RegExp(
-      `\\b${escapedName}\\s*(?::=|=|\\+=|-=|\\*=|/=|%=|&=|\\|=|\\^=|<<=|>>=)`
+      `\\b${escapedName}\\s*(?::=|=(?!=)|\\+=|-=|\\*=|/=|%=|&=|\\|=|\\^=|<<=|>>=)`
     ).test(bodyText);
     const escaped =
-      new RegExp(`\\([^)]*\\b${escapedName}\\b[^)]*\\)`).test(bodyText) ||
+      addressedNames.has(receiverName) ||
+      new RegExp(`\\([^)]*\\b${escapedName}\\b[^)]*\\)`).test(argumentSafetyText) ||
       new RegExp(
         `(?:\\b(?:var\\s+)?[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)?(?:\\s+\\*?[A-Za-z_][A-Za-z0-9_]*)?\\s*(?::=|=(?!=))\\s*|\\breturn\\s+|<-\\s*)${bareReceiver}`
       ).test(bodyText) ||
       new RegExp(`\\bfunc\\s*\\([^)]*\\)\\s*\\{[^}]*\\b${escapedName}\\b`).test(bodyText);
-    safeReceivers.set(receiverName, !reassigned && !escaped);
+    safeReceivers.set(receiverName,
+      !shadowedNames.has(receiverName) && !mutatedNames.has(receiverName) && !reassigned && !escaped);
   }
 
   for (const methodNode of descendantsNamed(functionDeclaration.body, "FieldName")) {
