@@ -336,6 +336,10 @@ function renderLimitations(result: UnknownRecord): string[] {
       record(record(result.sourceWindowAllocation)?.summary)?.truncated === true) {
     notes.add("Source windows were limited; additional call-site source may be omitted.");
   }
+  const unavailableSites = finiteNumber(record(record(result.sourceWindowPlan)?.summary)?.unavailableFileSiteCount) ?? 0;
+  if (unavailableSites > 0) {
+    notes.add(`${unavailableSites} exact call sites are in files outside the current source envelope; follow their cited file and line to retrieve source.`);
+  }
   if (record(record(result.sourceAllocation)?.summary)?.truncated === true) notes.add("Primary source was limited by the shared character budget.");
   const spineSummary = record(record(result.pathSpinePlan)?.summary);
   if (spineSummary?.pairAttemptsTruncated === true || spineSummary?.spinesTruncated === true || spineSummary?.traversalTruncated === true) {

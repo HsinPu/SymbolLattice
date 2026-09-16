@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/nestjs/nest",
+  "commit": "35c3ded6dbf3f23f917ae88d0ed966932788cae6",
+  "truthMethod": "Manual reading of pinned source before evaluating source-window changes. This task is held out from tuning v0.520.7. File judgments are intentionally incomplete; graph precision is not measured.",
+  "tasks": [
+    {
+      "id": "guard-activation-body",
+      "split": "held-out",
+      "query": "tryActivate",
+      "requiredFiles": ["packages/core/guards/guards-consumer.ts"],
+      "supportingFiles": ["packages/core/helpers/execution-context-host.ts"],
+      "irrelevantFiles": [],
+      "evidence": [
+        { "file": "packages/core/guards/guards-consumer.ts", "line": 22, "text": "const result = guard.canActivate(context)" },
+        { "file": "packages/core/guards/guards-consumer.ts", "line": 29, "text": "if (await this.pickResult(result))" },
+        { "file": "packages/core/guards/guards-consumer.ts", "line": 32, "text": "return false" }
+      ]
+    }
+  ]
+}

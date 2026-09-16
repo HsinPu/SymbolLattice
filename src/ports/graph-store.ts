@@ -92,6 +92,8 @@ export interface ActiveSourceDocumentsProjection {
 export interface BoundedGraphQueryRequest {
   readonly query: string;
   readonly terms: readonly string[];
+  /** Alternatives for each bounded query concept; OR within groups, AND across source-search groups. */
+  readonly lexicalTermGroups?: readonly (readonly string[])[];
   readonly maxSeedFiles: number;
   readonly maxSeedSymbols: number;
   readonly maxSymbolsPerFile: number;

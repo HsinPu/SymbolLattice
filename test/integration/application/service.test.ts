@@ -1058,7 +1058,7 @@ describe("SymbolLatticeService", () => {
       sourceAvailability: "not-applicable",
       source: null,
       queryPlan: {
-        policy: "explore-query-plan-v11",
+        policy: "explore-query-plan-v12",
         ranking: {
           graphDiffusion: {
             policy: "explore-query-graph-diffusion-v3",
@@ -1128,7 +1128,7 @@ describe("SymbolLatticeService", () => {
       ],
       sourceAllocation: {
         policy: "reference-order-source-v1",
-        budget: { characterBudget: 24_000 },
+        budget: { characterBudget: 21_952 },
         summary: { candidateCount: 4 }
       },
       pathSpinePlan: {
@@ -1136,22 +1136,14 @@ describe("SymbolLatticeService", () => {
         summary: { selectedSpineCount: 0, bridgeSymbolCount: 0 }
       },
       sourceWindowPlan: {
-        policy: "explore-source-windows-v1",
-        summary: { candidateCount: 1, selectedCount: 1, truncated: false }
+        policy: "explore-source-windows-v2",
+        summary: { candidateCount: 0, selectedCount: 0, truncated: false }
       },
-      sourceWindows: [
-        {
-          index: 0,
-          focusRank: 1,
-          filePath: "src/api/orders.ts",
-          reason: "exact-connection-site",
-          source: { filePath: "src/api/orders.ts" }
-        }
-      ],
+      sourceWindows: [],
       sourceWindowAllocation: {
         policy: "explore-source-window-allocation-v4",
         budget: { totalCharacterBudget: 24_000 },
-        summary: { candidateCount: 1, emittedWindows: 1 }
+        summary: { candidateCount: 0, emittedWindows: 0 }
       }
     });
     expect(result.focuses?.map((focus) => focus.source?.text).join("\n")).toContain(
@@ -1161,8 +1153,8 @@ describe("SymbolLatticeService", () => {
       "not indexed"
     );
     expect(result.sourceAllocation?.summary.emittedCharacters).toBeLessThanOrEqual(24_000);
-    expect(result.sourceWindows?.[0]?.source.text).toContain("return persistOrder();");
-    expect(result.sourceWindows?.[0]?.source.text).not.toContain("not indexed api");
+    expect(result.focuses?.[0]?.source?.text).toContain("return persistOrder();");
+    expect(result.focuses?.[0]?.source?.text).not.toContain("not indexed api");
     expect(
       (result.sourceAllocation?.summary.emittedCharacters ?? 0) +
         (result.sourceWindowAllocation?.summary.emittedCharacters ?? 0)
@@ -1187,7 +1179,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v11",
+      policy: "explore-query-plan-v12",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -1264,7 +1256,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "dispatch behavior");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v11",
+      policy: "explore-query-plan-v12",
       ranking: {
         graphExpansion: {
           policy: "explore-query-graph-expansion-v2",
@@ -1401,13 +1393,13 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "dispatch pipeline");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v11",
+      policy: "explore-query-plan-v12",
       scoreFloor: {
         policy: "explore-query-relative-file-score-floor-v1",
         reason: "relative-floor-applied",
         applied: true,
-        topFileScore: 510,
-        computedFloor: 102,
+        topFileScore: 940,
+        computedFloor: 120,
         candidateFileCount: 5,
         filesPastFloorCount: 3,
         retainedFileCount: 3,
@@ -1426,12 +1418,51 @@ describe("SymbolLatticeService", () => {
       }
     });
     expect(result.focuses?.map((focus) => focus.symbol.filePath)).toEqual([
-      "src/dispatch.ts",
       "src/dispatch-pipeline.ts",
+      "src/dispatch.ts",
       "src/dispatch-registry.ts"
     ]);
     expect(result.focuses?.map((focus) => focus.source?.text).join("\n"))
       .not.toMatch(/weak-file-a|weak-file-b/u);
+  });
+
+  it("returns callable bodies and supporting caller source from the same indexed generation", async () => {
+    const projectPath = await createInlineProject({
+      "src/flow.ts": [
+        "export function resolveInputs(", "  first: string,", "  second: string,", "  third: string,",
+        "  fourth: string,", "  fifth: string", ") {",
+        "  return [first, second, third, fourth, fifth].join(':');", "}", "",
+        "export function invoke() {", "  return resolveInputs('a', 'b', 'c', 'd', 'e');", "}"
+      ].join("\n")
+    });
+    const service = createService();
+    await service.init({ projectPath });
+    const exact = await service.explore(projectPath, "src/flow.ts#resolveInputs");
+    expect(exact.source?.text).toContain("return [first, second, third, fourth, fifth]");
+    const query = await service.explore(projectPath, "resolveInputs behavior");
+    const evidence = [...(query.focuses ?? []).map((item) => item.source),
+      ...(query.sourceWindows ?? []).map((window) => window.source)];
+    expect(evidence.some((source) => source?.lines.some((line) => line.line === 8 && line.text.includes("return [first")))).toBe(true);
+    expect(evidence.some((source) => source?.lines.some((line) => line.line === 12 && line.text.includes("return resolveInputs")))).toBe(true);
+    expect((query.sourceAllocation?.summary.emittedCharacters ?? 0) +
+      (query.sourceWindowAllocation?.summary.emittedCharacters ?? 0)).toBeLessThanOrEqual(24_000);
+  });
+
+  it("reserves source capacity for late call evidence after truncating a large callable", async () => {
+    const projectPath = await createInlineProject({
+      "src/large.ts": ["import { persistValue } from './store.js';", "export function storeValues() {",
+        ...Array.from({ length: 1_000 }, (_, index) => `  // persisted context ${index} ${"x".repeat(50)}`),
+        "  return persistValue();", "}"].join("\n"),
+      "src/store.ts": "export function persistValue() { return 'saved'; }\n"
+    });
+    const service = createService();
+    await service.init({ projectPath });
+    const result = await service.explore(projectPath, "storeValues persistValue");
+    expect(result.focuses?.find((item) => item.symbol.name === "storeValues")?.source?.truncated).toBe(true);
+    expect(result.sourceWindows?.some((window) => window.source.lines.some((line) =>
+      line.line === 1003 && line.text.includes("return persistValue()")))).toBe(true);
+    expect((result.sourceAllocation?.summary.emittedCharacters ?? 0) +
+      (result.sourceWindowAllocation?.summary.emittedCharacters ?? 0)).toBeLessThanOrEqual(24_000);
   });
 
   it("keeps test source out of a general explore envelope when production evidence is sufficient", async () => {
@@ -1451,7 +1482,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v11",
+      policy: "explore-query-plan-v12",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1497,7 +1528,7 @@ describe("SymbolLatticeService", () => {
 
     const general = await service.explore(projectPath, "renderAsset");
     expect(general.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v11",
+      policy: "explore-query-plan-v12",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",

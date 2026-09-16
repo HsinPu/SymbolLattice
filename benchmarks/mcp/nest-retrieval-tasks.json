@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/nestjs/nest",
+  "commit": "35c3ded6dbf3f23f917ae88d0ed966932788cae6",
+  "truthMethod": "Manual reading of pinned source before scoring. Required files are a bounded task minimum, not an exhaustive relevance judgment. Unlisted results remain unjudged. Source evidence is scored separately from file recall and graph correctness.",
+  "tasks": [
+    {
+      "id": "constructor-dependencies",
+      "split": "development",
+      "query": "How are constructor dependencies resolved when creating providers?",
+      "requiredFiles": ["packages/core/injector/injector.ts"],
+      "supportingFiles": ["packages/core/injector/instance-loader.ts", "packages/core/injector/instance-wrapper.ts", "packages/common/decorators/core/inject.decorator.ts", "packages/common/utils/forward-ref.util.ts"],
+      "irrelevantFiles": ["packages/core/router/router-explorer.ts", "packages/core/injector/lazy-module-loader/lazy-module-loader.ts", "packages/core/hooks/before-app-shutdown.hook.ts", "packages/core/hooks/on-app-bootstrap.hook.ts", "packages/core/hooks/on-app-shutdown.hook.ts"],
+      "evidence": [
+        { "file": "packages/core/injector/injector.ts", "line": 187, "text": "await this.resolveConstructorParams<T>(" },
+        { "file": "packages/core/injector/injector.ts", "line": 315, "text": "this.getClassDependencies(wrapper)" }
+      ]
+    },
+    {
+      "id": "known-provider-loader",
+      "split": "development",
+      "query": "loadProvider",
+      "requiredFiles": ["packages/core/injector/injector.ts"],
+      "supportingFiles": ["packages/core/injector/instance-loader.ts", "packages/core/injector/instance-wrapper.ts", "packages/core/injector/module.ts"],
+      "irrelevantFiles": [],
+      "evidence": [{ "file": "packages/core/injector/injector.ts", "line": 268, "text": "await this.loadInstance<Injectable>(" }]
+    },
+    {
+      "id": "provider-creation-flow",
+      "split": "development",
+      "query": "createInstancesOfProviders loadProvider resolveConstructorParams",
+      "requiredFiles": ["packages/core/injector/instance-loader.ts", "packages/core/injector/injector.ts"],
+      "supportingFiles": ["packages/core/injector/instance-wrapper.ts", "packages/core/injector/module.ts"],
+      "irrelevantFiles": ["packages/core/hooks/before-app-shutdown.hook.ts", "packages/core/hooks/on-app-bootstrap.hook.ts", "packages/core/hooks/on-app-shutdown.hook.ts"],
+      "evidence": [
+        { "file": "packages/core/injector/instance-loader.ts", "line": 74, "text": "await this.injector.loadProvider(item, moduleRef)" },
+        { "file": "packages/core/injector/injector.ts", "line": 268, "text": "await this.loadInstance<Injectable>(" },
+        { "file": "packages/core/injector/injector.ts", "line": 187, "text": "await this.resolveConstructorParams<T>(" }
+      ]
+    },
+    {
+      "id": "request-pipe-transforms",
+      "split": "held-out",
+      "query": "How are request parameters transformed by pipes before a controller is called?",
+      "requiredFiles": ["packages/core/router/router-execution-context.ts", "packages/core/pipes/pipes-consumer.ts"],
+      "supportingFiles": ["packages/core/pipes/pipes-context-creator.ts", "packages/core/pipes/params-token-factory.ts"],
+      "irrelevantFiles": ["packages/core/injector/instance-loader.ts", "packages/core/hooks/before-app-shutdown.hook.ts", "packages/core/hooks/on-app-bootstrap.hook.ts", "packages/core/hooks/on-app-shutdown.hook.ts"],
+      "evidence": [
+        { "file": "packages/core/router/router-execution-context.ts", "line": 336, "text": "return this.pipesConsumer.apply(" },
+        { "file": "packages/core/pipes/pipes-consumer.ts", "line": 26, "text": "const result = pipe.transform(val, { metatype, type, data })" }
+      ]
+    }
+  ]
+}

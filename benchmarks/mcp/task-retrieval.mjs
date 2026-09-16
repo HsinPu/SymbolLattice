@@ -1,0 +1,139 @@
+import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { spawnSync } from "node:child_process";
+import { performance } from "node:perf_hooks";
+
+/** File judgments are deliberately incomplete; unknown output is never a false positive. */
+export function scoreTask(task, result) {
+  const selected = [...new Set([
+    ...(result.focuses ?? []).map((focus) => focus.symbol?.filePath),
+    result.match?.symbol?.filePath
+  ].filter(Boolean))];
+  const required = new Set(task.requiredFiles);
+  const relevant = new Set([...required, ...task.supportingFiles]);
+  const irrelevant = new Set(task.irrelevantFiles);
+  const truePositives = selected.filter((file) => relevant.has(file));
+  const falsePositives = selected.filter((file) => irrelevant.has(file));
+  const falseNegatives = [...required].filter((file) => !selected.includes(file));
+  const unjudged = selected.filter((file) => !relevant.has(file) && !irrelevant.has(file));
+  const sources = [result.source, ...(result.focuses ?? []).map((focus) => focus.source),
+    ...(result.sourceWindows ?? []).map((window) => window.source)].filter(Boolean);
+  const evidence = task.evidence.map((item) => ({ ...item, found: sources.some((source) =>
+    source.filePath === item.file && (source.lines ?? []).some((line) =>
+      line.line === item.line && typeof line.text === "string" && line.text.includes(item.text))) }));
+  const judged = truePositives.length + falsePositives.length;
+  return {
+    selected, truePositives, falsePositives, falseNegatives, unjudged,
+    requiredFileRecall: required.size === 0 ? null : (required.size - falseNegatives.length) / required.size,
+    judgedPrecision: judged === 0 ? null : truePositives.length / judged,
+    judgedFraction: selected.length === 0 ? null : judged / selected.length,
+    evidence, evidenceRecall: evidence.length === 0 ? null : evidence.filter((item) => item.found).length / evidence.length
+  };
+}
+
+function execute(command, args, cwd) {
+  const run = spawnSync(command, args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout: 120_000, windowsHide: true });
+  if (run.error || run.status !== 0) throw new Error(`${command} failed: ${run.error?.message ?? run.stderr}`);
+  return run.stdout.trim();
+}
+
+/** Verify emitted bytes and line coordinates against the pinned checkout, independently of extraction. */
+export function verifySourceExcerpts(result, readSource) {
+  const sources = [result.source, ...(result.focuses ?? []).map((focus) => focus.source),
+    ...(result.sourceWindows ?? []).map((window) => window.source)].filter(Boolean);
+  let characters = 0;
+  let lines = 0;
+  for (const source of sources) {
+    const original = readSource(source.filePath);
+    const { start, end } = source.sourceIdentity.fullFileCharacterOffsets;
+    assert.ok(Number.isSafeInteger(start) && Number.isSafeInteger(end) && start >= 0 && end >= start && end <= original.length);
+    const expected = original.slice(start, end).replace(/\r\n|\r|\u2028|\u2029/gu, "\n");
+    assert.equal(source.text, expected, `Source text mismatch: ${source.filePath}`);
+    assert.equal(source.emittedCharacters, expected.length);
+    assert.equal(source.sourceIdentity.contentSha256, createHash("sha256").update(expected).digest("hex"));
+    const position = (offset) => {
+      const endings = [...original.slice(0, offset).matchAll(/\r\n|\r|\n|\u2028|\u2029/gu)];
+      const last = endings.at(-1);
+      return { line: endings.length + 1, column: offset - (last ? last.index + last[0].length : 0) + 1 };
+    };
+    assert.deepEqual(source.range, { start: position(start), end: position(end) });
+    const texts = expected.split("\n");
+    if (expected.endsWith("\n")) texts.pop();
+    assert.deepEqual(source.lines, texts.map((text, index) => ({ line: source.range.start.line + index, text })));
+    characters += expected.length;
+    lines += source.lines.length;
+  }
+  return { verifiedExcerpts: sources.length, emittedCharacters: characters, emittedLines: lines };
+}
+
+export async function runTaskRetrieval({ project, manifestPath, output, repetitions = 3, split }) {
+  assert.ok(Number.isInteger(repetitions) && repetitions > 0 && repetitions <= 100);
+  const manifestText = readFileSync(manifestPath, "utf8");
+  const manifest = JSON.parse(manifestText);
+  assert.equal(execute("git", ["rev-parse", "HEAD"], project), manifest.commit, "Corpus commit differs from task truth");
+  assert.equal(execute("git", ["remote", "get-url", "origin"], project).replace(/\.git$/, ""), manifest.repository.replace(/\.git$/, ""));
+  assert.equal(execute("git", ["status", "--porcelain", "--untracked-files=no"], project), "", "Corpus tracked source changed");
+  const tasks = manifest.tasks.filter((task) => split === undefined || task.split === split);
+  assert.ok(tasks.length > 0, "No tasks selected");
+  // Validate all source truth before executing any product query.
+  for (const task of manifest.tasks) {
+    assert.equal(new Set(task.requiredFiles).size, task.requiredFiles.length);
+    assert.ok(task.irrelevantFiles.every((file) => ![...task.requiredFiles, ...task.supportingFiles].includes(file)));
+    for (const item of task.evidence) {
+      const actual = readFileSync(resolve(project, item.file), "utf8").split(/\r?\n/)[item.line - 1];
+      assert.ok(actual?.includes(item.text), `Source truth mismatch: ${task.id} ${item.file}:${item.line}`);
+    }
+  }
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+  const { renderExploreText } = await import(pathToFileURL(resolve(root, "dist/mcp/explore-text.js")).href);
+  const productVersion = execute(process.execPath, [resolve(root, "dist/cli/main.js"), "--version"], root);
+  const results = tasks.map((task) => {
+    const durations = [];
+    let response;
+    let raw;
+    for (let iteration = 0; iteration < repetitions; iteration += 1) {
+      const start = performance.now();
+      raw = execute(process.execPath, [resolve(root, "dist/cli/main.js"), "explore", task.query, "--project", project, "--json"], root);
+      durations.push(performance.now() - start);
+      const current = JSON.parse(raw);
+      assert.equal(current.status?.initialized, true, "Corpus index is not initialized");
+      assert.equal(current.status?.stale, false, "Corpus index is stale");
+      if (response) assert.equal(current.status.generationId, response.status.generationId, "Index generation changed during evaluation");
+      if (response) assert.deepEqual(scoreTask(task, current), scoreTask(task, response), "Retrieval changed across repetitions");
+      response = current;
+    }
+    const sorted = [...durations].sort((a, b) => a - b);
+    const sourceVerification = verifySourceExcerpts(response, (file) => readFileSync(resolve(project, file), "utf8"));
+    return { id: task.id, split: task.split, query: task.query, ...scoreTask(task, response),
+      processMilliseconds: durations, medianProcessMilliseconds: sorted[Math.floor(sorted.length / 2)],
+      responseBytes: Buffer.byteLength(raw), markdownProjectionBytes: Buffer.byteLength(renderExploreText(response)),
+      sourceVerification, result: response };
+  });
+  const report = {
+    schemaVersion: 1, productVersion, repository: manifest.repository, commit: manifest.commit,
+    manifestSha256: createHash("sha256").update(manifestText).digest("hex"),
+    conditions: { project: resolve(project), repetitions, node: process.version, platform: process.platform,
+      timing: "Sequential fresh CLI processes against an existing index; includes startup, freshness checking and JSON serialization. Small-sample diagnostic, not a latency SLO.",
+      indexing: "Not measured; this run reuses an existing index.",
+      scoring: "Distinct focus files per task; recall denominator is required files; precision denominator includes only manually judged returned files. Evidence checks cited source lines, not semantic graph correctness.",
+      graphPrecision: "not-measured", agentCompletionTime: "not-measured" },
+    results
+  };
+  mkdirSync(dirname(output), { recursive: true });
+  writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`);
+  return report;
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const args = process.argv.slice(2);
+  const option = (name) => { const i = args.indexOf(name); return i < 0 ? undefined : args[i + 1]; };
+  const project = option("--project");
+  const manifestPath = option("--manifest");
+  const output = option("--output");
+  assert.ok(project && manifestPath && output, "Required: --project <indexed corpus> --manifest <truth.json> --output <report.json>");
+  const report = await runTaskRetrieval({ project, manifestPath, output, repetitions: Number(option("--repetitions") ?? 3), split: option("--split") });
+  console.log(JSON.stringify(report.results.map(({ result, ...summary }) => summary), null, 2));
+}

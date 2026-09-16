@@ -111,7 +111,7 @@ describe("MCP explore text rendering", () => {
     const text = renderExploreText({
       queryPlan: { input: { truncated: true }, summary: { truncated: true } },
       connectionsTruncated: true,
-      sourceWindowPlan: { summary: { truncated: true } },
+      sourceWindowPlan: { summary: { truncated: true, unavailableFileSiteCount: 2 } },
       sourceWindowAllocation: { summary: { truncated: true } },
       pathSpinePlan: { summary: { traversalTruncated: true } },
       source: { filePath: "src/large.ts", startLine: 12, endLine: 80, text: "", lines: [], truncated: true, emittedCharacters: 0, requestedCharacters: 9000 }
@@ -120,6 +120,7 @@ describe("MCP explore text rendering", () => {
     expect(text).toContain("Focus selection was truncated");
     expect(text).toContain("Additional exact connections were truncated");
     expect(text).toContain("Source windows were limited");
+    expect(text).toContain("2 exact call sites are in files outside the current source envelope");
     expect(text).toContain("Path exploration was limited");
     expect(text).toContain("0/9000 characters");
     expect(text).toContain("SymbolLattice file");

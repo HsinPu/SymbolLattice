@@ -107,6 +107,52 @@ function focus(rank: number, node: SymbolNode, primaryStart: number, primaryEnd:
 }
 
 describe("explore source window planning", () => {
+  it("retains an uncovered call site even when its padding overlaps a primary excerpt", () => {
+    const source = symbol("source", "src/source.ts", 1);
+    const target = symbol("target", "src/target.ts", 1);
+    const plan = planExploreSourceWindows([focus(1, source, 1, 5)], [
+      edge("covered", source, target, 3), edge("uncovered", source, target, 8)
+    ]);
+    expect(plan.windows).toHaveLength(1);
+    expect(plan.windows[0]).toMatchObject({ startLine: 5, endLine: 11, connectionEdgeIds: ["uncovered"] });
+  });
+
+  it("does not treat a partially delivered last line as complete evidence", () => {
+    const source = symbol("source", "src/source.ts", 1);
+    const target = symbol("target", "src/target.ts", 1);
+    const item = focus(1, source, 1, 5);
+    const partial: ExploreFocus = { ...item, source: { ...item.source!, truncated: true,
+      truncationReason: "character-budget", range: { start: { line: 1, column: 1 }, end: { line: 5, column: 3 } } } };
+    expect(planExploreSourceWindows([partial], [edge("partial-line", source, target, 5)]).windows)
+      .toHaveLength(1);
+  });
+
+  it("uses exact incoming and outgoing call sites within requested files and discloses others", () => {
+    const source = symbol("source", "src/source.ts", 20);
+    const caller = symbol("caller", source.filePath, 1);
+    const target = symbol("target", "src/target.ts", 1);
+    const external = symbol("external", "src/other.ts", 1);
+    const incoming = edge("incoming", caller, source, 10);
+    const outgoing = edge("outgoing", source, target, 50);
+    const heuristic = edge("guess", source, target, 60, "heuristic");
+    const outside = edge("outside", external, source, 30);
+    const item: ExploreFocus = { ...focus(1, source, 18, 22),
+      callers: { items: [{ symbol: caller, edge: incoming.edge }, { symbol: external, edge: outside.edge }], truncated: false },
+      callees: { items: [{ symbol: target, edge: outgoing.edge }, { symbol: target, edge: heuristic.edge }], truncated: false } };
+    const plan = planExploreSourceWindows([item], []);
+    expect(plan.windows.map((window) => window.connectionEdgeIds)).toEqual([["incoming"], ["outgoing"]]);
+    expect(plan.windows.every((window) => window.reason === "exact-focus-call")).toBe(true);
+    expect(plan.summary.unavailableFileSiteCount).toBe(1);
+  });
+
+  it("recognizes proof already covered by another focus in the same file", () => {
+    const source = symbol("source", "src/source.ts", 1);
+    const target = symbol("target", source.filePath, 20);
+    const plan = planExploreSourceWindows([focus(1, source, 1, 5), focus(2, target, 18, 25)],
+      [edge("covered-by-another-focus", source, target, 22)]);
+    expect(plan.windows).toEqual([]);
+  });
+
   it("merges nearby exact call sites, excludes the primary excerpt, and enforces bounds", () => {
     const entry = symbol("entry", "src/entry.ts", 1);
     const target = symbol("target", "src/target.ts", 1);
@@ -283,6 +329,25 @@ describe("explore source window planning", () => {
         reason: "exact-path-spine"
       })
     ]);
+
+    const bridges = [1, 2, 3].map((index) => symbol(`bridge-${index}`, `src/bridge-${index}.ts`, 1));
+    const chain = [entry, ...bridges, target];
+    const chainEdges = chain.slice(0, -1).map((node, index) => edge(`chain-${index}`, node, chain[index + 1]!, 2).edge);
+    const caller = symbol("caller", entry.filePath, 100);
+    const incoming = edge("incoming", caller, entry, 101);
+    const extended = planExploreSourceWindows([
+      { ...focus(1, entry, 1, 5), callers: { items: [{ symbol: caller, edge: incoming.edge }], truncated: false } },
+      focus(2, target, 20, 24)
+    ], [], {
+      ...spinePlan,
+      summary: { ...spinePlan.summary, bridgeSymbolCount: 3 },
+      spines: [{ ...spinePlan.spines[0]!, bridgeSymbols: bridges, edgeIds: chainEdges.map((item) => item.id),
+        path: { symbols: chain, edges: chainEdges,
+          steps: chainEdges.map((edge, index) => ({ from: chain[index]!, to: chain[index + 1]!, edge })) } }]
+    });
+    expect(extended.windows.filter((window) => window.reason === "exact-path-spine")).toHaveLength(3);
+    expect(extended.windows.some((window) => window.connectionEdgeIds.includes("incoming"))).toBe(true);
+    expect(extended.summary.truncated).toBe(false);
   });
 
   it("reserves only the source budget left after primary focus excerpts", () => {

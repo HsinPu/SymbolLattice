@@ -1963,6 +1963,13 @@ function likelyNaturalLanguageQuery(
   return /\s/gu.test(query);
 }
 
+function boundedLexicalGroups(request: BoundedGraphQueryRequest): readonly (readonly string[])[] {
+  if (request.lexicalTermGroups === undefined) return boundedLexicalTerms(request).map((term) => [term]);
+  return request.lexicalTermGroups.slice(0, 8)
+    .map((group) => [...new Set(group.flatMap(sourceSearchTerms))].slice(0, 8))
+    .filter((group) => group.length > 0);
+}
+
 function readBoundedFileSeedPaths(
   database: DatabaseSync,
   identifierTerms: readonly string[],
@@ -2001,7 +2008,7 @@ function readBoundedSourceSeedPaths(
   database: DatabaseSync,
   activeGenerationId: string | null,
   sourceSearchVersion: string | null,
-  lexicalTerms: readonly string[],
+  lexicalGroups: readonly (readonly string[])[],
   maxFiles: number
 ): readonly string[] {
   if (
@@ -2013,8 +2020,10 @@ function readBoundedSourceSeedPaths(
     return [];
   }
 
-  const matchQuery = sourceSearchPrefixQuery(lexicalTerms);
-  if (matchQuery === null) {
+  const matchQuery = lexicalGroups.map((group) =>
+    `(${group.map((term) => `"${term.replaceAll('"', '""')}"*`).join(" OR ")})`
+  ).join(" AND ");
+  if (matchQuery.length === 0) {
     return [];
   }
 
@@ -2045,10 +2054,11 @@ function symbolProjectionSelect(): string {
 function readBoundedSymbolRows(
   database: DatabaseSync,
   identifierTerms: readonly string[],
-  lexicalTerms: readonly string[],
+  lexicalGroups: readonly (readonly string[])[],
   filePaths: readonly string[],
   limit: number
 ): readonly SymbolRow[] {
+  const lexicalTerms = lexicalGroups.flat();
   if (limit === 0 || (identifierTerms.length === 0 && lexicalTerms.length === 0 && filePaths.length === 0)) {
     return [];
   }
@@ -2115,14 +2125,22 @@ function readBoundedSymbolRows(
     exactOrderParameters.push(...filePaths);
   }
 
+  // Rank concept coverage before LIMIT, rather than spend the budget on the
+  // alphabetically first files containing one generic query word.
+  const coverageParameters: string[] = [];
+  const coverageOrder = lexicalGroups.length < 2 ? "0 + 0" : lexicalGroups.map((group) => {
+    coverageParameters.push(...group);
+    return `(CASE WHEN ${group.map(() => "instr(lower(name), ?) > 0").join(" OR ")} THEN 1 ELSE 0 END)`;
+  }).join(" + ");
+
   return database
     .prepare(
       `${symbolProjectionSelect()}
        WHERE ${where.join(" OR ")}
-       ORDER BY ${exactOrder}, file_path, start_line, start_column, name, id
+       ORDER BY (${coverageOrder}) DESC, ${exactOrder}, file_path, start_line, start_column, name, id
        LIMIT ?`
     )
-    .all(...parameters, ...exactOrderParameters, limit) as unknown as SymbolRow[];
+    .all(...parameters, ...coverageParameters, ...exactOrderParameters, limit) as unknown as SymbolRow[];
 }
 
 function toSymbolNode(row: SymbolRow): SymbolNode {
@@ -2250,7 +2268,8 @@ function readActiveBoundedGraphBundle(
     request.expectedGenerationId === active.generationId;
   const files = readActiveFiles(database);
   const identifierTerms = boundedIdentifierTerms(request);
-  const lexicalTerms = boundedLexicalTerms(request);
+  const lexicalGroups = boundedLexicalGroups(request);
+  const lexicalTerms = lexicalGroups.flat();
   const sourceSearchAvailable =
     sourceSearchVersion !== null && supportsSourceSearch(database) && active.generationId !== null;
 
@@ -2284,23 +2303,22 @@ function readActiveBoundedGraphBundle(
     database,
     active.generationId,
     sourceSearchVersion,
-    lexicalTerms,
+    lexicalGroups,
     bounds.maxSeedFiles
   );
   const directSymbolRows = readBoundedSymbolRows(
     database,
     identifierTerms,
-    lexicalTerms,
+    lexicalGroups,
     [],
     bounds.maxSeedSymbols
   );
   const selectedFilePaths = [...new Set([...fileSeeds, ...directSymbolRows.map((row) => row.file_path), ...sourceSeeds])]
-    .sort()
     .slice(0, bounds.maxSeedFiles);
   const candidateSymbolRows = readBoundedSymbolRows(
     database,
     identifierTerms,
-    lexicalTerms,
+    lexicalGroups,
     selectedFilePaths,
     Math.min(bounds.maxSeedSymbols * Math.max(bounds.maxSymbolsPerFile, 1), MAX_BOUNDED_SEED_SYMBOLS)
   );

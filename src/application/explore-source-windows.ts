@@ -2,7 +2,7 @@ import type { ExploreConnection, ExploreFocus } from "./types.js";
 import type { ExplorePathSpinePlan } from "./explore-path-spines.js";
 import { EXPLORE_GENERATED_SOURCE_WORTH } from "./explore-query.js";
 
-export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v1" as const;
+export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v2" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY =
   "explore-source-window-allocation-v4" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS = {
@@ -21,7 +21,8 @@ export const EXPLORE_SOURCE_WINDOW_LIMITS = {
   contextPaddingLines: 3,
   mergeGapLines: 3,
   maximumWindows: 8,
-  maximumWindowsPerFocus: 2
+  maximumWindowsPerFocus: 2,
+  pathSpineWindowsExemptPerFocus: true
 } as const;
 
 export interface ExploreSourceWindowPlanItem {
@@ -34,7 +35,7 @@ export interface ExploreSourceWindowPlanItem {
   readonly relatedSymbolIds: readonly string[];
   readonly pathSpineIndexes: readonly number[];
   readonly relevanceWeight: number;
-  readonly reason: "exact-connection-site" | "exact-path-spine";
+  readonly reason: "exact-connection-site" | "exact-focus-call" | "exact-path-spine";
 }
 
 export interface ExploreSourceWindowPlan {
@@ -44,6 +45,7 @@ export interface ExploreSourceWindowPlan {
     readonly candidateCount: number;
     readonly selectedCount: number;
     readonly selectedFocusCount: number;
+    readonly unavailableFileSiteCount: number;
     readonly truncated: boolean;
   };
   readonly windows: readonly ExploreSourceWindowPlanItem[];
@@ -145,6 +147,8 @@ interface WindowSite {
   readonly filePath: string;
   readonly startLine: number;
   readonly endLine: number;
+  readonly evidenceStartLine: number;
+  readonly evidenceEndLine: number;
   readonly connectionEdgeIds: readonly string[];
   readonly relatedSymbolIds: readonly string[];
   readonly pathSpineIndexes: readonly number[];
@@ -460,18 +464,26 @@ export function allocateExploreSourceWindowCharacters(input: {
   };
 }
 
-function overlapsPrimarySource(window: MutableWindow, focus: ExploreFocus): boolean {
-  return (
-    focus.source !== null &&
-    window.filePath === focus.source.filePath &&
-    window.startLine <= focus.source.endLine &&
-    window.endLine >= focus.source.startLine
-  );
+function coveredByPrimarySource(site: WindowSite, focuses: readonly ExploreFocus[]): boolean {
+  const ranges = focuses.flatMap(({ source }) => {
+    if (source === null || source.filePath !== site.filePath || source.emittedCharacters === 0) return [];
+    const start = source.startLine + (source.range.start.column > 1 ? 1 : 0);
+    const end = source.endLine - (source.truncated && source.range.end.column > 1 ? 1 : 0);
+    return end < start ? [] : [{ start, end }];
+  }).sort((left, right) => left.start - right.start);
+  let nextLine = site.evidenceStartLine;
+  for (const range of ranges) {
+    if (range.start > nextLine) break;
+    nextLine = Math.max(nextLine, range.end + 1);
+    if (nextLine > site.evidenceEndLine) return true;
+  }
+  return false;
 }
 
 /**
- * Plans bounded additional source windows from exact, selected-to-selected
- * connections. It never synthesizes a call site or follows heuristic edges.
+ * Plans bounded source for exact connections, direct calls and path bridges.
+ * Direct-call source is limited to files already requested for this exploration.
+ * It never synthesizes a call site or follows heuristic edges.
  */
 export function planExploreSourceWindows(
   focuses: readonly ExploreFocus[],
@@ -500,6 +512,8 @@ export function planExploreSourceWindows(
       ),
       endLine:
         connection.edge.range.end.line + EXPLORE_SOURCE_WINDOW_LIMITS.contextPaddingLines,
+      evidenceStartLine: connection.edge.range.start.line,
+      evidenceEndLine: connection.edge.range.end.line,
       connectionEdgeIds: [connection.edge.id],
       relatedSymbolIds: [connection.target.id],
       pathSpineIndexes: [],
@@ -517,6 +531,8 @@ export function planExploreSourceWindows(
         bridge.range.start.line - EXPLORE_SOURCE_WINDOW_LIMITS.contextPaddingLines
       ),
       endLine: bridge.range.end.line + EXPLORE_SOURCE_WINDOW_LIMITS.contextPaddingLines,
+      evidenceStartLine: bridge.range.start.line,
+      evidenceEndLine: bridge.range.end.line,
       connectionEdgeIds: spine.edgeIds,
       relatedSymbolIds: [bridge.id],
       pathSpineIndexes: [spine.index],
@@ -524,25 +540,63 @@ export function planExploreSourceWindows(
       reason: "exact-path-spine"
     }));
   });
-  const sites = [...connectionSites, ...spineSites]
+  const availableFiles = new Set([
+    ...focuses.map((focus) => focus.symbol.filePath),
+    ...(pathSpinePlan?.spines ?? []).flatMap((spine) => spine.bridgeSymbols.map((symbol) => symbol.filePath))
+  ]);
+  const unavailableEdges = new Set<string>();
+  const seenEdges = new Set(connectionSites.map((site) => site.connectionEdgeIds[0]));
+  const callSites: WindowSite[] = [];
+  for (const focus of [...focuses].sort((left, right) => left.rank - right.rank)) {
+    for (const [direction, relations] of [["incoming", focus.callers.items], ["outgoing", focus.callees.items]] as const) {
+      for (const relation of relations) {
+        const edge = relation.edge;
+        const caller = direction === "incoming" ? relation.symbol : focus.symbol;
+        const callee = direction === "incoming" ? focus.symbol : relation.symbol;
+        if (edge.kind !== "calls" || edge.resolution !== "exact" ||
+            edge.sourceId !== caller.id || edge.targetId !== callee.id || edge.filePath !== caller.filePath ||
+            seenEdges.has(edge.id)) continue;
+        seenEdges.add(edge.id);
+        if (!availableFiles.has(edge.filePath)) {
+          unavailableEdges.add(edge.id);
+          continue;
+        }
+        callSites.push({
+          focus, filePath: edge.filePath,
+          startLine: Math.max(1, edge.range.start.line - EXPLORE_SOURCE_WINDOW_LIMITS.contextPaddingLines),
+          endLine: edge.range.end.line + EXPLORE_SOURCE_WINDOW_LIMITS.contextPaddingLines,
+          evidenceStartLine: edge.range.start.line, evidenceEndLine: edge.range.end.line,
+          connectionEdgeIds: [edge.id], relatedSymbolIds: [relation.symbol.id], pathSpineIndexes: [],
+          relevanceWeight: focus.score, reason: "exact-focus-call"
+        });
+      }
+    }
+  }
+  const sites = [...connectionSites, ...spineSites, ...callSites]
+    .filter((site) => !coveredByPrimarySource(site, focuses))
     .sort(
       (left, right) =>
         left.focus.rank - right.focus.rank ||
+        compareText(left.filePath, right.filePath) ||
         left.startLine - right.startLine ||
         left.endLine - right.endLine ||
-        compareText(left.filePath, right.filePath) ||
         compareText(left.connectionEdgeIds.join("\u0000"), right.connectionEdgeIds.join("\u0000"))
     );
 
   const merged: MutableWindow[] = [];
   for (const site of sites) {
-    const previous = merged.at(-1);
+    const previous = merged.find((window) =>
+      window.filePath === site.filePath &&
+      ((window.focusRank === site.focus.rank &&
+        site.startLine <= window.endLine + EXPLORE_SOURCE_WINDOW_LIMITS.mergeGapLines &&
+        site.endLine >= window.startLine - EXPLORE_SOURCE_WINDOW_LIMITS.mergeGapLines) ||
+       ((window.reason === "exact-path-spine" || site.reason === "exact-path-spine") &&
+        site.startLine <= window.endLine && site.endLine >= window.startLine))
+    );
     if (
-      previous !== undefined &&
-      previous.focusRank === site.focus.rank &&
-      previous.filePath === site.filePath &&
-      site.startLine <= previous.endLine + EXPLORE_SOURCE_WINDOW_LIMITS.mergeGapLines
+      previous !== undefined
     ) {
+      previous.startLine = Math.min(previous.startLine, site.startLine);
       previous.endLine = Math.max(previous.endLine, site.endLine);
       for (const edgeId of site.connectionEdgeIds) {
         if (!previous.connectionEdgeIds.includes(edgeId)) previous.connectionEdgeIds.push(edgeId);
@@ -572,22 +626,22 @@ export function planExploreSourceWindows(
     });
   }
 
-  const candidates = merged.filter((window) => {
-    const focus = focuses.find((item) => item.rank === window.focusRank);
-    return focus !== undefined && !overlapsPrimarySource(window, focus);
-  });
+  const candidates = merged;
   const selectedPerFocus = new Map<number, number>();
+  const nonSpinePerFocus = new Map<number, number>();
   const selected: MutableWindow[] = [];
   for (const candidate of candidates) {
     if (selected.length >= EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows) {
       break;
     }
     const focusCount = selectedPerFocus.get(candidate.focusRank) ?? 0;
-    if (focusCount >= EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindowsPerFocus) {
+    const nonSpineCount = nonSpinePerFocus.get(candidate.focusRank) ?? 0;
+    if (candidate.reason !== "exact-path-spine" && nonSpineCount >= EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindowsPerFocus) {
       continue;
     }
     selected.push(candidate);
     selectedPerFocus.set(candidate.focusRank, focusCount + 1);
+    if (candidate.reason !== "exact-path-spine") nonSpinePerFocus.set(candidate.focusRank, nonSpineCount + 1);
   }
 
   return {
@@ -597,6 +651,7 @@ export function planExploreSourceWindows(
       candidateCount: candidates.length,
       selectedCount: selected.length,
       selectedFocusCount: selectedPerFocus.size,
+      unavailableFileSiteCount: unavailableEdges.size,
       truncated: selected.length < candidates.length
     },
     windows: selected.map((window, index) => ({

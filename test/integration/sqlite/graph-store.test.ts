@@ -22,6 +22,7 @@ import {
   sourceSearchTerms
 } from "../../../src/domain/index.js";
 import { SqliteGraphStore } from "../../../src/infrastructure/sqlite/index.js";
+import { exploreQuerySeedTerms } from "../../../src/application/explore-query.js";
 
 const temporaryDirectories: string[] = [];
 const persistentReadStores: SqliteGraphStore[] = [];
@@ -2325,6 +2326,62 @@ describe("SqliteGraphStore", () => {
       terms: ["src/c.ts"]
     });
     expect(file?.snapshot.symbols.map((node) => node.id)).toContain("c-tail");
+  });
+
+  it("keeps multi-concept candidates before SQL and file caps despite hundreds of generic matches", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const template = boundedGraphSnapshot();
+    const symbols = Array.from({ length: 300 }, (_, index): SymbolNode => ({
+      ...template.symbols[0]!, id: `generic-${index}`, name: "constructor",
+      qualifiedName: `src/a${index}.ts#constructor`, filePath: `src/a${index}.ts`
+    }));
+    symbols.push({ ...template.symbols[0]!, id: "implementation", name: "resolveConstructorParams",
+      qualifiedName: "src/z-engine.ts#resolveConstructorParams", filePath: "src/z-engine.ts" });
+    const graphSnapshot = { ...template, symbols, edges: [], pendingReferences: [],
+      files: symbols.map((node) => ({ ...template.files[0]!, path: node.filePath })) };
+    store.replaceProjectFacts({ projectPath, snapshot: graphSnapshot,
+      indexedAt: "2026-09-16T00:00:00.000Z", artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("concept-coverage"), resolverVersion: "bounded-resolver-v1" });
+    const query = "How are constructor dependencies resolved when creating providers?";
+    const result = store.getActiveBoundedGraphBundle(projectPath, {
+      ...boundedRequest(query, { maxSeedFiles: 1, maxSeedSymbols: 2, maxSymbolsPerFile: 1, maxHops: 0 }),
+      ...exploreQuerySeedTerms(query)
+    });
+    expect(result.snapshot.symbols.map((node) => node.id)).toEqual(["implementation"]);
+    expect(result.diagnostics.seedFiles).toBe(1);
+  });
+
+  it("uses alternative inflections within each FTS concept instead of requiring every variant", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const graphSnapshot = boundedGraphSnapshot();
+    store.replaceProjectFacts({ projectPath, snapshot: graphSnapshot,
+      indexedAt: "2026-09-16T00:00:00.000Z", artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("concept-fts"), resolverVersion: "bounded-resolver-v1",
+      sourceDocuments: sourceDocuments(graphSnapshot, "create provider"), sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION });
+    const query = "creating providers";
+    const result = store.getActiveBoundedGraphBundle(projectPath, {
+      ...boundedRequest(query), ...exploreQuerySeedTerms(query)
+    });
+    expect(result.diagnostics.usedSourceSearch).toBe(true);
+    expect(result.fallbackRequired).toBe(false);
+  });
+
+  it("retains dotted identifier candidates inside multi-identifier queries", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const template = boundedGraphSnapshot();
+    const graphSnapshot = { ...template, edges: [], symbols: [{ ...template.symbols[0]!,
+      name: "execute", qualifiedName: "src/a.ts#Runner.execute" }] };
+    store.replaceProjectFacts({ projectPath, snapshot: graphSnapshot,
+      indexedAt: "2026-09-16T00:00:00.000Z", artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("dotted-seed"), resolverVersion: "bounded-resolver-v1" });
+    const query = "Runner.execute Missing.perform";
+    const result = store.getActiveBoundedGraphBundle(projectPath, {
+      ...boundedRequest(query), ...exploreQuerySeedTerms(query)
+    });
+    expect(result.snapshot.symbols.map((node) => node.qualifiedName)).toContain("src/a.ts#Runner.execute");
   });
 
   it("uses source-search file seeds, keeps adjacency deterministic, and omits non-exact edges", async () => {

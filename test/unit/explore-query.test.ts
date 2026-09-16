@@ -84,6 +84,36 @@ function edge(id: string, sourceId: string, targetId: string): GraphEdge {
 }
 
 describe("explore query planning", () => {
+  it("ranks compound intent above unrelated exact generic words and handles inflections", () => {
+    const implementation = symbol({ id: "resolve", name: "resolveConstructorParams", filePath: "src/z-engine.ts" });
+    const noise = Array.from({ length: 8 }, (_, index) => symbol({
+      id: `noise-${index}`, name: "constructor", filePath: `src/a${index}.ts`
+    }));
+    const plan = planExploreQuery({ symbols: [...noise, implementation], edges: [] },
+      "How are constructor dependencies resolved when creating providers?");
+    expect(plan.selection[0]?.symbol.id).toBe("resolve");
+    expect(plan.selection[0]?.matchedTerms).toEqual(["constructor", "resolved"]);
+    expect(plan.selection[0]?.reasons).toEqual(expect.arrayContaining(["inflected-symbol-term", "multi-term-coverage"]));
+    expect(plan.identifierTerms).not.toContain("when");
+  });
+
+  it("does not reward repeated inflections as separate concepts or match stems inside unrelated words", () => {
+    const provider = symbol({ id: "provider", name: "loadProvider", filePath: "src/loader.ts" });
+    const unrelated = symbol({ id: "unrelated", name: "unresolvedFlag", filePath: "src/flags.ts" });
+    const plan = planExploreQuery({ symbols: [provider, unrelated], edges: [] }, "provider providers");
+    expect(plan.selection[0]?.reasons).not.toContain("multi-term-coverage");
+    expect(planExploreQuery({ symbols: [unrelated], edges: [] }, "resolving").selection).toEqual([]);
+  });
+
+  it("does not count short locals or shared identifier substrings as several query concepts", () => {
+    const local = symbol({ id: "local", name: "e", filePath: "src/main.ts" });
+    const provider = symbol({ id: "provider", name: "Provider", filePath: "src/types.ts" });
+    const plan = planExploreQuery({ symbols: [local, provider], edges: [] },
+      "createInstancesOfProviders loadProvider resolveConstructorParams");
+    expect(plan.selection.map((item) => item.symbol.id)).not.toContain("local");
+    expect(plan.selection.find((item) => item.symbol.id === "provider")?.reasons).not.toContain("multi-term-coverage");
+  });
+
   it("softly lowers persisted test declarations for general queries and discloses both factors", () => {
     const production = symbol({ id: "production", name: "orderService", filePath: "src/order-service.ts" });
     const test = symbol({ id: "test", name: "orderService", filePath: "test/order-service.test.ts" });
@@ -98,7 +128,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v11",
+      policy: "explore-query-plan-v12",
       queryIntent: {
         tests: false,
         icons: false,
@@ -216,7 +246,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v11",
+      policy: "explore-query-plan-v12",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -448,7 +478,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v11",
+      policy: "explore-query-plan-v12",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -872,7 +902,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v11",
+      policy: "explore-query-plan-v12",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v2",
@@ -1570,7 +1600,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v11",
+      policy: "explore-query-plan-v12",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,

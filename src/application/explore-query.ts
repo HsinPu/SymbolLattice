@@ -13,7 +13,9 @@ import {
   type SymbolNode
 } from "../domain/index.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v11" as const;
+import { identifierTermGroups, identifierTermVariants, identifierWords } from "../domain/identifier-search.js";
+
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v12" as const;
 export const EXPLORE_QUERY_SOURCE_WORTH_POLICY = "explore-query-source-worth-v1" as const;
 export const EXPLORE_QUERY_GRAPH_MASS_POLICY = "explore-query-graph-mass-v2" as const;
 export const EXPLORE_QUERY_GRAPH_EXPANSION_POLICY =
@@ -103,6 +105,8 @@ export type ExploreQuerySelectionReason =
   | "qualified-symbol-term"
   | "partial-symbol-term"
   | "file-name-term"
+  | "inflected-symbol-term"
+  | "multi-term-coverage"
   | "graph-expanded"
   | "graph-connected"
   | "graph-mass"
@@ -590,6 +594,7 @@ const STOP_WORDS = new Set([
   "trace",
   "what",
   "where",
+  "when",
   "which",
   "with"
 ]);
@@ -842,31 +847,44 @@ function candidateFor(
   const name = normalizedIdentifier(symbol.name);
   const qualifiedName = normalizedIdentifier(symbol.qualifiedName);
   const normalizedFileName = normalizedIdentifier(fileName(symbol.filePath));
+  const nameWords = new Set(identifierWords(symbol.name));
   const matchedTerms: string[] = [];
+  const coveredTerms: string[] = [];
   let exactSymbolTerm = false;
   let qualifiedSymbolTerm = false;
   let partialSymbolTerm = false;
   let fileNameTerm = false;
+  let inflectedSymbolTerm = false;
 
   for (const term of identifierTerms) {
     if (name === term) {
       exactSymbolTerm = true;
       matchedTerms.push(term);
+      coveredTerms.push(term);
       continue;
     }
     if (qualifiedName === term || qualifiedName.endsWith(term)) {
       qualifiedSymbolTerm = true;
       matchedTerms.push(term);
+      coveredTerms.push(term);
       continue;
     }
-    if (name.includes(term) || term.includes(name)) {
+    if (name.includes(term) || (name.length >= 3 && term.includes(name))) {
       partialSymbolTerm = true;
       matchedTerms.push(term);
+      if (name.includes(term)) coveredTerms.push(term);
+      continue;
+    }
+    if (identifierTermVariants(term).some((variant) => nameWords.has(variant))) {
+      inflectedSymbolTerm = true;
+      matchedTerms.push(term);
+      coveredTerms.push(term);
       continue;
     }
     if (normalizedFileName.includes(term) || term.includes(normalizedFileName)) {
       fileNameTerm = true;
       matchedTerms.push(term);
+      if (normalizedFileName.includes(term)) coveredTerms.push(term);
     }
   }
 
@@ -889,11 +907,22 @@ function candidateFor(
     baseReasons.push("partial-symbol-term");
     baseScore += 120;
   }
+  if (inflectedSymbolTerm) {
+    baseReasons.push("inflected-symbol-term");
+    if (!partialSymbolTerm) baseScore += 120;
+  }
   if (fileNameTerm) {
     baseReasons.push("file-name-term");
     baseScore += 80;
   }
   baseScore += new Set(matchedTerms).size * 10;
+  // Several distinct query concepts should beat a generic single-word exact
+  // match (e.g. every constructor). Repeated inflections count once.
+  const coveredConcepts = identifierTermGroups(coveredTerms).length;
+  if (coveredConcepts > 1) {
+    baseReasons.push("multi-term-coverage");
+    baseScore += (coveredConcepts - 1) * 500;
+  }
   const generated = generatedClassificationFor(filesByPath.get(symbol.filePath) ?? {});
   const sourceRole = sourceRoleClassificationFor(filesByPath.get(symbol.filePath) ?? {});
   const sourceRoleWorth = sourceRoleWorthFor(sourceRole.role, explicitFile, roleIntent);
@@ -2000,6 +2029,21 @@ function applyRelativeFileScoreFloor(
         .sort((left, right) => compareText(left.filePath, right.filePath))
         .map((file) => receiptFor(file, "below-relative-floor"))
     }
+  };
+}
+
+/** Keep SQL candidate retrieval on the same bounded terms as final ranking. */
+export function exploreQuerySeedTerms(query: string): {
+  terms: readonly string[];
+  lexicalTermGroups: readonly (readonly string[])[];
+} {
+  const parsed = parseQuery(query);
+  const originalIdentifiers = [...parsed.boundedQuery.matchAll(IDENTIFIER_EXPRESSION)].map((match) => match[0]);
+  return {
+    terms: [...parsed.fileHints, ...parsed.identifierTerms],
+    lexicalTermGroups: identifierTermGroups(parsed.identifierTerms).map((group) => [
+      ...new Set([...group, ...originalIdentifiers.filter((term) => group.includes(normalizedIdentifier(term)))])
+    ])
   };
 }
 

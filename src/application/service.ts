@@ -135,6 +135,7 @@ import {
   EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS,
   EXPLORE_QUERY_LIMITS,
   planExploreQuery,
+  exploreQuerySeedTerms,
   type ExploreQueryPlan
 } from "./explore-query.js";
 import {
@@ -147,6 +148,8 @@ import {
 } from "./explore-path-spines.js";
 import {
   allocateExploreSourceWindowCharacters,
+  EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS,
+  EXPLORE_SOURCE_WINDOW_LIMITS,
   planExploreSourceWindows
 } from "./explore-source-windows.js";
 import {
@@ -883,6 +886,7 @@ function contextSourceDraftFromPersistedText(input: {
   readonly filePath: string;
   readonly sourceText: string;
   readonly centerLine: number;
+  readonly endLine?: number;
 }): ContextSourceDraft | null {
   return sourceWindowDraftFromPersistedText({
     referenceIndex: input.referenceIndex,
@@ -890,8 +894,14 @@ function contextSourceDraftFromPersistedText(input: {
     filePath: input.filePath,
     sourceText: input.sourceText,
     startLine: Math.max(1, input.centerLine - 2),
-    endLine: input.centerLine + 2
+    endLine: input.endLine ?? input.centerLine + 2
   });
+}
+
+function exploreSourceEndLine(symbol: SymbolNode): number {
+  return symbol.kind === "function" || symbol.kind === "method" || symbol.kind === "entrypoint"
+    ? symbol.range.end.line
+    : symbol.range.start.line + 2;
 }
 
 function sourceWindowDraftFromPersistedText(input: {
@@ -3118,7 +3128,8 @@ export class SymbolLatticeService {
           reference: sourceMatch.symbol.qualifiedName,
           filePath: sourceDocument.filePath,
           sourceText: sourceDocument.sourceText,
-          centerLine: sourceMatch.symbol.range.start.line
+          centerLine: sourceMatch.symbol.range.start.line,
+          endLine: exploreSourceEndLine(sourceMatch.symbol)
         });
         const source = sourceDraft === null
           ? null
@@ -3180,7 +3191,8 @@ export class SymbolLatticeService {
           reference: sourceMatch.symbol.qualifiedName,
           filePath: sourceDocument.filePath,
           sourceText: sourceDocument.sourceText,
-          centerLine: sourceMatch.symbol.range.start.line
+          centerLine: sourceMatch.symbol.range.start.line,
+          endLine: exploreSourceEndLine(sourceMatch.symbol)
         });
         const source = sourceDraft === null
           ? null
@@ -4128,7 +4140,8 @@ export class SymbolLatticeService {
   private symbolContextPack(
     read: ContextRead,
     bounds: ContextBounds,
-    graphView?: GraphQueryView
+    graphView?: GraphQueryView,
+    exploreDeclarations = false
   ): SymbolContextPack {
     const drafts = new Map<number, ContextSourceDraft>();
     const sourceProjectionAvailable =
@@ -4143,7 +4156,8 @@ export class SymbolLatticeService {
           reference: match.reference,
           filePath: document.filePath,
           sourceText: document.sourceText,
-          centerLine: match.symbol.range.start.line
+          centerLine: match.symbol.range.start.line,
+          ...(exploreDeclarations ? { endLine: exploreSourceEndLine(match.symbol) } : {})
         });
         if (draft !== null) drafts.set(referenceIndex, draft);
       }
@@ -5562,13 +5576,17 @@ export class SymbolLatticeService {
       candidates: [symbol]
     }));
     const bounds = this.contextBounds({
-      sourceCharacterBudget: DEFAULT_CONTEXT_SOURCE_CHARACTER_BUDGET
+      // Keep room for call sites outside the selected declarations even when
+      // several large functions exhaust their primary source allocation.
+      sourceCharacterBudget: DEFAULT_CONTEXT_SOURCE_CHARACTER_BUDGET -
+        EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows *
+        EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.minimumPerWindow
     });
     const read: ContextRead = { bundle, matches, documentsByFilePath };
     const contextPack = measureQueryTiming(
       this.queryTimingSink,
       "context",
-      () => this.symbolContextPack(read, bounds, graphView),
+      () => this.symbolContextPack(read, bounds, graphView, true),
       { focusCount: matches.length }
     );
     const focuses: readonly ExploreFocus[] = plan.selection.map((selection, index) => ({
@@ -5946,7 +5964,7 @@ export class SymbolLatticeService {
         "seed-retrieval",
         () => readBoundedGraphBundle.call(this.graphStore, projectPath, {
           query,
-          terms: sourceSearchTerms(query),
+          ...exploreQuerySeedTerms(query),
           maxSeedFiles: EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedFiles,
           maxSeedSymbols: EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedSymbols,
           maxSymbolsPerFile:
