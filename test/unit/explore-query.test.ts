@@ -13,6 +13,7 @@ import {
   type SourceRole,
   type SymbolNode
 } from "../../src/domain/index.js";
+import { matchCallableSource, scoreCallableSource, SOURCE_LEXICAL_POLICY, SOURCE_LEXICAL_LIMITS } from "../../src/domain/source-lexical.js";
 
 function indexedFile(path: string, generated: boolean, role: SourceRole = "production"): IndexedFile {
   return {
@@ -38,6 +39,63 @@ function indexedFile(path: string, generated: boolean, role: SourceRole = "produ
     }
   };
 }
+
+describe("bounded lexical and relationship ranking", () => {
+  it("requires a corroborating declaration stem before inheriting an exact file-title boost", () => {
+    const symbols = ["validate", "get", "render"].map((name, index) => symbol({ id: name, name, filePath: "src/validation.ts", line: index * 3 + 1 }));
+    const source = symbols.map((node) => `function ${node.name}() {\n  validation(request);\n}`).join("\n");
+    const matched = matchCallableSource(source, symbols, [["request"], ["validation"]]);
+    const plan = planExploreQuery({ symbols, edges: [] }, "request validation", {
+      policy: SOURCE_LEXICAL_POLICY, limits: SOURCE_LEXICAL_LIMITS, state: "searched", scannedFiles: 1,
+      scannedSymbols: symbols.length, scannedCharacters: source.length, truncated: false,
+      candidates: scoreCallableSource(matched.documents)
+    });
+    expect(plan.selection[0]?.symbol.id).toBe("validate");
+    expect(plan.selection[0]?.reasons).toContain("exact-file-name");
+    expect(plan.selection.filter((selection) => selection.symbol.id !== "validate")
+      .every((selection) => !selection.reasons.includes("exact-file-name"))).toBe(true);
+  });
+
+  it("bounds source-only coverage even when a declaration contains every query concept", () => {
+    const implementation = symbol({ id: "run", name: "run", filePath: "src/work.ts" });
+    const terms = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta"];
+    const source = `function run() {\n ${terms.join(" ")};\n}`;
+    const matched = matchCallableSource(source, [implementation], terms.map((term) => [term]));
+    const plan = planExploreQuery({ symbols: [implementation], edges: [] }, terms.join(" "), {
+      policy: SOURCE_LEXICAL_POLICY, limits: SOURCE_LEXICAL_LIMITS, state: "searched", scannedFiles: 1,
+      scannedSymbols: 1, scannedCharacters: source.length, truncated: false, candidates: scoreCallableSource(matched.documents)
+    });
+    expect(plan.selection[0]?.sourceScore).toBeGreaterThanOrEqual(1620);
+    expect(plan.selection[0]?.sourceScore).toBeLessThanOrEqual(1720);
+  });
+  it("can rank an implementation whose name does not mention the query, with literal source evidence", () => {
+    const implementation = { ...symbol({ id: "run", name: "run", filePath: "src/work.ts" }),
+      range: { start: { line: 1, column: 1 }, end: { line: 3, column: 2 } } };
+    const source = "function run() {\n  refund(payment);\n}";
+    const matched = matchCallableSource(source, [implementation], [["payment"], ["refund"]]);
+    const plan = planExploreQuery({ symbols: [implementation], edges: [] }, "payment refund", {
+      policy: SOURCE_LEXICAL_POLICY, limits: SOURCE_LEXICAL_LIMITS, state: "searched", scannedFiles: 1,
+      scannedSymbols: 1, scannedCharacters: source.length, ...matched, candidates: scoreCallableSource(matched.documents)
+    });
+    expect(plan.selection[0]).toMatchObject({ symbol: { id: "run" }, matchedTerms: ["payment", "refund"],
+      sourceMatches: [{ token: "payment" }, { token: "refund" }], reasons: ["callable-source-term"] });
+    expect(plan.selection[0]?.sourceScore).toBeGreaterThan(0);
+    expect(plan.sourceLexical?.matchedSymbols).toBe(1);
+  });
+
+  it("caps popular-symbol bonuses and does not count repeated edges to the same neighbor", () => {
+    const hub = symbol({ id: "hub", name: "request", filePath: "src/common.ts" });
+    const peers = Array.from({ length: 12 }, (_, index) => symbol({ id: `peer${index}`, name: "requestHelper", filePath: "src/helpers.ts" }));
+    const detailed = symbol({ id: "detailed", name: "requestPaymentRefund", filePath: "src/payments.ts" });
+    const plan = planExploreQuery({ symbols: [hub, ...peers, detailed],
+      edges: peers.flatMap((peer) => Array.from({ length: 100 }, (_, index) => edge(`e-${peer.id}-${index}`, peer.id, hub.id))) }, "request payment refund");
+    expect(plan.selection[0]?.symbol.id).toBe("detailed");
+    expect(plan.selection.find((selection) => selection.symbol.id === hub.id)?.connectionScore).toBe(240);
+    const repeated = planExploreQuery({ symbols: [hub, peers[0]!],
+      edges: Array.from({ length: 100 }, (_, index) => edge(`repeat-${index}`, hub.id, peers[0]!.id)) }, "request");
+    expect(repeated.selection.every((selection) => selection.connectionScore === 60)).toBe(true);
+  });
+});
 
 function symbol(input: {
   readonly id: string;
@@ -93,7 +151,7 @@ describe("explore query planning", () => {
       "How are constructor dependencies resolved when creating providers?");
     expect(plan.selection[0]?.symbol.id).toBe("resolve");
     expect(plan.selection[0]?.matchedTerms).toEqual(["constructor", "resolved"]);
-    expect(plan.selection[0]?.reasons).toEqual(expect.arrayContaining(["inflected-symbol-term", "multi-term-coverage"]));
+    expect(plan.selection[0]?.reasons).toEqual(expect.arrayContaining(["lexical-symbol-variant", "multi-term-coverage"]));
     expect(plan.identifierTerms).not.toContain("when");
   });
 
@@ -128,7 +186,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v12",
+      policy: "explore-query-plan-v13",
       queryIntent: {
         tests: false,
         icons: false,
@@ -246,7 +304,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v12",
+      policy: "explore-query-plan-v13",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -478,7 +536,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v12",
+      policy: "explore-query-plan-v13",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -902,7 +960,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v12",
+      policy: "explore-query-plan-v13",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v2",
@@ -1552,8 +1610,9 @@ describe("explore query planning", () => {
       graphMassTruncatedCandidateCount: 1
     });
     expect(plan.selection[0]).toMatchObject({
-      score: 1350,
-      rankingScore: 405,
+      score: 990,
+      rankingScore: 297,
+      connectionScore: 240,
       sourceWorth: 0.3,
       graphMass: {
         eligibleRelationshipCount: 40,
@@ -1600,7 +1659,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v12",
+      policy: "explore-query-plan-v13",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,

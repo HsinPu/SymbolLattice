@@ -1,8 +1,9 @@
 import type { ExploreConnection, ExploreFocus } from "./types.js";
+import { identifierTermVariants, identifierWords } from "../domain/identifier-search.js";
 import type { ExplorePathSpinePlan } from "./explore-path-spines.js";
 import { EXPLORE_GENERATED_SOURCE_WORTH } from "./explore-query.js";
 
-export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v2" as const;
+export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v3" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY =
   "explore-source-window-allocation-v4" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS = {
@@ -35,7 +36,7 @@ export interface ExploreSourceWindowPlanItem {
   readonly relatedSymbolIds: readonly string[];
   readonly pathSpineIndexes: readonly number[];
   readonly relevanceWeight: number;
-  readonly reason: "exact-connection-site" | "exact-focus-call" | "exact-path-spine";
+  readonly reason: "exact-connection-site" | "exact-focus-call" | "exact-focus-callee" | "exact-path-spine";
 }
 
 export interface ExploreSourceWindowPlan {
@@ -488,7 +489,8 @@ function coveredByPrimarySource(site: WindowSite, focuses: readonly ExploreFocus
 export function planExploreSourceWindows(
   focuses: readonly ExploreFocus[],
   connections: readonly ExploreConnection[],
-  pathSpinePlan?: ExplorePathSpinePlan
+  pathSpinePlan?: ExplorePathSpinePlan,
+  queryTerms: readonly string[] = []
 ): ExploreSourceWindowPlan {
   const focusBySymbolId = new Map(
     [...focuses]
@@ -547,6 +549,8 @@ export function planExploreSourceWindows(
   const unavailableEdges = new Set<string>();
   const seenEdges = new Set(connectionSites.map((site) => site.connectionEdgeIds[0]));
   const callSites: WindowSite[] = [];
+  const calleeSites: WindowSite[] = [];
+  const seenCallees = new Set<string>();
   for (const focus of [...focuses].sort((left, right) => left.rank - right.rank)) {
     for (const [direction, relations] of [["incoming", focus.callers.items], ["outgoing", focus.callees.items]] as const) {
       for (const relation of relations) {
@@ -554,8 +558,22 @@ export function planExploreSourceWindows(
         const caller = direction === "incoming" ? relation.symbol : focus.symbol;
         const callee = direction === "incoming" ? focus.symbol : relation.symbol;
         if (edge.kind !== "calls" || edge.resolution !== "exact" ||
-            edge.sourceId !== caller.id || edge.targetId !== callee.id || edge.filePath !== caller.filePath ||
-            seenEdges.has(edge.id)) continue;
+            edge.sourceId !== caller.id || edge.targetId !== callee.id || edge.filePath !== caller.filePath) continue;
+        const calleeWords = new Set([callee.name.toLowerCase(), ...identifierWords(callee.name)]);
+        if (direction === "outgoing" && availableFiles.has(callee.filePath) && !seenCallees.has(callee.id) &&
+            ["function", "method", "entrypoint"].includes(callee.kind) &&
+            queryTerms.some((term) => identifierTermVariants(term).some((variant) => calleeWords.has(variant)))) {
+          seenCallees.add(callee.id);
+          calleeSites.push({
+            focus, filePath: callee.filePath,
+            startLine: Math.max(1, callee.range.start.line - EXPLORE_SOURCE_WINDOW_LIMITS.contextPaddingLines),
+            endLine: callee.range.end.line + EXPLORE_SOURCE_WINDOW_LIMITS.contextPaddingLines,
+            evidenceStartLine: callee.range.start.line, evidenceEndLine: callee.range.end.line,
+            connectionEdgeIds: [edge.id], relatedSymbolIds: [callee.id], pathSpineIndexes: [],
+            relevanceWeight: focus.score, reason: "exact-focus-callee"
+          });
+        }
+        if (seenEdges.has(edge.id)) continue;
         seenEdges.add(edge.id);
         if (!availableFiles.has(edge.filePath)) {
           unavailableEdges.add(edge.id);
@@ -572,7 +590,7 @@ export function planExploreSourceWindows(
       }
     }
   }
-  const sites = [...connectionSites, ...spineSites, ...callSites]
+  const sites = [...connectionSites, ...spineSites, ...callSites, ...calleeSites]
     .filter((site) => !coveredByPrimarySource(site, focuses))
     .sort(
       (left, right) =>

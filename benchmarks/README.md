@@ -31,7 +31,7 @@ These tools generate or validate large-project evidence outside the published np
 | `r/` | `lifecycle.mjs` | manual |
 | `mcp/` | `read-query-concurrency.mjs` | manual |
 | `mcp/` | `strict-fresh-read-lifecycle.mjs` | manual |
-| `mcp/` | `task-retrieval.mjs`, `nest-retrieval-tasks.json`, `nest-source-tasks.json` | automatic scorer/source verifier contracts; manual pinned-corpus execution |
+| `mcp/` | `task-retrieval.mjs`, `nest-retrieval-tasks.json`, `nest-source-tasks.json`, `fastify-retrieval-tasks.json`, `fastify-plugin-tasks.json` | automatic scorer/source verifier contracts; manual pinned-corpus execution |
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
@@ -87,3 +87,41 @@ Executed against the same pinned checkout, index generation and Windows/Node env
 The three development tasks improve from 1/6 to 6/6 required source snippets, and the new held-out callable improves from 0/3 to 3/3. This proves delivery of those particular source facts, not complete relation resolution or a completed agent task. The HTTP pipes question still misses its required files and therefore its required source. The guard task is now known and is no longer unseen validation for subsequent tuning.
 
 Fresh-process median elapsed times in table order were 2,675 → 2,683 ms, 2,543 → 2,470 ms, 2,571 → 2,562 ms, 2,848 → 2,817 ms, and 2,450 → 2,414 ms. Only three processes were measured per task; no speed improvement is claimed. CLI JSON sizes increased to 744,138, 403,229, 951,901, 693,218 and 156,910 bytes respectively, including verbose provenance and graph diagnostics. The extra source improves the tested evidence coverage but increases reading cost; retrieval quality, relation completeness and output efficiency remain separate work.
+
+### Callable-source retrieval validation for v0.520.8
+
+This change uses same-generation source to admit and rank callable declarations with at least two query concepts. Matches retain literal tokens and line/column ranges; the benchmark independently checks those tokens against the pinned checkout and the owning declaration's range. A lexical match, including an English inflection or conventional abbreviation, is not evidence of a resolved call. Comments, string literals, nested callables and type annotations can contribute words and may introduce noise. Identifier-like tokens longer than 128 UTF-16 characters are ineligible for this source-matching channel.
+
+Source retrieval has separate limits: at most 128 files, 4,096 declarations in total, 128 declarations per file, 1,048,576 source characters in total, 65,536 per file and 8,192 per declaration. FTS overfetches up to twice the requested seed-file limit (hard cap 128); final graph seeds retain their existing limits. Production and explicitly requested source roles are prioritized before the FTS cap and before scanning. The result reports scan counts and truncation; it does not claim the unscanned source is irrelevant. Single-concept queries skip the callable scan. Direct graph-connection bonuses count distinct relation-kind/neighbor pairs once and stop at 240 points, so repeated calls cannot overwhelm lexical relevance.
+
+Source can add at most 1,500 points for additional concept coverage, 120 for admission without a symbol-name match, and 100 from length-normalized, saturating term frequency. The latter uses BM25 over the bounded scanned declarations, not repository-wide statistics, and is not a probability of relevance. An exact file stem adds 500 only when source evidence exists and the declaration name corroborates nearly the whole stem; generic getters cannot inherit this boost. Exact query-relevant callees can supply missing implementation windows within the existing requested files and source allocation policy.
+
+The acceptance check fixed before opening held-out results was to improve HTTP-pipes retrieval while preserving the five existing NestJS tasks' required-file and source-evidence coverage, reporting cost and remaining failures. The first held-out task, `mcp/fastify-retrieval-tasks.json`, uses Fastify v5.6.0 at `70b14e92c0b55e8201f5530ba2e6bab4e928c784`. Its initial v0.520.8 result regressed from 2/2 to 1/2 required files and from 3/4 to 0/4 source facts. That failed experiment was retained, and this task became a known regression while revising the source-ranking bounds and callee windows. A separate plugin-dependency task was then fixed in `mcp/fastify-plugin-tasks.json`; its outputs were held out from those revisions. No task question, required file or evidence fact was changed to match a product result.
+
+The final comparison rebuilt v0.520.7 from product commit `05052abc3614fe5bfd6e814d027e8ca05ea5f0c1` in an external directory using the existing dependencies. Use `--product-root <built-product-checkout>` to compare that product with the current one using the same benchmark runner. Reports include a SHA-256 of all built product files, checked again after evaluation, so experimental builds sharing a package version remain distinguishable. Final build digests were `fadd5baae178266c3b0682d2461ab65e892504c0bc71028deca00fe024419154` (v0.520.7) and `5efeedb408ef3d902890ecf66b385d63faef191aec0ead0f19af26a182e04bd4` (v0.520.8).
+
+Executed sequentially on Windows/Node v24.19.0, three fresh CLI processes per task and product, using unchanged indexes. NestJS retained its 1,738 files / 17,399 symbols / 44,728 edges and generation `aec92b67-8630-4780-b8dd-6c43b5b63be3`; Fastify had 338 files / 8,311 symbols / 18,718 edges and generation `d4e88d42-da9d-453a-b3cc-15e357484770`. Paired manifest hashes and generation IDs matched. All final 73 emitted source excerpts and 85 lexical token receipts passed independent checkout/range verification.
+
+| Task | Required files, v0.520.7 → v0.520.8 | Required source facts, before → after | Judged TP / FP / unjudged, after |
+| --- | --- | --- | --- |
+| Constructor dependencies | 1/1 → 1/1 | 2/2 → 2/2 | 1 / 0 / 3 |
+| Known provider loader | 1/1 → 1/1 | 1/1 → 1/1 | 3 / 0 / 1 |
+| Provider creation flow | 2/2 → 2/2 | 3/3 → 3/3 | 2 / 1 / 1 |
+| HTTP pipes | 0/2 → 2/2 | 0/2 → 2/2 | 2 / 0 / 2 |
+| Guard activation body | 1/1 → 1/1 | 3/3 → 3/3 | 1 / 0 / 0 |
+| Fastify validation (known regression after initial failure) | 2/2 → 2/2 | 3/4 → 3/4 | 3 / 0 / 1 |
+| Fastify plugin dependencies (held out for the revised rules) | 1/2 → 1/2 | 1/3 → 1/3 | 1 / 0 / 3 |
+
+HTTP pipes now returns `router-execution-context.ts` and `pipes-consumer.ts` with the specified source facts. The constructor task still finds its required file, but only 1/4 returned files are judged relevant under the frozen manifest; unjudged files are not false positives or proof of relevance. The known irrelevant lifecycle-hook file remains in the provider-flow result. Fastify validation still omits `handleRequest.js:157`; the plugin task still misses `pluginOverride.js` and source at `pluginUtils.js:152` / `pluginOverride.js:29`. The plugin case did not improve and is now a known regression sample, no longer unseen validation.
+
+| Task | Median process ms, before → after | Markdown bytes, before → after | Emitted source characters, before → after | CLI JSON bytes, after |
+| --- | --- | --- | --- | --- |
+| Constructor dependencies | 2,721 → 3,235 | 19,700 → 31,572 | 6,692 → 14,281 | 953,293 |
+| Known provider loader | 2,508 → 2,645 | 8,595 → 8,595 | 2,049 → 2,049 | 404,884 |
+| Provider creation flow | 2,596 → 2,754 | 24,174 → 24,340 | 10,201 → 10,201 | 951,616 |
+| HTTP pipes | 3,107 → 2,990 | 18,637 → 23,534 | 2,825 → 8,287 | 681,937 |
+| Guard activation body | 2,726 → 2,444 | 3,147 → 3,147 | 755 → 755 | 156,910 |
+| Fastify validation | 1,430 → 1,504 | 32,077 → 36,204 | 22,483 → 24,000 | 369,769 |
+| Fastify plugin dependencies | 1,385 → 1,436 | 7,725 → 17,224 | 1,359 → 10,971 | 227,156 |
+
+These are small-sample process measurements, including startup, freshness checking and serialization; the rebuilt baseline lives in a separate directory. They establish no speed improvement, latency SLO, graph precision, indexing performance or agent completion rate. Source expansion is costly: the plugin task more than doubles Markdown size without improving required-file or fact coverage. Remaining work includes that missing dependency flow, the validation call site, irrelevant results and output cost. Raw corpora, built baseline, intermediate failed experiments and final reports remain outside this repository.

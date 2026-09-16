@@ -25,6 +25,11 @@ import type {
 } from "../../domain/types.js";
 import type { GeneratedFileClassification } from "../../domain/generated-files.js";
 import type { SourceRoleClassification } from "../../domain/source-roles.js";
+import { identifierWords, identifierTermVariants } from "../../domain/identifier-search.js";
+import {
+  matchCallableSource, scoreCallableSource, SOURCE_LEXICAL_LIMITS, SOURCE_LEXICAL_POLICY,
+  type SourceLexicalDocument, type SourceLexicalRetrieval
+} from "../../domain/source-lexical.js";
 import {
   MAX_SOURCE_SEARCH_LIMIT,
   sourceSearchCorpus,
@@ -2009,7 +2014,9 @@ function readBoundedSourceSeedPaths(
   activeGenerationId: string | null,
   sourceSearchVersion: string | null,
   lexicalGroups: readonly (readonly string[])[],
-  maxFiles: number
+  maxFiles: number,
+  anyConcept = false,
+  sourceRoleIntent?: BoundedGraphQueryRequest["sourceRoleIntent"]
 ): readonly string[] {
   if (
     maxFiles === 0 ||
@@ -2022,25 +2029,32 @@ function readBoundedSourceSeedPaths(
 
   const matchQuery = lexicalGroups.map((group) =>
     `(${group.map((term) => `"${term.replaceAll('"', '""')}"*`).join(" OR ")})`
-  ).join(" AND ");
+  ).join(anyConcept ? " OR " : " AND ");
   if (matchQuery.length === 0) {
     return [];
   }
 
+  const roles = ["production", ...(sourceRoleIntent?.tests ? ["test"] : []),
+    ...(sourceRoleIntent?.icons ? ["icon"] : []), ...(sourceRoleIntent?.localization ? ["localization"] : [])];
+  const prioritizeRoles = anyConcept && columnExists(database, "files", "source_role_json");
+  const roleOrder = prioritizeRoles
+    ? `CASE WHEN COALESCE(json_extract(files.source_role_json, '$.role'), 'production') IN (${roles.map(() => "?").join(",")}) THEN 0 ELSE 1 END`
+    : "0 + 0";
+
   const rows = database
     .prepare(
-      `SELECT source_search.file_path, 0 AS relevance
+      `SELECT source_search.file_path, bm25(source_search) AS relevance
        FROM source_search
        INNER JOIN source_documents
          ON source_documents.generation_id = source_search.generation_id
          AND source_documents.file_path = source_search.file_path
+       INNER JOIN files ON files.path = source_search.file_path
        WHERE source_search MATCH ?
          AND source_search.generation_id = ?
-       GROUP BY source_search.file_path
-       ORDER BY source_search.file_path ASC
+       ORDER BY (${roleOrder}), relevance ASC, source_search.file_path ASC
        LIMIT ?`
     )
-    .all(matchQuery, activeGenerationId, maxFiles) as unknown as SourceSearchPathRow[];
+    .all(matchQuery, activeGenerationId, ...(prioritizeRoles ? roles : []), maxFiles) as unknown as SourceSearchPathRow[];
   return rows.map((row) => row.file_path);
 }
 
@@ -2141,6 +2155,63 @@ function readBoundedSymbolRows(
        LIMIT ?`
     )
     .all(...parameters, ...coverageParameters, ...exactOrderParameters, limit) as unknown as SymbolRow[];
+}
+
+function readBoundedSourceLexical(
+  database: DatabaseSync,
+  generationId: string | null,
+  available: boolean,
+  filePaths: readonly string[],
+  groups: readonly (readonly string[])[]
+): { retrieval: SourceLexicalRetrieval; rows: readonly SymbolRow[] } {
+  const limits = SOURCE_LEXICAL_LIMITS;
+  const state = groups.length < 2 ? "single-concept" : !available ? "unavailable" : "searched";
+  let scannedFiles = 0;
+  let scannedSymbols = 0;
+  let scannedCharacters = 0;
+  let truncated = false;
+  const documents: SourceLexicalDocument[] = [];
+  const rows: SymbolRow[] = [];
+  if (state === "searched") {
+    truncated = filePaths.length > limits.maximumFiles;
+    const readSource = database.prepare(`SELECT substr(source_text, 1, ?) AS source_text,
+      length(source_text) AS characters FROM source_documents WHERE generation_id = ? AND file_path = ?`);
+    const readSymbols = database.prepare(`${symbolProjectionSelect()}
+      WHERE file_path = ? AND kind IN ('function', 'method', 'entrypoint')
+      ORDER BY start_line, start_column, id LIMIT ?`);
+    for (const filePath of filePaths.slice(0, limits.maximumFiles)) {
+      const remaining = limits.maximumCharacters - scannedCharacters;
+      const remainingSymbols = limits.maximumSymbols - scannedSymbols;
+      if (remaining <= 0 || remainingSymbols <= 0) { truncated = true; break; }
+      const characterLimit = Math.min(remaining, limits.maximumFileCharacters);
+      const document = readSource.get(characterLimit + 1, generationId, filePath) as
+        { source_text: string; characters: number } | undefined;
+      if (document === undefined) continue;
+      scannedFiles += 1;
+      const shortened = document.characters > characterLimit || document.source_text.length > characterLimit;
+      let sourceText = document.source_text.slice(0, characterLimit);
+      scannedCharacters += sourceText.length;
+      if (shortened) {
+        truncated = true;
+        // Do not treat a token cut by the file budget as a complete lexical hit.
+        const lastBreak = Math.max(sourceText.lastIndexOf("\n"), sourceText.lastIndexOf("\r"),
+          sourceText.lastIndexOf("\u2028"), sourceText.lastIndexOf("\u2029"));
+        sourceText = sourceText.slice(0, Math.max(0, lastBreak));
+      }
+      const symbolLimit = Math.min(remainingSymbols, limits.maximumSymbolsPerFile);
+      const fileRows = readSymbols.all(filePath, symbolLimit + 1) as unknown as SymbolRow[];
+      if (fileRows.length > symbolLimit) truncated = true;
+      const scanned = fileRows.slice(0, symbolLimit);
+      scannedSymbols += scanned.length;
+      const matched = matchCallableSource(sourceText, scanned.map(toSymbolNode), groups);
+      truncated ||= matched.truncated;
+      documents.push(...matched.documents);
+      const matchedIds = new Set(matched.candidates.map((candidate) => candidate.symbolId));
+      rows.push(...scanned.filter((row) => matchedIds.has(row.id)));
+    }
+  }
+  return { retrieval: { policy: SOURCE_LEXICAL_POLICY, limits, state,
+    scannedFiles, scannedSymbols, scannedCharacters, truncated, candidates: scoreCallableSource(documents) }, rows };
 }
 
 function toSymbolNode(row: SymbolRow): SymbolNode {
@@ -2273,7 +2344,7 @@ function readActiveBoundedGraphBundle(
   const sourceSearchAvailable =
     sourceSearchVersion !== null && supportsSourceSearch(database) && active.generationId !== null;
 
-  if (!generationMatched || bounds.maxNodes === 0) {
+  if (!generationMatched || bounds.maxNodes === 0 || bounds.maxSeedFiles === 0 || bounds.maxSeedSymbols === 0) {
     const diagnostics: BoundedGraphQueryDiagnostics = {
       generationMatched,
       seedFiles: 0,
@@ -2299,13 +2370,18 @@ function readActiveBoundedGraphBundle(
   }
 
   const fileSeeds = readBoundedFileSeedPaths(database, identifierTerms, bounds.maxSeedFiles);
-  const sourceSeeds = readBoundedSourceSeedPaths(
+  const sourceSeedLimit = lexicalGroups.length >= 2
+    ? Math.min(SOURCE_LEXICAL_LIMITS.maximumFiles, bounds.maxSeedFiles * 2) : bounds.maxSeedFiles;
+  const sourceSeedHits = readBoundedSourceSeedPaths(
     database,
     active.generationId,
     sourceSearchVersion,
     lexicalGroups,
-    bounds.maxSeedFiles
+    sourceSeedLimit === 0 ? 0 : sourceSeedLimit + 1,
+    lexicalGroups.length >= 2,
+    request.sourceRoleIntent
   );
+  const sourceSeeds = sourceSeedHits.slice(0, sourceSeedLimit);
   const directSymbolRows = readBoundedSymbolRows(
     database,
     identifierTerms,
@@ -2313,7 +2389,33 @@ function readActiveBoundedGraphBundle(
     [],
     bounds.maxSeedSymbols
   );
-  const selectedFilePaths = [...new Set([...fileSeeds, ...directSymbolRows.map((row) => row.file_path), ...sourceSeeds])]
+  const directPaths = [...new Set(directSymbolRows.map((row) => row.file_path))];
+  // Interleave both retrieval channels so neither exhausts the source-reading cap alone.
+  const sourcePaths = [...new Set([...fileSeeds, ...Array.from(
+    { length: Math.max(directPaths.length, sourceSeeds.length) },
+    (_, index) => [directPaths[index], sourceSeeds[index]].filter((path): path is string => path !== undefined)
+  ).flat()])];
+  const fileRoles = new Map(files.map((file) => [file.path, file.sourceRole?.role]));
+  const explicitFiles = new Set(fileSeeds);
+  const sourcePriority = (path: string): number => {
+    if (explicitFiles.has(path)) return 0;
+    const role = fileRoles.get(path) ?? "production";
+    return role === "production" || (role === "test" && request.sourceRoleIntent?.tests) ||
+      (role === "icon" && request.sourceRoleIntent?.icons) ||
+      (role === "localization" && request.sourceRoleIntent?.localization) ? 1 : 2;
+  };
+  sourcePaths.sort((left, right) => sourcePriority(left) - sourcePriority(right));
+  const lexical = readBoundedSourceLexical(database, active.generationId, sourceSearchAvailable, sourcePaths, lexicalGroups);
+  const sourceTerms = new Map(lexical.retrieval.candidates.map((candidate) =>
+    [candidate.symbolId, new Set(candidate.matches.map((match) => match.term))]));
+  const coverage = (row: SymbolRow): number => {
+    const words = new Set(identifierWords(row.name).flatMap(identifierTermVariants));
+    return lexicalGroups.filter((group) => sourceTerms.get(row.id)?.has(group[0]!) ||
+      group.some((term) => words.has(term) || row.name.toLowerCase().includes(term))).length;
+  };
+  const prioritizedRows = [...new Map([...directSymbolRows, ...lexical.rows].map((row) => [row.id, row])).values()]
+    .sort((left, right) => lexicalGroups.length >= 2 ? coverage(right) - coverage(left) : 0);
+  const selectedFilePaths = [...new Set([...fileSeeds, ...prioritizedRows.map((row) => row.file_path), ...sourceSeeds])]
     .slice(0, bounds.maxSeedFiles);
   const candidateSymbolRows = readBoundedSymbolRows(
     database,
@@ -2326,7 +2428,7 @@ function readActiveBoundedGraphBundle(
   const selectedPathSet = new Set(selectedFilePaths);
   const symbolsPerFile = new Map<string, number>();
   const seenSeedIds = new Set<string>();
-  for (const row of [...directSymbolRows, ...candidateSymbolRows]) {
+  for (const row of [...prioritizedRows, ...candidateSymbolRows]) {
     if (!selectedPathSet.has(row.file_path)) continue;
     if (seenSeedIds.has(row.id)) continue;
     const count = symbolsPerFile.get(row.file_path) ?? 0;
@@ -2415,6 +2517,10 @@ function readActiveBoundedGraphBundle(
     extractorVersion: active.generation?.extractor_version ?? null,
     resolverVersion: active.generation?.resolver_version ?? null,
     sourceSearchVersion,
+    sourceLexical: { ...lexical.retrieval,
+      truncated: lexical.retrieval.truncated ||
+        (lexical.retrieval.state === "searched" && sourceSeedHits.length > sourceSeedLimit),
+      candidates: lexical.retrieval.candidates.filter((candidate) => symbolIds.has(candidate.symbolId)) },
     diagnostics,
     fallbackRequired
   };

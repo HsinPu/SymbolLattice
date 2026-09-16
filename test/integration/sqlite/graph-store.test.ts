@@ -19,6 +19,7 @@ import type {
 import {
   PROJECT_INDEX_INPUTS_FORMAT_VERSION,
   SOURCE_SEARCH_INDEX_VERSION,
+  SOURCE_ROLE_CLASSIFIER_VERSION,
   sourceSearchTerms
 } from "../../../src/domain/index.js";
 import { SqliteGraphStore } from "../../../src/infrastructure/sqlite/index.js";
@@ -2366,6 +2367,63 @@ describe("SqliteGraphStore", () => {
     });
     expect(result.diagnostics.usedSourceSearch).toBe(true);
     expect(result.fallbackRequired).toBe(false);
+  });
+
+  it("retrieves body-only callable candidates without borrowing adjacent source, within the same generation", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const template = boundedGraphSnapshot();
+    const texts = ["function run() {\n  payment();\n}\nrefund();", "function run() {\n  issueRefund(payment);\n}"];
+    const symbols: SymbolNode[] = ["a", "z"].map((name) => ({ ...template.symbols[0]!,
+      id: name, name: "run", qualifiedName: `src/${name}.ts#run`, filePath: `src/${name}.ts`, kind: "function",
+      range: { start: { line: 1, column: 1 }, end: { line: 3, column: 2 } } }));
+    const graphSnapshot = { ...template, symbols, edges: [], pendingReferences: [],
+      files: symbols.map((node) => ({ ...template.files[0]!, path: node.filePath })) };
+    store.replaceProjectFacts({ projectPath, snapshot: graphSnapshot,
+      indexedAt: "2026-09-16T00:00:00.000Z", artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("body-lexical"), resolverVersion: "bounded-resolver-v1",
+      sourceDocuments: symbols.map((node, index) => ({ filePath: node.filePath, language: "typescript", sourceText: texts[index]! })),
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION });
+    const query = "payments refunds tracing";
+    const request = { ...boundedRequest(query, { maxSeedFiles: 1, maxSeedSymbols: 1, maxSymbolsPerFile: 1, maxHops: 0 }),
+      ...exploreQuerySeedTerms(query) };
+    const result = store.getActiveBoundedGraphBundle(projectPath, request);
+    expect(result.snapshot.symbols.map((node) => node.id)).toEqual(["z"]);
+    expect(result.sourceLexical).toMatchObject({ state: "searched", candidates: [
+      { symbolId: "z", matches: [{ term: "payments", token: "payment" }, { term: "refunds", token: "issueRefund" }] }
+    ] });
+    const mismatch = store.getActiveBoundedGraphBundle(projectPath, { ...request, expectedGenerationId: "different-generation" });
+    expect(mismatch.diagnostics.generationMatched).toBe(false);
+    expect(mismatch.sourceLexical).toBeUndefined();
+  });
+
+  it("prioritizes requested source roles before the FTS file cap and reports omitted matches", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const template = boundedGraphSnapshot();
+    const paths = [...Array.from({ length: 130 }, (_, index) => `tests/a${index}.ts`), "src/z.ts"];
+    const symbols: SymbolNode[] = paths.map((filePath) => ({ ...template.symbols[0]!,
+      id: filePath, filePath, name: "run", qualifiedName: `${filePath}#run`, kind: "function",
+      range: { start: { line: 1, column: 1 }, end: { line: 3, column: 2 } } }));
+    const graphSnapshot: GraphSnapshot = { ...template, symbols, edges: [], pendingReferences: [],
+      files: paths.map((path) => ({ ...template.files[0]!, path, sourceRole: {
+        classifierVersion: SOURCE_ROLE_CLASSIFIER_VERSION,
+        role: path.startsWith("tests/") ? "test" : "production", evidence: [] } })) };
+    store.replaceProjectFacts({ projectPath, snapshot: graphSnapshot,
+      indexedAt: "2026-09-16T00:00:00.000Z", artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("source-role-cap"), resolverVersion: "bounded-resolver-v1",
+      sourceDocuments: paths.map((filePath) => ({ filePath, language: "typescript",
+        sourceText: filePath.startsWith("tests/") ? "function run() {\n  refund(payment, tracing);\n}" : "function run() {\n  refund(payment);\n}" })),
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION });
+    const read = (query: string, maxSeedFiles = 1) => store.getActiveBoundedGraphBundle(projectPath, {
+      ...boundedRequest(query, { maxSeedFiles, maxSeedSymbols: 1, maxSymbolsPerFile: 1, maxHops: 0 }),
+      ...exploreQuerySeedTerms(query) });
+    const result = read("payments refunds");
+    expect(result.snapshot.symbols.map((node) => node.filePath)).toEqual(["src/z.ts"]);
+    expect(result.sourceLexical).toMatchObject({ state: "searched", truncated: true });
+    expect(read("payments refunds tracing test").snapshot.symbols[0]?.filePath.startsWith("tests/")).toBe(true);
+    expect(read("tests/a0.ts payments refunds test").snapshot.symbols[0]?.filePath).toBe("tests/a0.ts");
+    expect(read("payments refunds", 0).sourceLexical).toBeUndefined();
   });
 
   it("retains dotted identifier candidates inside multi-identifier queries", async () => {

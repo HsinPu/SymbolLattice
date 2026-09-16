@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -32,6 +32,25 @@ export function scoreTask(task, result) {
     judgedFraction: selected.length === 0 ? null : judged / selected.length,
     evidence, evidenceRecall: evidence.length === 0 ? null : evidence.filter((item) => item.found).length / evidence.length
   };
+}
+
+export function verifyLexicalMatches(result, readSource) {
+  let verifiedMatches = 0;
+  for (const focus of result.focuses ?? []) {
+    for (const match of focus.sourceMatches ?? []) {
+      assert.equal(match.filePath, focus.symbol.filePath);
+      assert.equal(match.range.start.line, match.range.end.line);
+      const compare = (left, right) => left.line - right.line || left.column - right.column;
+      assert.ok(compare(match.range.start, focus.symbol.range.start) >= 0 && compare(match.range.end, focus.symbol.range.end) <= 0,
+        "Lexical evidence lies outside its declaration");
+      const line = readSource(match.filePath).split(/\r\n|\r|\n|\u2028|\u2029/u)[match.range.start.line - 1];
+      assert.ok(line !== undefined && match.range.start.column >= 1 && match.range.end.column > match.range.start.column);
+      assert.equal(line.slice(match.range.start.column - 1, match.range.end.column - 1), match.token,
+        `Lexical source mismatch: ${match.filePath}:${match.range.start.line}`);
+      verifiedMatches += 1;
+    }
+  }
+  return { verifiedMatches };
 }
 
 function execute(command, args, cwd) {
@@ -69,7 +88,27 @@ export function verifySourceExcerpts(result, readSource) {
   return { verifiedExcerpts: sources.length, emittedCharacters: characters, emittedLines: lines };
 }
 
-export async function runTaskRetrieval({ project, manifestPath, output, repetitions = 3, split }) {
+export function productFingerprint(root) {
+  const hash = createHash("sha256");
+  let files = 0;
+  let bytes = 0;
+  const visit = (relative) => {
+    for (const entry of readdirSync(resolve(root, "dist", relative), { withFileTypes: true }).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
+      const name = relative ? `${relative}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) visit(name);
+      else if (entry.isFile()) {
+        const contents = readFileSync(resolve(root, "dist", name));
+        hash.update(`${name}\0${contents.length}\0`).update(contents);
+        files += 1;
+        bytes += contents.length;
+      }
+    }
+  };
+  visit("");
+  return { sha256: hash.digest("hex"), files, bytes };
+}
+
+export async function runTaskRetrieval({ project, manifestPath, output, repetitions = 3, split, productRoot }) {
   assert.ok(Number.isInteger(repetitions) && repetitions > 0 && repetitions <= 100);
   const manifestText = readFileSync(manifestPath, "utf8");
   const manifest = JSON.parse(manifestText);
@@ -87,7 +126,8 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
       assert.ok(actual?.includes(item.text), `Source truth mismatch: ${task.id} ${item.file}:${item.line}`);
     }
   }
-  const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+  const root = productRoot === undefined ? resolve(dirname(fileURLToPath(import.meta.url)), "../..") : resolve(productRoot);
+  const productBuild = productFingerprint(root);
   const { renderExploreText } = await import(pathToFileURL(resolve(root, "dist/mcp/explore-text.js")).href);
   const productVersion = execute(process.execPath, [resolve(root, "dist/cli/main.js"), "--version"], root);
   const results = tasks.map((task) => {
@@ -110,10 +150,10 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
     return { id: task.id, split: task.split, query: task.query, ...scoreTask(task, response),
       processMilliseconds: durations, medianProcessMilliseconds: sorted[Math.floor(sorted.length / 2)],
       responseBytes: Buffer.byteLength(raw), markdownProjectionBytes: Buffer.byteLength(renderExploreText(response)),
-      sourceVerification, result: response };
+      sourceVerification, lexicalVerification: verifyLexicalMatches(response, (file) => readFileSync(resolve(project, file), "utf8")), result: response };
   });
   const report = {
-    schemaVersion: 1, productVersion, repository: manifest.repository, commit: manifest.commit,
+    schemaVersion: 1, productVersion, productBuild, repository: manifest.repository, commit: manifest.commit,
     manifestSha256: createHash("sha256").update(manifestText).digest("hex"),
     conditions: { project: resolve(project), repetitions, node: process.version, platform: process.platform,
       timing: "Sequential fresh CLI processes against an existing index; includes startup, freshness checking and JSON serialization. Small-sample diagnostic, not a latency SLO.",
@@ -122,6 +162,7 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
       graphPrecision: "not-measured", agentCompletionTime: "not-measured" },
     results
   };
+  assert.deepEqual(productFingerprint(root), productBuild, "Product build changed during evaluation");
   mkdirSync(dirname(output), { recursive: true });
   writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`);
   return report;
@@ -134,6 +175,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const manifestPath = option("--manifest");
   const output = option("--output");
   assert.ok(project && manifestPath && output, "Required: --project <indexed corpus> --manifest <truth.json> --output <report.json>");
-  const report = await runTaskRetrieval({ project, manifestPath, output, repetitions: Number(option("--repetitions") ?? 3), split: option("--split") });
+  const report = await runTaskRetrieval({ project, manifestPath, output, repetitions: Number(option("--repetitions") ?? 3), split: option("--split"), productRoot: option("--product-root") });
   console.log(JSON.stringify(report.results.map(({ result, ...summary }) => summary), null, 2));
 }

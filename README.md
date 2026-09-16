@@ -4,7 +4,7 @@
 
 繁體中文 | [English](README.en.md)
 
-目前版本：**v0.520.7** · Node.js **>=22.13 <25** · [MIT](LICENSE)
+目前版本：**v0.520.8** · Node.js **>=22.13 <25** · [MIT](LICENSE)
 
 ## 能做什麼
 
@@ -96,8 +96,8 @@ SymbolLattice serve --mcp --project C:\path\to\project --no-auto-sync
 
 - MCP query handlers 是唯讀的，但 server 預設可啟動自動同步並更新索引；需要停用背景更新時使用 `--no-auto-sync`。
 - 預設只暴露 `SymbolLattice_explore`，回傳 Markdown、附行號來源、關係位置與解析規則。結果會揭露截斷及未確認的路徑，並保留來源去重後的新片段；省略內容可依提示繼續查詢。CLI 的 `explore --json` 保留完整的機器可讀契約，仍受查詢本身的範圍限制。
-- 查找會考慮多個查詢詞的覆蓋程度與常見英文詞形變化，並在候選數量受限前先排序；這是詞彙檢索，找到檔案後仍應核對回傳證據。[固定任務驗證](benchmarks/README.md#task-retrieval-checks)分開衡量檔案召回與來源證據。
-- 函式與方法來源會包含實作，過長時依共享字數額度截斷；補充片段保留尚未顯示的精確呼叫與路徑證據，並標示需要另外讀取來源的呼叫位置。
+- 查找會考慮多個查詢詞、英文詞形與常見程式縮寫（例如 `parameters`／`params`），並在限額內掃描索引中的函式宣告，附上命中的原文字詞與位置；註解和字串也可能命中，這些只代表詞彙線索。重複關係不會無限增加排名權重。[固定任務驗證](benchmarks/README.md#task-retrieval-checks)分開衡量檔案召回與來源證據。
+- 函式與方法來源會包含實作，過長時依共享字數額度截斷；補充片段保留尚未顯示的精確呼叫與路徑證據，也能在已請求的檔案中補上與查詢相關的精確被呼叫函式。缺少的來源仍須依提示追查。
 - 使用環境變數 `SYMBOL_LATTICE_MCP_TOOLS=node,impact` 加入工具，或設為 `all` 暴露全部工具。
 - 啟動目錄沒有索引時仍會註冊工具，但不啟動該目錄的 watcher。查詢時以 `projectPath` 指定已建立索引的 repository；query handlers 不會直接執行 `init`。
 - 多 repository 的查詢須分別提供 `projectPath`；各索引不會自動合併成跨 repo 關係圖。

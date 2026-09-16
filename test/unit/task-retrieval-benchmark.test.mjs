@@ -1,8 +1,32 @@
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import { scoreTask, verifySourceExcerpts } from "../../benchmarks/mcp/task-retrieval.mjs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { scoreTask, verifySourceExcerpts, verifyLexicalMatches, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
 
 describe("task retrieval benchmark judgments", () => {
+  it("identifies changed product builds even when the package version is unchanged", () => {
+    const root = mkdtempSync(join(tmpdir(), "SymbolLattice-product-hash-"));
+    try {
+      mkdirSync(join(root, "dist"));
+      writeFileSync(join(root, "dist", "version.js"), "0.520.8");
+      const before = productFingerprint(root);
+      expect(productFingerprint(root)).toEqual(before);
+      writeFileSync(join(root, "dist", "query.js"), "new ranking");
+      expect(productFingerprint(root).sha256).not.toBe(before.sha256);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+  it("verifies lexical receipt coordinates independently, rejecting a correct token at the wrong position", () => {
+    const match = { filePath: "a.ts", token: "refund", range: { start: { line: 2, column: 3 }, end: { line: 2, column: 9 } } };
+    const result = { focuses: [{ symbol: { filePath: "a.ts", range: { start: { line: 2, column: 1 }, end: { line: 2, column: 19 } } }, sourceMatches: [match] }] };
+    const read = () => "header\r\n  refund(payment);";
+    expect(verifyLexicalMatches(result, read)).toEqual({ verifiedMatches: 1 });
+    match.range.start.column = 2;
+    expect(() => verifyLexicalMatches(result, read)).toThrow("Lexical source mismatch");
+    match.range.start.line = match.range.end.line = 1;
+    expect(() => verifyLexicalMatches(result, read)).toThrow("outside its declaration");
+  });
   const task = { requiredFiles: ["a.ts", "b.ts"], supportingFiles: ["helper.ts"], irrelevantFiles: ["noise.ts"],
     evidence: [{ file: "a.ts", line: 5, text: "run()" }] };
   it("deduplicates files and excludes unjudged results from the precision denominator", () => {

@@ -13,6 +13,27 @@ import type { ExploreConnection, ExploreFocus } from "../../src/application/type
 import type { ExplorePathSpinePlan } from "../../src/application/explore-path-spines.js";
 import type { GraphEdge, SymbolNode } from "../../src/domain/types.js";
 
+describe("query-relevant exact callee source", () => {
+  it("includes an uncovered callee implementation after its call site was already delivered", () => {
+    const entry = symbol("entry", "src/run.ts", 1);
+    const target = symbol("validateRequest", "src/run.ts", 30);
+    const linked = edge("entry-target", entry, target, 2);
+    const primary = { ...focus(1, entry, 1, 5),
+      callees: { items: [{ symbol: target, edge: linked.edge }], truncated: false } };
+    const plan = planExploreSourceWindows([primary], [], undefined, ["request"]);
+    expect(plan.windows).toEqual([expect.objectContaining({ filePath: "src/run.ts", startLine: 27, endLine: 35,
+      reason: "exact-focus-callee", connectionEdgeIds: ["entry-target"], relatedSymbolIds: [target.id] })]);
+    expect(planExploreSourceWindows([primary], [], undefined, ["unrelated"]).windows).toEqual([]);
+    expect(planExploreSourceWindows([{ ...primary, callees: { items: [
+      { symbol: target, edge: { ...linked.edge, resolution: "heuristic" } }
+    ], truncated: false } }], [], undefined, ["request"]).windows).toEqual([]);
+    const external = { ...target, filePath: "src/other.ts" };
+    expect(planExploreSourceWindows([{ ...primary, callees: { items: [
+      { symbol: external, edge: linked.edge }
+    ], truncated: false } }], [], undefined, ["request"]).windows).toEqual([]);
+  });
+});
+
 function symbol(id: string, filePath: string, line: number): SymbolNode {
   return {
     id,

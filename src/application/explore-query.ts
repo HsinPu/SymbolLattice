@@ -14,8 +14,20 @@ import {
 } from "../domain/index.js";
 
 import { identifierTermGroups, identifierTermVariants, identifierWords } from "../domain/identifier-search.js";
+import { SOURCE_LEXICAL_SCORING, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v12" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v13" as const;
+export const EXPLORE_QUERY_CONNECTION_LIMITS = { perNeighbor: 60, maximumScore: 240 } as const;
+export const EXPLORE_QUERY_SOURCE_LEXICAL_SCORING = {
+  policy: "callable-source-ranking-v1",
+  density: SOURCE_LEXICAL_SCORING,
+  maximumScore: 1720,
+  admissionScore: 120,
+  maximumCoverageScore: 1500,
+  perAdditionalConcept: 500,
+  maximumDensityScore: 100,
+  exactFileNameScore: 500
+} as const;
 export const EXPLORE_QUERY_SOURCE_WORTH_POLICY = "explore-query-source-worth-v1" as const;
 export const EXPLORE_QUERY_GRAPH_MASS_POLICY = "explore-query-graph-mass-v2" as const;
 export const EXPLORE_QUERY_GRAPH_EXPANSION_POLICY =
@@ -105,8 +117,10 @@ export type ExploreQuerySelectionReason =
   | "qualified-symbol-term"
   | "partial-symbol-term"
   | "file-name-term"
-  | "inflected-symbol-term"
+  | "lexical-symbol-variant"
   | "multi-term-coverage"
+  | "callable-source-term"
+  | "exact-file-name"
   | "graph-expanded"
   | "graph-connected"
   | "graph-mass"
@@ -289,6 +303,8 @@ export interface ExploreQuerySelection {
     | "localization-intent-exempt"
     | "explicit-localization-file-exempt";
   readonly matchedTerms: readonly string[];
+  readonly sourceMatches?: readonly SourceLexicalMatch[];
+  readonly sourceScore?: number;
   readonly reasons: readonly ExploreQuerySelectionReason[];
 }
 
@@ -384,6 +400,7 @@ export interface ExploreQueryPlan {
   };
   readonly fileHints: readonly string[];
   readonly identifierTerms: readonly string[];
+  readonly sourceLexical?: (Omit<SourceLexicalRetrieval, "candidates"> & { readonly matchedSymbols: number }) | null;
   readonly queryIntent: {
     readonly tests: boolean;
     readonly icons: boolean;
@@ -393,6 +410,8 @@ export interface ExploreQueryPlan {
   readonly filtering: ExploreQueryLowValueFilter;
   readonly scoreFloor: ExploreQueryRelativeScoreFloor;
   readonly ranking: {
+    readonly connection?: typeof EXPLORE_QUERY_CONNECTION_LIMITS;
+    readonly sourceLexical?: typeof EXPLORE_QUERY_SOURCE_LEXICAL_SCORING;
     readonly policy: typeof EXPLORE_QUERY_SOURCE_WORTH_POLICY;
     readonly generatedSourceWorth: typeof EXPLORE_GENERATED_SOURCE_WORTH;
     readonly explicitFileExempt: true;
@@ -455,6 +474,8 @@ interface Candidate {
   readonly symbol: SymbolNode;
   readonly explicitFile: boolean;
   readonly matchedTerms: readonly string[];
+  readonly sourceMatches?: readonly SourceLexicalMatch[];
+  readonly sourceScore?: number;
   readonly baseReasons: readonly ExploreQuerySelectionReason[];
   readonly baseScore: number;
   readonly generated: GeneratedFileClassification;
@@ -572,9 +593,12 @@ const STOP_WORDS = new Set([
   "as",
   "at",
   "be",
+  "before",
+  "after",
   "by",
   "call",
   "calls",
+  "called",
   "code",
   "does",
   "flow",
@@ -840,7 +864,9 @@ function candidateFor(
   fileHints: readonly string[],
   identifierTerms: readonly string[],
   roleIntent: ExploreQueryRoleIntent,
-  filesByPath: ReadonlyMap<string, IndexedFile>
+  filesByPath: ReadonlyMap<string, IndexedFile>,
+  sourceMatches: readonly SourceLexicalMatch[] = [],
+  sourceScore = 0
 ): Candidate | null {
   if (symbol.kind === "file") return null;
   const explicitFile = fileHints.includes(symbol.filePath);
@@ -888,6 +914,10 @@ function candidateFor(
     }
   }
 
+  const nameMatchedTermCount = new Set(matchedTerms).size;
+  for (const match of sourceMatches) {
+    matchedTerms.push(match.term);
+  }
   if (!explicitFile && matchedTerms.length === 0) return null;
   const baseReasons: ExploreQuerySelectionReason[] = [];
   let baseScore = 0;
@@ -908,20 +938,43 @@ function candidateFor(
     baseScore += 120;
   }
   if (inflectedSymbolTerm) {
-    baseReasons.push("inflected-symbol-term");
+    baseReasons.push("lexical-symbol-variant");
     if (!partialSymbolTerm) baseScore += 120;
   }
   if (fileNameTerm) {
     baseReasons.push("file-name-term");
     baseScore += 80;
   }
-  baseScore += new Set(matchedTerms).size * 10;
+  baseScore += nameMatchedTermCount * 10;
   // Several distinct query concepts should beat a generic single-word exact
   // match (e.g. every constructor). Repeated inflections count once.
   const coveredConcepts = identifierTermGroups(coveredTerms).length;
   if (coveredConcepts > 1) {
     baseReasons.push("multi-term-coverage");
     baseScore += (coveredConcepts - 1) * 500;
+  }
+  if (sourceMatches.length > 0) {
+    baseReasons.push("callable-source-term");
+    const combinedConcepts = identifierTermGroups([...coveredTerms, ...sourceMatches.map((match) => match.term)]).length;
+    const additionalConcepts = Math.max(0, combinedConcepts - 1) - Math.max(0, coveredConcepts - 1);
+    sourceScore = Math.min(EXPLORE_QUERY_SOURCE_LEXICAL_SCORING.maximumCoverageScore,
+      Math.max(0, additionalConcepts) * EXPLORE_QUERY_SOURCE_LEXICAL_SCORING.perAdditionalConcept) +
+      Math.round(sourceScore / SOURCE_LEXICAL_SCORING.maximumScore * EXPLORE_QUERY_SOURCE_LEXICAL_SCORING.maximumDensityScore);
+    if (!exactSymbolTerm && !qualifiedSymbolTerm && !partialSymbolTerm && !inflectedSymbolTerm) {
+      sourceScore += EXPLORE_QUERY_SOURCE_LEXICAL_SCORING.admissionScore;
+    }
+    baseScore += sourceScore;
+    const stem = normalizedIdentifier(fileName(symbol.filePath).replace(/\.[^.]+$/u, ""));
+    // Near-whole word stems (validate/validation) corroborate the file title;
+    // a generic getter must not inherit that boost just by living in the file.
+    const corroboratedStem = identifierWords(symbol.name).some((word) => {
+      const length = Math.min(word.length, stem.length);
+      return length >= 5 && word.slice(0, length - 1) === stem.slice(0, length - 1);
+    });
+    if (!explicitFile && !exactSymbolTerm && !qualifiedSymbolTerm && identifierTerms.includes(stem) && corroboratedStem) {
+      baseReasons.push("exact-file-name");
+      baseScore += EXPLORE_QUERY_SOURCE_LEXICAL_SCORING.exactFileNameScore;
+    }
   }
   const generated = generatedClassificationFor(filesByPath.get(symbol.filePath) ?? {});
   const sourceRole = sourceRoleClassificationFor(filesByPath.get(symbol.filePath) ?? {});
@@ -930,6 +983,8 @@ function candidateFor(
     symbol,
     explicitFile,
     matchedTerms: [...new Set(matchedTerms)],
+    sourceMatches,
+    sourceScore,
     baseReasons,
     baseScore,
     generated,
@@ -2036,11 +2091,14 @@ function applyRelativeFileScoreFloor(
 export function exploreQuerySeedTerms(query: string): {
   terms: readonly string[];
   lexicalTermGroups: readonly (readonly string[])[];
+  sourceRoleIntent: ExploreQueryRoleIntent;
 } {
   const parsed = parseQuery(query);
   const originalIdentifiers = [...parsed.boundedQuery.matchAll(IDENTIFIER_EXPRESSION)].map((match) => match[0]);
   return {
     terms: [...parsed.fileHints, ...parsed.identifierTerms],
+    sourceRoleIntent: { tests: parsed.testIntentTerms.length > 0, icons: parsed.iconIntentTerms.length > 0,
+      localization: parsed.localizationIntentTerms.length > 0 },
     lexicalTermGroups: identifierTermGroups(parsed.identifierTerms).map((group) => [
       ...new Set([...group, ...originalIdentifiers.filter((term) => group.includes(normalizedIdentifier(term)))])
     ])
@@ -2048,7 +2106,11 @@ export function exploreQuerySeedTerms(query: string): {
 }
 
 /** Builds a deterministic, bounded graph focus plan without reading live source. */
-export function planExploreQuery(graph: ExploreQueryGraph, query: string): ExploreQueryPlan {
+export function planExploreQuery(
+  graph: ExploreQueryGraph,
+  query: string,
+  sourceLexical?: SourceLexicalRetrieval
+): ExploreQueryPlan {
   const parsed = parseQuery(query);
   const roleIntent: ExploreQueryRoleIntent = {
     tests: parsed.testIntentTerms.length > 0,
@@ -2056,13 +2118,16 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
     localization: parsed.localizationIntentTerms.length > 0
   };
   const filesByPath = new Map((graph.files ?? []).map((file) => [file.path, file]));
+  const sourceById = new Map((sourceLexical?.candidates ?? []).map((candidate) => [candidate.symbolId, candidate]));
   const lexicalCandidates = graph.symbols
     .map((symbol) => candidateFor(
       symbol,
       parsed.fileHints,
       parsed.identifierTerms,
       roleIntent,
-      filesByPath
+      filesByPath,
+      sourceById.get(symbol.id)?.matches,
+      sourceById.get(symbol.id)?.score
     ))
     .filter((candidate): candidate is Candidate => candidate !== null);
   const seedFiltering = filterLowValueCandidates(lexicalCandidates, roleIntent);
@@ -2079,6 +2144,14 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
     string,
     Map<string, GraphMassRelationship>
   >();
+  const connectedNeighbors = new Map<string, Set<string>>();
+  const addConnection = (candidate: Candidate, edge: GraphEdge, neighborId: string): void => {
+    const neighbors = connectedNeighbors.get(candidate.symbol.id) ?? new Set<string>();
+    neighbors.add(`${edge.kind}:${neighborId}`);
+    connectedNeighbors.set(candidate.symbol.id, neighbors);
+    candidate.connectionScore = Math.min(EXPLORE_QUERY_CONNECTION_LIMITS.maximumScore,
+      neighbors.size * EXPLORE_QUERY_CONNECTION_LIMITS.perNeighbor);
+  };
   const addGraphMassRelationship = (
     candidate: Candidate,
     edge: GraphEdge,
@@ -2102,8 +2175,8 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
     if (source !== undefined) addGraphMassRelationship(source, edge, edge.targetId);
     if (target !== undefined) addGraphMassRelationship(target, edge, edge.sourceId);
     if (source !== undefined && target !== undefined && source !== target) {
-      source.connectionScore += 60;
-      target.connectionScore += 60;
+      addConnection(source, edge, target.symbol.id);
+      addConnection(target, edge, source.symbol.id);
     }
   }
   for (const candidate of candidates) {
@@ -2145,6 +2218,8 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
       symbol: candidate.symbol,
       score,
       baseScore: candidate.baseScore,
+      sourceMatches: candidate.sourceMatches ?? [],
+      sourceScore: candidate.sourceScore ?? 0,
       connectionScore: candidate.connectionScore,
       graphMass: {
         policy: EXPLORE_QUERY_GRAPH_MASS_POLICY,
@@ -2216,6 +2291,12 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
     input: parsed.input,
     fileHints: parsed.fileHints,
     identifierTerms: parsed.identifierTerms,
+    sourceLexical: sourceLexical === undefined ? null : {
+      policy: sourceLexical.policy, limits: sourceLexical.limits, state: sourceLexical.state,
+      scannedFiles: sourceLexical.scannedFiles, scannedSymbols: sourceLexical.scannedSymbols,
+      scannedCharacters: sourceLexical.scannedCharacters, truncated: sourceLexical.truncated,
+      matchedSymbols: sourceLexical.candidates.length
+    },
     queryIntent: {
       ...roleIntent,
       matchedTerms: parsed.matchedIntentTerms
@@ -2223,6 +2304,8 @@ export function planExploreQuery(graph: ExploreQueryGraph, query: string): Explo
     filtering: filtering.receipt,
     scoreFloor: scoreFloor.receipt,
     ranking: {
+      connection: EXPLORE_QUERY_CONNECTION_LIMITS,
+      sourceLexical: EXPLORE_QUERY_SOURCE_LEXICAL_SCORING,
       policy: EXPLORE_QUERY_SOURCE_WORTH_POLICY,
       generatedSourceWorth: EXPLORE_GENERATED_SOURCE_WORTH,
       explicitFileExempt: true,

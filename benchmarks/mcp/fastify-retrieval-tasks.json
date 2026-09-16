@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/fastify/fastify",
+  "commit": "70b14e92c0b55e8201f5530ba2e6bab4e928c784",
+  "truthMethod": "Manual reading of pinned Fastify v5.6.0 source before evaluating v0.520.8. The task and its baseline outputs remain held out until the retrieval rules are frozen. File judgments are incomplete; this is a diagnostic task, not a repository-wide precision estimate.",
+  "tasks": [
+    {
+      "id": "request-validation-before-handler",
+      "split": "held-out",
+      "query": "How does a request run validation before invoking the route handler?",
+      "requiredFiles": ["lib/handleRequest.js", "lib/validation.js"],
+      "supportingFiles": ["lib/hooks.js", "lib/route.js", "lib/context.js"],
+      "irrelevantFiles": ["lib/logger-factory.js", "lib/reqIdGenFactory.js"],
+      "evidence": [
+        { "file": "lib/handleRequest.js", "line": 85, "text": "const validationErr = validateSchema(reply[kRouteContext], request)" },
+        { "file": "lib/handleRequest.js", "line": 157, "text": "result = context.handler(request, reply)" },
+        { "file": "lib/validation.js", "line": 142, "text": "const params = validateParam(context[paramsSchema], request, 'params')" },
+        { "file": "lib/validation.js", "line": 164, "text": "const body = validateParam(validatorFunction, request, 'body')" }
+      ]
+    }
+  ]
+}

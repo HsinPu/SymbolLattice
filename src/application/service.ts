@@ -3256,7 +3256,7 @@ export class SymbolLatticeService {
         const plan = measureQueryTiming(
           this.queryTimingSink,
           "planning",
-          () => planExploreQuery(bundle.snapshot, query),
+          () => planExploreQuery(bundle.snapshot, query, bundle.sourceLexical),
           { retry: attempt > 0 }
         );
         const pathSpinePlan = this.markBoundedTraversal(
@@ -3324,7 +3324,7 @@ export class SymbolLatticeService {
     }
 
     let graphView = createGraphQueryView(initialBundle.snapshot);
-    let plan = planExploreQuery(initialBundle.snapshot, query);
+    let plan = planExploreQuery(initialBundle.snapshot, query, initialBundle.sourceLexical);
     let pathSpinePlan = this.markBoundedTraversal(
       initialBundle,
       planExplorePathSpines(initialBundle.snapshot, plan.selection, graphView)
@@ -3350,7 +3350,7 @@ export class SymbolLatticeService {
         requestedFilePaths
       );
       graphView = createGraphQueryView(sourceBundle.snapshot);
-      plan = planExploreQuery(sourceBundle.snapshot, query);
+      plan = planExploreQuery(sourceBundle.snapshot, query, sourceBundle.sourceLexical);
       pathSpinePlan = this.markBoundedTraversal(
         sourceBundle,
         planExplorePathSpines(sourceBundle.snapshot, plan.selection, graphView)
@@ -3379,7 +3379,7 @@ export class SymbolLatticeService {
       );
     }
 
-    const fallbackPlan = planExploreQuery(initialBundle.snapshot, query);
+    const fallbackPlan = planExploreQuery(initialBundle.snapshot, query, initialBundle.sourceLexical);
     const fallbackGraphView = createGraphQueryView(initialBundle.snapshot);
     const fallbackPathSpinePlan = this.markBoundedTraversal(
       initialBundle,
@@ -5637,7 +5637,7 @@ export class SymbolLatticeService {
         return source === undefined || target === undefined ? [] : [{ source, target, edge }];
       });
 
-    const sourceWindowPlan = planExploreSourceWindows(focuses, connections, pathSpinePlan);
+    const sourceWindowPlan = planExploreSourceWindows(focuses, connections, pathSpinePlan, plan.identifierTerms);
     const sourceWindowDrafts = new Map<number, ContextSourceDraft>();
     const sourceWindowWholeFileDrafts = new Map<number, ContextSourceDraft>();
     const focusFilePaths = new Set(focuses.map((focus) => focus.symbol.filePath));

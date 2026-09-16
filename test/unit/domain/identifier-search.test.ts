@@ -12,7 +12,7 @@ describe("identifier search concepts", () => {
     expect(identifierTermVariants("creating")).toContain("create");
     expect(identifierTermVariants("running")).toContain("run");
     expect(identifierTermVariants("dependencies")).toContain("dependency");
-    for (const term of ["class", "status", "analysis", "src/file.ts", "資料", "x"]) {
+    for (const term of ["class", "status", "analysis", "constructor", "src/file.ts", "資料", "x"]) {
       expect(identifierTermVariants(term)).toEqual([term]);
     }
   });
@@ -22,5 +22,11 @@ describe("identifier search concepts", () => {
     expect(groups).toHaveLength(2);
     expect(groups[0]).toEqual(expect.arrayContaining(["resolve", "resolved", "resolving"]));
     expect(groups[1]).toEqual(expect.arrayContaining(["provider", "providers"]));
+  });
+
+  it("retains full query words while expanding conventional abbreviations as one concept", () => {
+    expect(identifierTermVariants("parameters")).toEqual(expect.arrayContaining(["parameters", "parameter", "param", "params"]));
+    expect(identifierTermGroups(["arguments", "args", "configuration", "config"])).toHaveLength(2);
+    expect(identifierTermVariants("contextual")).not.toContain("ctx");
   });
 });

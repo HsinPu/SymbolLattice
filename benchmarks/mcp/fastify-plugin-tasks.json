@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/fastify/fastify",
+  "commit": "70b14e92c0b55e8201f5530ba2e6bab4e928c784",
+  "truthMethod": "Manual reading of pinned source after discovering the initial v0.520.8 request-validation regression, before evaluating revised source-ranking rules. This distinct task is held out from that revision. An initial v0.520.8 experimental baseline was captured; the final comparison additionally rebuilds v0.520.7 from committed source. Only this provenance description was updated; task text and source truth are unchanged. File judgments remain incomplete.",
+  "tasks": [
+    {
+      "id": "plugin-dependency-rejection",
+      "split": "held-out",
+      "query": "How does plugin registration reject missing dependencies?",
+      "requiredFiles": ["lib/pluginUtils.js", "lib/pluginOverride.js"],
+      "supportingFiles": ["fastify.js", "lib/errors.js"],
+      "irrelevantFiles": ["lib/contentTypeParser.js", "lib/validation.js"],
+      "evidence": [
+        { "file": "lib/pluginUtils.js", "line": 74, "text": "this[kRegisteredPlugins].indexOf(dependency) > -1" },
+        { "file": "lib/pluginUtils.js", "line": 152, "text": "checkDependencies.call(this, fn)" },
+        { "file": "lib/pluginOverride.js", "line": 29, "text": "const shouldSkipOverride = pluginUtils.registerPlugin.call(old, fn)" }
+      ]
+    }
+  ]
+}

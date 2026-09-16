@@ -203,6 +203,9 @@ function renderFocuses(result: UnknownRecord): string[] {
     const location = symbolLocation(focus);
     const rank = finiteNumber(focus.rank);
     output.push(`- ${rank === null ? "" : `#${rank} `}\`${reference}\`${kind === null ? "" : ` (${kind})`}${location.length === 0 ? "" : ` — ${location}`}`);
+    const sourceTerms = records(focus.sourceMatches).map((match) =>
+      `\`${text(match.term) ?? "?"}\` → \`${text(match.token) ?? "?"}\` at \`${symbolLocation(match)}\``);
+    if (sourceTerms.length > 0) output.push(`  Source terms (lexical, not resolved relationships): ${sourceTerms.join("; ")}.`);
   }
   return output;
 }
@@ -329,6 +332,9 @@ function renderEvidencePaths(result: UnknownRecord): string[] {
 function renderLimitations(result: UnknownRecord): string[] {
   const notes = new Set<string>();
   const plan = record(result.queryPlan);
+  const sourceLexical = record(plan?.sourceLexical);
+  if (sourceLexical?.truncated === true) notes.add("Callable-source lexical search reached its scan bounds; further matches may exist. Narrow the query or specify a file to continue.");
+  if (sourceLexical?.state === "unavailable") notes.add("Indexed source is unavailable for lexical ranking; this result uses symbol and graph evidence.");
   if (record(plan?.input)?.truncated === true) notes.add("Query text was truncated; retry with a shorter query.");
   if (record(plan?.summary)?.truncated === true) notes.add("Focus selection was truncated; narrow the query to a file or qualified symbol.");
   if (result.connectionsTruncated === true) notes.add("Additional exact connections were truncated.");

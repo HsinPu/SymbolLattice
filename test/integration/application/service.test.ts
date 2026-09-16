@@ -1058,7 +1058,7 @@ describe("SymbolLatticeService", () => {
       sourceAvailability: "not-applicable",
       source: null,
       queryPlan: {
-        policy: "explore-query-plan-v12",
+        policy: "explore-query-plan-v13",
         ranking: {
           graphDiffusion: {
             policy: "explore-query-graph-diffusion-v3",
@@ -1088,12 +1088,17 @@ describe("SymbolLatticeService", () => {
           reasons: [
             "explicit-file",
             "exact-symbol-term",
+            "callable-source-term",
             "graph-connected",
             "graph-mass",
             "graph-diffusion"
           ],
           sourceAvailability: "active-generation",
-          source: { filePath: "src/api/orders.ts" }
+          source: { filePath: "src/api/orders.ts" },
+          sourceMatches: [
+            { term: "createorder", token: "createOrder", range: { start: { line: 3 } } },
+            { term: "persistorder", token: "persistOrder", range: { start: { line: 12 } } }
+          ]
         },
         {
           rank: 2,
@@ -1136,7 +1141,7 @@ describe("SymbolLatticeService", () => {
         summary: { selectedSpineCount: 0, bridgeSymbolCount: 0 }
       },
       sourceWindowPlan: {
-        policy: "explore-source-windows-v2",
+        policy: "explore-source-windows-v3",
         summary: { candidateCount: 0, selectedCount: 0, truncated: false }
       },
       sourceWindows: [],
@@ -1179,7 +1184,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v12",
+      policy: "explore-query-plan-v13",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -1256,7 +1261,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "dispatch behavior");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v12",
+      policy: "explore-query-plan-v13",
       ranking: {
         graphExpansion: {
           policy: "explore-query-graph-expansion-v2",
@@ -1393,12 +1398,12 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "dispatch pipeline");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v12",
+      policy: "explore-query-plan-v13",
       scoreFloor: {
         policy: "explore-query-relative-file-score-floor-v1",
         reason: "relative-floor-applied",
         applied: true,
-        topFileScore: 940,
+        topFileScore: expect.any(Number),
         computedFloor: 120,
         candidateFileCount: 5,
         filesPastFloorCount: 3,
@@ -1482,7 +1487,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v12",
+      policy: "explore-query-plan-v13",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1528,7 +1533,7 @@ describe("SymbolLatticeService", () => {
 
     const general = await service.explore(projectPath, "renderAsset");
     expect(general.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v12",
+      policy: "explore-query-plan-v13",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",

@@ -7,6 +7,7 @@ import type {
 import type { PersistedArtifactFacts } from "../domain/facts.js";
 import type { ProjectIndexInputs } from "../domain/index-inputs.js";
 import type { IndexWork } from "../domain/index-work.js";
+import type { SourceLexicalRetrieval } from "../domain/source-lexical.js";
 import type {
   IndexedSourceDocument,
   IndexedSourceSearchHit,
@@ -38,6 +39,8 @@ export interface ActiveGraphBundle {
   readonly resolverVersion: string | null;
   /** Undefined/null when an older adapter or generation has no source retrieval. */
   readonly sourceSearchVersion?: string | null;
+  /** Optional bounded lexical evidence from the same immutable source generation. */
+  readonly sourceLexical?: SourceLexicalRetrieval;
 }
 
 /** Minimal active-generation projection needed for freshness checks. */
@@ -94,6 +97,7 @@ export interface BoundedGraphQueryRequest {
   readonly terms: readonly string[];
   /** Alternatives for each bounded query concept; OR within groups, AND across source-search groups. */
   readonly lexicalTermGroups?: readonly (readonly string[])[];
+  readonly sourceRoleIntent?: { readonly tests: boolean; readonly icons: boolean; readonly localization: boolean };
   readonly maxSeedFiles: number;
   readonly maxSeedSymbols: number;
   readonly maxSymbolsPerFile: number;

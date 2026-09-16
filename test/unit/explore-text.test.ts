@@ -4,6 +4,14 @@ import { sourceDeliveryIdentityFromText } from "../../src/application/source-del
 import { McpSourceSession } from "../../src/mcp/source-session.js";
 
 describe("MCP explore text rendering", () => {
+  it("retains lexical ranking evidence and discloses its bounded scope without claiming resolved relations", () => {
+    const text = renderExploreText({ focuses: [{ symbol: { name: "run", filePath: "a.ts" },
+      sourceMatches: [{ term: "refunds", token: "refund", filePath: "a.ts", range: { start: { line: 5, column: 3 } } }] }],
+      queryPlan: { sourceLexical: { state: "searched", truncated: true } } });
+    expect(text).toContain("Source terms (lexical, not resolved relationships)");
+    expect(text).toContain("`refunds` → `refund` at `a.ts:5`");
+    expect(text).toContain("Callable-source lexical search reached its scan bounds");
+  });
   it("renders a concise Markdown result instead of exposing diagnostic JSON", () => {
     const text = renderExploreText({
       status: {

@@ -6,7 +6,14 @@ export function identifierWords(value: string): readonly string[] {
     .toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
 }
 
-/** Conservative English inflections, preserving the original term first. */
+// Conventional code abbreviations are lexical alternatives, never semantic equivalence or exact relations.
+const CODE_ABBREVIATIONS: Readonly<Record<string, readonly string[]>> = {
+  parameter: ["param", "params"], argument: ["arg", "args"], configuration: ["config"],
+  context: ["ctx"], request: ["req"], response: ["res", "resp"], message: ["msg"],
+  environment: ["env"], error: ["err"], function: ["fn"]
+};
+
+/** English inflections and conventional identifier abbreviations, preserving the original term first. */
 export function identifierTermVariants(term: string): readonly string[] {
   const variants = new Set([term]);
   if (!/^[a-z]{4,}$/u.test(term)) return [...variants];
@@ -20,6 +27,10 @@ export function identifierTermVariants(term: string): readonly string[] {
       variants.add(`${stem}e`);
       if (/([b-df-hj-np-tv-z])\1$/u.test(stem)) variants.add(stem.slice(0, -1));
     }
+  }
+  for (const variant of [...variants]) {
+    if (!Object.hasOwn(CODE_ABBREVIATIONS, variant)) continue;
+    for (const abbreviation of CODE_ABBREVIATIONS[variant]!) variants.add(abbreviation);
   }
   return [...variants];
 }
