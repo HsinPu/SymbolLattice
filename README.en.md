@@ -4,7 +4,7 @@ Local, source-backed code graphs for developers and AI agents to search code, tr
 
 [繁體中文](README.md) | English
 
-Current version: **v0.520.4** · Node.js **>=22.13 <25** · [MIT](LICENSE)
+Current version: **v0.520.5** · Node.js **>=22.13 <25** · [MIT](LICENSE)
 
 ## Features
 
@@ -95,7 +95,7 @@ SymbolLattice serve --mcp --project C:\path\to\project --no-auto-sync
 ```
 
 - MCP query handlers are read-only, but the server can start automatic synchronization and update indexes by default. Use `--no-auto-sync` to disable background updates.
-- Only `SymbolLattice_explore` is exposed by default, returning compact Markdown and numbered source lines. CLI `explore --json` retains machine-readable output.
+- Only `SymbolLattice_explore` is exposed by default, returning Markdown, numbered source lines, relationship locations, and resolution rules. Results disclose truncation and unverified paths, retain new fragments after source deduplication, and explain how to retrieve omitted content. CLI `explore --json` retains the full machine-readable contract within the query's own bounds.
 - Set the environment variable `SYMBOL_LATTICE_MCP_TOOLS=node,impact` to add tools, or `all` to expose every tool.
 - An unindexed startup directory still registers tools but does not start a watcher for that directory. Pass an indexed repository as `projectPath` when querying; query handlers do not run `init` directly.
 - Query independent repositories with separate `projectPath` values. Their indexes are not automatically merged into a cross-repository graph.

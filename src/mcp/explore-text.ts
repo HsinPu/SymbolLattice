@@ -92,7 +92,7 @@ function sourceLines(source: UnknownRecord): string[] {
   if (lines.length > 0) return lines;
 
   const content = typeof source.text === "string" ? source.text : null;
-  if (content === null) return [];
+  if (content === null || content.length === 0) return [];
   const startLine = finiteNumber(source.startLine) ?? 1;
   return content.split("\n").map((line, index) => `${startLine + index}\t${line}`);
 }
@@ -103,6 +103,11 @@ function sourceKey(source: UnknownRecord): string {
     finiteNumber(source.startLine) ?? "",
     finiteNumber(source.endLine) ?? ""
   ].join(":");
+}
+
+function hasSourceContent(source: UnknownRecord): boolean {
+  return sourceLines(source).length > 0 ||
+    records(record(source.delivery)?.fragments).some((fragment) => text(fragment.text) !== null);
 }
 
 function sourceCandidates(result: UnknownRecord): UnknownRecord[] {
@@ -121,7 +126,7 @@ function sourceCandidates(result: UnknownRecord): UnknownRecord[] {
   for (const source of candidates) {
     const key = sourceKey(source);
     const existing = unique.get(key);
-    if (existing === undefined || sourceLines(existing).length === 0) unique.set(key, source);
+    if (existing === undefined || !hasSourceContent(existing)) unique.set(key, source);
   }
   return [...unique.values()];
 }
@@ -133,10 +138,25 @@ function renderSources(result: UnknownRecord): string[] {
     const lines = sourceLines(source);
     if (lines.length === 0) {
       const delivery = record(source.delivery);
-      const pointer = record(delivery?.pointer);
-      const display = text(pointer?.display);
-      if (delivery?.status === "already-served") {
-        output.push(`- \`${filePath}\` — already served${display === null ? "" : ` as \`${display}\``}.`);
+      if (delivery?.status === "already-served" || delivery?.status === "partially-served") {
+        const references = records(delivery.coveredPointers)
+          .map((pointer) => text(pointer.display))
+          .filter((display): display is string => display !== null);
+        const sourceId = text(delivery.sourceId);
+        if (references.length === 0 && sourceId !== null) references.push(sourceId);
+        output.push(`- \`${filePath}\` — ${delivery.status === "already-served" ? "already served" : "partially served"}${references.length === 0 ? "" : `; prior source: ${references.map((reference) => `\`${reference}\``).join(", ")}`}.`);
+        for (const fragment of records(delivery.fragments)) {
+          const content = text(fragment.text);
+          if (content === null) continue;
+          const pointer = record(fragment.pointer);
+          const startLine = sourceLine(pointer);
+          const display = text(pointer?.display) ?? text(record(fragment.sourceIdentity)?.id) ?? filePath;
+          // Without a verified pointer, retain the bytes without inventing line numbers.
+          const fragmentLines = startLine === null
+            ? content.split("\n")
+            : content.split("\n").map((line, index) => `${startLine + index}\t${line}`);
+          output.push(`**New source fragment: \`${display}\`**`, "", `\`\`\`${sourceLanguage(filePath)}`, ...fragmentLines, "```", "");
+        }
       }
       continue;
     }
@@ -151,7 +171,9 @@ function renderSources(result: UnknownRecord): string[] {
 function renderStatus(result: UnknownRecord): string {
   const status = record(result.status);
   if (status === null) return "Index status unavailable.";
-  const freshness = status.stale === true ? "stale" : "up to date";
+  const freshness = status.initialized === false ? "not initialized"
+    : status.stale === true ? "stale"
+    : status.stale === false ? "up to date" : "freshness unknown";
   const parts = [`Index: ${freshness}`];
   const projectPath = text(status.projectPath);
   if (projectPath !== null) parts.push(projectPath);
@@ -209,34 +231,141 @@ function renderMatch(result: UnknownRecord): string[] {
     ];
   }
   return records(result.focuses).length === 0
-    ? [`No exact symbol found for \`${reference}\`.`]
+    ? [`No exact symbol found for \`${reference}\`.`,
+      "This does not prove the symbol or relationship is absent. Check the project and index status, then try a file path or a more specific query."]
     : [];
 }
 
+function edgeDetails(edge: UnknownRecord | null): string {
+  if (edge === null) return " — evidence unavailable";
+  const details: string[] = [];
+  const location = symbolLocation(edge);
+  if (location.length > 0) details.push(`at \`${location}\``);
+  details.push(text(edge.resolution) ?? "resolution unspecified");
+  const evidence = record(edge.evidence);
+  const stage = text(evidence?.stage);
+  const rule = text(evidence?.ruleId);
+  if (stage !== null) details.push(stage);
+  if (rule !== null) details.push(`rule \`${rule}\``);
+  return ` — ${details.join("; ")}`;
+}
+
 function renderRelations(result: UnknownRecord): string[] {
-  const relations: string[] = [];
+  const relations = new Set<string>();
+  const add = (from: string, to: string, edge: UnknownRecord | null): void => {
+    relations.add(`- \`${from}\` → \`${to}\` (${text(edge?.kind) ?? "related"})${edgeDetails(edge)}`);
+  };
   for (const connection of records(result.connections)) {
     const from = symbolReference(connection.source);
     const to = symbolReference(connection.target);
     const edge = record(connection.edge);
-    const kind = text(edge?.kind) ?? "related";
-    if (from !== null && to !== null) relations.push(`- \`${from}\` → \`${to}\` (${kind})`);
+    if (from !== null && to !== null) add(from, to, edge);
   }
-  for (const [label, value] of [["caller", result.callers], ["callee", result.callees]] as const) {
-    for (const relation of records(value)) {
-      const reference = symbolReference(relation.symbol);
-      const kind = text(record(relation.edge)?.kind) ?? "related";
-      if (reference !== null) relations.push(`- ${label}: \`${reference}\` (${kind})`);
+  for (const context of [result, ...records(result.focuses)]) {
+    const focal = symbolReference(record(context.match)?.symbol) ?? symbolReference(context.symbol);
+    for (const label of ["callers", "callees"] as const) {
+      const value = context[label];
+      for (const relation of records(Array.isArray(value) ? value : record(value)?.items)) {
+        const reference = symbolReference(relation.symbol);
+        const edge = record(relation.edge);
+        if (reference === null) continue;
+        if (focal !== null) {
+          add(label === "callers" ? reference : focal, label === "callers" ? focal : reference, edge);
+        } else {
+          relations.add(`- ${label === "callers" ? "caller" : "callee"}: \`${reference}\` (${text(edge?.kind) ?? "related"})${edgeDetails(edge)}`);
+        }
+      }
     }
   }
   for (const path of records(result.impact)) {
     const chain = Array.isArray(path.symbols)
       ? path.symbols.map(symbolReference).filter((item): item is string => item !== null)
       : [];
-    if (chain.length > 1) relations.push(`- impact: ${chain.map((item) => `\`${item}\``).join(" → ")}`);
+    if (chain.length > 1) {
+      relations.add([
+        `- impact (reverse dependency): ${chain.map((item) => `\`${item}\``).join(" → ")}`,
+        ...records(path.edges).map((edge) => `  - ${text(edge.kind) ?? "related"}${edgeDetails(edge)}`)
+      ].join("\n"));
+    }
   }
-  if (relations.length === 0) return [];
-  return ["**Relationships**", "", ...relations, ...(result.connectionsTruncated === true ? ["- Additional exact connections were truncated."] : [])];
+  return relations.size === 0 ? [] : ["**Relationships**", "", ...relations];
+}
+
+function renderEvidencePaths(result: UnknownRecord): string[] {
+  const output: string[] = [];
+  const seen = new Set<string>();
+  const paths: UnknownRecord[] = [
+    ...records(result.evidencePaths),
+    ...records(record(result.pathSpinePlan)?.spines).map((spine) => ({ status: "path", path: spine.path }))
+  ];
+  for (const entry of paths) {
+    const path = record(entry.path);
+    const steps = records(path?.steps);
+    const lines: string[] = [];
+    for (const step of steps) {
+      const from = symbolReference(step.from);
+      const to = symbolReference(step.to);
+      if (from === null || to === null) continue;
+      const edge = record(step.edge);
+      lines.push(`- \`${from}\` → \`${to}\` (${text(edge?.kind) ?? "related"})${edgeDetails(edge)}`);
+    }
+    if (lines.length > 0) {
+      const key = lines.join("\n");
+      if (!seen.has(key)) {
+        seen.add(key);
+        output.push(...lines);
+      }
+    } else {
+      const pair = `\`${text(entry.fromReference) ?? "unknown"}\` → \`${text(entry.toReference) ?? "unknown"}\``;
+      if (entry.status === "no-path") output.push(`- ${pair}: No exact path found within the search bounds; this does not prove no relationship exists.`);
+      if (entry.status === "truncated") output.push(`- ${pair}: Path search truncated; connectivity remains unverified.`);
+      if (entry.status === "not-applicable") output.push(`- ${pair}: Path not checked because the endpoints were not both resolved.`);
+      if (entry.status === "same-symbol") output.push(`- ${pair}: Both references identify the same symbol.`);
+    }
+  }
+  return output.length === 0 ? [] : ["**Path Evidence**", "", ...output];
+}
+
+function renderLimitations(result: UnknownRecord): string[] {
+  const notes = new Set<string>();
+  const plan = record(result.queryPlan);
+  if (record(plan?.input)?.truncated === true) notes.add("Query text was truncated; retry with a shorter query.");
+  if (record(plan?.summary)?.truncated === true) notes.add("Focus selection was truncated; narrow the query to a file or qualified symbol.");
+  if (result.connectionsTruncated === true) notes.add("Additional exact connections were truncated.");
+  if (record(record(result.sourceWindowPlan)?.summary)?.truncated === true ||
+      record(record(result.sourceWindowAllocation)?.summary)?.truncated === true) {
+    notes.add("Source windows were limited; additional call-site source may be omitted.");
+  }
+  if (record(record(result.sourceAllocation)?.summary)?.truncated === true) notes.add("Primary source was limited by the shared character budget.");
+  const spineSummary = record(record(result.pathSpinePlan)?.summary);
+  if (spineSummary?.pairAttemptsTruncated === true || spineSummary?.spinesTruncated === true || spineSummary?.traversalTruncated === true) {
+    notes.add("Path exploration was limited; the displayed paths are not exhaustive.");
+  }
+  for (const context of [result, ...records(result.focuses)]) {
+    const reference = symbolReference(context.symbol) ?? text(context.reference) ?? symbolReference(record(context.match)?.symbol);
+    const suffix = reference === null ? "" : ` for \`${reference}\``;
+    if (context.sourceAvailability === "unavailable") notes.add(`Source unavailable${suffix} in the indexed generation.`);
+    for (const [field, label] of [["callers", "Callers"], ["callees", "Callees"], ["impact", "Impact paths"]] as const) {
+      if (record(context[field])?.truncated === true) notes.add(`${label} were truncated${suffix}.`);
+    }
+  }
+  const focusImpactCount = records(result.focuses).reduce(
+    (count, focus) => count + records(record(focus.impact)?.paths).length, 0
+  );
+  if (focusImpactCount > 0) {
+    notes.add(`${focusImpactCount} per-focus reverse-impact paths are omitted from this compact view; retrieve them with \`SymbolLattice explore <query> --json --project <project>\`.`);
+  }
+  for (const source of sourceCandidates(result)) {
+    if (source.truncated !== true) continue;
+    const filePath = text(source.filePath) ?? "unknown source";
+    const requested = finiteNumber(source.requestedCharacters);
+    const emitted = finiteNumber(source.emittedCharacters);
+    const counts = requested === null || emitted === null ? "" : ` (${emitted}/${requested} characters)`;
+    notes.add(`Source truncated for \`${filePath}\`${counts}; the excerpt may end mid-line.`);
+  }
+  if (notes.size === 0) return [];
+  return ["**Coverage and Next Steps**", "", ...[...notes].map((note) => `- ${note}`),
+    "", "For omitted source, read the cited file and line range, or use `SymbolLattice file <path> --offset <line> --limit <count> --project <project>`. For relationships, explore the cited qualified symbol. These bounded results do not prove that other files or relationships are absent."];
 }
 
 /** Renders the primary MCP explore result for agents and humans without diagnostic JSON. */
@@ -248,7 +377,9 @@ export function renderExploreText(value: Record<string, unknown>): string {
     [`**Exploration: ${title}**`, "", renderStatus(value)],
     renderFocuses(value),
     renderMatch(value),
-    renderRelations(value)
+    renderRelations(value),
+    renderEvidencePaths(value),
+    renderLimitations(value)
   ].filter((section) => section.length > 0);
   const sources = renderSources(value);
   if (sources.length > 0) sections.push(["**Source Code**", "", ...sources]);

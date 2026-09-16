@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderExploreText } from "../../src/mcp/explore-text.js";
+import { sourceDeliveryIdentityFromText } from "../../src/application/source-delivery.js";
+import { McpSourceSession } from "../../src/mcp/source-session.js";
 
 describe("MCP explore text rendering", () => {
   it("renders a concise Markdown result instead of exposing diagnostic JSON", () => {
@@ -52,6 +54,7 @@ describe("MCP explore text rendering", () => {
     expect(text).toContain("Index: stale");
     expect(text).toContain("Found 1 ranked focus");
     expect(text).toContain("`src/users.ts#userById` → `src/db.ts#findUser` (calls)");
+    expect(text).toContain("at `src/users.ts:13`");
     expect(text).toContain("12\texport function userById() {");
     expect(text).not.toContain("queryPlan");
     expect(text).not.toContain("sourceIdentity");
@@ -76,6 +79,135 @@ describe("MCP explore text rendering", () => {
 
     expect(text).toContain("**Exploration: missing**");
     expect(text).toContain("No exact symbol found for `missing`.");
+    expect(text).toContain("does not prove the symbol or relationship is absent");
     expect(text.trim().startsWith("{")).toBe(false);
+  });
+
+  it("keeps each path step's evidence and distinguishes failed bounded searches", () => {
+    const first = { qualifiedName: "api#handle" };
+    const bridge = { qualifiedName: "service#load" };
+    const last = { qualifiedName: "db#read" };
+    const text = renderExploreText({
+      evidencePaths: [
+        { status: "path", fromReference: "api#handle", toReference: "db#read", path: { steps: [
+          { from: first, to: bridge, edge: { kind: "calls", resolution: "exact", filePath: "api.ts", range: { start: { line: 8 } }, evidence: { ruleId: "direct-call", stage: "lexical" } } },
+          { from: bridge, to: last, edge: { kind: "calls", resolution: "exact", filePath: "service.ts", range: { start: { line: 21 } }, evidence: { ruleId: "import-call", stage: "module" } } }
+        ] } },
+        { status: "no-path", fromReference: "db#read", toReference: "other#save", path: null },
+        { status: "truncated", fromReference: "other#save", toReference: "other#end", path: null }
+      ]
+    });
+    expect(text).toContain("`api#handle` → `service#load` (calls)");
+    expect(text).toContain("at `api.ts:8`");
+    expect(text).toContain("rule `direct-call`");
+    expect(text).toContain("`service#load` → `db#read` (calls)");
+    expect(text).toContain("at `service.ts:21`");
+    expect(text).toContain("rule `import-call`");
+    expect(text).toContain("No exact path found within the search bounds");
+    expect(text).toContain("Path search truncated");
+  });
+
+  it("discloses source and selection limits even when no source or relationships were emitted", () => {
+    const text = renderExploreText({
+      queryPlan: { input: { truncated: true }, summary: { truncated: true } },
+      connectionsTruncated: true,
+      sourceWindowPlan: { summary: { truncated: true } },
+      sourceWindowAllocation: { summary: { truncated: true } },
+      pathSpinePlan: { summary: { traversalTruncated: true } },
+      source: { filePath: "src/large.ts", startLine: 12, endLine: 80, text: "", lines: [], truncated: true, emittedCharacters: 0, requestedCharacters: 9000 }
+    });
+    expect(text).toContain("Query text was truncated");
+    expect(text).toContain("Focus selection was truncated");
+    expect(text).toContain("Additional exact connections were truncated");
+    expect(text).toContain("Source windows were limited");
+    expect(text).toContain("Path exploration was limited");
+    expect(text).toContain("0/9000 characters");
+    expect(text).toContain("SymbolLattice file");
+    expect(text).not.toContain("12\t");
+  });
+
+  it("labels uncertain focus relations and preserves per-focus limits", () => {
+    const text = renderExploreText({ focuses: [{
+      symbol: { qualifiedName: "api#handle" },
+      callers: { items: [], truncated: true },
+      callees: { items: [{ symbol: { qualifiedName: "service#load" }, edge: { kind: "calls", resolution: "heuristic", filePath: "api.ts", range: { start: { line: 8 } } } }], truncated: false },
+      impact: { paths: [], truncated: true },
+      sourceAvailability: "unavailable"
+    }] });
+    expect(text).toContain("`api#handle` → `service#load` (calls)");
+    expect(text).toContain("heuristic");
+    expect(text).toContain("Callers were truncated");
+    expect(text).toContain("Impact paths were truncated");
+    expect(text).toContain("Source unavailable");
+  });
+
+  it("renders newly delivered fragments and references prior source without inventing line numbers", () => {
+    const text = renderExploreText({ source: {
+      filePath: "src/users.ts", startLine: 1, endLine: 100, lines: [], text: null,
+      delivery: { status: "partially-served", coveredPointers: [{ display: "src/users.ts:1–5" }], fragments: [
+        { text: "return loadUser();", pointer: { display: "src/users.ts:6:3–6:21", range: { start: { line: 6, column: 3 } } } },
+        { text: "return fallback();", sourceIdentity: { id: "source:fallback" } }
+      ] }
+    } });
+    expect(text).toContain("partially served");
+    expect(text).toContain("src/users.ts:1–5");
+    expect(text).toContain("6\treturn loadUser();");
+    expect(text).toContain("source:fallback");
+    expect(text).toContain("return fallback();");
+    expect(text).not.toContain("1\treturn fallback();");
+  });
+
+  it("preserves new source across real session overlap and subsequent full reuse", () => {
+    const session = new McpSourceSession({ minimumAvoidedCharacters: 1, minimumEmittedCharacters: 1 });
+    const sourceText = "export function loadUser() {\n  return database.findUser();\n}";
+    const boundary = sourceText.indexOf("\n") + 1;
+    const response = (end: number) => {
+      const text = sourceText.slice(0, end);
+      return { content: [], structuredContent: {
+        status: { projectPath: "C:/project", generationId: "generation:1" },
+        source: {
+          filePath: "src/users.ts", startLine: 1, endLine: 3,
+          range: { start: { line: 1, column: 1 }, end: { line: 3, column: 2 } },
+          text, lines: text.split("\n").map((text, index) => ({ line: index + 1, text })),
+          sourceIdentity: sourceDeliveryIdentityFromText({ filePath: "src/users.ts", text, fullFileCharacterOffsets: { start: 0, end } })
+        }
+      } };
+    };
+    session.project(response(boundary), "explore", "deduplicate");
+    const partial = session.project(response(sourceText.length), "explore", "deduplicate");
+    expect(partial.structuredContent.source).toMatchObject({ text: null, delivery: { status: "partially-served" } });
+    const rendered = renderExploreText(partial.structuredContent);
+    expect(rendered).toContain("partially served");
+    expect(rendered).toContain("database.findUser()");
+    expect(rendered).not.toContain("export function loadUser()");
+    const reused = session.project(response(sourceText.length), "explore", "deduplicate");
+    const reusedText = renderExploreText(reused.structuredContent);
+    expect(reusedText).toContain("already served");
+    expect(reusedText).toContain("prior source:");
+    expect(reusedText).not.toContain("database.findUser()");
+  });
+
+  it("keeps a new fragment when a duplicate window only refers to previously served source", () => {
+    const range = { filePath: "src/users.ts", startLine: 1, endLine: 5, text: null, lines: [] };
+    const text = renderExploreText({
+      focuses: [{
+        source: { ...range, delivery: { status: "partially-served", fragments: [{ text: "const newEvidence = true;" }] } },
+        impact: { paths: [{ symbols: [] }], truncated: false }
+      }],
+      sourceWindows: [{ source: { ...range, delivery: { status: "already-served", sourceId: "source:old" } } }]
+    });
+    expect(text).toContain("const newEvidence = true;");
+    expect(text).toContain("1 per-focus reverse-impact paths are omitted");
+    expect(text).toContain("SymbolLattice explore <query> --json");
+  });
+
+  it.each([
+    [{ initialized: false, stale: false }, "Index: not initialized"],
+    [{ initialized: true }, "Index: freshness unknown"],
+    [null, "Index status unavailable"]
+  ])("does not present unavailable freshness as up to date: %j", (status, expected) => {
+    const text = renderExploreText({ status });
+    expect(text).toContain(expected);
+    expect(text).not.toContain("up to date");
   });
 });

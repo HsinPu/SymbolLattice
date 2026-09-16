@@ -4,7 +4,7 @@
 
 繁體中文 | [English](README.en.md)
 
-目前版本：**v0.520.4** · Node.js **>=22.13 <25** · [MIT](LICENSE)
+目前版本：**v0.520.5** · Node.js **>=22.13 <25** · [MIT](LICENSE)
 
 ## 能做什麼
 
@@ -95,7 +95,7 @@ SymbolLattice serve --mcp --project C:\path\to\project --no-auto-sync
 ```
 
 - MCP query handlers 是唯讀的，但 server 預設可啟動自動同步並更新索引；需要停用背景更新時使用 `--no-auto-sync`。
-- 預設只暴露 `SymbolLattice_explore`，回傳精簡 Markdown 與附行號來源。CLI 的 `explore --json` 保留機器可讀輸出。
+- 預設只暴露 `SymbolLattice_explore`，回傳 Markdown、附行號來源、關係位置與解析規則。結果會揭露截斷及未確認的路徑，並保留來源去重後的新片段；省略內容可依提示繼續查詢。CLI 的 `explore --json` 保留完整的機器可讀契約，仍受查詢本身的範圍限制。
 - 使用環境變數 `SYMBOL_LATTICE_MCP_TOOLS=node,impact` 加入工具，或設為 `all` 暴露全部工具。
 - 啟動目錄沒有索引時仍會註冊工具，但不啟動該目錄的 watcher。查詢時以 `projectPath` 指定已建立索引的 repository；query handlers 不會直接執行 `init`。
 - 多 repository 的查詢須分別提供 `projectPath`；各索引不會自動合併成跨 repo 關係圖。
