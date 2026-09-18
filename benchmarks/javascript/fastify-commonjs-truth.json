@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/fastify/fastify",
+  "commit": "70b14e92c0b55e8201f5530ba2e6bab4e928c784",
+  "truthMethod": "Manual reading of the pinned source before scoring product output: reply.js line 37 destructures handleError from ./error-handler; error-handler.js line 175 exports the local function declared at line 30. Both direct identifier calls belong to onErrorHook. These are two development occurrences for a known missing relation, not a random sample or a repository-wide precision truth set.",
+  "calls": [
+    { "file": "lib/reply.js", "line": 812, "column": 13, "text": "handleError(reply, error, cb)", "caller": "onErrorHook", "localName": "handleError", "targetFile": "lib/error-handler.js", "targetName": "handleError", "targetLine": 30, "importLine": 37, "exportLine": 175 },
+    { "file": "lib/reply.js", "line": 815, "column": 5, "text": "handleError(reply, error, cb)", "caller": "onErrorHook", "localName": "handleError", "targetFile": "lib/error-handler.js", "targetName": "handleError", "targetLine": 30, "importLine": 37, "exportLine": 175 }
+  ]
+}

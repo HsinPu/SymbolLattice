@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/fastify/fastify",
+  "commit": "70b14e92c0b55e8201f5530ba2e6bab4e928c784",
+  "truthMethod": "Manual reading of pinned reply.js and schemas.js before implementing CommonJS object-export call resolution. Both product outputs remain unopened until the implementation is frozen. This is a held-out task on a known repository; judgments of other files are incomplete.",
+  "tasks": [{
+    "id": "response-serializer-selection",
+    "split": "held-out",
+    "query": "How is the response serializer selected for an HTTP status and media type?",
+    "requiredFiles": ["lib/reply.js", "lib/schemas.js"],
+    "supportingFiles": ["lib/route.js", "lib/schema-controller.js"],
+    "irrelevantFiles": ["lib/pluginUtils.js", "lib/pluginOverride.js"],
+    "evidence": [
+      { "file": "lib/reply.js", "line": 931, "text": "const fnSerialize = getSchemaSerializer(context, statusCode, contentType)" },
+      { "file": "lib/reply.js", "line": 933, "text": "return fnSerialize(data)" },
+      { "file": "lib/schemas.js", "line": 151, "text": "const mediaName = contentType.split(';', 1)[0]" },
+      { "file": "lib/schemas.js", "line": 165, "text": "const fallbackStatusCode = (statusCode + '')[0] + 'xx'" }
+    ]
+  }]
+}

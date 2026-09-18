@@ -831,6 +831,7 @@ function artifactFactsPayload(facts: PersistedArtifactFacts): ArtifactFacts {
     importBindings: facts.importBindings,
     exportBindings: facts.exportBindings,
     reExportBindings: facts.reExportBindings,
+    ...(facts.commonJsFacts === undefined ? {} : { commonJsFacts: facts.commonJsFacts }),
     ...(facts.typescriptFacts === undefined ? {} : { typescriptFacts: facts.typescriptFacts }),
     ...(facts.nestRouteFacts === undefined ? {} : { nestRouteFacts: facts.nestRouteFacts }),
     ...(facts.nestGraphqlFacts === undefined ? {} : { nestGraphqlFacts: facts.nestGraphqlFacts }),

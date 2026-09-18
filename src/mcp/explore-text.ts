@@ -250,6 +250,11 @@ function edgeDetails(edge: UnknownRecord | null): string {
   const rule = text(evidence?.ruleId);
   if (stage !== null) details.push(stage);
   if (rule !== null) details.push(`rule \`${rule}\``);
+  const commonJs = record(evidence?.commonJsBinding);
+  if (commonJs !== null) {
+    details.push(`CommonJS \`${text(commonJs.localName) ?? "?"}\` ← \`${text(commonJs.importedName) ?? "?"}\``);
+    details.push(`import \`${symbolLocation(commonJs.importSite)}\`; export \`${symbolLocation(commonJs.exportSite)}\``);
+  }
   return ` — ${details.join("; ")}`;
 }
 

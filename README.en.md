@@ -4,7 +4,7 @@ Local, source-backed code graphs for developers and AI agents to search code, tr
 
 [繁體中文](README.md) | English
 
-Current version: **v0.521.0** · Node.js **>=22.13 <25** · [MIT](LICENSE)
+Current version: **v0.522.0** · Node.js **>=22.13 <25** · [MIT](LICENSE)
 
 ## Features
 
@@ -103,7 +103,7 @@ Discovery covers 58 languages and formats, including TypeScript/JavaScript, Pyth
 
 See [language scope and limitations](src/domain/language-depth.ts) and [real-project and performance validation](benchmarks/README.md). Passing small fixtures does not establish validation across all large projects.
 
-Named JavaScript/TypeScript function expressions retain source and ownership of calls inside them; this does not imply resolution of all dynamic exports or calls. Run `SymbolLattice sync .` after upgrading to update an existing index.
+JavaScript/TypeScript support named function expressions. JavaScript also traces statically supported CommonJS object exports and destructured import calls, with import/export locations. Dynamic exports, mutations and cycles may remain unresolved. Run `SymbolLattice sync .` after upgrading to update an existing index.
 
 ## Development
 

@@ -4,7 +4,7 @@
 
 繁體中文 | [English](README.en.md)
 
-目前版本：**v0.521.0** · Node.js **>=22.13 <25** · [MIT](LICENSE)
+目前版本：**v0.522.0** · Node.js **>=22.13 <25** · [MIT](LICENSE)
 
 ## 能做什麼
 
@@ -103,7 +103,7 @@ SymbolLattice uninstall codex --apply --yes
 
 詳見[語言範圍與限制](src/domain/language-depth.ts)、[真實專案與效能驗證](benchmarks/README.md)。小型測試通過不代表所有大型專案都已驗證。
 
-JavaScript／TypeScript 的具名函式運算式可保留來源與內部呼叫歸屬；不代表能解析所有動態匯出或呼叫。升級後執行 `SymbolLattice sync .` 更新既有索引。
+JavaScript／TypeScript 支援具名函式運算式；JavaScript 另可追蹤符合靜態條件的 CommonJS 物件匯出與解構匯入呼叫，附上匯入／匯出位置。動態匯出、覆寫與循環相依不保證可解析。升級後執行 `SymbolLattice sync .` 更新既有索引。
 
 ## 開發
 

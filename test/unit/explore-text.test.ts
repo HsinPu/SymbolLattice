@@ -4,6 +4,16 @@ import { sourceDeliveryIdentityFromText } from "../../src/application/source-del
 import { McpSourceSession } from "../../src/mcp/source-session.js";
 
 describe("MCP explore text rendering", () => {
+  it("retains CommonJS import/export receipts alongside the call site", () => {
+    const output = renderExploreText({ connections: [{ source: { name: "start" }, target: { name: "handle" },
+      edge: { kind: "calls", resolution: "exact", filePath: "consumer.js", range: { start: { line: 9 } },
+        evidence: { commonJsBinding: { localName: "run", importedName: "handle",
+          importSite: { filePath: "consumer.js", range: { start: { line: 2 } } },
+          exportSite: { filePath: "provider.js", range: { start: { line: 20 } } } } } } }] });
+    expect(output).toContain("at `consumer.js:9`");
+    expect(output).toContain("CommonJS `run` ← `handle`");
+    expect(output).toContain("import `consumer.js:2`; export `provider.js:20`");
+  });
   it("retains lexical ranking evidence and discloses its bounded scope without claiming resolved relations", () => {
     const text = renderExploreText({ focuses: [{ symbol: { name: "run", filePath: "a.ts" },
       sourceMatches: [{ term: "refunds", token: "refund", filePath: "a.ts", range: { start: { line: 5, column: 3 } } }] }],

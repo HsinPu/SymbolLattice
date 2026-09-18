@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v423";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v424";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v203";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v204";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -910,6 +910,15 @@ export interface EdgeEvidence {
   readonly configurationPaths?: readonly string[];
   /** Project-relative file hops used to reach an exact re-export target. */
   readonly resolutionPath?: readonly string[];
+  /** Source receipts for one conservative CommonJS object-export call. */
+  readonly commonJsBinding?: {
+    readonly policy: "javascript-commonjs-object-call-v1";
+    readonly moduleSpecifier: string;
+    readonly importedName: string;
+    readonly localName: string;
+    readonly importSite: { readonly filePath: string; readonly range: SourceRange };
+    readonly exportSite: { readonly filePath: string; readonly range: SourceRange };
+  };
   /** Ordered static mount evidence used to project a framework route prefix. */
   readonly routePrefixChain?: readonly RoutePrefixSegment[];
   /** Syntax-proven argument count and every declaration considered by an overload rule. */
@@ -4494,6 +4503,15 @@ export interface ArtifactFacts {
   readonly importBindings: readonly ImportBinding[];
   readonly exportBindings: readonly ExportBinding[];
   readonly reExportBindings: readonly ReExportBinding[];
+  readonly commonJsFacts?: {
+    readonly requires: readonly string[];
+    readonly unsafeModules: readonly string[];
+    readonly receiverCalls: readonly { readonly moduleSpecifier: string; readonly exportedName: string }[];
+    readonly exports: readonly { readonly exportedName: string; readonly symbolId: string; readonly range: SourceRange;
+      readonly receiverIndependent: boolean }[];
+    readonly calls: readonly { readonly moduleSpecifier: string; readonly importedName: string;
+      readonly localName: string; readonly importRange: SourceRange; readonly range: SourceRange }[];
+  };
   /** Omitted only by artifact facts persisted before the v0.419.1 TypeScript exact-call repair. */
   readonly typescriptFacts?: {
     /** Decorated classes whose runtime constructor/member surface may be replaced. */

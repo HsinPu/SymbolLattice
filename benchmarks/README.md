@@ -14,6 +14,7 @@ These tools generate or validate large-project evidence outside the published np
 | `groovy/` | `correctness-oracle.mjs`, `GroovyOracle.groovy` | manual compiler oracle |
 | `javascript/` | `correctness-oracle.mjs` | automatic |
 | `javascript/` | `named-function-expressions.mjs` | automatic declaration/scorer contract; manual pinned-corpus execution |
+| `javascript/` | `commonjs-call-evidence.mjs`, `fastify-commonjs-truth.json` | automatic source-receipt verifier contract; manual pinned-corpus execution |
 | `python/` | `correctness-oracle.mjs`, `PythonOracle.py` | manual CPython stdlib AST oracle |
 | `sfc/` | `correctness-oracle.mjs` | manual Vue/Svelte/Astro component relation oracle |
 | `shell/` | `correctness-oracle.mjs` | manual mvdan ABI v2 direct-call oracle |
@@ -32,7 +33,7 @@ These tools generate or validate large-project evidence outside the published np
 | `r/` | `lifecycle.mjs` | manual |
 | `mcp/` | `read-query-concurrency.mjs` | manual |
 | `mcp/` | `strict-fresh-read-lifecycle.mjs` | manual |
-| `mcp/` | `task-retrieval.mjs`, `nest-retrieval-tasks.json`, `nest-source-tasks.json`, `fastify-retrieval-tasks.json`, `fastify-plugin-tasks.json`, `fastify-error-tasks.json` | automatic scorer/source verifier contracts; manual pinned-corpus execution |
+| `mcp/` | `task-retrieval.mjs`, `nest-retrieval-tasks.json`, `nest-source-tasks.json`, `fastify-retrieval-tasks.json`, `fastify-plugin-tasks.json`, `fastify-error-tasks.json`, `fastify-serializer-tasks.json` | automatic scorer/source verifier contracts; manual pinned-corpus execution |
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
@@ -181,3 +182,69 @@ node benchmarks/javascript/correctness-oracle.mjs --corpus fastify=/external/fas
 ```
 
 Run the other task manifests with their corresponding corpus; finish all baseline queries before upgrading its index. External artifacts for this run are under `SymbolLattice-evidence-0521` in the verification workspace, including `*-baseline.json`, `*-candidate.json`, both oracle reports, sync reports and the built baseline. No corpus or generated report is committed here.
+
+### CommonJS object-export calls in v0.522.0
+
+Fastify's `lib/reply.js:37` destructures `handleError` from `./error-handler`. The local function at `lib/error-handler.js:30` is exported through the object at line 175. The two direct calls from `onErrorHook` at `reply.js:812` and `:815` previously lacked cross-file targets. `javascript/fastify-commonjs-truth.json` fixes these manually reviewed development occurrences separately from product scoring; they are not a random sample or a repository-wide precision truth set.
+
+The new rule accepts parser-clean strict JavaScript or `.cjs`, an unshadowed static relative `require`, top-level `const` named destructuring, and a single direct `module.exports = { ... }` assignment containing an unmutated top-level function declaration or const function initializer. Aliases retain the original import, export and call locations. Each exact call carries `javascript-commonjs-object-call-v1` receipts and a source-to-target path; Markdown displays the import and export sites. `multi-language-ast-v424` and `project-resolver-v204` invalidate older cached facts/projections; run `SymbolLattice sync .` after upgrading.
+
+This is bounded static resolution. Namespace calls, default exports, computed/spread/accessor exports, ESM interop, directory/package lookup and observed cycles remain unresolved. Dependencies are traversed for at most 256 distinct files. Observed module-object writes or escapes in other parser-clean JavaScript files suppress the affected module's targets, including mutations in non-strict files. A namespace member invocation passes the object as `this`: it is safe for this suppression check only when the member is a proven own function export whose declaration never refers to `this`. Direct eval and `with` dynamic scopes disable the file's CommonJS bindings and conservatively suppress its observed relative dependencies. Inherited methods such as `valueOf` and `__defineGetter__`, unknown members and receiver-dependent functions do not qualify. This check does not itself resolve a namespace call. Dynamic loading, parse-rejected files, external code and runtime monkey-patching are outside the proof; unresolved does not mean absent or safe to modify.
+
+An intermediate experiment conservatively rejected every namespace member invocation. It preserved the error-task improvement but regressed validation from 2/2 required files and 3/4 source facts to 1/2 and 1/4. The failed report is retained as `fastify-retrieval-final.json`. Distinguishing functions that cannot observe the receiver recovered some relations, but the `*-release.json` experiment still missed validation: computed-name invocations in the corpus correctly kept that module unresolved. No query or truth file was changed to match those results.
+
+The revised retrieval planner (`explore-query-plan-v15`, `callable-source-ranking-v2`) also distinguishes ambient TypeScript declarations from executable bodies for explicit execution-flow questions. In `.d.ts`, `.d.cts` and `.d.mts`, a callable retains its symbol-name score, literal source receipts and graph evidence, but receives no additional body-vocabulary score for execution intent. The receipt includes `declaration-source-only`. The bounded English intent heuristic recognizes flow/runtime/execution/run/invoke/process terms; explicit type/interface/signature/declaration/overload/generic questions and explicit file hints are exempt. Ordinary queries and implementation files keep their prior behavior. This does not classify every bodyless declaration inside ordinary `.ts` files or establish semantic understanding of arbitrary natural language.
+
+CommonJS raw facts are persisted with the index. A lifecycle test closes and reopens SQLite, changes an unrelated file without re-extracting the importer/provider, and confirms that the call evidence survives. Mutating the export then removes the exact call; restoring it recovers the original edge and receipts.
+
+`javascript/commonjs-call-evidence.mjs` uses Espree independently to verify every emitted CommonJS call's literal import/export/call/declaration AST locations, alias names and relative target path. Contract tests deliberately corrupt each kind of receipt. The tool also scores the two manual occurrences. Source-receipt correctness is separate from whole-program binding/mutation correctness, which this audit does not independently measure; overall precision remains unmeasured.
+
+The acceptance check is to recover the known missing calls and improve the error task's evidence while preserving the other seven known tasks' required-file and evidence coverage. `mcp/fastify-serializer-tasks.json` was fixed before implementation, with both products' outputs held out throughout capability and retrieval tuning. It was first opened against frozen build `f82d9025fc27bde59689a497ff257f6c73f2ff30c79016c6671bbb681167974f`, improving from 2/4 to 4/4 source facts. A later independent synthetic audit exposed the `with` scope bug; that safety fix was followed by another corpus run, with the now-known serializer task treated as regression. No rule was tuned against its output. This was an unseen task on a known repository, not an unseen project.
+
+The final comparison used Windows/Node v22.23.2, three sequential fresh CLI processes per task, paired identical manifest hashes and the same pinned Fastify/NestJS source as v0.521.0. Baseline product commit: `0b11eba69de74583406b91d1cd12a7f695b79eef`; built-product SHA-256: `ade96ce3d10a2018de46aed1f149f901df9b3270f2530f89199ef4949aee9767`. Final v0.522.0 SHA-256: `39eef8e1736dde591665c692eda7e667210a86d2f56b51c68447eba60a1225fe`. All baseline queries completed before upgrading indexes. The final Fastify generation is `a26d00ee-ff37-44c8-af85-2d87be64ec6d` (338 files, 8,454 symbols, 18,861 edges, 7,916 unresolved references); NestJS is `5d899fb2-f5f1-4707-8080-5e42116f3420` (1,738 files, 17,403 symbols, 44,732 edges). Full reindexing completed, but indexing latency was not benchmarked.
+
+| Task | Required files, before → after | Required source facts, before → after | Judged TP / FP / unjudged, after |
+| --- | --- | --- | --- |
+| Constructor dependencies | 1/1 → 1/1 | 2/2 → 2/2 | 1 / 0 / 3 |
+| Known provider loader | 1/1 → 1/1 | 1/1 → 1/1 | 3 / 0 / 1 |
+| Provider creation flow | 2/2 → 2/2 | 3/3 → 3/3 | 2 / 1 / 1 |
+| HTTP pipes | 2/2 → 2/2 | 2/2 → 2/2 | 2 / 0 / 2 |
+| Guard activation body | 1/1 → 1/1 | 3/3 → 3/3 | 1 / 0 / 0 |
+| Fastify validation | 2/2 → 2/2 | 3/4 → 3/4 | 3 / 0 / 1 |
+| Fastify plugin dependencies | 2/2 → 2/2 | 3/3 → 3/3 | 2 / 0 / 2 |
+| Fastify error response | 2/2 → 2/2 | 2/4 → 3/4 | 2 / 0 / 2 |
+| Response serializer selection (held out for this change) | 2/2 → 2/2 | 2/4 → 4/4 | 2 / 0 / 2 |
+
+All 104 emitted source excerpts and 147 lexical receipts passed independent source/range verification. Judged precision remains 2/3 for provider creation and 1 for the other judged subsets; judgment coverage ranges from 1/4 to 1. Unjudged files are neither confirmed relevant nor FP. The serializer task is now a known regression sample and cannot serve as unseen validation for future tuning.
+
+| Task | Median process ms, before → after | Markdown bytes, before → after | Source characters, before → after | CLI JSON bytes, after |
+| --- | --- | --- | --- | --- |
+| Constructor dependencies | 3,679 → 4,687 | 31,572 → 31,572 | 14,281 → 14,281 | 953,293 |
+| Known provider loader | 3,226 → 3,153 | 8,595 → 8,595 | 2,049 → 2,049 | 404,884 |
+| Provider creation flow | 3,344 → 3,503 | 24,340 → 24,340 | 10,201 → 10,201 | 951,616 |
+| HTTP pipes | 3,676 → 3,783 | 23,534 → 23,534 | 8,287 → 8,287 | 681,937 |
+| Guard activation body | 3,136 → 3,078 | 3,147 → 3,147 | 755 → 755 | 156,910 |
+| Fastify validation | 2,082 → 1,992 | 36,204 → 38,891 | 24,000 → 24,000 | 495,360 |
+| Fastify plugin dependencies | 2,003 → 1,928 | 11,246 → 11,246 | 5,063 → 5,063 | 229,323 |
+| Fastify error response | 2,080 → 1,965 | 35,191 → 37,920 | 24,000 → 24,000 | 462,445 |
+| Response serializer selection | 2,092 → 1,984 | 35,119 → 40,840 | 22,755 → 23,538 | 657,628 |
+
+More relationship receipts increase output cost; the serializer's Markdown grows by 16.3% while its four required source facts become visible. These three-run diagnostics establish no speed improvement, latency SLO or end-to-end agent completion rate. An earlier experiment's first CLI-version invocation failed while loading TypeScript; an immediate syntax check and fresh import succeeded without changing dependencies. That failure, with undetermined cause, is preserved separately and excluded from successful timing repetitions. Full tests ran after final timing measurements.
+
+The independent CommonJS receipt audit verified all 62 emitted calls across 18 source files. Both manually fixed `onErrorHook` occurrences matched (TP 2, FN 0, recall 1; truth SHA-256 `f86fa501d1d3220784cabb609475cb3889693aaee2f0df71ee891808a0634ebc`); this is not a corpus-wide precision estimate. The existing JavaScript oracle also recovered 212/212 sampled facts with no invalid evidence and passed 150 negative cases (15 templates × 10). Its status is **inconclusive** because this corpus lacks enough instantiation, heritage and ESM-import quota items; it does not replace the full multi-project 300-positive release validation. The 58-language depth check passes its identity/smoke contract, not deep validation for every language.
+
+The final build and TypeScript test typecheck passed. The complete test suite passed 3,038 tests with 4 skipped (296 passing files, one skipped); this includes CommonJS negative cases, receipt corruption checks and SQLite reopen/incremental lifecycle coverage.
+
+Remaining gaps: validation still omits `lib/handleRequest.js:157`; error response still omits `lib/reply.js:140`. Computed-name namespace calls keep the validation module's call targets unresolved, and plugin `.call` links remain unsupported. The known irrelevant NestJS lifecycle-hook result and unjudged results also remain. Finding files or delivering source text does not prove every intervening relationship.
+
+Reproduce with external indexed checkouts and a preserved built baseline:
+
+```sh
+node benchmarks/mcp/task-retrieval.mjs --project /external/fastify --manifest benchmarks/mcp/fastify-error-tasks.json --product-root /external/baseline-05210 --repetitions 3 --output /external/evidence/error-before.json
+node dist/cli/main.js sync /external/fastify --json
+node benchmarks/mcp/task-retrieval.mjs --project /external/fastify --manifest benchmarks/mcp/fastify-error-tasks.json --repetitions 3 --output /external/evidence/error-after.json
+node benchmarks/javascript/commonjs-call-evidence.mjs --project /external/fastify --manifest benchmarks/javascript/fastify-commonjs-truth.json --output /external/evidence/commonjs.json
+node benchmarks/javascript/correctness-oracle.mjs --corpus fastify=/external/fastify=/external/fastify --output /external/evidence/relations.json
+```
+
+Run the other manifests against their matching corpus, finishing all baseline queries before index upgrades. External evidence is under `SymbolLattice-evidence-0522`: `*-baseline.json`, final `*-completed.json`, `*-release4-index.json`, `commonjs-receipts-completed.json`, `javascript-oracle-completed.json`, `language-depth-completed.json`, the baseline build, full test log and preserved intermediate experiments. No downloaded project, generated index or result report is committed here.

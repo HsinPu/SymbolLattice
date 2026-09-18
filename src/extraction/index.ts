@@ -1,4 +1,5 @@
 import ts from "typescript";
+import { extractCommonJsFacts } from "./javascript-commonjs.js";
 
 import { extractCFileFacts } from "./c.js";
 import { extractCobolFileFacts } from "./cobol.js";
@@ -9672,8 +9673,16 @@ export function extractFileFacts(
     ts.forEachChild(sourceFile, extractFrameworkRoutePluginDecoratorFacts);
   }
 
+  const commonJsFacts = input.language === "javascript" ? extractCommonJsFacts({
+    sourceFile, enabled: commonJsSyntaxEnabled && !/\.mjs$/iu.test(input.filePath),
+    moduleGlobalSafe: !hasDirectSourceBinding(sourceFile, "module") && hasOnlyDirectCommonJsModuleUses(sourceFile),
+    requires: commonJsRequires, symbols: symbolsByDeclaration,
+    bindingOf: (identifier) => visibleRouteBinding(sourceFile, identifier, routeReceiverBindings)?.declaration
+  }) : undefined;
+  const commonJsExportIds = new Set(commonJsFacts?.exports.map((entry) => entry.symbolId) ?? []);
   return {
-    symbols,
+    symbols: commonJsExportIds.size === 0 ? symbols :
+      symbols.map((symbol) => commonJsExportIds.has(symbol.id) ? { ...symbol, isExported: true } : symbol),
     edges,
     pendingReferences,
     localBindings,
@@ -9681,6 +9690,7 @@ export function extractFileFacts(
     importBindings,
     exportBindings,
     reExportBindings,
+    ...(commonJsFacts === undefined ? {} : { commonJsFacts }),
     typescriptFacts: {
       decoratorTaintedTypeSymbolIds: [...decoratorTaintedTypeSymbolIds],
       decoratorTaintedMemberSymbolIds: [...decoratorTaintedMemberSymbolIds],

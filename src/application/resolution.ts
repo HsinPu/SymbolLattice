@@ -69,6 +69,7 @@ import {
   type SymbolNode
 } from "../domain/index.js";
 import type { ExtractedFileFacts } from "../extraction/index.js";
+import { commonJsCallResolver } from "./resolvers/javascript-commonjs-resolver.js";
 import {
   projectFrameworkPluginOutputs,
   type FrameworkProjectPluginRegistry
@@ -575,6 +576,7 @@ function mergeExplicitEntry(
 
 function directExportSurface(facts: ExtractedFileFacts, filePath: string): ExportSurface {
   const surface = new Map<string, ExportSurfaceEntry>();
+  const commonJsExportIds = new Set(facts.commonJsFacts?.exports.map((entry) => entry.symbolId) ?? []);
   const defaultExportLocalNames = new Set(
     facts.exportBindings
       .filter((binding) => binding.exportedName === "default")
@@ -598,6 +600,7 @@ function directExportSurface(facts: ExtractedFileFacts, filePath: string): Expor
     if (
       symbol.kind !== "file" &&
       symbol.isExported &&
+      !commonJsExportIds.has(symbol.id) &&
       !defaultExportLocalNames.has(symbol.name) &&
       symbol.qualifiedName === `${filePath}#${symbol.name}`
     ) {
@@ -2167,6 +2170,8 @@ export function resolveProjectFacts(input: {
   // Framework projections may append references after module resolution. Re-sort
   // the same owned list rather than allocating another full-size copy.
   references.sort((left, right) => compareStableText(left.id, right.id));
+  const resolveCommonJsCall = commonJsCallResolver({ factsByFile, symbolsById,
+    resolveModule: (filePath, specifier) => moduleTargetPathByKey.get(moduleKey(filePath, specifier)) });
   let referenceIndex = 0;
   for (const reference of references) {
     referenceIndex += 1;
@@ -2344,6 +2349,13 @@ export function resolveProjectFacts(input: {
       continue;
     }
 
+    const commonJsCall = resolveCommonJsCall(reference);
+    if (commonJsCall !== null) {
+      if (commonJsCall.target === null) unresolvedReferences.push(reference);
+      resolvedEdges.push(referenceEdge(reference, commonJsCall.target?.id ?? null,
+        commonJsCall.target === null ? "unresolved" : "exact", commonJsCall.target === null ? 0 : 1, commonJsCall.evidence));
+      continue;
+    }
     const scopedLocal = resolveScopedBinding(
       reference.referenceName,
       referenceScopeIdsByReferenceId.get(reference.id) ?? [],

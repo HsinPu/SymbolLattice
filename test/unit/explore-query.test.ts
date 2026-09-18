@@ -41,6 +41,32 @@ function indexedFile(path: string, generated: boolean, role: SourceRole = "produ
 }
 
 describe("bounded lexical and relationship ranking", () => {
+  it.each(["d.ts", "d.cts", "d.mts"])("does not treat %s signatures as implementation bodies for execution questions", (extension) => {
+    const declaration = { ...symbol({ id: "ambient", name: "request", filePath: `types/handler.${extension}` }),
+      range: { start: { line: 1, column: 1 }, end: { line: 1, column: 64 } } };
+    const source = "declare function request(validation: RouteHandler): void;";
+    const matched = matchCallableSource(source, [declaration], [["request"], ["validation"], ["handler"]]);
+    const lexical = { policy: SOURCE_LEXICAL_POLICY, limits: SOURCE_LEXICAL_LIMITS, state: "searched" as const,
+      scannedFiles: 1, scannedSymbols: 1, scannedCharacters: source.length, truncated: false,
+      candidates: scoreCallableSource(matched.documents) };
+    const graph = { symbols: [declaration], edges: [] };
+    const flow = planExploreQuery(graph, "How does request validation run before the handler?", lexical).selection[0]!;
+    expect(flow.sourceScore).toBe(0);
+    expect(flow.sourceMatches.length).toBeGreaterThan(0);
+    expect(flow.reasons).toContain("declaration-source-only");
+    for (const query of ["request validation handler", "How does request validation run with handler types?",
+      `${declaration.filePath} request validation handler run`]) {
+      const exempt = planExploreQuery(graph, query, lexical).selection[0]!;
+      expect(exempt.sourceScore).toBeGreaterThan(0);
+      expect(exempt.reasons).not.toContain("declaration-source-only");
+    }
+    const ordinarySource = { ...declaration, filePath: "src/handler.ts" };
+    const ordinaryLexical = { ...lexical, candidates: lexical.candidates.map((candidate) => ({ ...candidate,
+      matches: candidate.matches.map((match) => ({ ...match, filePath: ordinarySource.filePath })) })) };
+    expect(planExploreQuery({ symbols: [ordinarySource], edges: [] }, "request validation handler run", ordinaryLexical)
+      .selection[0]!.sourceScore).toBeGreaterThan(0);
+  });
+
   it("uses the second focus slot for new evidence instead of an already covered local variable", () => {
     const owner = { ...symbol({ id: "owner", name: "checkPluginDependencies", filePath: "src/check.ts" }),
       range: { start: { line: 1, column: 1 }, end: { line: 9, column: 2 } } };
@@ -207,7 +233,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v14",
+      policy: "explore-query-plan-v15",
       queryIntent: {
         tests: false,
         icons: false,
@@ -325,7 +351,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v14",
+      policy: "explore-query-plan-v15",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -557,7 +583,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v14",
+      policy: "explore-query-plan-v15",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -981,7 +1007,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v14",
+      policy: "explore-query-plan-v15",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v2",
@@ -1680,7 +1706,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v14",
+      policy: "explore-query-plan-v15",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,

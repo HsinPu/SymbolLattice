@@ -16,10 +16,10 @@ import {
 import { identifierTermGroups, identifierTermVariants, identifierWords } from "../domain/identifier-search.js";
 import { SOURCE_LEXICAL_SCORING, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v14" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v15" as const;
 export const EXPLORE_QUERY_CONNECTION_LIMITS = { perNeighbor: 60, maximumScore: 240 } as const;
 export const EXPLORE_QUERY_SOURCE_LEXICAL_SCORING = {
-  policy: "callable-source-ranking-v1",
+  policy: "callable-source-ranking-v2",
   density: SOURCE_LEXICAL_SCORING,
   maximumScore: 1720,
   admissionScore: 120,
@@ -120,6 +120,7 @@ export type ExploreQuerySelectionReason =
   | "lexical-symbol-variant"
   | "multi-term-coverage"
   | "callable-source-term"
+  | "declaration-source-only"
   | "exact-file-name"
   | "graph-expanded"
   | "graph-connected"
@@ -866,7 +867,8 @@ function candidateFor(
   roleIntent: ExploreQueryRoleIntent,
   filesByPath: ReadonlyMap<string, IndexedFile>,
   sourceMatches: readonly SourceLexicalMatch[] = [],
-  sourceScore = 0
+  sourceScore = 0,
+  executionIntent = false
 ): Candidate | null {
   if (symbol.kind === "file") return null;
   const explicitFile = fileHints.includes(symbol.filePath);
@@ -974,6 +976,14 @@ function candidateFor(
     if (!explicitFile && !exactSymbolTerm && !qualifiedSymbolTerm && identifierTerms.includes(stem) && corroboratedStem) {
       baseReasons.push("exact-file-name");
       baseScore += EXPLORE_QUERY_SOURCE_LEXICAL_SCORING.exactFileNameScore;
+    }
+    // Ambient declarations contain signatures, not executable bodies. Keep
+    // their literal receipts and symbol-name score, but do not treat type
+    // vocabulary as implementation evidence for an execution-flow question.
+    if (executionIntent && !explicitFile && /\.d\.[cm]?ts$/iu.test(symbol.filePath)) {
+      baseScore -= sourceScore;
+      sourceScore = 0;
+      baseReasons.push("declaration-source-only");
     }
   }
   const generated = generatedClassificationFor(filesByPath.get(symbol.filePath) ?? {});
@@ -2117,6 +2127,8 @@ export function planExploreQuery(
     icons: parsed.iconIntentTerms.length > 0,
     localization: parsed.localizationIntentTerms.length > 0
   };
+  const executionIntent = /\b(?:flow|runtime|execution|execute[sd]?|executing|runs?|running|invoke[sd]?|invoking|invocation|process(?:es|ing)?)\b/iu.test(parsed.boundedQuery) &&
+    !/\b(?:types?|typings?|interfaces?|signatures?|declarations?|overloads?|generics?|typecheck(?:ing)?)\b/iu.test(parsed.boundedQuery);
   const filesByPath = new Map((graph.files ?? []).map((file) => [file.path, file]));
   const sourceById = new Map((sourceLexical?.candidates ?? []).map((candidate) => [candidate.symbolId, candidate]));
   const lexicalCandidates = graph.symbols
@@ -2127,7 +2139,8 @@ export function planExploreQuery(
       roleIntent,
       filesByPath,
       sourceById.get(symbol.id)?.matches,
-      sourceById.get(symbol.id)?.score
+      sourceById.get(symbol.id)?.score,
+      executionIntent
     ))
     .filter((candidate): candidate is Candidate => candidate !== null);
   const seedFiltering = filterLowValueCandidates(lexicalCandidates, roleIntent);
