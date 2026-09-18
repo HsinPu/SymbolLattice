@@ -14,6 +14,7 @@ These tools generate or validate large-project evidence outside the published np
 | `groovy/` | `correctness-oracle.mjs`, `GroovyOracle.groovy` | manual compiler oracle |
 | `javascript/` | `correctness-oracle.mjs` | automatic |
 | `javascript/` | `named-function-expressions.mjs` | automatic declaration/scorer contract; manual pinned-corpus execution |
+| `javascript/` | `assigned-callables.mjs` | automatic anonymous-assignment/ownership scorer contract; manual pinned-corpus execution |
 | `javascript/` | `commonjs-call-evidence.mjs`, `fastify-commonjs-truth.json` | automatic source-receipt verifier contract; manual pinned-corpus execution |
 | `python/` | `correctness-oracle.mjs`, `PythonOracle.py` | manual CPython stdlib AST oracle |
 | `sfc/` | `correctness-oracle.mjs` | manual Vue/Svelte/Astro component relation oracle |
@@ -33,7 +34,7 @@ These tools generate or validate large-project evidence outside the published np
 | `r/` | `lifecycle.mjs` | manual |
 | `mcp/` | `read-query-concurrency.mjs` | manual |
 | `mcp/` | `strict-fresh-read-lifecycle.mjs` | manual |
-| `mcp/` | `task-retrieval.mjs`, `nest-retrieval-tasks.json`, `nest-source-tasks.json`, `fastify-retrieval-tasks.json`, `fastify-plugin-tasks.json`, `fastify-error-tasks.json`, `fastify-serializer-tasks.json` | automatic scorer/source verifier contracts; manual pinned-corpus execution |
+| `mcp/` | `task-retrieval.mjs`, `nest-retrieval-tasks.json`, `nest-source-tasks.json`, `fastify-retrieval-tasks.json`, `fastify-plugin-tasks.json`, `fastify-error-tasks.json`, `fastify-serializer-tasks.json`, `fastify-cookie-tasks.json` | automatic scorer/source verifier contracts; manual pinned-corpus execution |
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
@@ -248,3 +249,62 @@ node benchmarks/javascript/correctness-oracle.mjs --corpus fastify=/external/fas
 ```
 
 Run the other manifests against their matching corpus, finishing all baseline queries before index upgrades. External evidence is under `SymbolLattice-evidence-0522`: `*-baseline.json`, final `*-completed.json`, `*-release4-index.json`, `commonjs-receipts-completed.json`, `javascript-oracle-completed.json`, `language-depth-completed.json`, the baseline build, full test log and preserved intermediate experiments. No downloaded project, generated index or result report is committed here.
+
+### Anonymous member assignments and upstream source in v0.523.0
+
+JavaScript/TypeScript now retain anonymous functions and arrows directly assigned to static member paths, including `Reply.prototype.send = function (...) { ... }`. The symbol's source range includes the assignment target and body; internal calls belong to that callable. Dot names, literal string/number/template keys, `this` roots and transparent TypeScript assertions are supported within bounded path depth and label length. Existing named-expression, variable, class-property and default-export identities are preserved. These source labels create no lexical binding and do not prove exports, object identity or receiver dispatch. Dynamic computed targets, call-expression receivers and compound assignments remain outside this addition. `multi-language-ast-v425` invalidates previous extraction facts; the resolver remains `project-resolver-v204`. Upgrade existing indexes with `SymbolLattice sync .`.
+
+Extraction alone did not fix the known error-response task: the intermediate `*-candidate.json` reports still delivered only 3/4 required source facts. The final source-window planner (`explore-source-windows-v4`) also uses already-returned incoming impact paths. It accepts only consistently directed exact call chains of two hops, with a query-matching terminal name and call sites in already requested files. It preserves the existing direct-call/spine selections, then fills at most two spare slots within the existing eight-window and shared character limits. Each supplemental window retains the chain's edge IDs; full edge receipts remain in the focus's impact paths. Capacity and source truncation remain disclosed. This does not prove an invocation of an assigned property or make the returned graph exhaustive.
+
+Acceptance fixed before opening the new held-out output: recover `lib/reply.js:140` in the error task without losing any of the nine known tasks' required files or evidence. `mcp/fastify-cookie-tasks.json` independently fixes five source facts about preserving repeated cookie headers before implementation; neither its baseline nor candidate output was inspected until the final product was frozen. It is a new task on the existing Fastify corpus, not an unseen repository. Its failure below is retained, and it is now a regression case rather than unseen validation.
+
+Runs used Windows/Node v22.23.2 and three sequential fresh CLI processes per task, before full tests. The preserved baseline is v0.522.0 at product commit `57dd487793347928a7fe0429b0f8c5e92d462707`, build SHA-256 `39eef8e1736dde591665c692eda7e667210a86d2f56b51c68447eba60a1225fe`. The final v0.523.0 build is `ff7dd78134a76aaa42b5add30478490ee0112f5765baa5a163642e49253d9437`. Paired manifest hashes match. Corpus URLs and pinned commits remain [Fastify](https://github.com/fastify/fastify/tree/70b14e92c0b55e8201f5530ba2e6bab4e928c784) and [NestJS](https://github.com/nestjs/nest/tree/35c3ded6dbf3f23f917ae88d0ed966932788cae6).
+
+Official sync upgraded the extractor and re-extracted all existing files. Fastify has 338 files / 8,531 symbols / 18,938 edges, generation `b22e4013-8e0e-4931-9eb4-a31143cc1931`; NestJS has 1,738 files / 17,431 symbols / 44,760 edges, generation `f4329572-07fd-4767-a2a2-9e5158c5c6a5`. This version-triggered re-extraction is not a measurement of ordinary small-change incremental performance.
+
+| Task | Required files, before → after | Source facts, before → after | Judged TP / FP / unjudged, after |
+| --- | --- | --- | --- |
+| Constructor dependencies | 1/1 → 1/1 | 2/2 → 2/2 | 1 / 0 / 3 |
+| Known provider loader | 1/1 → 1/1 | 1/1 → 1/1 | 3 / 0 / 1 |
+| Provider creation flow | 2/2 → 2/2 | 3/3 → 3/3 | 2 / 1 / 1 |
+| HTTP pipes | 2/2 → 2/2 | 2/2 → 2/2 | 2 / 0 / 2 |
+| Guard activation body | 1/1 → 1/1 | 3/3 → 3/3 | 1 / 0 / 0 |
+| Fastify validation | 2/2 → 2/2 | 3/4 → 3/4 | 3 / 0 / 1 |
+| Fastify plugin dependencies | 2/2 → 2/2 | 3/3 → 3/3 | 2 / 0 / 2 |
+| Fastify error response | 2/2 → 2/2 | 3/4 → 4/4 | 2 / 0 / 2 |
+| Response serializer selection | 2/2 → 2/2 | 4/4 → 4/4 | 2 / 0 / 2 |
+| Multiple cookie headers (held out) | 1/1 → 1/1 | 0/5 → 0/5 | 2 / 0 / 2 |
+
+All 118 emitted excerpts and 164 lexical token receipts in the final ten tasks passed independent source/range verification. Judged precision is 2/3 for provider creation and 1 for the other judged subsets; judgment coverage ranges from 1/4 to 1. Unjudged files are not automatically relevant or FP. Validation still omits `lib/handleRequest.js:157`, and the cookie task finds `lib/reply.js` without delivering any of its five required header-append facts. The known irrelevant NestJS lifecycle-hook file remains. None of these file/source measurements establish complete graph correctness.
+
+| Task | Median process ms, before → after | Markdown bytes, before → after | Source characters, before → after | CLI JSON bytes, after |
+| --- | --- | --- | --- | --- |
+| Constructor dependencies | 3,846 → 3,450 | 31,572 → 31,572 | 14,281 → 14,281 | 953,406 |
+| Known provider loader | 3,302 → 3,077 | 8,595 → 8,595 | 2,049 → 2,049 | 404,997 |
+| Provider creation flow | 3,390 → 3,403 | 24,340 → 24,340 | 10,201 → 10,201 | 951,729 |
+| HTTP pipes | 3,685 → 3,673 | 23,534 → 23,534 | 8,287 → 8,287 | 682,050 |
+| Guard activation body | 3,134 → 3,089 | 3,147 → 3,147 | 755 → 755 | 156,960 |
+| Fastify validation | 2,139 → 1,970 | 38,891 → 38,891 | 24,000 → 24,000 | 496,035 |
+| Fastify plugin dependencies | 2,021 → 2,024 | 11,246 → 11,246 | 5,063 → 5,063 | 229,747 |
+| Fastify error response | 2,239 → 1,969 | 37,920 → 38,058 | 24,000 → 24,000 | 472,116 |
+| Response serializer selection | 2,102 → 1,976 | 40,840 → 40,168 | 23,538 → 23,142 | 576,846 |
+| Multiple cookie headers | 2,162 → 1,946 | 25,449 → 25,449 | 14,192 → 14,192 | 419,439 |
+
+The error task recovers its missing entry call with 138 additional Markdown bytes and unchanged 24,000 source characters. These process timings include startup, freshness checks and serialization; three repetitions on two repositories establish no speed improvement, latency SLO or agent completion-time result.
+
+The independent Espree audit parsed all 254 tracked Fastify JavaScript files without rejection. Its 76 anonymous-assignment truths are fixed independently of the index (truth SHA-256 `3d4f4d45c60a006869090f2467c1c56fc616b8df85cf7b577546fea3877e8c55`). Exact declaration identity/range improves from TP 0 / FN 76 to TP 75 / FN 1, with zero duplicate identities. Direct identifier-call ownership improves from 0/39 to 37/39. The remaining declaration and both ownership misses are `.github/scripts/lint-ecosystem.js:14–17`, which the default hidden-directory discovery policy excludes. Within the default indexed scope, the corresponding counts are 75/75 and 37/37; the full tracked-source denominators and failing audit exit are preserved, not rewritten to match the product. This measures source identity and call ownership, not callee correctness, property dispatch, repository-wide precision or TypeScript corpus coverage.
+
+The existing named-expression audit remains TP 124 / FN 0 with no duplicates. The CommonJS audit verifies all 62 emitted receipts across 18 files and both fixed manual occurrences (TP 2 / FN 0); overall precision is unmeasured. The existing JavaScript relation oracle retains 212/212 sampled positives, no invalid evidence and 150/150 negative cases. Its overall status remains **inconclusive**, with only 2/24 instantiation, 0/5 heritage and 4/65 ESM-import quota items. This is not the full multi-project release validation.
+
+The final build and TypeScript test typecheck pass. The full suite passes 3,071 tests with 4 skipped (298 passing files, one skipped). The 58-language identity/smoke check and MCP worker generation-switch check also pass; these do not establish deep support for every language or resolve the corpus gaps above.
+
+Reproduce with external indexed checkouts, finishing baseline queries before the extractor upgrade:
+
+```sh
+node benchmarks/mcp/task-retrieval.mjs --project /external/fastify --manifest benchmarks/mcp/fastify-error-tasks.json --product-root /external/baseline-05220 --repetitions 3 --output /external/evidence/error-before.json
+node dist/cli/main.js sync /external/fastify --json
+node benchmarks/mcp/task-retrieval.mjs --project /external/fastify --manifest benchmarks/mcp/fastify-error-tasks.json --repetitions 3 --output /external/evidence/error-after.json
+node benchmarks/javascript/assigned-callables.mjs --project /external/fastify --commit 70b14e92c0b55e8201f5530ba2e6bab4e928c784 --output /external/evidence/assignments.json
+```
+
+Run all other manifests on their matching corpora. External artifacts are under `SymbolLattice-evidence-0523`: the baseline build, `*-baseline.json`, intermediate `*-candidate.json`, final retrieval `*-windows.json`, sync reports, `assignments-final.json`, `named-final.json`, `commonjs-final.json`, `javascript-oracle-final.json` and the full test log. No corpus, generated index or report is committed here.

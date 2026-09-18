@@ -3,7 +3,7 @@ import { identifierTermVariants, identifierWords } from "../domain/identifier-se
 import type { ExplorePathSpinePlan } from "./explore-path-spines.js";
 import { EXPLORE_GENERATED_SOURCE_WORTH } from "./explore-query.js";
 
-export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v3" as const;
+export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v4" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY =
   "explore-source-window-allocation-v4" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS = {
@@ -23,6 +23,8 @@ export const EXPLORE_SOURCE_WINDOW_LIMITS = {
   mergeGapLines: 3,
   maximumWindows: 8,
   maximumWindowsPerFocus: 2,
+  maximumImpactHops: 2,
+  maximumImpactWindows: 2,
   pathSpineWindowsExemptPerFocus: true
 } as const;
 
@@ -36,7 +38,7 @@ export interface ExploreSourceWindowPlanItem {
   readonly relatedSymbolIds: readonly string[];
   readonly pathSpineIndexes: readonly number[];
   readonly relevanceWeight: number;
-  readonly reason: "exact-connection-site" | "exact-focus-call" | "exact-focus-callee" | "exact-path-spine";
+  readonly reason: "exact-connection-site" | "exact-focus-call" | "exact-focus-callee" | "exact-path-spine" | "exact-impact-call";
 }
 
 export interface ExploreSourceWindowPlan {
@@ -662,15 +664,70 @@ export function planExploreSourceWindows(
     if (candidate.reason !== "exact-path-spine") nonSpinePerFocus.set(candidate.focusRank, nonSpineCount + 1);
   }
 
+  // Existing impact paths already contain bounded incoming-call evidence.
+  // Spend only spare window slots on query-relevant upstream callers, after
+  // preserving the primary direct-call/spine plan. Full edge receipts remain
+  // in focus.impact.paths; a static assignment label does not prove dispatch.
+  const impactCandidates: MutableWindow[] = [];
+  const seenImpactEdges = new Set<string>();
+  for (const focus of [...focuses].sort((left, right) => left.rank - right.rank)) {
+    for (const path of focus.impact.paths) {
+      const terminal = path.symbols.at(-1);
+      if (terminal === undefined || path.symbols[0]?.id !== focus.symbol.id ||
+          path.edges.length < 2 || path.edges.length > EXPLORE_SOURCE_WINDOW_LIMITS.maximumImpactHops ||
+          path.symbols.length !== path.edges.length + 1 ||
+          new Set(path.symbols.map((symbol) => symbol.id)).size !== path.symbols.length) continue;
+      const words = new Set(identifierWords(terminal.name).flatMap(identifierTermVariants));
+      if (!queryTerms.some((term) => identifierTermVariants(term).some((variant) => words.has(variant)))) continue;
+      if (!path.edges.every((edge, index) => {
+        const caller = path.symbols[index + 1]!;
+        return edge.kind === "calls" && edge.resolution === "exact" &&
+          edge.sourceId === caller.id && edge.targetId === path.symbols[index]!.id &&
+          edge.filePath === caller.filePath;
+      })) continue;
+      for (const edge of path.edges) {
+        if (!availableFiles.has(edge.filePath)) unavailableEdges.add(edge.id);
+      }
+      if (path.edges.some((edge) => !availableFiles.has(edge.filePath))) continue;
+      for (const edge of path.edges) {
+        if (seenImpactEdges.has(edge.id)) continue;
+        seenImpactEdges.add(edge.id);
+        const site: WindowSite = {
+          focus, filePath: edge.filePath,
+          startLine: Math.max(1, edge.range.start.line - EXPLORE_SOURCE_WINDOW_LIMITS.contextPaddingLines),
+          endLine: edge.range.end.line + EXPLORE_SOURCE_WINDOW_LIMITS.contextPaddingLines,
+          evidenceStartLine: edge.range.start.line, evidenceEndLine: edge.range.end.line,
+          connectionEdgeIds: path.edges.map((item) => item.id),
+          relatedSymbolIds: path.symbols.slice(1).map((symbol) => symbol.id),
+          pathSpineIndexes: [], relevanceWeight: focus.score, reason: "exact-impact-call"
+        };
+        if (coveredByPrimarySource(site, focuses) || selected.some((window) =>
+          window.filePath === site.filePath && window.startLine <= site.evidenceStartLine &&
+          window.endLine >= site.evidenceEndLine) || impactCandidates.some((window) =>
+          window.filePath === site.filePath && window.startLine <= site.evidenceStartLine &&
+          window.endLine >= site.evidenceEndLine)) continue;
+        impactCandidates.push({ ...site, focusRank: focus.rank,
+          connectionEdgeIds: [...site.connectionEdgeIds], relatedSymbolIds: [...site.relatedSymbolIds],
+          pathSpineIndexes: [] });
+      }
+    }
+  }
+  const impactSlots = Math.min(EXPLORE_SOURCE_WINDOW_LIMITS.maximumImpactWindows,
+    EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows - selected.length);
+  for (const window of impactCandidates.slice(0, impactSlots)) {
+    selected.push(window);
+    selectedPerFocus.set(window.focusRank, (selectedPerFocus.get(window.focusRank) ?? 0) + 1);
+  }
+
   return {
     policy: EXPLORE_SOURCE_WINDOW_POLICY,
     limits: EXPLORE_SOURCE_WINDOW_LIMITS,
     summary: {
-      candidateCount: candidates.length,
+      candidateCount: candidates.length + impactCandidates.length,
       selectedCount: selected.length,
       selectedFocusCount: selectedPerFocus.size,
       unavailableFileSiteCount: unavailableEdges.size,
-      truncated: selected.length < candidates.length
+      truncated: selected.length < candidates.length + impactCandidates.length
     },
     windows: selected.map((window, index) => ({
       index,

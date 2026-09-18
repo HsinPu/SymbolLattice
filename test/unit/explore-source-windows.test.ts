@@ -12,6 +12,76 @@ import {
 import type { ExploreConnection, ExploreFocus } from "../../src/application/types.js";
 import type { ExplorePathSpinePlan } from "../../src/application/explore-path-spines.js";
 import type { GraphEdge, SymbolNode } from "../../src/domain/types.js";
+import type { ImpactPath } from "../../src/domain/graph.js";
+
+function impactPath(symbols: readonly SymbolNode[], edges: readonly GraphEdge[]): ImpactPath {
+  return { symbols, edges, steps: edges.map((edge, index) => ({ from: symbols[index]!, to: symbols[index + 1]!, edge })) };
+}
+
+describe("query-relevant upstream call evidence", () => {
+  const root = symbol("chooseStatus", "src/reply.js", 1);
+  const bridge = symbol("handleFailure", "src/reply.js", 30);
+  const entry = symbol("Reply.prototype.send", "src/reply.js", 60);
+  const first = edge("bridge-root", bridge, root, 31).edge;
+  const second = edge("entry-bridge", entry, bridge, 61).edge;
+  const path = impactPath([root, bridge, entry], [first, second]);
+  const primary = { ...focus(1, root, 1, 5),
+    callers: { items: [{ symbol: bridge, edge: first }], truncated: false },
+    impact: { paths: [path], truncated: false } };
+
+  it("fills spare slots with upstream source and preserves both directed edge receipts", () => {
+    const plan = planExploreSourceWindows([primary], [], undefined, ["sending"]);
+    expect(plan.windows).toEqual([
+      expect.objectContaining({ startLine: 28, endLine: 34, reason: "exact-focus-call" }),
+      expect.objectContaining({ startLine: 58, endLine: 64, reason: "exact-impact-call",
+        connectionEdgeIds: [first.id, second.id], relatedSymbolIds: [bridge.id, entry.id] })
+    ]);
+    expect(plan.summary.truncated).toBe(false);
+    expect(planExploreSourceWindows([primary], [], undefined, ["unrelated"]).windows).toHaveLength(1);
+  });
+
+  it("rejects heuristic hops, reversed edges, broken chains, cycles and unavailable files", () => {
+    for (const invalid of [
+      impactPath(path.symbols, [{ ...first, resolution: "heuristic" }, second]),
+      impactPath(path.symbols, [first, { ...second, sourceId: bridge.id, targetId: entry.id }]),
+      impactPath(path.symbols, [first, { ...second, targetId: root.id }]),
+      impactPath(path.symbols, [first, { ...second, filePath: "wrong.js" }]),
+      impactPath([root, bridge, root], [first, { ...second, sourceId: root.id }]),
+      impactPath([root, bridge, { ...entry, filePath: "other.js" }], [first, { ...second, filePath: "other.js" }])
+    ]) {
+      const plan = planExploreSourceWindows([{ ...primary, impact: { paths: [invalid], truncated: false } }], [], undefined, ["send", "status"]);
+      expect(plan.windows).toHaveLength(1);
+    }
+    const missing = impactPath([root, bridge, { ...entry, filePath: "other.js" }], [first, { ...second, filePath: "other.js" }]);
+    expect(planExploreSourceWindows([{ ...primary, impact: { paths: [missing], truncated: false } }], [], undefined, ["send"])
+      .summary.unavailableFileSiteCount).toBe(1);
+  });
+
+  it("deduplicates repeated sites, omits delivered source and discloses the supplemental cap", () => {
+    const more = [path, path, ...[80, 100, 120].map((line) => {
+      const sender = { ...symbol(`sender-${line}`, "src/reply.js", line), name: "sendResponse" };
+      return impactPath([root, bridge, sender], [first, edge(`sender-${line}`, sender, bridge, line + 1).edge]);
+    })];
+    const plan = planExploreSourceWindows([{ ...primary, impact: { paths: more, truncated: false } }], [], undefined, ["sending"]);
+    expect(plan.windows.filter((item) => item.reason === "exact-impact-call")).toHaveLength(2);
+    expect(plan.summary).toMatchObject({ candidateCount: 5, selectedCount: 3, truncated: true });
+    const delivered = { ...primary, source: focus(1, root, 1, 70).source };
+    expect(planExploreSourceWindows([delivered], [], undefined, ["sending"]).windows).toEqual([]);
+  });
+
+  it("keeps existing windows when the total envelope is full", () => {
+    const focuses = [primary, ...[2, 3, 4].map((rank) => focus(rank, symbol(`root-${rank}`, "src/reply.js", rank * 100), rank * 100, rank * 100 + 4))]
+      .map((item) => ({ ...item, callers: { truncated: false, items: [1, 2].map((offset) => {
+        const caller = symbol(`caller-${item.rank}-${offset}`, "src/reply.js", item.rank * 100 + offset * 20);
+        return { symbol: caller, edge: edge(caller.id, caller, item.symbol, caller.range.start.line + 1).edge };
+      }) } }));
+    const withoutImpact = planExploreSourceWindows(focuses.map((item) => ({ ...item, impact: { paths: [], truncated: false } })), [], undefined, ["sending"]);
+    const withImpact = planExploreSourceWindows(focuses, [], undefined, ["sending"]);
+    expect(withoutImpact.windows).toHaveLength(8);
+    expect(withImpact.windows).toEqual(withoutImpact.windows);
+    expect(withImpact.summary.truncated).toBe(true);
+  });
+});
 
 describe("query-relevant exact callee source", () => {
   it("includes an uncovered callee implementation after its call site was already delivered", () => {

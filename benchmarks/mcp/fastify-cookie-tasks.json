@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/fastify/fastify",
+  "commit": "70b14e92c0b55e8201f5530ba2e6bab4e928c784",
+  "truthMethod": "Manual reading of pinned reply.js before implementing anonymous member-assignment source extraction. Repeated set-cookie values are normalized to an array and appended; other header values replace the previous value. Both product outputs are held out during development. This is an unseen task on a known repository, with incomplete judgments of other files.",
+  "tasks": [{
+    "id": "preserve-multiple-cookie-headers",
+    "split": "held-out",
+    "query": "How are multiple cookie headers preserved instead of overwriting earlier values?",
+    "requiredFiles": ["lib/reply.js"],
+    "supportingFiles": ["types/reply.d.ts", "docs/Reference/Reply.md"],
+    "irrelevantFiles": ["lib/pluginUtils.js", "lib/pluginOverride.js"],
+    "evidence": [
+      { "file": "lib/reply.js", "line": 243, "text": "if (this[kReplyHeaders][key] && key === 'set-cookie')" },
+      { "file": "lib/reply.js", "line": 246, "text": "this[kReplyHeaders][key] = [this[kReplyHeaders][key]]" },
+      { "file": "lib/reply.js", "line": 250, "text": "Array.prototype.push.apply(this[kReplyHeaders][key], value)" },
+      { "file": "lib/reply.js", "line": 252, "text": "this[kReplyHeaders][key].push(value)" },
+      { "file": "lib/reply.js", "line": 255, "text": "this[kReplyHeaders][key] = value" }
+    ]
+  }]
+}

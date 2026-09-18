@@ -1,5 +1,6 @@
 import ts from "typescript";
 import { extractCommonJsFacts } from "./javascript-commonjs.js";
+import { anonymousMemberAssignment } from "./assigned-callables.js";
 
 import { extractCFileFacts } from "./c.js";
 import { extractCobolFileFacts } from "./cobol.js";
@@ -8923,7 +8924,7 @@ export function extractFileFacts(
     }
   }
 
-  function addDeclaration(node: ts.Node, info: DeclarationInfo): SymbolNode {
+  function addDeclaration(node: ts.Node, info: DeclarationInfo, sourceNode = node): SymbolNode {
     const parent = currentOwner();
     const qualifiedName =
       parent.kind === "file"
@@ -8943,13 +8944,13 @@ export function extractFileFacts(
       qualifiedName,
       kind: info.kind,
       filePath: input.filePath,
-      range: sourceRange(sourceFile, node),
+      range: sourceRange(sourceFile, sourceNode),
       isExported: info.isExported,
       declarationOrdinal
     };
     symbols.push(symbol);
     symbolsByDeclaration.set(node, symbol);
-    addResolvedEdge(parent.id, symbol.id, "contains", node, info.name);
+    addResolvedEdge(parent.id, symbol.id, "contains", sourceNode, info.name);
     return symbol;
   }
 
@@ -9088,6 +9089,10 @@ export function extractFileFacts(
       // declaration too. Their name does not prove an export or property target.
       info = { name: namedFunctionExpression.name!.text, kind: "function", isExported: false };
     }
+    const assignedExpression = info === null && !symbolsByDeclaration.has(node) ? anonymousMemberAssignment(node) : null;
+    if (assignedExpression !== null) {
+      info = { name: assignedExpression.name, kind: "function", isExported: false };
+    }
     if (info === null && node === commonJsExportClass && commonJsExportClass.name !== undefined) {
       info = { name: commonJsExportClass.name.text, kind: "class", isExported: true };
     }
@@ -9102,7 +9107,7 @@ export function extractFileFacts(
     } else if (exportAssignment !== null && ts.isClassExpression(exportAssignment.expression)) {
       heritageDeclaration = exportAssignment.expression;
     }
-    let declaredSymbol = info === null ? null : addDeclaration(node, info);
+    let declaredSymbol = info === null ? null : addDeclaration(node, info, assignedExpression?.assignment ?? node);
     if (declaredSymbol === null && expressionInfo !== null && exportAssignment !== null) {
       info = expressionInfo;
       declaredSymbol = addDeclaration(exportAssignment.expression, info);
@@ -9213,7 +9218,8 @@ export function extractFileFacts(
     ) {
       addPendingReference(declaredSymbol.id, node.name.text, "overrides", node.name);
     }
-    if (info !== null && declaredSymbol !== null) {
+    // An assignment label is not a lexical declaration or a private self name.
+    if (info !== null && declaredSymbol !== null && assignedExpression === null) {
       const enclosingScopeId = declarationScopeId(sourceFile, node, info);
       if (enclosingScopeId !== undefined) {
         for (const space of declaredBindingSpaces(info)) {

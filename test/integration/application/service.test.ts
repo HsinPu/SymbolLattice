@@ -1141,7 +1141,7 @@ describe("SymbolLatticeService", () => {
         summary: { selectedSpineCount: 0, bridgeSymbolCount: 0 }
       },
       sourceWindowPlan: {
-        policy: "explore-source-windows-v3",
+        policy: "explore-source-windows-v4",
         summary: { candidateCount: 0, selectedCount: 0, truncated: false }
       },
       sourceWindows: [],
