@@ -4,6 +4,16 @@ import { sourceDeliveryIdentityFromText } from "../../src/application/source-del
 import { McpSourceSession } from "../../src/mcp/source-session.js";
 
 describe("MCP explore text rendering", () => {
+  it("cites shared source and every selected flow step even without a path-spine slot", () => {
+    const text = renderExploreText({ focuses: [{ symbol: { name: "later" }, sourceReuse: { segments: [{
+      referenceIndex: 0, filePath: "a.ts", range: { start: { line: 8 } }
+    }] }, focusCoverage: { flow: { truncated: true, path: { steps: [{ from: { name: "anchor" }, to: { name: "later" },
+      edge: { kind: "calls", resolution: "exact", filePath: "a.ts", range: { start: { line: 9 } } } }] } } } }] });
+    expect(text).toContain("Shared source: focus #1 at `a.ts:8`");
+    expect(text).toContain("`anchor` → `later` (calls)");
+    expect(text).toContain("at `a.ts:9`");
+    expect(text).toContain("Downstream focus search reached its bounds");
+  });
   it("distinguishes callee lexical matches from call proof and discloses search limits", () => {
     const output = renderExploreText({ focuses: [{ symbol: { name: "run" } }], sourceWindows: [{
       sourceMatches: [{ term: "cleanup", token: "cleanup", filePath: "a.ts", range: { start: { line: 9, column: 3 } } }]

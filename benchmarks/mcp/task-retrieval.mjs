@@ -74,6 +74,57 @@ function execute(command, args, cwd) {
   return run.stdout.trim();
 }
 
+/** Shared prefixes must resolve to earlier emitted excerpts, with no missing bytes. */
+export function verifySourceReuse(result, readSource) {
+  let verifiedReuses = 0, reusedCharacters = 0;
+  const focuses = result.focuses ?? [];
+  const canonical = (text) => text.replace(/\r\n|\r|\u2028|\u2029/gu, "\n");
+  for (const [index, focus] of focuses.entries()) {
+    const reuse = focus.sourceReuse;
+    if (!reuse) continue;
+    assert.equal(focus.sourceAvailability, "active-generation");
+    const original = readSource(focus.symbol.filePath);
+    const offsets = reuse.originalCharacterOffsets;
+    assert.ok(Number.isSafeInteger(offsets.start) && Number.isSafeInteger(offsets.end) &&
+      offsets.start >= 0 && offsets.start < offsets.end && offsets.end <= original.length);
+    assert.equal(canonical(original.slice(offsets.start, offsets.end)).length, reuse.originalEmittedCharacters);
+    let cursor = offsets.start;
+    assert.ok(reuse.segments.length > 0, "Missing shared source owners");
+    for (const segment of reuse.segments) {
+      assert.ok(Number.isSafeInteger(segment.referenceIndex) && segment.referenceIndex >= 0 && segment.referenceIndex < index,
+        "Shared source must reference an earlier focus");
+      const owner = focuses[segment.referenceIndex];
+      assert.ok(owner.source, "Shared source owner was not emitted");
+      assert.equal(segment.reference, owner.reference);
+      assert.equal(segment.sourceIdentityId, owner.source.sourceIdentity.id);
+      assert.equal(segment.filePath, focus.symbol.filePath);
+      assert.equal(segment.filePath, owner.source.filePath);
+      const span = segment.fullFileCharacterOffsets;
+      const delivered = owner.source.sourceIdentity.fullFileCharacterOffsets;
+      assert.equal(span.start, cursor, "Gap in shared source coverage");
+      assert.ok(Number.isSafeInteger(span.end) && span.end > span.start && span.end <= offsets.end &&
+        span.start >= delivered.start && span.end <= delivered.end, "Shared source extends beyond its emitted owner");
+      const position = (offset) => {
+        const endings = [...original.slice(0, offset).matchAll(/\r\n|\r|\n|\u2028|\u2029/gu)];
+        const last = endings.at(-1);
+        return { line: endings.length + 1, column: offset - (last ? last.index + last[0].length : 0) + 1 };
+      };
+      assert.deepEqual(segment.range, { start: position(span.start), end: position(span.end) });
+      cursor = span.end;
+    }
+    assert.equal(canonical(original.slice(offsets.start, cursor)).length, reuse.reusedCharacters);
+    if (focus.source === null) assert.equal(cursor, offsets.end, "Shared source did not cover the omitted excerpt");
+    else {
+      assert.equal(focus.source.filePath, focus.symbol.filePath);
+      assert.deepEqual(focus.source.sourceIdentity.fullFileCharacterOffsets, { start: cursor, end: offsets.end });
+    }
+    assert.equal(reuse.reusedCharacters + (focus.source?.emittedCharacters ?? 0), reuse.originalEmittedCharacters);
+    verifiedReuses += 1;
+    reusedCharacters += reuse.reusedCharacters;
+  }
+  return { verifiedReuses, reusedCharacters };
+}
+
 /** Verify emitted bytes and line coordinates against the pinned checkout, independently of extraction. */
 export function verifySourceExcerpts(result, readSource) {
   const sources = [result.source, ...(result.focuses ?? []).map((focus) => focus.source),
@@ -165,7 +216,8 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
     return { id: task.id, split: task.split, query: task.query, ...scoreTask(task, response),
       processMilliseconds: durations, medianProcessMilliseconds: sorted[Math.floor(sorted.length / 2)],
       responseBytes: Buffer.byteLength(raw), markdownProjectionBytes: Buffer.byteLength(renderExploreText(response)),
-      sourceVerification, lexicalVerification: verifyLexicalMatches(response, (file) => readFileSync(resolve(project, file), "utf8")), result: response };
+      sourceVerification, lexicalVerification: verifyLexicalMatches(response, (file) => readFileSync(resolve(project, file), "utf8")),
+      reuseVerification: verifySourceReuse(response, (file) => readFileSync(resolve(project, file), "utf8")), result: response };
   });
   const report = {
     schemaVersion: 1, productVersion, productBuild, repository: manifest.repository, commit: manifest.commit,

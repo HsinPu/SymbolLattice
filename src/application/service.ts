@@ -152,6 +152,7 @@ import {
   EXPLORE_SOURCE_WINDOW_LIMITS,
   planExploreSourceWindows
 } from "./explore-source-windows.js";
+import { planExploreSourceReuse, type ExploreSourceReuse } from "./explore-source-reuse.js";
 import {
   allocateInvestigationSource,
   DEFAULT_INVESTIGATION_SOURCE_CHARACTER_BUDGET,
@@ -4174,10 +4175,24 @@ export class SymbolLatticeService {
       }))
     });
     const sources = new Map<number, DeliveredSourceExcerpt>();
+    const sourceReuse = new Map<number, ExploreSourceReuse>();
     for (const allocation of reservation.contexts) {
       const draft = drafts.get(allocation.referenceIndex);
       if (draft === undefined) continue;
-      const source = renderContextSource(draft, allocation.allocatedCharacters);
+      let source = renderContextSource(draft, allocation.allocatedCharacters);
+      if (exploreDeclarations && source !== null) {
+        const reuse = planExploreSourceReuse(source, [...sources].map(([referenceIndex, source]) => ({
+          referenceIndex, reference: read.matches[referenceIndex]!.reference, source
+        })), draft.sourceText);
+        // Tiny padding overlaps cost more to explain than to repeat. Reuse
+        // should free at least one standard source-window reservation.
+        if (reuse !== undefined && reuse.receipt.reusedCharacters >= EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.minimumPerWindow) {
+          sourceReuse.set(allocation.referenceIndex, reuse.receipt);
+          const originalEnd = source.sourceIdentity.fullFileCharacterOffsets.end;
+          source = reuse.startOffset === originalEnd ? null :
+            renderContextSource({ ...draft, startOffset: reuse.startOffset }, originalEnd - reuse.startOffset);
+        }
+      }
       if (source !== null) sources.set(allocation.referenceIndex, source);
     }
     const allocationContexts = reservation.contexts.map((allocation) => {
@@ -4203,16 +4218,17 @@ export class SymbolLatticeService {
       contexts: allocationContexts
     };
     return {
-      contexts: read.matches.map((match, referenceIndex) =>
-        this.toSymbolContext(
+      contexts: read.matches.map((match, referenceIndex) => ({
+        ...this.toSymbolContext(
           match.reference,
           match,
           read,
           bounds,
           sources.get(referenceIndex) ?? null,
           graphView
-        )
-      ),
+        ),
+        ...(sourceReuse.has(referenceIndex) ? { sourceReuse: sourceReuse.get(referenceIndex)!, sourceAvailability: "active-generation" as const } : {})
+      })),
       allocation
     };
   }

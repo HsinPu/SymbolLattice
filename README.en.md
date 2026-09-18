@@ -4,7 +4,7 @@ Local, source-backed code graphs for developers and AI agents to search code, tr
 
 [繁體中文](README.md) | English
 
-Current version: **v0.523.2** · Node.js **>=22.13 <25** · [MIT](LICENSE)
+Current version: **v0.523.3** · Node.js **>=22.13 <25** · [MIT](LICENSE)
 
 ## Features
 

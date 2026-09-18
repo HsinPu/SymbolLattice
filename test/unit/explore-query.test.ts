@@ -17,6 +17,38 @@ import { matchCallableSource, scoreCallableSource, SOURCE_LEXICAL_POLICY, SOURCE
 import { identifierTermGroups } from "../../src/domain/identifier-search.js";
 
 describe("source-backed same-file focus coverage", () => {
+  function flowFixture(laterBody = "finish(request, run, route, handler)") {
+    const names = ["handler", "handleRequest", "checkInput", "sendOutput", "finish"];
+    const bodies = ["checkInput(request, validation, route)", "handler(request, run, route)",
+      "sendOutput(request, validation, route)", laterBody, "route(request, handler)"];
+    const lines = names.map((name, i) => `function ${name}() { return ${bodies[i]}; }`);
+    const nodes = names.map((name, i) => ({ ...symbol({ id: name, name, filePath: "src/evidence.ts" }),
+      range: { start: { line: i + 1, column: 1 }, end: { line: i + 1, column: lines[i]!.length + 1 } } }));
+    const graph = { symbols: nodes, edges: [["handleRequest", "handler"], ["handler", "checkInput"], ["checkInput", "sendOutput"], ["sendOutput", "finish"]]
+      .map(([from, to]) => ({ ...edge(`${from}-${to}`, from!, to!), filePath: nodes[0]!.filePath })) };
+    const text = lines.join("\n"), query = "request run validation handler route flow";
+    const matches = matchCallableSource(text, nodes, identifierTermGroups(query.split(" ")));
+    return { graph, query, lexical: { policy: SOURCE_LEXICAL_POLICY, limits: SOURCE_LEXICAL_LIMITS, state: "searched" as const,
+      scannedFiles: 1, scannedSymbols: nodes.length, scannedCharacters: text.length, truncated: false,
+      candidates: scoreCallableSource(matches.documents) } };
+  }
+  it("uses a comparable later step for execution queries while preserving the anchor and source concepts", () => {
+    const { graph, query, lexical } = flowFixture();
+    const plan = planExploreQuery(graph, query, lexical);
+    expect(plan.selection.map(s => s.symbol.id)).toEqual(["handler", "sendOutput"]);
+    expect(plan.selection[1]).toMatchObject({ reasons: expect.arrayContaining(["downstream-flow-coverage"]),
+      focusCoverage: { replacedSymbolId: "handleRequest", flow: { path: { symbols: [
+        expect.objectContaining({ id: "handler" }), expect.objectContaining({ id: "checkInput" }), expect.objectContaining({ id: "sendOutput" })
+      ] } } } });
+    expect(planExploreQuery({ ...graph, edges: [...graph.edges].reverse() }, query, lexical).selection).toEqual(plan.selection);
+    expect(planExploreQuery(graph, `src/evidence.ts ${query}`, lexical).selection.every(s => s.focusCoverage?.flow === undefined)).toBe(true);
+    expect(planExploreQuery(graph, "request validation handler route", lexical).selection.every(s => s.focusCoverage?.flow === undefined)).toBe(true);
+    expect(planExploreQuery(graph, `handleRequest ${query}`, lexical).selection.some(s => s.symbol.id === "handleRequest")).toBe(true);
+  });
+  it("does not trade away a query concept for a later call-chain position", () => {
+    const { graph, query, lexical } = flowFixture("finish(request, route, handler)");
+    expect(planExploreQuery(graph, query, lexical).selection.every(s => s.focusCoverage?.flow === undefined)).toBe(true);
+  });
   const query = "response output checksum values";
   function fixture(specificBody = "checksum(output, values)", extraBody?: string) {
     const names = ["begin", "busy", "specific", ...(extraBody === undefined ? [] : ["extra"])];
@@ -289,7 +321,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v16",
+      policy: "explore-query-plan-v17",
       queryIntent: {
         tests: false,
         icons: false,
@@ -407,7 +439,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v16",
+      policy: "explore-query-plan-v17",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -639,7 +671,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v16",
+      policy: "explore-query-plan-v17",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1063,7 +1095,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v16",
+      policy: "explore-query-plan-v17",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v2",
@@ -1762,7 +1794,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v16",
+      policy: "explore-query-plan-v17",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,

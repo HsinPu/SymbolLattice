@@ -428,3 +428,73 @@ node benchmarks/mcp/task-retrieval.mjs --project /external/express --manifest be
 ```
 
 Run the other seven manifests on their matching corpus as recorded above. External artifacts are under `SymbolLattice-evidence-05232`: baseline build, Express checkout/init report, `*-baseline.json` / `*-candidate.json` task reports, paired timing reports and archived runners, plus the full test log. No external source, index or generated report is committed here. Extractor `multi-language-ast-v425` and resolver `project-resolver-v204` are unchanged; parser/compiler correctness was not re-audited for this source-selection patch.
+
+### Flow coverage and shared source in v0.523.3
+
+Fastify validation's remaining missing fact had two causes. The second `handleRequest.js` focus was the immediate caller of the strongest focus, leaving later callbacks out of focus selection. Large outer and nested `route.js` excerpts also repeated thousands of characters. Selecting the later callback alone still cut the handler invocation line short; the shared-source change below then made enough source capacity available to deliver it.
+
+`explore-query-plan-v17` keeps the selected files and strongest anchor. Existing additional-concept selection takes priority. For execution-intent queries only, if no such replacement exists, a second focus that directly calls the anchor can be replaced by a comparable downstream callable in the same file. The replacement must preserve every source-backed query concept of the displaced focus, score at least 75% as highly, and be reachable through two to four exact calls. Explicit file requests and a displaced focus with an exact symbol-term match are protected. Alternatives retain normal score ordering; the rule does not simply pick the furthest node. The execution-intent classifier is the existing English query heuristic and excludes type/signature questions; this is not a general natural-language intent model.
+
+`same-file-downstream-focus-v1` walks at most 128 symbols (including the anchor and excluded original caller) and 512 edges within the already bounded query graph. It rejects heuristic, non-call, reversed, cross-file and misfiled edges, avoids cycles, and retains every selected hop plus the displaced caller's exact edge. A selected flow receipt discloses its walk limits/truncation. Graph preparation uses the existing bounded snapshot and is not included in the walk-edge counter. Markdown renders the selected path even when the separate path-spine selection has no slot for it. Static call paths do not prove runtime reachability through all branch conditions, asynchronous callbacks or dynamic dispatch.
+
+For natural-language exploration, `explore-source-prefix-reuse-v1` can share the contiguous prefix of a primary excerpt that earlier focuses already emitted in the same indexed generation. It never reuses undelivered text, skips gaps and different files, and keeps any remaining suffix on a complete line. Reuse must save at least 256 canonical characters, enough for one standard source-window reservation; small padding overlaps stay inline. No primary evidence is dropped: the shared prefix plus remaining suffix must reconstruct the original emitted excerpt exactly. This does not deduplicate arbitrary interior overlaps or supplementary windows, and it does not grow the eight-focus, eight-window or 24,000-character envelope.
+
+`sourceReuse` records the original excerpt range/offsets, its truncation state, saved character count, and the actual shared ranges with earlier focus references and source identity IDs. A fully shared excerpt may have `source: null` with `sourceAvailability: active-generation`; its text is in the cited earlier focus. This is distinct from unavailable source. A partly shared excerpt carries only the unseen suffix in `source`. Allocation receipts still distinguish reserved characters from actually emitted characters; the saved primary space becomes available to supplementary windows. Markdown cites the shared file/line and focus number. Exact-symbol and ordinary `context` source delivery retain their existing behavior.
+
+This patch repairs evidence coverage and output allocation under the existing exploration contract. No parser, resolver or index format changes are required. Acceptance was fixed before opening the new task outputs: recover all four Fastify validation facts without losing necessary files or facts on the twelve known tasks. `mcp/express-json-response-tasks.json` adds an unseen object-to-JSON/content-type task on the pinned Express repository, with five source facts independently defined from `response.js` before implementation. Neither output was opened while adjusting the product.
+
+Baseline: v0.523.2 commit `1e941c5742a30355432d6220d0e09c2ad310f83c`, build SHA-256 `497109ba89b897b01c5ff4937fb47c4f9f4d9c84112991389060667165774a26`. Final v0.523.3 build: `20847db7f16b72e630a57ce08ec9c3b77e6fba6218fb51377a8acfcaa39d215c`. Windows/Node v22.23.2, three sequential fresh CLI processes per task/product, matching frozen manifest hashes and identical paired index generations were used. The Fastify, NestJS and Express commits/generations are unchanged from v0.523.2 above; no reindex was performed. Quality and output comparisons use the final build, after correcting shared-range coordinates and applying the small-overlap cost threshold.
+
+| Task | Required files, before → after | Source facts, before → after | Judged TP / FP / unjudged, after |
+| --- | --- | --- | --- |
+| Constructor dependencies | 1/1 → 1/1 | 2/2 → 2/2 | 1 / 0 / 3 |
+| Known provider loader | 1/1 → 1/1 | 1/1 → 1/1 | 3 / 0 / 1 |
+| Provider creation flow | 2/2 → 2/2 | 3/3 → 3/3 | 2 / 1 / 1 |
+| HTTP pipes | 2/2 → 2/2 | 2/2 → 2/2 | 2 / 0 / 2 |
+| Guard activation body | 1/1 → 1/1 | 3/3 → 3/3 | 1 / 0 / 0 |
+| Fastify validation | 2/2 → 2/2 | 3/4 → 4/4 | 3 / 0 / 1 |
+| Fastify plugin dependencies | 2/2 → 2/2 | 3/3 → 3/3 | 2 / 0 / 2 |
+| Fastify error response | 2/2 → 2/2 | 4/4 → 4/4 | 2 / 0 / 2 |
+| Response serializer selection | 2/2 → 2/2 | 4/4 → 4/4 | 2 / 0 / 2 |
+| Multiple cookie headers | 1/1 → 1/1 | 5/5 → 5/5 | 2 / 0 / 2 |
+| Closing application signal listeners | 1/1 → 1/1 | 5/5 → 5/5 | 1 / 0 / 3 |
+| Restoring parent prototypes after a mounted child | 1/1 → 1/1 | 5/5 → 5/5 | 3 / 0 / 1 |
+| Object-to-JSON content type (held-out Express task) | 1/1 → 1/1 | 5/5 → 5/5 | 3 / 0 / 1 |
+
+All selected file sets are unchanged. Provider creation's known irrelevant lifecycle-hook file remains: judged precision is 2/3 there and 1 for the other judged subsets, with judged fractions from 1/4 to 1. Unknown files are not counted as false positives. The new Express task confirms preserved coverage, not a new improvement on that task or a new unseen repository.
+
+All 158 final source excerpts, 237 literal receipts and one shared-source receipt passed independent checks against pinned source. The shared receipt saves 5,123 canonical characters in the validation task. Checks require earlier emitted owners, consistent file/identity references, gap-free offsets, correct line/column coordinates, and reconstruction of the originally emitted text. The four manually specified static calls from `handler` through `preValidationCallback`, `validationCompleted` and `preHandlerCallback` to `preHandlerCallbackInner` also have exact directed receipts and their actual call-site lines in the final source envelope. The last function's body now includes the handler invocation at `handleRequest.js:157`. This is a scoped four-hop/source audit, not repository-wide graph precision or proof of runtime path feasibility.
+
+| Task | Median process ms, before → after | Markdown bytes, before → after | Source characters, before → after | CLI JSON bytes, after |
+| --- | --- | --- | --- | --- |
+| Constructor dependencies | 4,056 → 3,752 | 31,572 → 31,572 | 14,281 → 14,281 | 954,054 |
+| Known provider loader | 3,513 → 3,134 | 8,595 → 8,595 | 2,049 → 2,049 | 405,645 |
+| Provider creation flow | 3,497 → 3,308 | 27,163 → 27,163 | 12,443 → 12,443 | 1,021,175 |
+| HTTP pipes | 4,032 → 3,785 | 26,903 → 26,903 | 10,715 → 10,715 | 759,521 |
+| Guard activation body | 3,324 → 3,151 | 3,147 → 3,147 | 755 → 755 | 156,960 |
+| Fastify validation | 2,090 → 2,088 | 39,329 → 40,104 | 24,000 → 24,000 | 575,657 |
+| Fastify plugin dependencies | 2,085 → 1,940 | 11,626 → 11,626 | 5,242 → 5,242 | 236,018 |
+| Fastify error response | 2,301 → 4,526 | 38,058 → 38,058 | 24,000 → 24,000 | 472,763 |
+| Response serializer selection | 2,098 → 2,083 | 41,892 → 41,892 | 24,000 → 24,000 | 592,655 |
+| Multiple cookie headers | 2,350 → 2,344 | 26,796 → 26,796 | 15,216 → 15,216 | 376,966 |
+| Closing application signal listeners | 4,213 → 3,648 | 13,730 → 13,730 | 3,926 → 3,926 | 408,867 |
+| Restoring parent prototypes after a mounted child | 1,663 → 1,585 | 14,297 → 14,297 | 6,801 → 6,801 | 346,480 |
+| Object-to-JSON content type | 1,619 → 1,560 | 13,575 → 13,575 | 6,702 → 6,702 | 338,966 |
+
+Validation's source envelope stays at 24,000 characters because freed space is spent on previously truncated evidence. Its Markdown increases by 775 bytes (+2.0%) and CLI JSON by 69,256 bytes (+13.7%) while adding the missing fact and fuller call-path receipts. Other measured task outputs have identical byte counts. This improves evidence per source budget in this case; it does not establish universal output reduction or faster agent completion.
+
+An isolated ranking diagnostic used two warmups then 25 alternating-order `planExploreQuery` repetitions per product on the same bounded snapshot for twelve non-exact queries. It excludes retrieval, source sharing, delivery, serialization and startup; the exact guard query bypasses this planner. Full plan repeatability was checked outside timing. Median changes range from −3.10 to +2.62 ms, with validation 37.89 → 39.09 ms. CPU/Node metadata, fingerprints and samples are in `planning-paired.json`, with archived `planning-runner.mjs` (command `node .tmp/planning-05233.mjs`). This diagnostic does not measure the whole changed pipeline or provide an SLO.
+
+The error-response process outlier was followed by a four-task diagnostic: one warmup and three alternating-order fresh-process pairs per product, without concurrent tests or indexing. Median milliseconds before → after: validation 2,129 → 1,968; error response 1,973 → 1,949; shutdown 3,527 → 3,498; exact guard control 3,017 → 2,972. The large error-response increase did not reproduce. These small samples do not establish general acceleration or exclude regressions on other workloads. First indexing, incremental sync and total agent task completion time remain unmeasured. Raw samples and runner are `process-paired.json` / `process-timing-runner.mjs` (command `node .tmp/paired-process-05233.mjs`). All timing ran before the full suite. A stale description of test order in the reused planning runner was corrected with an explicit metadata note; its original report/runner remain archived and timing samples are unchanged.
+
+Build, TypeScript test typecheck and version consistency checks pass. The full suite passes with 3,095 tests passed and 4 skipped (300 passing files, one skipped). New cases cover directed paths, heuristic/reversed/misfiled edges, cycles and traversal caps; preserved query concepts, protected exact/file requests; partial/full shared prefixes, gaps, missing owners, CRLF/Unicode boundaries, small-overlap cost and unchanged ordinary context delivery. The independent benchmark verifier rejects missing or insufficient owners and inconsistent shared coordinates. These contract tests complement the actual pinned-corpus runs above.
+
+Reproduce against the same frozen manifests and external indexes:
+
+```sh
+node benchmarks/mcp/task-retrieval.mjs --project /external/fastify --manifest benchmarks/mcp/fastify-retrieval-tasks.json --product-root /external/baseline-05232 --repetitions 3 --output /external/evidence/validation-before.json
+node benchmarks/mcp/task-retrieval.mjs --project /external/fastify --manifest benchmarks/mcp/fastify-retrieval-tasks.json --repetitions 3 --output /external/evidence/validation-after.json
+node benchmarks/mcp/task-retrieval.mjs --project /external/express --manifest benchmarks/mcp/express-json-response-tasks.json --repetitions 3 --output /external/evidence/json-after.json
+```
+
+Run the remaining eight manifests on their matching pinned corpus for the full thirteen-task comparison. External artifacts under `SymbolLattice-evidence-05233` include the preserved baseline build, `*-baseline.json` / final `*-final.json` reports, intermediate `*-candidate.json` and validation probes, paired timing samples/runners, build/full-test logs and `receipt-verification.json`. The archived `receipt-verification-runner.mjs` (command `node .tmp/verify-final-05233.mjs`) checks all final output and the four specified static hops; `retrieval-runner.mjs` records the complete task loop. No external corpus, index or generated report is committed. Unchanged parsers were not re-audited against compiler corpora for this query/source-allocation patch.

@@ -15,8 +15,9 @@ import {
 
 import { identifierTermGroups, identifierTermVariants, identifierWords } from "../domain/identifier-search.js";
 import { SOURCE_LEXICAL_SCORING, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
+import { downstreamFocusPaths, type ExploreFlowFocus } from "./explore-flow-focus.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v16" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v17" as const;
 export const EXPLORE_QUERY_FOCUS_COVERAGE = {
   policy: "same-file-source-coverage-v1",
   minimumRelativeScore: 0.75,
@@ -127,6 +128,7 @@ export type ExploreQuerySelectionReason =
   | "multi-term-coverage"
   | "callable-source-term"
   | "additional-query-concepts"
+  | "downstream-flow-coverage"
   | "declaration-source-only"
   | "exact-file-name"
   | "graph-expanded"
@@ -290,6 +292,7 @@ export interface ExploreQueryFocusCoverage {
   readonly additionalTerms: readonly { readonly term: string; readonly candidateFrequency: number }[];
   readonly weightedCoverage: number;
   readonly replacedWeightedCoverage: number;
+  readonly flow?: ExploreFlowFocus;
 }
 
 export interface ExploreQuerySelection {
@@ -2144,7 +2147,9 @@ export function exploreQuerySeedTerms(query: string): {
 function diversifyFileFocuses(
   selected: Candidate[],
   ranked: readonly Candidate[],
-  queryTerms: readonly string[]
+  queryTerms: readonly string[],
+  graph: ExploreQueryGraph,
+  executionIntent: boolean
 ): ReadonlyMap<string, ExploreQueryFocusCoverage> {
   const receipts = new Map<string, ExploreQueryFocusCoverage>();
   const groups = identifierTermGroups(queryTerms);
@@ -2180,7 +2185,16 @@ function diversifyFileFocuses(
     const alternatives = population.filter((candidate) => !selectedIds.has(candidate.symbol.id) &&
       rankingScore(candidate) >= minimumRankingScore && coverage(candidate) > previousCoverage)
       .sort((left, right) => coverage(right) - coverage(left) || compareCandidates(left, right));
-    const replacement = alternatives[0];
+    let replacement = alternatives[0];
+    let flow: ExploreFlowFocus | undefined;
+    if (replacement === undefined && executionIntent && !previous.baseReasons.includes("exact-symbol-term")) {
+      const paths = downstreamFocusPaths(graph, anchor.symbol, previous.symbol);
+      const previousTerms = sourceTerms(previous);
+      replacement = population.find((candidate) => !selectedIds.has(candidate.symbol.id) &&
+        rankingScore(candidate) >= minimumRankingScore && paths.has(candidate.symbol.id) &&
+        previousTerms.every((term) => sourceTerms(candidate).includes(term)));
+      if (replacement !== undefined) flow = paths.get(replacement.symbol.id);
+    }
     if (replacement === undefined) continue;
     selected[indexes[1]!] = replacement;
     receipts.set(replacement.symbol.id, {
@@ -2188,7 +2202,8 @@ function diversifyFileFocuses(
       anchorSymbolId: anchor.symbol.id, replacedSymbolId: previous.symbol.id,
       minimumRankingScore, comparedCandidates: population.length,
       additionalTerms: additionalTerms(replacement), weightedCoverage: coverage(replacement),
-      replacedWeightedCoverage: previousCoverage
+      replacedWeightedCoverage: previousCoverage,
+      ...(flow === undefined ? {} : { flow })
     });
   }
   selected.sort(compareCandidates);
@@ -2318,7 +2333,7 @@ export function planExploreQuery(
   }
 
   const coverageReceipts = naturalLanguage && parsed.fileHints.length === 0
-    ? diversifyFileFocuses(selected, ranked, parsed.identifierTerms)
+    ? diversifyFileFocuses(selected, ranked, parsed.identifierTerms, graph, executionIntent)
     : new Map<string, ExploreQueryFocusCoverage>();
   const selection: ExploreQuerySelection[] = selected.map((candidate, index) => {
     const score = rawScore(candidate);
@@ -2382,7 +2397,8 @@ export function planExploreQuery(
       ...(coverageReceipts.has(candidate.symbol.id) ? { focusCoverage: coverageReceipts.get(candidate.symbol.id)! } : {}),
       reasons: [
         ...candidate.baseReasons,
-        ...(coverageReceipts.has(candidate.symbol.id) ? ["additional-query-concepts" as const] : []),
+        ...(coverageReceipts.has(candidate.symbol.id) ? [coverageReceipts.get(candidate.symbol.id)?.flow === undefined
+          ? "additional-query-concepts" as const : "downstream-flow-coverage" as const] : []),
         ...(candidate.connectionScore > 0 ? ["graph-connected" as const] : []),
         ...(candidate.graphMass.score > 0 ? ["graph-mass" as const] : []),
         ...(candidate.graphDiffusion.score > 0 ? ["graph-diffusion" as const] : [])

@@ -911,6 +911,8 @@ export interface SymbolContext {
   readonly matchCandidatesTruncated: boolean;
   readonly sourceAvailability: SourceAvailability;
   readonly source: DeliveredSourceExcerpt | null;
+  /** Explore may cite an earlier emitted excerpt for a shared source prefix. */
+  readonly sourceReuse?: import("./explore-source-reuse.js").ExploreSourceReuse;
   readonly callers: BoundedRelations;
   readonly callees: BoundedRelations;
   readonly impact: BoundedImpactPaths;

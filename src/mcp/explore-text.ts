@@ -206,6 +206,9 @@ function renderFocuses(result: UnknownRecord): string[] {
     const sourceTerms = records(focus.sourceMatches).map((match) =>
       `\`${text(match.term) ?? "?"}\` → \`${text(match.token) ?? "?"}\` at \`${symbolLocation(match)}\``);
     if (sourceTerms.length > 0) output.push(`  Source terms (lexical, not resolved relationships): ${sourceTerms.join("; ")}.`);
+    const reused = records(record(focus.sourceReuse)?.segments);
+    if (reused.length > 0) output.push(`  Shared source: ${reused.map((segment) =>
+      `focus #${(finiteNumber(segment.referenceIndex) ?? -1) + 1} at \`${symbolLocation(segment)}\``).join("; ")}.`);
   }
   const calleeTerms = records(result.sourceWindows).flatMap((window) => records(window.sourceMatches)).map((match) =>
     `\`${text(match.term) ?? "?"}\` → \`${text(match.token) ?? "?"}\` at \`${symbolLocation(match)}\``);
@@ -307,7 +310,11 @@ function renderEvidencePaths(result: UnknownRecord): string[] {
   const seen = new Set<string>();
   const paths: UnknownRecord[] = [
     ...records(result.evidencePaths),
-    ...records(record(result.pathSpinePlan)?.spines).map((spine) => ({ status: "path", path: spine.path }))
+    ...records(record(result.pathSpinePlan)?.spines).map((spine) => ({ status: "path", path: spine.path })),
+    ...records(result.focuses).flatMap((focus) => {
+      const flow = record(record(focus.focusCoverage)?.flow);
+      return flow === null ? [] : [{ status: "path", path: flow.path }];
+    })
   ];
   for (const entry of paths) {
     const path = record(entry.path);
@@ -361,6 +368,9 @@ function renderLimitations(result: UnknownRecord): string[] {
   }
   if (record(record(result.sourceAllocation)?.summary)?.truncated === true) notes.add("Primary source was limited by the shared character budget.");
   const spineSummary = record(record(result.pathSpinePlan)?.summary);
+  if (records(result.focuses).some((focus) => record(record(focus.focusCoverage)?.flow)?.truncated === true)) {
+    notes.add("Downstream focus search reached its bounds; other relevant flow steps may be omitted.");
+  }
   if (spineSummary?.pairAttemptsTruncated === true || spineSummary?.spinesTruncated === true || spineSummary?.traversalTruncated === true) {
     notes.add("Path exploration was limited; the displayed paths are not exhaustive.");
   }

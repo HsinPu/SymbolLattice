@@ -3,9 +3,28 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { scoreTask, verifySourceExcerpts, verifyLexicalMatches, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
+import { scoreTask, verifySourceExcerpts, verifyLexicalMatches, verifySourceReuse, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
 
 describe("task retrieval benchmark judgments", () => {
+  it("rejects shared prefixes that cite missing, different or insufficient source owners", () => {
+    const owner = { reference: "outer", source: { filePath: "a.ts", emittedCharacters: 8,
+      range: { start: { line: 1, column: 1 }, end: { line: 3, column: 1 } },
+      sourceIdentity: { id: "source:owner", fullFileCharacterOffsets: { start: 0, end: 10 } } } };
+    const focus = { symbol: { filePath: "a.ts" }, sourceAvailability: "active-generation", source: null,
+      sourceReuse: { originalCharacterOffsets: { start: 5, end: 10 }, originalEmittedCharacters: 4, reusedCharacters: 4,
+        segments: [{ referenceIndex: 0, reference: "outer", sourceIdentityId: "source:owner", filePath: "a.ts",
+          range: { start: { line: 2, column: 1 }, end: { line: 3, column: 1 } }, fullFileCharacterOffsets: { start: 5, end: 10 } }] } };
+    const result = { focuses: [owner, focus] }, read = () => "one\r\ntwo\r\nthree";
+    expect(verifySourceReuse(result, read)).toEqual({ verifiedReuses: 1, reusedCharacters: 4 });
+    for (const mutate of [
+      r => { r.focuses[1].sourceReuse.segments[0].referenceIndex = 1; },
+      r => { r.focuses[0].source = null; },
+      r => { r.focuses[1].sourceReuse.segments[0].filePath = "other.ts"; },
+      r => { r.focuses[1].sourceReuse.segments[0].range.start.line = 1; },
+      r => { r.focuses[1].sourceReuse.segments[0].fullFileCharacterOffsets.start = 6; },
+      r => { r.focuses[0].source.sourceIdentity.fullFileCharacterOffsets.end = 9; }
+    ]) { const corrupt = structuredClone(result); mutate(corrupt); expect(() => verifySourceReuse(corrupt, read)).toThrow(); }
+  });
   it("requires callee source matches to have an exact directed call receipt and independent literal source", () => {
     const target = { id: "finish", filePath: "a.ts", range: { start: { line: 2, column: 1 }, end: { line: 2, column: 19 } } };
     const edge = { id: "call", sourceId: "run", targetId: target.id, filePath: "a.ts", kind: "calls", resolution: "exact" };

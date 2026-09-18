@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/expressjs/express",
+  "commit": "cd7d4397c398a3f3ecadeaf9ef6ac1377bd414c4",
+  "truthMethod": "Manual reading of pinned Express v5.1.0 response.js before changing flow focus selection. Sending a non-buffer object delegates to JSON serialization; that code uses app serialization settings, preserves an existing content type, otherwise selects application/json, and sends the serialized body. Baseline and candidate outputs stay unopened until implementation is frozen. This is an unseen task on a known repository. It checks source facts, not static resolution of dynamic this.json/this.send dispatch. Other-file judgments are incomplete.",
+  "tasks": [{
+    "id": "object-response-json-content-type",
+    "split": "held-out",
+    "query": "How does sending an object turn it into JSON and choose the response content type?",
+    "requiredFiles": ["lib/response.js"],
+    "supportingFiles": ["lib/application.js", "lib/utils.js"],
+    "irrelevantFiles": ["lib/view.js", "lib/request.js"],
+    "evidence": [
+      { "file": "lib/response.js", "line": 149, "text": "return this.json(chunk);" },
+      { "file": "lib/response.js", "line": 243, "text": "var body = stringify(obj, replacer, spaces, escape)" },
+      { "file": "lib/response.js", "line": 246, "text": "if (!this.get('Content-Type'))" },
+      { "file": "lib/response.js", "line": 247, "text": "this.set('Content-Type', 'application/json');" },
+      { "file": "lib/response.js", "line": 250, "text": "return this.send(body);" }
+    ]
+  }]
+}

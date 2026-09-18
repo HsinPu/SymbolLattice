@@ -1058,7 +1058,7 @@ describe("SymbolLatticeService", () => {
       sourceAvailability: "not-applicable",
       source: null,
       queryPlan: {
-        policy: "explore-query-plan-v16",
+        policy: "explore-query-plan-v17",
         ranking: {
           graphDiffusion: {
             policy: "explore-query-graph-diffusion-v3",
@@ -1184,7 +1184,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v16",
+      policy: "explore-query-plan-v17",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -1261,7 +1261,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "dispatch behavior");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v16",
+      policy: "explore-query-plan-v17",
       ranking: {
         graphExpansion: {
           policy: "explore-query-graph-expansion-v2",
@@ -1398,7 +1398,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "dispatch pipeline");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v16",
+      policy: "explore-query-plan-v17",
       scoreFloor: {
         policy: "explore-query-relative-file-score-floor-v1",
         reason: "relative-floor-applied",
@@ -1490,6 +1490,34 @@ describe("SymbolLatticeService", () => {
       (result.sourceWindowAllocation?.summary.emittedCharacters ?? 0)).toBeLessThanOrEqual(24_000);
   });
 
+  it("shares overlapping query excerpts without claiming their source is unavailable", async () => {
+    const projectPath = await createInlineProject({ "src/flow.ts": [
+      "export function outerFlow() {", "  function innerFlow() {", `    // ${"context ".repeat(50)}`, "    return 'flow result';", "  }",
+      "  return innerFlow();", "}", ""].join("\n") });
+    const service = createService();
+    await service.init({ projectPath });
+    const result = await service.explore(projectPath, "src/flow.ts flow behavior");
+    const shared = result.focuses?.find(item => item.sourceReuse !== undefined);
+    expect(shared).toMatchObject({ source: null, sourceAvailability: "active-generation",
+      sourceReuse: { policy: "explore-source-prefix-reuse-v1", originalTruncated: false } });
+    const receipt = shared!.sourceReuse!;
+    const owner = result.focuses![receipt.segments[0]!.referenceIndex]!;
+    expect(receipt.segments[0]!.sourceIdentityId).toBe(owner.source!.sourceIdentity.id);
+    expect(owner.source!.text).toContain("return 'flow result'");
+    expect(receipt.reusedCharacters).toBe(receipt.originalEmittedCharacters);
+    const context = await service.context(projectPath, ["src/flow.ts#outerFlow", "src/flow.ts#outerFlow.innerFlow"]);
+    expect(context.contexts.every(item => item.sourceReuse === undefined)).toBe(true);
+  });
+
+  it("keeps tiny overlapping excerpts inline instead of adding more expensive reuse receipts", async () => {
+    const projectPath = await createInlineProject({ "src/tiny.ts": "export function first() { return 1; }\nexport function second() { return 2; }\n" });
+    const service = createService();
+    await service.init({ projectPath });
+    const result = await service.explore(projectPath, "src/tiny.ts first second");
+    expect(result.focuses).toHaveLength(2);
+    expect(result.focuses?.every(item => item.source !== null && item.sourceReuse === undefined)).toBe(true);
+  });
+
   it("keeps test source out of a general explore envelope when production evidence is sufficient", async () => {
     const projectPath = await createInlineProject({
       "src/order-service.ts":
@@ -1507,7 +1535,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v16",
+      policy: "explore-query-plan-v17",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1553,7 +1581,7 @@ describe("SymbolLatticeService", () => {
 
     const general = await service.explore(projectPath, "renderAsset");
     expect(general.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v16",
+      policy: "explore-query-plan-v17",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
