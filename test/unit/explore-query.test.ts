@@ -14,6 +14,62 @@ import {
   type SymbolNode
 } from "../../src/domain/index.js";
 import { matchCallableSource, scoreCallableSource, SOURCE_LEXICAL_POLICY, SOURCE_LEXICAL_LIMITS } from "../../src/domain/source-lexical.js";
+import { identifierTermGroups } from "../../src/domain/identifier-search.js";
+
+describe("source-backed same-file focus coverage", () => {
+  const query = "response output checksum values";
+  function fixture(specificBody = "checksum(output, values)", extraBody?: string) {
+    const names = ["begin", "busy", "specific", ...(extraBody === undefined ? [] : ["extra"])];
+    const bodies = ["response(output, values)", "response(output, values)", specificBody, ...(extraBody === undefined ? [] : [extraBody])];
+    const lines = names.map((name, index) => `function ${name}() { return ${bodies[index]}; }`);
+    const nodes = names.map((name, index) => ({ ...symbol({ id: name, name, filePath: "src/evidence.ts" }),
+      range: { start: { line: index + 1, column: 1 }, end: { line: index + 1, column: lines[index]!.length + 1 } } }));
+    const text = lines.join("\n");
+    const matched = matchCallableSource(text, nodes, identifierTermGroups(query.split(" ")));
+    return { graph: { symbols: nodes, edges: [{ ...edge("link", "begin", "busy"), filePath: nodes[0]!.filePath }] },
+      lexical: { policy: SOURCE_LEXICAL_POLICY, limits: SOURCE_LEXICAL_LIMITS, state: "searched" as const,
+        scannedFiles: 1, scannedSymbols: nodes.length, scannedCharacters: text.length, truncated: false,
+        candidates: scoreCallableSource(matched.documents) } };
+  }
+
+  it("keeps the leading anchor and replaces a redundant second focus with missing source evidence", () => {
+    const { graph, lexical } = fixture();
+    const plan = planExploreQuery(graph, query, lexical);
+    expect(plan.selection.map((item) => item.symbol.id)).toEqual(["begin", "specific"]);
+    expect(plan.selection[1]).toMatchObject({ focusCoverage: {
+      anchorSymbolId: "begin", replacedSymbolId: "busy", comparedCandidates: 3,
+      additionalTerms: [{ term: "checksum", candidateFrequency: 1 }], weightedCoverage: 1, replacedWeightedCoverage: 0
+    }, reasons: expect.arrayContaining(["additional-query-concepts"]) });
+    expect(plan.selection[1]!.sourceMatches).toContainEqual(expect.objectContaining({ term: "checksum", token: "checksum" }));
+    expect(plan.summary.selectedFileCount).toBe(1);
+    expect(planExploreQuery({ ...graph, symbols: [...graph.symbols].reverse() }, query, lexical).selection).toEqual(plan.selection);
+  });
+
+  it("counts a concept once per callable, including lower-ranked source candidates", () => {
+    const { graph, lexical } = fixture(undefined, "checksum(checksum(values))");
+    const candidate = planExploreQuery(graph, query, lexical).selection.find((item) => item.symbol.id === "specific");
+    expect(candidate?.focusCoverage).toMatchObject({ additionalTerms: [{ term: "checksum", candidateFrequency: 2 }], weightedCoverage: 0.5 });
+    const repeated = planExploreQuery(graph, `${query} checksums values`, lexical);
+    expect(repeated.selection.find((item) => item.symbol.id === "specific")?.focusCoverage?.additionalTerms).toHaveLength(1);
+  });
+
+  it("preserves explicit-file requests and rejects weak or non-callable alternatives", () => {
+    const { graph, lexical } = fixture();
+    expect(planExploreQuery(graph, `src/evidence.ts ${query}`, lexical).selection.map((item) => item.symbol.id)).toEqual(["begin", "busy"]);
+    expect(planExploreQuery(graph, "output", lexical).selection.every((item) => item.focusCoverage === undefined)).toBe(true);
+    const weak = fixture("checksum(values)");
+    expect(planExploreQuery(weak.graph, query, weak.lexical).selection.map((item) => item.symbol.id)).toEqual(["begin", "busy"]);
+    const noBody = { ...lexical, candidates: lexical.candidates.filter((item) => item.symbolId !== "specific") };
+    expect(planExploreQuery(graph, query, noBody).selection.map((item) => item.symbol.id)).toEqual(["begin", "busy"]);
+    const variable = { ...graph, symbols: graph.symbols.map((item) => item.id === "specific" ? { ...item, kind: "variable" as const } : item) };
+    expect(planExploreQuery(variable, query, lexical).selection.map((item) => item.symbol.id)).toEqual(["begin", "busy"]);
+  });
+
+  it("keeps score ordering when an alternative adds no new concept", () => {
+    const { graph, lexical } = fixture("response(output, values)");
+    expect(planExploreQuery(graph, query, lexical).selection.map((item) => item.symbol.id)).toEqual(["begin", "busy"]);
+  });
+});
 
 function indexedFile(path: string, generated: boolean, role: SourceRole = "production"): IndexedFile {
   return {
@@ -233,7 +289,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v15",
+      policy: "explore-query-plan-v16",
       queryIntent: {
         tests: false,
         icons: false,
@@ -351,7 +407,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v15",
+      policy: "explore-query-plan-v16",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -583,7 +639,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v15",
+      policy: "explore-query-plan-v16",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1007,7 +1063,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v15",
+      policy: "explore-query-plan-v16",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v2",
@@ -1706,7 +1762,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v15",
+      policy: "explore-query-plan-v16",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,

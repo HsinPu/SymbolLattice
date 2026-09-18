@@ -34,7 +34,7 @@ These tools generate or validate large-project evidence outside the published np
 | `r/` | `lifecycle.mjs` | manual |
 | `mcp/` | `read-query-concurrency.mjs` | manual |
 | `mcp/` | `strict-fresh-read-lifecycle.mjs` | manual |
-| `mcp/` | `task-retrieval.mjs`, `nest-retrieval-tasks.json`, `nest-source-tasks.json`, `fastify-retrieval-tasks.json`, `fastify-plugin-tasks.json`, `fastify-error-tasks.json`, `fastify-serializer-tasks.json`, `fastify-cookie-tasks.json` | automatic scorer/source verifier contracts; manual pinned-corpus execution |
+| `mcp/` | `task-retrieval.mjs`, `nest-retrieval-tasks.json`, `nest-source-tasks.json`, `nest-shutdown-tasks.json`, `fastify-retrieval-tasks.json`, `fastify-plugin-tasks.json`, `fastify-error-tasks.json`, `fastify-serializer-tasks.json`, `fastify-cookie-tasks.json` | automatic scorer/source verifier contracts; manual pinned-corpus execution |
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
@@ -308,3 +308,61 @@ node benchmarks/javascript/assigned-callables.mjs --project /external/fastify --
 ```
 
 Run all other manifests on their matching corpora. External artifacts are under `SymbolLattice-evidence-0523`: the baseline build, `*-baseline.json`, intermediate `*-candidate.json`, final retrieval `*-windows.json`, sync reports, `assignments-final.json`, `named-final.json`, `commonjs-final.json`, `javascript-oracle-final.json` and the full test log. No corpus, generated index or report is committed here.
+
+### Same-file query coverage in v0.523.1
+
+The known cookie task already had a literal source match for `Reply.prototype.header`, but graph-connected functions filled both `reply.js` focus slots. The new `explore-query-plan-v16` keeps the selected files and each file's strongest anchor. For multi-concept queries without explicit file hints, it may replace the second focus with a source-backed callable scoring at least 75% of the displaced focus. Eligible callables need at least two distinct source concepts. It prefers additional concepts absent from the anchor, weighted by inverse occurrence count among the retained source-backed callables in that same file. Repeated tokens and overlapping query inflections count once. Ties retain the original selection; at most one focus changes per file. Symbol scores, graph certainty, file limits and source budgets are unchanged.
+
+This is bounded lexical selection, not semantic proof: comments, strings and nested bodies can contribute matches, and candidate frequency does not measure repository-wide rarity. JSON retains an `additional-query-concepts` reason and a `focusCoverage` receipt with the anchor, displaced symbol, score floor and counted terms. Existing literal source receipts explain those terms in the Markdown result. Explicit-file and single-concept requests retain the previous selection rules. This is a patch improvement to the existing query contract; extractor, resolver and index formats are unchanged.
+
+Acceptance: recover all five previously missing cookie facts without reducing the ten known tasks' required-file or source coverage. `mcp/nest-shutdown-tasks.json` fixed a new task and five manually checked source facts before implementation; both outputs remained unopened until the final product was frozen. It is an unseen task on the known NestJS repository, not an unseen project. The manifest and product output were not adjusted to make its remaining failure pass. It is now a known regression case.
+
+Comparison used Windows/Node v22.23.2, three sequential fresh CLI processes per task and product, unchanged pinned source, matching manifest hashes and identical paired index generations. The baseline is v0.523.0 commit `ebc28971bfbdc923fef47abd28417889eb3bab0a`, build SHA-256 `ff7dd78134a76aaa42b5add30478490ee0112f5765baa5a163642e49253d9437`; the v0.523.1 build is `1837bed5eb48f13fe6d63e3c708f8f9e0a0278a25f06dda17c497c94837ed8f6`. Fastify remains pinned to `70b14e92c0b55e8201f5530ba2e6bab4e928c784`, generation `b22e4013-8e0e-4931-9eb4-a31143cc1931`; NestJS remains pinned to `35c3ded6dbf3f23f917ae88d0ed966932788cae6`, generation `f4329572-07fd-4767-a2a2-9e5158c5c6a5`. No reindex was needed. Tests ran after query timing.
+
+| Task | Required files, before → after | Source facts, before → after | Judged TP / FP / unjudged, after |
+| --- | --- | --- | --- |
+| Constructor dependencies | 1/1 → 1/1 | 2/2 → 2/2 | 1 / 0 / 3 |
+| Known provider loader | 1/1 → 1/1 | 1/1 → 1/1 | 3 / 0 / 1 |
+| Provider creation flow | 2/2 → 2/2 | 3/3 → 3/3 | 2 / 1 / 1 |
+| HTTP pipes | 2/2 → 2/2 | 2/2 → 2/2 | 2 / 0 / 2 |
+| Guard activation body | 1/1 → 1/1 | 3/3 → 3/3 | 1 / 0 / 0 |
+| Fastify validation | 2/2 → 2/2 | 3/4 → 3/4 | 3 / 0 / 1 |
+| Fastify plugin dependencies | 2/2 → 2/2 | 3/3 → 3/3 | 2 / 0 / 2 |
+| Fastify error response | 2/2 → 2/2 | 4/4 → 4/4 | 2 / 0 / 2 |
+| Response serializer selection | 2/2 → 2/2 | 4/4 → 4/4 | 2 / 0 / 2 |
+| Multiple cookie headers | 1/1 → 1/1 | 0/5 → 5/5 | 2 / 0 / 2 |
+| Closing application signal listeners (held out) | 1/1 → 1/1 | 4/5 → 4/5 | 1 / 0 / 3 |
+
+All 128 final source excerpts and 178 lexical receipts passed independent range/text verification. The cookie task now delivers the append/replace branches at `reply.js:243–255`. It selects `Reply.prototype.header` (score 1,180) in place of `sendTrailer` (1,434), above the 1,075.5 score floor; `cookie` contributes 1/1 additional coverage versus 1/2 for `multiple`, among seven retained source candidates. This validates those source facts, not dynamic calls to `reply.header`. Judged precision remains 2/3 for provider creation and 1 for other judged subsets; coverage ranges from 1/4 to 1, so unjudged results remain unresolved rather than automatic TP or FP.
+
+The serializer task also changes its second `reply.js` focus while preserving all four required facts. Other tested focus selections are unchanged. The validation task still omits `lib/handleRequest.js:157`; the new shutdown task still omits `nest-application-context.ts:397`, where listeners are actually removed. The known irrelevant NestJS lifecycle-hook file remains in provider creation.
+
+| Task | Median process ms, before → after | Markdown bytes, before → after | Source characters, before → after | CLI JSON bytes, after |
+| --- | --- | --- | --- | --- |
+| Constructor dependencies | 3,587 → 3,592 | 31,572 → 31,572 | 14,281 → 14,281 | 953,604 |
+| Known provider loader | 3,116 → 3,077 | 8,595 → 8,595 | 2,049 → 2,049 | 405,195 |
+| Provider creation flow | 3,241 → 3,177 | 24,340 → 24,340 | 10,201 → 10,201 | 951,927 |
+| HTTP pipes | 3,795 → 3,537 | 23,534 → 23,534 | 8,287 → 8,287 | 682,248 |
+| Guard activation body | 3,062 → 3,056 | 3,147 → 3,147 | 755 → 755 | 156,960 |
+| Fastify validation | 2,028 → 2,179 | 38,891 → 38,891 | 24,000 → 24,000 | 496,233 |
+| Fastify plugin dependencies | 2,047 → 1,899 | 11,246 → 11,246 | 5,063 → 5,063 | 229,945 |
+| Fastify error response | 2,085 → 1,961 | 38,058 → 38,058 | 24,000 → 24,000 | 472,314 |
+| Response serializer selection | 2,011 → 1,966 | 40,168 → 40,242 | 23,142 → 23,142 | 578,664 |
+| Multiple cookie headers | 2,094 → 2,007 | 25,449 → 23,794 | 14,192 → 12,972 | 355,989 |
+| Closing application signal listeners | 3,623 → 3,600 | 12,610 → 12,610 | 3,315 → 3,315 | 379,791 |
+
+Cookie Markdown shrinks by 6.5% while delivering all five required source facts; serializer Markdown grows by 74 bytes. Validation's process median rises by 151 ms. These three-run measurements include startup, freshness checks and serialization and do not establish a speed improvement, sustained latency regression, SLO or end-to-end agent completion rate. First-index and incremental-sync timings are unmeasured in this query-only change.
+
+A separate diagnostic ran after the tests: two warmups per product, then 25 alternating-order repetitions of pure `planExploreQuery` on the same bounded snapshot for each of the eleven tasks. Full plan JSON was checked for repeatability outside the timer. This excludes retrieval, source delivery, serialization and process startup. Median differences range from −1.95 to +1.64 ms; validation is 35.65 → 36.57 ms and Cookie is 33.48 → 34.57 ms. These samples do not attribute the 151 ms process difference to the selection rule or establish a general latency guarantee. Raw samples, CPU/Node metadata, product fingerprints and exact runner provenance are in `planning-paired.json`; the command was `node .tmp/planning-05231.mjs`, with its source preserved as `planning-runner.mjs` alongside the report.
+
+The build, TypeScript test typecheck and full suite pass: 3,075 tests passed, 4 skipped (298 passing files, one skipped). The focused cases cover literal source evidence, preserved file/anchor selection, weak or non-callable alternatives, explicit-file requests, repeated terms and deterministic ordering. The unchanged language parsers were not re-audited against external compiler corpora for this query-only patch.
+
+Reproduce using the same frozen manifests and external indexed checkouts:
+
+```sh
+node benchmarks/mcp/task-retrieval.mjs --project /external/fastify --manifest benchmarks/mcp/fastify-cookie-tasks.json --product-root /external/baseline-05230 --repetitions 3 --output /external/evidence/cookie-before.json
+node benchmarks/mcp/task-retrieval.mjs --project /external/fastify --manifest benchmarks/mcp/fastify-cookie-tasks.json --repetitions 3 --output /external/evidence/cookie-after.json
+node benchmarks/mcp/task-retrieval.mjs --project /external/nest --manifest benchmarks/mcp/nest-shutdown-tasks.json --repetitions 3 --output /external/evidence/shutdown-after.json
+```
+
+External artifacts are under `SymbolLattice-evidence-05231`: the preserved baseline build, paired `*-baseline.json` / `*-candidate.json` task reports, `planning-paired.json`, its archived runner and full test log. No external source, index or generated report is committed here.

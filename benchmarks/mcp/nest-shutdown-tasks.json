@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/nestjs/nest",
+  "commit": "35c3ded6dbf3f23f917ae88d0ed966932788cae6",
+  "truthMethod": "Manual reading of pinned nest-application-context.ts before changing same-file focus coverage. Explicit close awaits lifecycle cleanup and unsubscribes registered process listeners; subscription stores the cleanup callback and active signals. Both baseline and candidate outputs remain unopened until implementation is frozen. This is an unseen task on a known repository; judgments of other files are incomplete.",
+  "tasks": [{
+    "id": "close-application-signal-listeners",
+    "split": "held-out",
+    "query": "How does closing an application stop listening for operating system shutdown events?",
+    "requiredFiles": ["packages/core/nest-application-context.ts"],
+    "supportingFiles": ["packages/common/enums/shutdown-signal.enum.ts", "packages/core/nest-application.ts"],
+    "irrelevantFiles": ["packages/core/pipes/pipes-consumer.ts", "packages/core/router/route-path-factory.ts"],
+    "evidence": [
+      { "file": "packages/core/nest-application-context.ts", "line": 282, "text": "this.unsubscribeFromProcessSignals();" },
+      { "file": "packages/core/nest-application-context.ts", "line": 381, "text": "this.shutdownCleanupRef = cleanup" },
+      { "file": "packages/core/nest-application-context.ts", "line": 384, "text": "this.activeShutdownSignals.push(signal);" },
+      { "file": "packages/core/nest-application-context.ts", "line": 385, "text": "process.on(signal as any, cleanup);" },
+      { "file": "packages/core/nest-application-context.ts", "line": 397, "text": "process.removeListener(signal, this.shutdownCleanupRef!);" }
+    ]
+  }]
+}

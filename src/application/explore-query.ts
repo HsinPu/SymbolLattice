@@ -16,7 +16,13 @@ import {
 import { identifierTermGroups, identifierTermVariants, identifierWords } from "../domain/identifier-search.js";
 import { SOURCE_LEXICAL_SCORING, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v15" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v16" as const;
+export const EXPLORE_QUERY_FOCUS_COVERAGE = {
+  policy: "same-file-source-coverage-v1",
+  minimumRelativeScore: 0.75,
+  minimumSourceConcepts: 2,
+  maximumReplacementsPerFile: 1
+} as const;
 export const EXPLORE_QUERY_CONNECTION_LIMITS = { perNeighbor: 60, maximumScore: 240 } as const;
 export const EXPLORE_QUERY_SOURCE_LEXICAL_SCORING = {
   policy: "callable-source-ranking-v2",
@@ -120,6 +126,7 @@ export type ExploreQuerySelectionReason =
   | "lexical-symbol-variant"
   | "multi-term-coverage"
   | "callable-source-term"
+  | "additional-query-concepts"
   | "declaration-source-only"
   | "exact-file-name"
   | "graph-expanded"
@@ -274,6 +281,17 @@ export interface ExploreQueryGraphDiffusionReceipt {
   readonly topCandidateFileMass: number;
 }
 
+export interface ExploreQueryFocusCoverage {
+  readonly policy: typeof EXPLORE_QUERY_FOCUS_COVERAGE.policy;
+  readonly anchorSymbolId: string;
+  readonly replacedSymbolId: string;
+  readonly minimumRankingScore: number;
+  readonly comparedCandidates: number;
+  readonly additionalTerms: readonly { readonly term: string; readonly candidateFrequency: number }[];
+  readonly weightedCoverage: number;
+  readonly replacedWeightedCoverage: number;
+}
+
 export interface ExploreQuerySelection {
   readonly rank: number;
   readonly symbol: SymbolNode;
@@ -306,6 +324,7 @@ export interface ExploreQuerySelection {
   readonly matchedTerms: readonly string[];
   readonly sourceMatches?: readonly SourceLexicalMatch[];
   readonly sourceScore?: number;
+  readonly focusCoverage?: ExploreQueryFocusCoverage;
   readonly reasons: readonly ExploreQuerySelectionReason[];
 }
 
@@ -413,6 +432,7 @@ export interface ExploreQueryPlan {
   readonly ranking: {
     readonly connection?: typeof EXPLORE_QUERY_CONNECTION_LIMITS;
     readonly sourceLexical?: typeof EXPLORE_QUERY_SOURCE_LEXICAL_SCORING;
+    readonly focusCoverage?: typeof EXPLORE_QUERY_FOCUS_COVERAGE;
     readonly policy: typeof EXPLORE_QUERY_SOURCE_WORTH_POLICY;
     readonly generatedSourceWorth: typeof EXPLORE_GENERATED_SOURCE_WORTH;
     readonly explicitFileExempt: true;
@@ -2115,6 +2135,66 @@ export function exploreQuerySeedTerms(query: string): {
   };
 }
 
+/**
+ * Keep the strongest anchor and the selected files. A comparable second
+ * callable may fill a missing query concept using literal source receipts.
+ * Frequencies describe only the retained source candidates in this file;
+ * they are not repository-wide rarity or proof of semantic relevance.
+ */
+function diversifyFileFocuses(
+  selected: Candidate[],
+  ranked: readonly Candidate[],
+  queryTerms: readonly string[]
+): ReadonlyMap<string, ExploreQueryFocusCoverage> {
+  const receipts = new Map<string, ExploreQueryFocusCoverage>();
+  const groups = identifierTermGroups(queryTerms);
+  const canonical = (terms: readonly string[]): readonly string[] => groups
+    .filter((group) => terms.some((term) => identifierTermVariants(term).some((variant) => group.includes(variant))))
+    .map((group) => group[0]!);
+  const callable = (candidate: Candidate): boolean =>
+    ["function", "method", "entrypoint"].includes(candidate.symbol.kind);
+  const sourceTerms = (candidate: Candidate): readonly string[] => canonical((candidate.sourceMatches ?? []).map((match) => match.term));
+  const sourceBacked = (candidate: Candidate): boolean => callable(candidate) &&
+    (candidate.sourceScore ?? 0) > 0 && sourceTerms(candidate).length >= EXPLORE_QUERY_FOCUS_COVERAGE.minimumSourceConcepts;
+  for (const filePath of new Set(selected.map((candidate) => candidate.symbol.filePath))) {
+    const indexes = selected.flatMap((candidate, index) => candidate.symbol.filePath === filePath ? [index] : []);
+    if (indexes.length < 2) continue;
+    const anchor = selected[indexes[0]!]!;
+    const previous = selected[indexes[1]!]!;
+    if (!callable(anchor) || anchor.explicitFile || previous.explicitFile || !sourceBacked(previous)) continue;
+    const population = ranked.filter((candidate) => candidate.symbol.filePath === filePath && sourceBacked(candidate));
+    const termsById = new Map(population.map((candidate) => [candidate.symbol.id, sourceTerms(candidate)]));
+    const frequencies = new Map<string, number>();
+    for (const terms of termsById.values()) {
+      for (const term of terms) frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
+    }
+    const covered = new Set(canonical(anchor.matchedTerms));
+    const additionalTerms = (candidate: Candidate) => (termsById.get(candidate.symbol.id) ?? [])
+      .filter((term) => !covered.has(term))
+      .map((term) => ({ term, candidateFrequency: frequencies.get(term)! }));
+    const coverage = (candidate: Candidate): number => additionalTerms(candidate)
+      .reduce((sum, term) => sum + 1 / term.candidateFrequency, 0);
+    const previousCoverage = coverage(previous);
+    const minimumRankingScore = rankingScore(previous) * EXPLORE_QUERY_FOCUS_COVERAGE.minimumRelativeScore;
+    const selectedIds = new Set(selected.map((candidate) => candidate.symbol.id));
+    const alternatives = population.filter((candidate) => !selectedIds.has(candidate.symbol.id) &&
+      rankingScore(candidate) >= minimumRankingScore && coverage(candidate) > previousCoverage)
+      .sort((left, right) => coverage(right) - coverage(left) || compareCandidates(left, right));
+    const replacement = alternatives[0];
+    if (replacement === undefined) continue;
+    selected[indexes[1]!] = replacement;
+    receipts.set(replacement.symbol.id, {
+      policy: EXPLORE_QUERY_FOCUS_COVERAGE.policy,
+      anchorSymbolId: anchor.symbol.id, replacedSymbolId: previous.symbol.id,
+      minimumRankingScore, comparedCandidates: population.length,
+      additionalTerms: additionalTerms(replacement), weightedCoverage: coverage(replacement),
+      replacedWeightedCoverage: previousCoverage
+    });
+  }
+  selected.sort(compareCandidates);
+  return receipts;
+}
+
 /** Builds a deterministic, bounded graph focus plan without reading live source. */
 export function planExploreQuery(
   graph: ExploreQueryGraph,
@@ -2237,6 +2317,9 @@ export function planExploreQuery(
     selectedByFile.set(candidate.symbol.filePath, fileCount + 1);
   }
 
+  const coverageReceipts = naturalLanguage && parsed.fileHints.length === 0
+    ? diversifyFileFocuses(selected, ranked, parsed.identifierTerms)
+    : new Map<string, ExploreQueryFocusCoverage>();
   const selection: ExploreQuerySelection[] = selected.map((candidate, index) => {
     const score = rawScore(candidate);
     return {
@@ -2296,8 +2379,10 @@ export function planExploreQuery(
         roleIntent
       ),
       matchedTerms: candidate.matchedTerms,
+      ...(coverageReceipts.has(candidate.symbol.id) ? { focusCoverage: coverageReceipts.get(candidate.symbol.id)! } : {}),
       reasons: [
         ...candidate.baseReasons,
+        ...(coverageReceipts.has(candidate.symbol.id) ? ["additional-query-concepts" as const] : []),
         ...(candidate.connectionScore > 0 ? ["graph-connected" as const] : []),
         ...(candidate.graphMass.score > 0 ? ["graph-mass" as const] : []),
         ...(candidate.graphDiffusion.score > 0 ? ["graph-diffusion" as const] : [])
@@ -2332,6 +2417,7 @@ export function planExploreQuery(
     ranking: {
       connection: EXPLORE_QUERY_CONNECTION_LIMITS,
       sourceLexical: EXPLORE_QUERY_SOURCE_LEXICAL_SCORING,
+      focusCoverage: EXPLORE_QUERY_FOCUS_COVERAGE,
       policy: EXPLORE_QUERY_SOURCE_WORTH_POLICY,
       generatedSourceWorth: EXPLORE_GENERATED_SOURCE_WORTH,
       explicitFileExempt: true,

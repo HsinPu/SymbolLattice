@@ -1058,7 +1058,7 @@ describe("SymbolLatticeService", () => {
       sourceAvailability: "not-applicable",
       source: null,
       queryPlan: {
-        policy: "explore-query-plan-v15",
+        policy: "explore-query-plan-v16",
         ranking: {
           graphDiffusion: {
             policy: "explore-query-graph-diffusion-v3",
@@ -1184,7 +1184,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v15",
+      policy: "explore-query-plan-v16",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -1261,7 +1261,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "dispatch behavior");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v15",
+      policy: "explore-query-plan-v16",
       ranking: {
         graphExpansion: {
           policy: "explore-query-graph-expansion-v2",
@@ -1398,7 +1398,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "dispatch pipeline");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v15",
+      policy: "explore-query-plan-v16",
       scoreFloor: {
         policy: "explore-query-relative-file-score-floor-v1",
         reason: "relative-floor-applied",
@@ -1487,7 +1487,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v15",
+      policy: "explore-query-plan-v16",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1533,7 +1533,7 @@ describe("SymbolLatticeService", () => {
 
     const general = await service.explore(projectPath, "renderAsset");
     expect(general.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v15",
+      policy: "explore-query-plan-v16",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
