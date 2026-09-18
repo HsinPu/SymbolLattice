@@ -47,7 +47,7 @@ describe("Java modern parameter receiver call relations v0.490", () => {
     const handle = snapshot.symbols.find((symbol) => symbol.name === "handle");
 
     expect(indexed).toMatchObject({ initialized: true, stale: false });
-    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v422");
+    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v423");
     expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v203");
     expect(snapshot.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({

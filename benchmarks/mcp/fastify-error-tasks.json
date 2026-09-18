@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/fastify/fastify",
+  "commit": "70b14e92c0b55e8201f5530ba2e6bab4e928c784",
+  "truthMethod": "Manual reading of pinned source before implementing named function-expression extraction and redundant focus suppression. This task and both product outputs are held out until those changes are frozen. Required files follow error submission through status selection; judgments of other files are incomplete. Before any task query executed, the source verifier rejected a transcribed line 142; reading the pinned source corrected it to line 140, with the required text unchanged.",
+  "tasks": [
+    {
+      "id": "error-response-status",
+      "split": "held-out",
+      "query": "How does sending an error choose the HTTP response status?",
+      "requiredFiles": ["lib/reply.js", "lib/error-handler.js"],
+      "supportingFiles": ["lib/errors.js", "lib/hooks.js"],
+      "irrelevantFiles": ["lib/pluginUtils.js", "lib/pluginOverride.js"],
+      "evidence": [
+        { "file": "lib/reply.js", "line": 140, "text": "onErrorHook(this, payload, onSendHook)" },
+        { "file": "lib/reply.js", "line": 815, "text": "handleError(reply, error, cb)" },
+        { "file": "lib/error-handler.js", "line": 86, "text": "reply.code(statusCode >= 400 ? statusCode : 500)" },
+        { "file": "lib/error-handler.js", "line": 170, "text": "res.statusCode = statusCode" }
+      ]
+    }
+  ]
+}

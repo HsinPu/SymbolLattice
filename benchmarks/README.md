@@ -13,6 +13,7 @@ These tools generate or validate large-project evidence outside the published np
 | `java/` | `lifecycle.mjs` | manual |
 | `groovy/` | `correctness-oracle.mjs`, `GroovyOracle.groovy` | manual compiler oracle |
 | `javascript/` | `correctness-oracle.mjs` | automatic |
+| `javascript/` | `named-function-expressions.mjs` | automatic declaration/scorer contract; manual pinned-corpus execution |
 | `python/` | `correctness-oracle.mjs`, `PythonOracle.py` | manual CPython stdlib AST oracle |
 | `sfc/` | `correctness-oracle.mjs` | manual Vue/Svelte/Astro component relation oracle |
 | `shell/` | `correctness-oracle.mjs` | manual mvdan ABI v2 direct-call oracle |
@@ -31,7 +32,7 @@ These tools generate or validate large-project evidence outside the published np
 | `r/` | `lifecycle.mjs` | manual |
 | `mcp/` | `read-query-concurrency.mjs` | manual |
 | `mcp/` | `strict-fresh-read-lifecycle.mjs` | manual |
-| `mcp/` | `task-retrieval.mjs`, `nest-retrieval-tasks.json`, `nest-source-tasks.json`, `fastify-retrieval-tasks.json`, `fastify-plugin-tasks.json` | automatic scorer/source verifier contracts; manual pinned-corpus execution |
+| `mcp/` | `task-retrieval.mjs`, `nest-retrieval-tasks.json`, `nest-source-tasks.json`, `fastify-retrieval-tasks.json`, `fastify-plugin-tasks.json`, `fastify-error-tasks.json` | automatic scorer/source verifier contracts; manual pinned-corpus execution |
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
@@ -125,3 +126,58 @@ HTTP pipes now returns `router-execution-context.ts` and `pipes-consumer.ts` wit
 | Fastify plugin dependencies | 1,385 → 1,436 | 7,725 → 17,224 | 1,359 → 10,971 | 227,156 |
 
 These are small-sample process measurements, including startup, freshness checking and serialization; the rebuilt baseline lives in a separate directory. They establish no speed improvement, latency SLO, graph precision, indexing performance or agent completion rate. Source expansion is costly: the plugin task more than doubles Markdown size without improving required-file or fact coverage. Remaining work includes that missing dependency flow, the validation call site, irrelevant results and output cost. Raw corpora, built baseline, intermediate failed experiments and final reports remain outside this repository.
+
+### Named function expressions and focus selection in v0.521.0
+
+Fastify's `lib/pluginOverride.js:28` assigns a named function expression to `module.exports`. Previously that expression had no callable symbol, so callable-source retrieval could not return its implementation. JavaScript/TypeScript now retain named expression declarations and attribute their internal calls to the callable. Existing variable/property identities are reused. The expression's private name has its own enclosing scope, so parameters, destructured parameters and local declarations can shadow it. This does not establish a CommonJS export target or resolve `.call` dispatch. Anonymous expressions are outside this addition.
+
+For multi-concept queries without an explicit file hint, a local variable wholly contained in an already selected callable no longer consumes a second focus slot if it contributes no additional query concept. Single-concept lookups, explicit files and locals with additional concepts retain the previous selection behavior. The planner policy is `explore-query-plan-v14`; `multi-language-ast-v423` invalidates cached extraction facts. Run `SymbolLattice sync .` after upgrading.
+
+The acceptance check was to recover the known plugin task's missing file and source facts while preserving the other six known tasks' required-file and evidence coverage. `mcp/fastify-error-tasks.json` was fixed before implementation and its outputs opened only after the change was frozen. It is an unseen task on an already used project, not an unseen repository. The source verifier caught a transcribed line 142 before any task query executed; pinned source established line 140, retaining the same required text. Both products used the corrected manifest. After inspection, this error task becomes a known regression sample.
+
+The baseline was rebuilt from v0.520.12 commit `4e97310bc95cbd29ef6bd202f74fa5904066aac4`. Product SHA-256 values were `6e290bf537304f7a48489ae157dd4db325dc27b70017822c6805b1195635c907` (baseline) and `ade96ce3d10a2018de46aed1f149f901df9b3270f2530f89199ef4949aee9767` (v0.521.0). Runs used Windows/Node v22.23.2, three sequential fresh CLI processes per task, unchanged pinned source and matching paired manifest hashes. The full test suite ran after these timing measurements. NestJS remains pinned to `35c3ded6dbf3f23f917ae88d0ed966932788cae6`; Fastify to `70b14e92c0b55e8201f5530ba2e6bab4e928c784`.
+
+Unlike v0.520.8's ranking-only comparison, this extraction change requires new indexes. NestJS's generation changed from `aec92b67-8630-4780-b8dd-6c43b5b63be3` to `8c0185c2-910d-41a5-9253-f2dbb0596885` (1,738 files; 17,399 → 17,403 symbols; 44,728 → 44,732 edges). Fastify changed from `d4e88d42-da9d-453a-b3cc-15e357484770` to `c02e8ce2-e95d-4f4f-9e2c-4dd795ae35d6` (338 files; 8,311 → 8,454 symbols; 18,718 → 18,861 edges). Index updates completed, but indexing latency was not benchmarked. All 87 final source excerpts and 118 lexical-token receipts passed independent source/range verification.
+
+| Task | Required files, before → after | Required source facts, before → after | Judged TP / FP / unjudged, after |
+| --- | --- | --- | --- |
+| Constructor dependencies | 1/1 → 1/1 | 2/2 → 2/2 | 1 / 0 / 3 |
+| Known provider loader | 1/1 → 1/1 | 1/1 → 1/1 | 3 / 0 / 1 |
+| Provider creation flow | 2/2 → 2/2 | 3/3 → 3/3 | 2 / 1 / 1 |
+| HTTP pipes | 2/2 → 2/2 | 2/2 → 2/2 | 2 / 0 / 2 |
+| Guard activation body | 1/1 → 1/1 | 3/3 → 3/3 | 1 / 0 / 0 |
+| Fastify validation | 2/2 → 2/2 | 3/4 → 3/4 | 3 / 0 / 1 |
+| Fastify plugin dependencies | 1/2 → 2/2 | 1/3 → 3/3 | 2 / 0 / 2 |
+| Fastify error response (held out for this change) | 2/2 → 2/2 | 1/4 → 2/4 | 2 / 0 / 2 |
+
+Judged precision remains 2/3 for provider creation and 1 for the other tasks, on the judged subset only. Judgment coverage ranges from 1/4 to 1; unjudged results are not evidence of relevance or false positives. The plugin flow's three source facts are now visible, but its `.call` links are still not resolved graph edges. Validation still omits `lib/handleRequest.js:157`; error response still omits `lib/reply.js:140` and `:815`. The known irrelevant lifecycle-hook result also remains.
+
+| Task | Median process ms, before → after | Markdown bytes, before → after | Source characters, before → after | CLI JSON bytes, after |
+| --- | --- | --- | --- | --- |
+| Constructor dependencies | 3,419 → 3,381 | 31,572 → 31,572 | 14,281 → 14,281 | 953,343 |
+| Known provider loader | 3,057 → 3,007 | 8,595 → 8,595 | 2,049 → 2,049 | 404,934 |
+| Provider creation flow | 3,206 → 3,135 | 24,340 → 24,340 | 10,201 → 10,201 | 951,666 |
+| HTTP pipes | 3,681 → 3,460 | 23,534 → 23,534 | 8,287 → 8,287 | 681,987 |
+| Guard activation body | 3,379 → 3,013 | 3,147 → 3,147 | 755 → 755 | 156,960 |
+| Fastify validation | 2,201 → 1,913 | 36,204 → 36,204 | 24,000 → 24,000 | 369,819 |
+| Fastify plugin dependencies | 1,875 → 1,936 | 17,224 → 11,246 | 10,971 → 5,063 | 229,394 |
+| Fastify error response | 2,113 → 1,904 | 36,346 → 35,191 | 24,000 → 24,000 | 367,175 |
+
+Plugin Markdown output shrank by 34.7%, while its JSON grew from 227,156 to 229,394 bytes and its median process time rose by 3.2%. These three-run diagnostics do not establish a speed improvement, latency SLO, graph precision, or agent completion time. The baseline's first constructor run took 11.3 seconds; medians do not hide that startup/cache variability in the retained raw reports.
+
+An independent Espree 11.2.0 audit parsed all 254 tracked Fastify JavaScript files without rejection. All 124 named function expressions matched an exact source identity/range (TP 124, FN 0, duplicate identities 0; declaration recall 1). This audit accepts an existing variable/property owner and measures declaration recall, not overall precision or TypeScript corpus coverage. Its truth SHA-256 is `b1f0ae0aacbf456549473e09a31c6c88ed6022366766c94d353ce5de28fbae86`.
+
+The existing JavaScript oracle also found 212/212 sampled positive facts with no invalid evidence and passed 150 negative cases (15 templates repeated 10 times). Its overall status remains **inconclusive**: this single corpus supplies only 2/24 instantiation, 0/5 heritage and 4/65 ESM-import quota items. This is not the full 300-positive multi-project release validation, nor a precision estimate.
+
+Reproduce with built products and external indexed checkouts:
+
+```sh
+node benchmarks/mcp/task-retrieval.mjs --project /external/fastify --manifest benchmarks/mcp/fastify-plugin-tasks.json --product-root /external/baseline-052012 --repetitions 3 --output /external/evidence/plugin-before.json
+# Update the index with the new product before its measurements.
+node dist/cli/main.js sync /external/fastify --json
+node benchmarks/mcp/task-retrieval.mjs --project /external/fastify --manifest benchmarks/mcp/fastify-plugin-tasks.json --repetitions 3 --output /external/evidence/plugin-after.json
+node benchmarks/javascript/named-function-expressions.mjs --project /external/fastify --commit 70b14e92c0b55e8201f5530ba2e6bab4e928c784 --output /external/evidence/expressions.json
+node benchmarks/javascript/correctness-oracle.mjs --corpus fastify=/external/fastify=/external/fastify --output /external/evidence/relations.json
+```
+
+Run the other task manifests with their corresponding corpus; finish all baseline queries before upgrading its index. External artifacts for this run are under `SymbolLattice-evidence-0521` in the verification workspace, including `*-baseline.json`, `*-candidate.json`, both oracle reports, sync reports and the built baseline. No corpus or generated report is committed here.

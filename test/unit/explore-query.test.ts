@@ -41,6 +41,27 @@ function indexedFile(path: string, generated: boolean, role: SourceRole = "produ
 }
 
 describe("bounded lexical and relationship ranking", () => {
+  it("uses the second focus slot for new evidence instead of an already covered local variable", () => {
+    const owner = { ...symbol({ id: "owner", name: "checkPluginDependencies", filePath: "src/check.ts" }),
+      range: { start: { line: 1, column: 1 }, end: { line: 9, column: 2 } } };
+    const local = { ...symbol({ id: "local", name: "dependencies", filePath: owner.filePath, line: 3 }), kind: "variable" as const };
+    const next = symbol({ id: "next", name: "registerPlugin", filePath: owner.filePath, line: 12 });
+    const plan = planExploreQuery({ symbols: [owner, local, next], edges: [] }, "plugin dependencies");
+    expect(plan.selection.map((selection) => selection.symbol.id)).toEqual(["owner", "next"]);
+    expect(planExploreQuery({ symbols: [owner, local, next], edges: [] }, "dependencies")
+      .selection.some((selection) => selection.symbol.id === "local")).toBe(true);
+    expect(planExploreQuery({ symbols: [owner, local, next], edges: [] }, "src/check.ts plugin dependencies")
+      .selection.some((selection) => selection.symbol.id === "local")).toBe(true);
+  });
+
+  it("retains contained locals that contribute an additional query concept", () => {
+    const owner = { ...symbol({ id: "owner", name: "loadPluginConfiguration", filePath: "src/load.ts" }),
+      range: { start: { line: 1, column: 1 }, end: { line: 12, column: 2 } } };
+    const local = { ...symbol({ id: "local", name: "dependencies", filePath: owner.filePath, line: 3 }), kind: "variable" as const };
+    const plan = planExploreQuery({ symbols: [owner, local], edges: [] }, "plugin configuration dependencies");
+    expect(plan.selection.map((selection) => selection.symbol.id)).toEqual(["owner", "local"]);
+  });
+
   it("requires a corroborating declaration stem before inheriting an exact file-title boost", () => {
     const symbols = ["validate", "get", "render"].map((name, index) => symbol({ id: name, name, filePath: "src/validation.ts", line: index * 3 + 1 }));
     const source = symbols.map((node) => `function ${node.name}() {\n  validation(request);\n}`).join("\n");
@@ -186,7 +207,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v13",
+      policy: "explore-query-plan-v14",
       queryIntent: {
         tests: false,
         icons: false,
@@ -304,7 +325,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v13",
+      policy: "explore-query-plan-v14",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -536,7 +557,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v13",
+      policy: "explore-query-plan-v14",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -960,7 +981,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v13",
+      policy: "explore-query-plan-v14",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v2",
@@ -1659,7 +1680,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v13",
+      policy: "explore-query-plan-v14",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,

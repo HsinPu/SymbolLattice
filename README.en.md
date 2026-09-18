@@ -4,7 +4,7 @@ Local, source-backed code graphs for developers and AI agents to search code, tr
 
 [繁體中文](README.md) | English
 
-Current version: **v0.520.12** · Node.js **>=22.13 <25** · [MIT](LICENSE)
+Current version: **v0.521.0** · Node.js **>=22.13 <25** · [MIT](LICENSE)
 
 ## Features
 
@@ -102,6 +102,8 @@ SymbolLattice uninstall codex --apply --yes
 Discovery covers 58 languages and formats, including TypeScript/JavaScript, Python, Java, Go, Rust, C/C++, C#, and web templates. **Analysis depth varies by language; this is not a claim of complete language support.**
 
 See [language scope and limitations](src/domain/language-depth.ts) and [real-project and performance validation](benchmarks/README.md). Passing small fixtures does not establish validation across all large projects.
+
+Named JavaScript/TypeScript function expressions retain source and ownership of calls inside them; this does not imply resolution of all dynamic exports or calls. Run `SymbolLattice sync .` after upgrading to update an existing index.
 
 ## Development
 

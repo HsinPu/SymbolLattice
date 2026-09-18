@@ -4,7 +4,7 @@
 
 繁體中文 | [English](README.en.md)
 
-目前版本：**v0.520.12** · Node.js **>=22.13 <25** · [MIT](LICENSE)
+目前版本：**v0.521.0** · Node.js **>=22.13 <25** · [MIT](LICENSE)
 
 ## 能做什麼
 
@@ -102,6 +102,8 @@ SymbolLattice uninstall codex --apply --yes
 可掃描 58 種語言與格式，包括 TypeScript／JavaScript、Python、Java、Go、Rust、C／C++、C# 與 Web 模板。**各語言的解析深度不同，不代表完整語言支援。**
 
 詳見[語言範圍與限制](src/domain/language-depth.ts)、[真實專案與效能驗證](benchmarks/README.md)。小型測試通過不代表所有大型專案都已驗證。
+
+JavaScript／TypeScript 的具名函式運算式可保留來源與內部呼叫歸屬；不代表能解析所有動態匯出或呼叫。升級後執行 `SymbolLattice sync .` 更新既有索引。
 
 ## 開發
 

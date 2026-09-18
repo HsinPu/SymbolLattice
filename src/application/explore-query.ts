@@ -16,7 +16,7 @@ import {
 import { identifierTermGroups, identifierTermVariants, identifierWords } from "../domain/identifier-search.js";
 import { SOURCE_LEXICAL_SCORING, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v13" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v14" as const;
 export const EXPLORE_QUERY_CONNECTION_LIMITS = { perNeighbor: 60, maximumScore: 240 } as const;
 export const EXPLORE_QUERY_SOURCE_LEXICAL_SCORING = {
   policy: "callable-source-ranking-v1",
@@ -2196,8 +2196,21 @@ export function planExploreQuery(
   const selected: Candidate[] = [];
   const selectedFiles = new Set<string>();
   const selectedByFile = new Map<string, number>();
+  const naturalLanguage = identifierTermGroups(parsed.identifierTerms).length > 1;
   for (const candidate of ranked) {
     if (selected.length >= EXPLORE_QUERY_LIMITS.maximumSymbols) break;
+    // A nested local already represented by a selected callable should not
+    // consume the second focus slot when it adds no query concept. Exact
+    // single-concept lookups and explicitly requested files retain all targets.
+    if (naturalLanguage && !candidate.explicitFile && candidate.symbol.kind === "variable" &&
+        selected.some((owner) =>
+          (owner.symbol.kind === "function" || owner.symbol.kind === "method" || owner.symbol.kind === "entrypoint") &&
+          owner.symbol.filePath === candidate.symbol.filePath &&
+          candidate.matchedTerms.every((term) => owner.matchedTerms.includes(term)) &&
+          (owner.symbol.range.start.line < candidate.symbol.range.start.line ||
+            (owner.symbol.range.start.line === candidate.symbol.range.start.line && owner.symbol.range.start.column <= candidate.symbol.range.start.column)) &&
+          (owner.symbol.range.end.line > candidate.symbol.range.end.line ||
+            (owner.symbol.range.end.line === candidate.symbol.range.end.line && owner.symbol.range.end.column >= candidate.symbol.range.end.column)))) continue;
     const fileCount = selectedByFile.get(candidate.symbol.filePath) ?? 0;
     if (fileCount >= EXPLORE_QUERY_LIMITS.maximumSymbolsPerFile) continue;
     if (

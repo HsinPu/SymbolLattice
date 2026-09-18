@@ -604,7 +604,18 @@ function enclosingScopeNodes(node: ts.Node): readonly ts.Node[] {
 }
 
 function enclosingScopeIds(sourceFile: ts.SourceFile, node: ts.Node): readonly string[] {
-  return enclosingScopeNodes(node).map((scopeNode) => scopeIdFor(sourceFile, scopeNode));
+  return enclosingScopeNodes(node).flatMap((scopeNode) => {
+    const scopeId = scopeIdFor(sourceFile, scopeNode);
+    // Parameters and function-local declarations shadow an expression's
+    // private self name, which lives in a separate enclosing environment.
+    return ts.isFunctionExpression(scopeNode) && scopeNode.name !== undefined
+      ? [scopeId, functionExpressionNameScopeId(sourceFile, scopeNode)]
+      : [scopeId];
+  });
+}
+
+function functionExpressionNameScopeId(sourceFile: ts.SourceFile, node: ts.FunctionExpression): string {
+  return `${scopeIdFor(sourceFile, node)}:self`;
 }
 
 function isVarDeclaration(node: ts.Node): node is ts.VariableDeclaration {
@@ -620,6 +631,8 @@ function declarationScopeId(
   node: ts.Node,
   info: DeclarationInfo
 ): string | undefined {
+  // A named function expression exposes its name only inside its own body.
+  if (ts.isFunctionExpression(node)) return functionExpressionNameScopeId(sourceFile, node);
   const scopeNodes = enclosingScopeNodes(node);
   if (info.kind === "variable" && isVarDeclaration(node)) {
     const variableScope = scopeNodes.find(
@@ -9063,6 +9076,17 @@ export function extractFileFacts(
     }
 
     let info = declarationInfo(node, explicitExportNames);
+    const namedFunctionExpression = ts.isFunctionExpression(node) && node.name !== undefined ? node : null;
+    const existingExpressionOwner = namedFunctionExpression === null ? undefined :
+      symbolsByDeclaration.get(node) ?? (
+        (ts.isVariableDeclaration(node.parent) || ts.isPropertyDeclaration(node.parent)) &&
+        node.parent.initializer === node ? symbolsByDeclaration.get(node.parent) : undefined
+      );
+    if (info === null && namedFunctionExpression !== null && existingExpressionOwner === undefined) {
+      // Named callbacks, assigned functions and IIFEs need a source-owning
+      // declaration too. Their name does not prove an export or property target.
+      info = { name: namedFunctionExpression.name!.text, kind: "function", isExported: false };
+    }
     if (info === null && node === commonJsExportClass && commonJsExportClass.name !== undefined) {
       info = { name: commonJsExportClass.name.text, kind: "class", isExported: true };
     }
@@ -9201,6 +9225,13 @@ export function extractFileFacts(
         }
       }
     }
+    if (namedFunctionExpression !== null && existingExpressionOwner !== undefined) {
+      // Reuse variable/property/default-export identities instead of emitting
+      // a second callable, while keeping the expression's self name scoped.
+      symbolsByDeclaration.set(node, existingExpressionOwner);
+      localBindings.push({ name: namedFunctionExpression.name!.text, symbolId: existingExpressionOwner.id,
+        scopeId: functionExpressionNameScopeId(sourceFile, namedFunctionExpression), space: "value" });
+    }
 
     const typeParameters = typeParametersFor(node);
     if (typeParameters !== undefined) {
@@ -9218,9 +9249,9 @@ export function extractFileFacts(
     if (ts.isFunctionLike(node)) {
       const functionScopeId = scopeIdFor(sourceFile, node);
       for (const parameter of node.parameters) {
-        if (ts.isIdentifier(parameter.name)) {
+        for (const name of bindingNames(parameter.name)) {
           localBindings.push({
-            name: parameter.name.text,
+            name,
             symbolId: null,
             scopeId: functionScopeId,
             space: "value"
