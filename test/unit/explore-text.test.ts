@@ -4,6 +4,15 @@ import { sourceDeliveryIdentityFromText } from "../../src/application/source-del
 import { McpSourceSession } from "../../src/mcp/source-session.js";
 
 describe("MCP explore text rendering", () => {
+  it("distinguishes callee lexical matches from call proof and discloses search limits", () => {
+    const output = renderExploreText({ focuses: [{ symbol: { name: "run" } }], sourceWindows: [{
+      sourceMatches: [{ term: "cleanup", token: "cleanup", filePath: "a.ts", range: { start: { line: 9, column: 3 } } }]
+    }], sourceWindowPlan: { calleeSourceSearch: { truncated: true, unavailableFiles: ["b.ts"] } } });
+    expect(output).toContain("Related source terms (lexical, not resolved relationships)");
+    expect(output).toContain("`cleanup` → `cleanup` at `a.ts:9`");
+    expect(output).toContain("Related callee source search reached its bounds");
+    expect(output).toContain("Indexed callee source is unavailable for: `b.ts`");
+  });
   it("retains CommonJS import/export receipts alongside the call site", () => {
     const output = renderExploreText({ connections: [{ source: { name: "start" }, target: { name: "handle" },
       edge: { kind: "calls", resolution: "exact", filePath: "consumer.js", range: { start: { line: 9 } },

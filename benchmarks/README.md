@@ -366,3 +366,65 @@ node benchmarks/mcp/task-retrieval.mjs --project /external/nest --manifest bench
 ```
 
 External artifacts are under `SymbolLattice-evidence-05231`: the preserved baseline build, paired `*-baseline.json` / `*-candidate.json` task reports, `planning-paired.json`, its archived runner and full test log. No external source, index or generated report is committed here.
+
+### Source evidence for differently named callees in v0.523.2
+
+The shutdown task already resolves `close` → `unsubscribeFromProcessSignals` exactly, but the latter's name does not match the question. Its indexed body does contain the query concept `shutdown`. `explore-source-windows-v5` now considers literal body matches for exact outgoing callees in files already requested by the exploration. It keeps the existing call-site, name-matched callee, path-spine and upstream windows first, then adds at most two supplementary callee windows within the existing eight-window, 24,000-source-character envelope. It does not change focus/file ranking, relation certainty or the index format. This repairs evidence delivery under the existing query contract, so the release is a patch.
+
+`exact-callee-source-terms-v1` examines at most 32 distinct targets, 65,536 source characters across unique file prefixes, and 8,192 characters per declaration. Shared/nested declaration ranges can be examined more than once; `sourceCharacters` counts file prefixes, not cumulative per-declaration work. Only the same indexed generation is used, including when live files have changed. A single literal query concept can justify supplementary source after an exact call has established the target; introducing new retrieval seeds still requires two concepts. Comments, strings and nested bodies can match, so lexical evidence does not independently prove runtime behavior or semantic relevance.
+
+JSON retains `calleeSourceSearch` scan counts, bounds, missing files and truncation, plus `exact-callee-source` windows with target IDs, exact edge IDs and literal `sourceMatches`. Markdown cites the tokens and source lines separately from resolved relationships and discloses missing source and search limits. Character allocation can still truncate supplementary source; matching tokens may lie beyond the emitted excerpt and remain locatable using their indexed coordinates. No result means only that no eligible match was found within these bounds.
+
+Acceptance was fixed before inspecting the new Express results: recover the fifth NestJS shutdown source fact without reducing required-file or source coverage on the eleven known tasks. `mcp/express-mounted-app-tasks.json` freezes a new repository/task and five manually verified statements about restoring the parent request/response prototypes after a mounted child. Neither its baseline nor candidate output was opened while implementing the rule. The task measures delivered source, not resolution of dynamic `fn.handle` calls or the external router.
+
+The baseline is v0.523.1 commit `ded888246af0b8cc720ce0e6c03460ee2d8ad37f`, build SHA-256 `1837bed5eb48f13fe6d63e3c708f8f9e0a0278a25f06dda17c497c94837ed8f6`; the v0.523.2 build is `497109ba89b897b01c5ff4937fb47c4f9f4d9c84112991389060667165774a26`. Windows/Node v22.23.2, three sequential fresh CLI processes per product/task, matching manifest hashes and unchanged index generations were used. Fastify and NestJS keep the commits and generations recorded in the preceding section. Express is pinned to `https://github.com/expressjs/express`, v5.1.0 commit `cd7d4397c398a3f3ecadeaf9ef6ac1377bd414c4`, generation `50e78adb-3154-4848-aabf-89d5e22cf7d1`: 169 indexed files, 2,761 symbols and 7,702 edges. It was indexed with the baseline before querying either product. No dependencies were installed for the corpus, and no index migration was needed.
+
+| Task | Required files, before → after | Source facts, before → after | Judged TP / FP / unjudged, after |
+| --- | --- | --- | --- |
+| Constructor dependencies | 1/1 → 1/1 | 2/2 → 2/2 | 1 / 0 / 3 |
+| Known provider loader | 1/1 → 1/1 | 1/1 → 1/1 | 3 / 0 / 1 |
+| Provider creation flow | 2/2 → 2/2 | 3/3 → 3/3 | 2 / 1 / 1 |
+| HTTP pipes | 2/2 → 2/2 | 2/2 → 2/2 | 2 / 0 / 2 |
+| Guard activation body | 1/1 → 1/1 | 3/3 → 3/3 | 1 / 0 / 0 |
+| Fastify validation | 2/2 → 2/2 | 3/4 → 3/4 | 3 / 0 / 1 |
+| Fastify plugin dependencies | 2/2 → 2/2 | 3/3 → 3/3 | 2 / 0 / 2 |
+| Fastify error response | 2/2 → 2/2 | 4/4 → 4/4 | 2 / 0 / 2 |
+| Response serializer selection | 2/2 → 2/2 | 4/4 → 4/4 | 2 / 0 / 2 |
+| Multiple cookie headers | 1/1 → 1/1 | 5/5 → 5/5 | 2 / 0 / 2 |
+| Closing application signal listeners | 1/1 → 1/1 | 4/5 → 5/5 | 1 / 0 / 3 |
+| Restoring parent prototypes after a mounted child (held-out Express) | 1/1 → 1/1 | 5/5 → 5/5 | 3 / 0 / 1 |
+
+All 148 final source excerpts and 218 literal lexical receipts passed independent source/range verification. The verifier now also checks supplementary callee tokens against the pinned source and requires a correctly directed exact call receipt to their owning declaration. These checks validate receipt consistency, not the semantic correctness of every graph edge. The shutdown result now includes `nest-application-context.ts:397` (`process.removeListener`) with the exact call from `close` and the literal `shutdown` concept in `shutdownCleanupRef`. All selected focus files remain unchanged. Judged precision remains 2/3 for provider creation and 1 for the other judged subsets; judged fractions range from 1/4 to 1. Unknown files remain unjudged. Fastify validation still omits `lib/handleRequest.js:157`, and provider creation retains the known irrelevant lifecycle-hook file.
+
+| Task | Median process ms, before → after | Markdown bytes, before → after | Source characters, before → after | CLI JSON bytes, after |
+| --- | --- | --- | --- | --- |
+| Constructor dependencies | 3,426 → 3,670 | 31,572 → 31,572 | 14,281 → 14,281 | 954,054 |
+| Known provider loader | 3,019 → 3,254 | 8,595 → 8,595 | 2,049 → 2,049 | 405,645 |
+| Provider creation flow | 3,135 → 3,245 | 24,340 → 27,163 | 10,201 → 12,443 | 1,021,175 |
+| HTTP pipes | 3,478 → 4,254 | 23,534 → 26,903 | 8,287 → 10,715 | 759,521 |
+| Guard activation body | 2,984 → 3,377 | 3,147 → 3,147 | 755 → 755 | 156,960 |
+| Fastify validation | 1,929 → 2,082 | 38,891 → 39,329 | 24,000 → 24,000 | 506,401 |
+| Fastify plugin dependencies | 1,854 → 2,125 | 11,246 → 11,626 | 5,063 → 5,242 | 236,018 |
+| Fastify error response | 1,929 → 2,506 | 38,058 → 38,058 | 24,000 → 24,000 | 472,763 |
+| Response serializer selection | 1,950 → 2,116 | 40,242 → 41,892 | 23,142 → 24,000 | 592,655 |
+| Multiple cookie headers | 1,917 → 2,126 | 23,794 → 26,796 | 12,972 → 15,216 | 376,966 |
+| Closing application signal listeners | 3,524 → 3,846 | 12,610 → 13,730 | 3,315 → 3,926 | 408,867 |
+| Restoring parent prototypes after a mounted child | 1,522 → 1,635 | 11,951 → 14,297 | 5,061 → 6,801 | 346,480 |
+
+The shutdown gain costs 1,120 Markdown bytes (+8.9%) and 611 source characters. Other tasks receive no additional required truth facts; some do receive more related source. Express Markdown increases by 19.6%, HTTP pipes by 14.3%, and cookies by 12.6%. Supplementary windows share the existing character allocator, so they may redistribute an already-full envelope; these fixed facts did not regress, but this is not a guarantee for all tasks. Serializer source search reached the 65,536-character bound and disclosed truncation. Output economy remains a tradeoff and a follow-up concern.
+
+An isolated diagnostic checks the changed step, rather than remeasuring the unchanged query ranking: two warmups followed by 25 alternating-order source-window planning repetitions on identical focus, connection, path and indexed-source inputs. Plans must match the real CLI result before timing; full JSON repeatability is checked outside the timer. Eleven natural-language queries have median increases of 0.29–2.62 ms; the exact guard query bypasses this planner and is not applicable. Source loading, retrieval, rendering and process startup are excluded. Samples, CPU/Node metadata and both build fingerprints are saved in `source-window-paired.json`, with runner `source-window-timing-runner.mjs` (command: `node .tmp/source-window-timing-05232.mjs`).
+
+Because the initial process samples increased even for the unchanged exact-symbol path, four tasks were remeasured with one warmup and three alternating-order fresh-process pairs, without concurrent tests or indexing. Median milliseconds before → after: HTTP pipes 4,250 → 4,031; error response 2,320 → 1,998; shutdown 3,693 → 3,847; exact guard control 3,099 → 3,159. The initial large increases for pipes/error did not repeat, while shutdown remained modestly slower. Raw samples and runner are `process-paired.json` / `process-timing-runner.mjs` (command: `node .tmp/paired-process-05232.mjs`). Neither this small sample nor the isolated planner timing establishes an overall speed improvement, latency SLO or absence of regressions elsewhere. First indexing, incremental synchronization and agent task completion times were not measured.
+
+Build and TypeScript test typecheck pass. The full suite passes with 3,082 tests passed and 4 skipped (298 passing files, one skipped). Focused cases cover stale indexed source, exact/directed edge requirements, unavailable files, declaration ownership, token coordinates, cut identifiers, scan caps and preservation of a full window envelope. The independent benchmark verifier also rejects coordinates beyond the real line ending; all twelve saved results were reverified after that check was tightened (`receipt-verification.json`, command `node .tmp/verify-receipts-05232.mjs`). README versions are synchronized without adding another development log section.
+
+Reproduce on the fixed external indexed checkouts, using the same manifests for both products:
+
+```sh
+node benchmarks/mcp/task-retrieval.mjs --project /external/nest --manifest benchmarks/mcp/nest-shutdown-tasks.json --product-root /external/baseline-05231 --repetitions 3 --output /external/evidence/shutdown-before.json
+node benchmarks/mcp/task-retrieval.mjs --project /external/nest --manifest benchmarks/mcp/nest-shutdown-tasks.json --repetitions 3 --output /external/evidence/shutdown-after.json
+node benchmarks/mcp/task-retrieval.mjs --project /external/express --manifest benchmarks/mcp/express-mounted-app-tasks.json --repetitions 3 --output /external/evidence/express-after.json
+```
+
+Run the other seven manifests on their matching corpus as recorded above. External artifacts are under `SymbolLattice-evidence-05232`: baseline build, Express checkout/init report, `*-baseline.json` / `*-candidate.json` task reports, paired timing reports and archived runners, plus the full test log. No external source, index or generated report is committed here. Extractor `multi-language-ast-v425` and resolver `project-resolver-v204` are unchanged; parser/compiler correctness was not re-audited for this source-selection patch.

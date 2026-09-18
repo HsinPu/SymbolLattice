@@ -1141,7 +1141,7 @@ describe("SymbolLatticeService", () => {
         summary: { selectedSpineCount: 0, bridgeSymbolCount: 0 }
       },
       sourceWindowPlan: {
-        policy: "explore-source-windows-v4",
+        policy: "explore-source-windows-v5",
         summary: { candidateCount: 0, selectedCount: 0, truncated: false }
       },
       sourceWindows: [],
@@ -1451,6 +1451,26 @@ describe("SymbolLatticeService", () => {
     expect(evidence.some((source) => source?.lines.some((line) => line.line === 12 && line.text.includes("return resolveInputs")))).toBe(true);
     expect((query.sourceAllocation?.summary.emittedCharacters ?? 0) +
       (query.sourceWindowAllocation?.summary.emittedCharacters ?? 0)).toBeLessThanOrEqual(24_000);
+  });
+
+  it("retrieves differently named callees using literal source from the indexed generation", async () => {
+    const source = ["export function runCleanup() { return finish(); }",
+      "export function logCleanup() { return 'logged'; }", ...Array<string>(30).fill(""),
+      "function finish() {", "  return 'cleanup complete';", "}", ""].join("\n");
+    const projectPath = await createInlineProject({ "src/session.ts": source });
+    const service = createService();
+    await service.init({ projectPath });
+    await writeFile(join(projectPath, "src/session.ts"), source.replace("cleanup complete", "changed live content"));
+    const result = await service.explore(projectPath, "Trace src/session.ts cleanup process");
+    expect(result.status.stale).toBe(true);
+    const window = result.sourceWindows?.find((item) => item.reason === "exact-callee-source");
+    expect(window?.source.text).toContain("cleanup complete");
+    expect(window?.source.text).not.toContain("changed live content");
+    expect(window?.sourceMatches).toEqual([expect.objectContaining({ term: "cleanup", token: "cleanup",
+      filePath: "src/session.ts", range: { start: { line: 34, column: 11 }, end: { line: 34, column: 18 } } })]);
+    expect(result.sourceWindowPlan?.calleeSourceSearch).toMatchObject({ matchedSymbols: 1, unavailableFiles: [], truncated: false });
+    expect((result.sourceAllocation?.summary.emittedCharacters ?? 0) +
+      (result.sourceWindowAllocation?.summary.emittedCharacters ?? 0)).toBeLessThanOrEqual(24_000);
   });
 
   it("reserves source capacity for late call evidence after truncating a large callable", async () => {

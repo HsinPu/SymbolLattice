@@ -13,6 +13,81 @@ import type { ExploreConnection, ExploreFocus } from "../../src/application/type
 import type { ExplorePathSpinePlan } from "../../src/application/explore-path-spines.js";
 import type { GraphEdge, SymbolNode } from "../../src/domain/types.js";
 import type { ImpactPath } from "../../src/domain/graph.js";
+import { matchExploreCalleeSource, EXPLORE_CALLEE_SOURCE_LIMITS } from "../../src/application/explore-callee-source.js";
+
+describe("literal source for differently named exact callees", () => {
+  const caller = symbol("run", "src/run.ts", 1);
+  const callee = symbol("finish", caller.filePath, 30);
+  const call = edge("run-finish", caller, callee, 2).edge;
+  const primary = { ...focus(1, caller, 1, 5), callees: { items: [{ symbol: callee, edge: call }], truncated: false } };
+  const source = [...Array<string>(29).fill(""), "function finish() {", "  shutdown();", "}"].join("\n");
+  const documents = new Map([[caller.filePath, { sourceText: source }]]);
+
+  it("attaches exact call proof and literal coordinates without changing name-based selection", () => {
+    const plan = planExploreSourceWindows([primary], [], undefined, ["shutdown"], documents);
+    expect(plan.windows).toEqual([expect.objectContaining({ reason: "exact-callee-source",
+      filePath: caller.filePath, startLine: 27, endLine: 35, connectionEdgeIds: [call.id], relatedSymbolIds: [callee.id],
+      sourceMatches: [{ term: "shutdown", token: "shutdown", filePath: caller.filePath,
+        range: { start: { line: 31, column: 3 }, end: { line: 31, column: 11 } } }] })]);
+    expect(plan.calleeSourceSearch).toMatchObject({ candidateCount: 1, scannedSymbols: 1, matchedSymbols: 1, truncated: false });
+    expect(planExploreSourceWindows([primary], [], undefined, ["unrelated"], documents).windows).toEqual([]);
+    expect(planExploreSourceWindows([primary], [], undefined, ["finish"], documents).windows[0]?.reason).toBe("exact-focus-callee");
+    expect(planExploreSourceWindows([{ ...primary, source: focus(1, caller, 1, 40).source }], [], undefined, ["shutdown"], documents).windows).toEqual([]);
+  });
+
+  it("rejects heuristic or inconsistent call receipts and never fetches additional files", () => {
+    for (const invalid of [{ ...call, resolution: "heuristic" as const }, { ...call, kind: "imports" as const },
+      { ...call, sourceId: "wrong" }, { ...call, targetId: "wrong" }, { ...call, filePath: "wrong.ts" }]) {
+      const item = { ...primary, callees: { items: [{ symbol: callee, edge: invalid }], truncated: false } };
+      expect(planExploreSourceWindows([item], [], undefined, ["shutdown"], documents).windows).toEqual([]);
+    }
+    const external = { ...primary, callees: { items: [{ symbol: { ...callee, filePath: "other.ts" }, edge: call }], truncated: false } };
+    expect(planExploreSourceWindows([external], [], undefined, ["shutdown"], documents).windows).toEqual([]);
+    const missing = planExploreSourceWindows([primary], [], undefined, ["shutdown"], new Map());
+    expect(missing.windows).toEqual([]);
+    expect(missing.calleeSourceSearch?.unavailableFiles).toEqual([caller.filePath]);
+  });
+
+  it("caps supplementary windows and preserves the existing full envelope", () => {
+    const targets = [30, 50, 70].map((line) => symbol(`finish${line}`, caller.filePath, line));
+    const lines = Array<string>(72).fill("");
+    for (const target of targets) lines[target.range.start.line] = "  shutdown();";
+    const docs = new Map([[caller.filePath, { sourceText: lines.join("\n") }]]);
+    const item = { ...primary, callees: { items: targets.map((target) => ({ symbol: target,
+      edge: edge(`call-${target.id}`, caller, target, 2).edge })), truncated: false } };
+    const plan = planExploreSourceWindows([item], [], undefined, ["shutdown"], docs);
+    expect(plan.windows).toHaveLength(2);
+    expect(plan.summary).toMatchObject({ candidateCount: 3, selectedCount: 2, truncated: true });
+    const full = [item, ...[2, 3, 4].map((rank) => focus(rank, symbol(`root${rank}`, caller.filePath, rank * 100), rank * 100, rank * 100 + 4))]
+      .map((entry) => ({ ...entry, callers: { truncated: false, items: [1, 2].map((offset) => {
+        const upstream = symbol(`up${entry.rank}-${offset}`, caller.filePath, entry.rank * 100 + offset * 20);
+        return { symbol: upstream, edge: edge(upstream.id, upstream, entry.symbol, upstream.range.start.line + 1).edge };
+      }) } }));
+    const original = planExploreSourceWindows(full, [], undefined, ["shutdown"]);
+    const candidate = planExploreSourceWindows(full, [], undefined, ["shutdown"], docs);
+    expect(original.windows).toHaveLength(8);
+    expect(candidate.windows).toEqual(original.windows);
+    expect(candidate.summary.truncated).toBe(true);
+  });
+
+  it("bounds symbols and file/declaration characters without inventing a cut token", () => {
+    const candidates = Array.from({ length: 33 }, (_, index) => ({ ...callee, id: `symbol${index}` }));
+    const capped = matchExploreCalleeSource(candidates, ["shutdown"], documents);
+    expect(capped.receipt).toMatchObject({ candidateCount: 33, scannedSymbols: 32, matchedSymbols: 32, truncated: true });
+    const start = { ...callee, range: { start: { line: 1, column: 1 }, end: { line: 2, column: 2 } } };
+    for (const maximum of [EXPLORE_CALLEE_SOURCE_LIMITS.maximumSourceCharacters,
+      EXPLORE_CALLEE_SOURCE_LIMITS.maximumDeclarationCharacters]) {
+      const cut = " ".repeat(maximum - 8) + "shutdownOther\n}";
+      const result = matchExploreCalleeSource([start], ["shutdown"], new Map([[caller.filePath, { sourceText: cut }]]));
+      expect(result.matches.size).toBe(0);
+      expect(result.receipt.truncated).toBe(true);
+      expect(result.receipt.sourceCharacters).toBeLessThanOrEqual(EXPLORE_CALLEE_SOURCE_LIMITS.maximumSourceCharacters);
+    }
+    const excluded = matchExploreCalleeSource([callee], ["shutdown"],
+      new Map([[caller.filePath, { sourceText: "shutdown\n" + source.replace("shutdown", "unrelated") }]]));
+    expect(excluded.matches.size).toBe(0);
+  });
+});
 
 function impactPath(symbols: readonly SymbolNode[], edges: readonly GraphEdge[]): ImpactPath {
   return { symbols, edges, steps: edges.map((edge, index) => ({ from: symbols[index]!, to: symbols[index + 1]!, edge })) };

@@ -36,18 +36,33 @@ export function scoreTask(task, result) {
 
 export function verifyLexicalMatches(result, readSource) {
   let verifiedMatches = 0;
+  const verify = (match, symbol) => {
+    assert.equal(match.filePath, symbol.filePath);
+    assert.equal(match.range.start.line, match.range.end.line);
+    const compare = (left, right) => left.line - right.line || left.column - right.column;
+    assert.ok(compare(match.range.start, symbol.range.start) >= 0 && compare(match.range.end, symbol.range.end) <= 0,
+      "Lexical evidence lies outside its declaration");
+    const line = readSource(match.filePath).split(/\r\n|\r|\n|\u2028|\u2029/u)[match.range.start.line - 1];
+    assert.ok(line !== undefined && match.range.start.column >= 1 &&
+      match.range.end.column > match.range.start.column && match.range.end.column <= line.length + 1,
+      "Lexical evidence has invalid line coordinates");
+    assert.equal(line.slice(match.range.start.column - 1, match.range.end.column - 1), match.token,
+      `Lexical source mismatch: ${match.filePath}:${match.range.start.line}`);
+    verifiedMatches += 1;
+  };
   for (const focus of result.focuses ?? []) {
-    for (const match of focus.sourceMatches ?? []) {
-      assert.equal(match.filePath, focus.symbol.filePath);
-      assert.equal(match.range.start.line, match.range.end.line);
-      const compare = (left, right) => left.line - right.line || left.column - right.column;
-      assert.ok(compare(match.range.start, focus.symbol.range.start) >= 0 && compare(match.range.end, focus.symbol.range.end) <= 0,
-        "Lexical evidence lies outside its declaration");
-      const line = readSource(match.filePath).split(/\r\n|\r|\n|\u2028|\u2029/u)[match.range.start.line - 1];
-      assert.ok(line !== undefined && match.range.start.column >= 1 && match.range.end.column > match.range.start.column);
-      assert.equal(line.slice(match.range.start.column - 1, match.range.end.column - 1), match.token,
-        `Lexical source mismatch: ${match.filePath}:${match.range.start.line}`);
-      verifiedMatches += 1;
+    for (const match of focus.sourceMatches ?? []) verify(match, focus.symbol);
+  }
+  for (const window of result.sourceWindows ?? []) {
+    if (!window.sourceMatches?.length) continue;
+    const owners = (result.focuses ?? []).flatMap((focus) => (focus.callees?.items ?? []).filter(({ symbol, edge }) =>
+      window.connectionEdgeIds.includes(edge.id) && window.relatedSymbolIds.includes(symbol.id) &&
+      edge.kind === "calls" && edge.resolution === "exact" && edge.sourceId === focus.symbol.id &&
+      edge.targetId === symbol.id && edge.filePath === focus.symbol.filePath && symbol.filePath === window.filePath
+    ).map(({ symbol }) => symbol));
+    assert.equal(new Set(owners.map((symbol) => symbol.id)).size, 1, "Callee lexical evidence requires an exact target receipt");
+    for (const match of window.sourceMatches) {
+      verify(match, owners[0]);
     }
   }
   return { verifiedMatches };

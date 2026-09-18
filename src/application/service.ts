@@ -5637,7 +5637,7 @@ export class SymbolLatticeService {
         return source === undefined || target === undefined ? [] : [{ source, target, edge }];
       });
 
-    const sourceWindowPlan = planExploreSourceWindows(focuses, connections, pathSpinePlan, plan.identifierTerms);
+    const sourceWindowPlan = planExploreSourceWindows(focuses, connections, pathSpinePlan, plan.identifierTerms, documentsByFilePath);
     const sourceWindowDrafts = new Map<number, ContextSourceDraft>();
     const sourceWindowWholeFileDrafts = new Map<number, ContextSourceDraft>();
     const focusFilePaths = new Set(focuses.map((focus) => focus.symbol.filePath));

@@ -6,6 +6,22 @@ import { join } from "node:path";
 import { scoreTask, verifySourceExcerpts, verifyLexicalMatches, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
 
 describe("task retrieval benchmark judgments", () => {
+  it("requires callee source matches to have an exact directed call receipt and independent literal source", () => {
+    const target = { id: "finish", filePath: "a.ts", range: { start: { line: 2, column: 1 }, end: { line: 2, column: 19 } } };
+    const edge = { id: "call", sourceId: "run", targetId: target.id, filePath: "a.ts", kind: "calls", resolution: "exact" };
+    const match = { filePath: "a.ts", token: "refund", range: { start: { line: 2, column: 3 }, end: { line: 2, column: 9 } } };
+    const result = { focuses: [{ symbol: { id: "run", filePath: "a.ts" }, callees: { items: [{ symbol: target, edge }] } }],
+      sourceWindows: [{ filePath: "a.ts", connectionEdgeIds: [edge.id], relatedSymbolIds: [target.id], sourceMatches: [match] }] };
+    const read = () => "header\r\n  refund(payment);";
+    expect(verifyLexicalMatches(result, read)).toEqual({ verifiedMatches: 1 });
+    for (const override of [{ resolution: "heuristic" }, { sourceId: "wrong" }, { targetId: "wrong" }, { filePath: "other.ts" }]) {
+      const corrupt = structuredClone(result);
+      Object.assign(corrupt.focuses[0].callees.items[0].edge, override);
+      expect(() => verifyLexicalMatches(corrupt, read)).toThrow("exact target receipt");
+    }
+    match.range.start.column = 2;
+    expect(() => verifyLexicalMatches(result, read)).toThrow("Lexical source mismatch");
+  });
   it("identifies changed product builds even when the package version is unchanged", () => {
     const root = mkdtempSync(join(tmpdir(), "SymbolLattice-product-hash-"));
     try {
@@ -26,6 +42,11 @@ describe("task retrieval benchmark judgments", () => {
     expect(() => verifyLexicalMatches(result, read)).toThrow("Lexical source mismatch");
     match.range.start.line = match.range.end.line = 1;
     expect(() => verifyLexicalMatches(result, read)).toThrow("outside its declaration");
+    const beyondLine = { focuses: [{ symbol: { filePath: "a.ts",
+      range: { start: { line: 1, column: 1 }, end: { line: 2, column: 1 } } }, sourceMatches: [{
+      filePath: "a.ts", token: "refund", range: { start: { line: 1, column: 1 }, end: { line: 1, column: 20 } }
+    }] }] };
+    expect(() => verifyLexicalMatches(beyondLine, () => "refund\n")).toThrow("invalid line coordinates");
   });
   const task = { requiredFiles: ["a.ts", "b.ts"], supportingFiles: ["helper.ts"], irrelevantFiles: ["noise.ts"],
     evidence: [{ file: "a.ts", line: 5, text: "run()" }] };

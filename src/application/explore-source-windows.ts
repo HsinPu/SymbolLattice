@@ -2,8 +2,11 @@ import type { ExploreConnection, ExploreFocus } from "./types.js";
 import { identifierTermVariants, identifierWords } from "../domain/identifier-search.js";
 import type { ExplorePathSpinePlan } from "./explore-path-spines.js";
 import { EXPLORE_GENERATED_SOURCE_WORTH } from "./explore-query.js";
+import { EXPLORE_CALLEE_SOURCE_LIMITS, matchExploreCalleeSource, type ExploreCalleeSourceSearch } from "./explore-callee-source.js";
+import type { SourceLexicalMatch } from "../domain/source-lexical.js";
+import type { SymbolNode } from "../domain/types.js";
 
-export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v4" as const;
+export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v5" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY =
   "explore-source-window-allocation-v4" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS = {
@@ -38,12 +41,14 @@ export interface ExploreSourceWindowPlanItem {
   readonly relatedSymbolIds: readonly string[];
   readonly pathSpineIndexes: readonly number[];
   readonly relevanceWeight: number;
-  readonly reason: "exact-connection-site" | "exact-focus-call" | "exact-focus-callee" | "exact-path-spine" | "exact-impact-call";
+  readonly reason: "exact-connection-site" | "exact-focus-call" | "exact-focus-callee" | "exact-path-spine" | "exact-impact-call" | "exact-callee-source";
+  readonly sourceMatches?: readonly SourceLexicalMatch[];
 }
 
 export interface ExploreSourceWindowPlan {
   readonly policy: typeof EXPLORE_SOURCE_WINDOW_POLICY;
   readonly limits: typeof EXPLORE_SOURCE_WINDOW_LIMITS;
+  readonly calleeSourceSearch?: ExploreCalleeSourceSearch;
   readonly summary: {
     readonly candidateCount: number;
     readonly selectedCount: number;
@@ -143,6 +148,7 @@ interface MutableWindow {
   readonly pathSpineIndexes: number[];
   relevanceWeight: number;
   reason: ExploreSourceWindowPlanItem["reason"];
+  readonly sourceMatches?: readonly SourceLexicalMatch[];
 }
 
 interface WindowSite {
@@ -492,7 +498,8 @@ export function planExploreSourceWindows(
   focuses: readonly ExploreFocus[],
   connections: readonly ExploreConnection[],
   pathSpinePlan?: ExplorePathSpinePlan,
-  queryTerms: readonly string[] = []
+  queryTerms: readonly string[] = [],
+  sourceDocuments?: ReadonlyMap<string, { readonly sourceText: string }>
 ): ExploreSourceWindowPlan {
   const focusBySymbolId = new Map(
     [...focuses]
@@ -553,6 +560,7 @@ export function planExploreSourceWindows(
   const callSites: WindowSite[] = [];
   const calleeSites: WindowSite[] = [];
   const seenCallees = new Set<string>();
+  const sourceCallees = new Map<string, { symbol: SymbolNode; site: WindowSite }>();
   for (const focus of [...focuses].sort((left, right) => left.rank - right.rank)) {
     for (const [direction, relations] of [["incoming", focus.callers.items], ["outgoing", focus.callees.items]] as const) {
       for (const relation of relations) {
@@ -574,6 +582,15 @@ export function planExploreSourceWindows(
             connectionEdgeIds: [edge.id], relatedSymbolIds: [callee.id], pathSpineIndexes: [],
             relevanceWeight: focus.score, reason: "exact-focus-callee"
           });
+        } else if (direction === "outgoing" && availableFiles.has(callee.filePath) && !seenCallees.has(callee.id) &&
+            ["function", "method", "entrypoint"].includes(callee.kind) && !sourceCallees.has(callee.id)) {
+          const site: WindowSite = { focus, filePath: callee.filePath,
+            startLine: Math.max(1, callee.range.start.line - EXPLORE_SOURCE_WINDOW_LIMITS.contextPaddingLines),
+            endLine: callee.range.end.line + EXPLORE_SOURCE_WINDOW_LIMITS.contextPaddingLines,
+            evidenceStartLine: callee.range.start.line, evidenceEndLine: callee.range.end.line,
+            connectionEdgeIds: [edge.id], relatedSymbolIds: [callee.id], pathSpineIndexes: [],
+            relevanceWeight: focus.score, reason: "exact-callee-source" };
+          if (!coveredByPrimarySource(site, focuses)) sourceCallees.set(callee.id, { symbol: callee, site });
         }
         if (seenEdges.has(edge.id)) continue;
         seenEdges.add(edge.id);
@@ -719,15 +736,33 @@ export function planExploreSourceWindows(
     selectedPerFocus.set(window.focusRank, (selectedPerFocus.get(window.focusRank) ?? 0) + 1);
   }
 
+  const uncoveredCallees = [...sourceCallees.values()].filter(({ site }) => !selected.some((window) =>
+    window.filePath === site.filePath && window.startLine <= site.evidenceStartLine && window.endLine >= site.evidenceEndLine));
+  const calleeSearch = sourceDocuments === undefined || queryTerms.length === 0 ? undefined :
+    matchExploreCalleeSource(uncoveredCallees.map(({ symbol }) => symbol), queryTerms, sourceDocuments);
+  const sourceCandidates: MutableWindow[] = uncoveredCallees.flatMap(({ symbol, site }) => {
+    const matches = calleeSearch?.matches.get(symbol.id);
+    return matches === undefined ? [] : [{ focusRank: site.focus.rank, filePath: site.filePath,
+      startLine: site.startLine, endLine: site.endLine, connectionEdgeIds: [...site.connectionEdgeIds],
+      relatedSymbolIds: [...site.relatedSymbolIds], pathSpineIndexes: [], relevanceWeight: site.relevanceWeight,
+      reason: site.reason, sourceMatches: matches }];
+  });
+  const calleeSlots = Math.min(EXPLORE_CALLEE_SOURCE_LIMITS.maximumWindows, EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows - selected.length);
+  for (const window of sourceCandidates.slice(0, calleeSlots)) {
+    selected.push(window);
+    selectedPerFocus.set(window.focusRank, (selectedPerFocus.get(window.focusRank) ?? 0) + 1);
+  }
+
   return {
     policy: EXPLORE_SOURCE_WINDOW_POLICY,
     limits: EXPLORE_SOURCE_WINDOW_LIMITS,
+    ...(calleeSearch === undefined ? {} : { calleeSourceSearch: calleeSearch.receipt }),
     summary: {
-      candidateCount: candidates.length + impactCandidates.length,
+      candidateCount: candidates.length + impactCandidates.length + sourceCandidates.length,
       selectedCount: selected.length,
       selectedFocusCount: selectedPerFocus.size,
       unavailableFileSiteCount: unavailableEdges.size,
-      truncated: selected.length < candidates.length + impactCandidates.length
+      truncated: selected.length < candidates.length + impactCandidates.length + sourceCandidates.length || calleeSearch?.receipt.truncated === true
     },
     windows: selected.map((window, index) => ({
       index,
@@ -739,7 +774,8 @@ export function planExploreSourceWindows(
       relatedSymbolIds: [...window.relatedSymbolIds],
       pathSpineIndexes: [...window.pathSpineIndexes],
       relevanceWeight: window.relevanceWeight,
-      reason: window.reason
+      reason: window.reason,
+      ...(window.sourceMatches === undefined ? {} : { sourceMatches: window.sourceMatches })
     }))
   };
 }

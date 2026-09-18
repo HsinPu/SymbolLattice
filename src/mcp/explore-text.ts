@@ -207,6 +207,9 @@ function renderFocuses(result: UnknownRecord): string[] {
       `\`${text(match.term) ?? "?"}\` → \`${text(match.token) ?? "?"}\` at \`${symbolLocation(match)}\``);
     if (sourceTerms.length > 0) output.push(`  Source terms (lexical, not resolved relationships): ${sourceTerms.join("; ")}.`);
   }
+  const calleeTerms = records(result.sourceWindows).flatMap((window) => records(window.sourceMatches)).map((match) =>
+    `\`${text(match.term) ?? "?"}\` → \`${text(match.token) ?? "?"}\` at \`${symbolLocation(match)}\``);
+  if (calleeTerms.length > 0) output.push("", `Related source terms (lexical, not resolved relationships): ${calleeTerms.join("; ")}.`);
   return output;
 }
 
@@ -348,6 +351,11 @@ function renderLimitations(result: UnknownRecord): string[] {
     notes.add("Source windows were limited; additional call-site source may be omitted.");
   }
   const unavailableSites = finiteNumber(record(record(result.sourceWindowPlan)?.summary)?.unavailableFileSiteCount) ?? 0;
+  const calleeSearch = record(record(result.sourceWindowPlan)?.calleeSourceSearch);
+  if (calleeSearch?.truncated === true) notes.add("Related callee source search reached its bounds; narrow the query or retrieve the cited callee directly.");
+  const unavailableCalleeFiles = Array.isArray(calleeSearch?.unavailableFiles)
+    ? calleeSearch.unavailableFiles.filter((file): file is string => typeof file === "string") : [];
+  if (unavailableCalleeFiles.length > 0) notes.add(`Indexed callee source is unavailable for: ${unavailableCalleeFiles.map((file) => `\`${file}\``).join(", ")}.`);
   if (unavailableSites > 0) {
     notes.add(`${unavailableSites} exact call sites are in files outside the current source envelope; follow their cited file and line to retrieve source.`);
   }

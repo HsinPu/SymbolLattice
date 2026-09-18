@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/expressjs/express",
+  "commit": "cd7d4397c398a3f3ecadeaf9ef6ac1377bd414c4",
+  "truthMethod": "Manual reading of Express v5.1.0 application.js before changing source-window selection. The mounted-app wrapper saves the parent application, invokes the child, restores both request and response prototypes, then forwards completion or error. This repository and task have not been used to adjust the product; both product outputs stay unopened until implementation is frozen. Other-file judgments are incomplete. This source task does not claim static resolution of dynamic mounted-app or external router dispatch.",
+  "tasks": [{
+    "id": "restore-parent-after-mounted-child",
+    "split": "held-out",
+    "query": "How are a parent application's request and response prototypes restored after a mounted child finishes?",
+    "requiredFiles": ["lib/application.js"],
+    "supportingFiles": ["lib/express.js", "lib/request.js", "lib/response.js"],
+    "irrelevantFiles": ["lib/view.js", "lib/utils.js"],
+    "evidence": [
+      { "file": "lib/application.js", "line": 231, "text": "var orig = req.app;" },
+      { "file": "lib/application.js", "line": 232, "text": "fn.handle(req, res, function (err)" },
+      { "file": "lib/application.js", "line": 233, "text": "Object.setPrototypeOf(req, orig.request)" },
+      { "file": "lib/application.js", "line": 234, "text": "Object.setPrototypeOf(res, orig.response)" },
+      { "file": "lib/application.js", "line": 235, "text": "next(err);" }
+    ]
+  }]
+}
