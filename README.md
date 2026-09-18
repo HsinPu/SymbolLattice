@@ -4,7 +4,7 @@
 
 繁體中文 | [English](README.en.md)
 
-目前版本：**v0.520.10** · Node.js **>=22.13 <25** · [MIT](LICENSE)
+目前版本：**v0.520.11** · Node.js **>=22.13 <25** · [MIT](LICENSE)
 
 ## 能做什麼
 
