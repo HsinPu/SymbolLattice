@@ -4,18 +4,17 @@ Local, source-backed code graphs for developers and AI agents to search code, tr
 
 [繁體中文](README.md) | English
 
-Current version: **v0.520.11** · Node.js **>=22.13 <25** · [MIT](LICENSE)
+Current version: **v0.520.12** · Node.js **>=22.13 <25** · [MIT](LICENSE)
 
 ## Features
 
-SymbolLattice scans a repository and stores files, symbols, and static relationships in `.SymbolLattice/index.sqlite`, exposing queries through a CLI and MCP.
+Query a repository through the CLI or MCP, with a local index in `.SymbolLattice/`.
 
-- Search symbols and source; inspect callers, callees, inheritance, imports, routes, and entry points.
-- Assess changes with `impact`, `affected`, and Git hunk information.
-- Retrieve source-backed code context with `explore`, `context`, and `investigate`.
-- Update the index incrementally and compare generations with history and diff.
+- Find task-relevant files and symbols with source code, line numbers, and relationship evidence.
+- Trace calls, inheritance, imports, and framework entry points to assess change impact.
+- Update the index incrementally and inspect history and differences.
 
-Relationships carry source ranges, resolution stages, and rule evidence. Relationships that cannot be reliably proven remain unresolved or pending, or are omitted. This is a static analysis tool; dynamic dispatch, reflection, macros, code generation, and external dependency types may remain unresolved.
+Static analysis may not resolve dynamic calls, reflection, macros, or external dependencies. Unresolved or truncated results do not prove related code is absent.
 
 ## Installation
 
@@ -41,7 +40,7 @@ if ($LASTEXITCODE -ne 0) { throw "Checkout failed" }
 & (Join-Path $bootstrap "install.ps1") -Ref $ref -Apply -Yes
 ```
 
-After installation, you can remove the temporary checkout identified by `$bootstrap`. The installer validates the fixed source, lockfile, type check, build, package, and isolated CLI/MCP operation, with rollback protection for installation failures. Installing the CLI does not change Codex settings or create a project index.
+After installation, you can remove the temporary checkout identified by `$bootstrap`. Installing the CLI does not change Codex settings or create a project index.
 
 ## Quick start
 
@@ -60,15 +59,10 @@ SymbolLattice sync .
 | Command | Purpose |
 | --- | --- |
 | `init` / `sync` | Create or update the index. |
-| `status` / `history` / `diff` | Inspect index freshness and generation changes. |
-| `files` / `file` / `find` / `node` / `search` | List files, read persisted source, and search symbols. |
+| `find` / `search` / `file` | Search symbols and source, and read persisted source. |
 | `callers` / `callees` / `hierarchy` | Trace calls and inheritance. |
-| `routes` / `entrypoints` | Inspect framework entry points. |
-| `impact` / `affected` / `git-hunks` | Assess change impact. |
+| `impact` / `affected` | Assess change impact. |
 | `context` / `explore` / `investigate` | Retrieve source-backed agent context. |
-| `explain-edge` | Inspect relationship evidence. |
-| `diagnostics` | Read operation and auto-sync diagnostic journals. |
-| `serve --mcp` | Start the MCP stdio server. |
 
 Run `SymbolLattice <command> --help` for all options.
 
@@ -81,26 +75,20 @@ SymbolLattice install codex --apply --yes
 SymbolLattice doctor codex
 ```
 
-The installer manages `mcp_servers.SymbolLattice` in `~/.codex/config.toml` and the `SYMBOL_LATTICE_START`/`SYMBOL_LATTICE_END` block in `~/.codex/AGENTS.md`, creating backups before writing. Settings use absolute paths to the current Node executable and `dist/cli/main.js`. Repeat integration installation after moving or reinstalling the CLI, then restart Codex or open a new task.
+Integration backs up and updates `mcp_servers.SymbolLattice` in `~/.codex/config.toml` and the managed block in `~/.codex/AGENTS.md`. Settings use absolute paths to Node and `dist/cli/main.js`. After moving or reinstalling the CLI, repeat integration installation, then restart Codex or open a new task.
 
-Integration installation does not create indexes. The installed agent instructions require `SymbolLattice init .` from the repository root when a software repository has no index and the task requires understanding or modifying code. A monorepo sharing an outer `.git` is indexed once at that root; a workspace containing independent repositories is indexed per repository. Filesystem roots, Home, the Desktop root, temporary directories, and dependency directories are excluded from automatic initialization.
+Integration installation does not create indexes. Run `SymbolLattice init .` at the repository root when analysis is needed: index a monorepo sharing one `.git` once, and each independent repository in a workspace separately.
 
 You can also start MCP directly:
 
 ```powershell
 SymbolLattice serve --mcp --project C:\path\to\project
-
-# Disable background index updates
-SymbolLattice serve --mcp --project C:\path\to\project --no-auto-sync
 ```
 
-- MCP query handlers are read-only, but the server can start automatic synchronization and update indexes by default. Use `--no-auto-sync` to disable background updates.
-- Only `SymbolLattice_explore` is exposed by default, returning Markdown, numbered source lines, relationship locations, and resolution rules. Results disclose truncation and unverified paths, retain new fragments after source deduplication, and explain how to retrieve omitted content. CLI `explore --json` retains the full machine-readable contract within the query's own bounds.
-- Retrieval considers multiple query terms, English inflections and common code abbreviations such as `parameters`/`params`. A bounded scan of indexed callable declarations adds literal token locations, including matches in comments or strings; these are lexical clues. Repeated relationships cannot add unlimited ranking weight. [Fixed-task checks](benchmarks/README.md#task-retrieval-checks) measure file recall and source evidence separately.
-- Function and method excerpts include implementation bodies within a shared character budget, with explicit truncation for large declarations. Supplementary windows retain uncovered exact call sites and path evidence, and can include query-relevant exact callees in files already requested. Missing source still requires a follow-up read.
-- Set the environment variable `SYMBOL_LATTICE_MCP_TOOLS=node,impact` to add tools, or `all` to expose every tool.
-- An unindexed startup directory still registers tools but does not start a watcher for that directory. Pass an indexed repository as `projectPath` when querying; query handlers do not run `init` directly.
-- Query independent repositories with separate `projectPath` values. Their indexes are not automatically merged into a cross-repository graph.
+- By default, MCP exposes `SymbolLattice_explore` with numbered source lines, relationship evidence, and explicit truncation and uncertainty. Use CLI `explore --json` when you need JSON.
+- Queries are read-only; the server can update indexes in the background by default. Add `--no-auto-sync` to disable this.
+- Query repositories separately using `projectPath`. Create each index first; queries do not initialize or merge indexes.
+- Set `SYMBOL_LATTICE_MCP_TOOLS=node,impact` to add tools, or `all` to expose every tool.
 
 Remove the integration with:
 
@@ -111,14 +99,9 @@ SymbolLattice uninstall codex --apply --yes
 
 ## Language support and evidence
 
-Discovery supports 58 languages and formats, including TypeScript/JavaScript, Java, Go, Python, C/C++, C#, Rust, Ruby, Shell, web templates, documentation, and configuration formats. **Discovery support does not imply equal relationship depth or complete language support.**
+Discovery covers 58 languages and formats, including TypeScript/JavaScript, Python, Java, Go, Rust, C/C++, C#, and web templates. **Analysis depth varies by language; this is not a claim of complete language support.**
 
-- Declarations, same-file calls, cross-file relationships, and framework semantics have separate validation scopes.
-- HTML, CSS, documentation, and configuration formats are validated against applicable resource references and structural relationships.
-- Nonempty fixtures, independent large-project truth, and negative cases use different denominators. Recall does not establish precision.
-- CI tests for benchmark helper contracts do not imply that every run downloads and analyzes the full external corpus.
-
-See [language-depth.ts](src/domain/language-depth.ts) for the full language matrix and limitations, and [benchmarks/README.md](benchmarks/README.md) for evidence tooling and execution boundaries.
+See [language scope and limitations](src/domain/language-depth.ts) and [real-project and performance validation](benchmarks/README.md). Passing small fixtures does not establish validation across all large projects.
 
 ## Development
 
@@ -134,21 +117,7 @@ npm pack --dry-run
 
 Build before testing so tests that require `dist/` and parser assets have their runtime artifacts. `npm pack --dry-run` still invokes `prepack`, which builds the package and checks language depth.
 
-| Directory | Contents |
-| --- | --- |
-| `src/domain/` | Graph models, evidence, query rules, and language support definitions. |
-| `src/extraction/` | Language parsers and framework fact extraction. |
-| `src/application/` | Indexing, relationship resolution, synchronization, and query orchestration. |
-| `src/ports/` | Storage, source catalog, and Git interfaces. |
-| `src/infrastructure/` | SQLite, filesystem, and Git implementations. |
-| `src/cli/` / `src/mcp/` | CLI and MCP entry points. |
-| `src/assets/` | Parser WASM, manifests, provenance, and third-party licenses. |
-| `test/` | Unit tests, integration tests, and fixtures. |
-| `scripts/` | [Build, installation, and release tooling](scripts/README.md). |
-| `benchmarks/` | [Large-project evidence and performance tooling](benchmarks/README.md). |
-| `tools/` | Shell parser adapter source and build target. |
-
-CI runs type checks, builds, the full test suite, language validation, isolated installation, and self-indexed concurrent queries on Ubuntu/Windows with Node 22/24. Keep external corpora and generated reports out of source directories.
+See [AGENTS.md](AGENTS.md) for development rules and [scripts/README.md](scripts/README.md) for tooling.
 
 ## Upgrading from v0.420.0 or earlier
 
