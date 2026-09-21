@@ -6,9 +6,9 @@ import { EXPLORE_CALLEE_SOURCE_LIMITS, matchExploreCalleeSource, type ExploreCal
 import type { SourceLexicalMatch } from "../domain/source-lexical.js";
 import type { SymbolNode } from "../domain/types.js";
 
-export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v5" as const;
+export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v6" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY =
-  "explore-source-window-allocation-v4" as const;
+  "explore-source-window-allocation-v5" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS = {
   minimumPerWindow: 256,
   maximumShareFraction: 0.7,
@@ -28,6 +28,7 @@ export const EXPLORE_SOURCE_WINDOW_LIMITS = {
   maximumWindowsPerFocus: 2,
   maximumImpactHops: 2,
   maximumImpactWindows: 2,
+  maximumFlowCalleeWindows: 2,
   pathSpineWindowsExemptPerFocus: true
 } as const;
 
@@ -41,7 +42,7 @@ export interface ExploreSourceWindowPlanItem {
   readonly relatedSymbolIds: readonly string[];
   readonly pathSpineIndexes: readonly number[];
   readonly relevanceWeight: number;
-  readonly reason: "exact-connection-site" | "exact-focus-call" | "exact-focus-callee" | "exact-path-spine" | "exact-impact-call" | "exact-callee-source";
+  readonly reason: "exact-connection-site" | "exact-focus-call" | "exact-focus-callee" | "exact-path-spine" | "exact-impact-call" | "exact-callee-source" | "exact-flow-callee";
   readonly sourceMatches?: readonly SourceLexicalMatch[];
 }
 
@@ -77,6 +78,10 @@ export interface ExploreSourceWindowCharacterAllocation {
     readonly wholeFileBuyOvershootFraction: typeof EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.wholeFileBuyOvershootFraction;
     readonly wholeFileBuyOvershootBudget: number;
     readonly wholeFileBuyOvershootSpentCharacters: number;
+    readonly remainingPhase?: {
+      readonly availableCharacters: number;
+      readonly relativeCliffThreshold: number;
+    };
   };
   readonly summary: {
     readonly candidateCount: number;
@@ -122,6 +127,7 @@ export interface ExploreSourceWindowCharacterAllocation {
       | "buy";
     readonly truncated: boolean;
     readonly reason: "score-spine-and-source-worth";
+    readonly allocationPhase?: "remaining-budget";
   }[];
 }
 
@@ -136,6 +142,7 @@ export interface ExploreSourceWindowAllocationCandidate {
   readonly generatedClassifierVersion?: string;
   readonly generatedEvidenceRuleIds?: readonly string[];
   readonly cliffExempt?: boolean;
+  readonly spareOnly?: boolean;
 }
 
 interface MutableWindow {
@@ -216,11 +223,47 @@ export function allocateExploreSourceWindowCharacters(input: {
           candidate.generatedEvidenceRuleIds.some(
             (ruleId) => typeof ruleId !== "string" || ruleId.length === 0
           ))) ||
-      (candidate.cliffExempt !== undefined && typeof candidate.cliffExempt !== "boolean")
+      (candidate.cliffExempt !== undefined && typeof candidate.cliffExempt !== "boolean") ||
+      (candidate.spareOnly !== undefined && typeof candidate.spareOnly !== "boolean") ||
+      (candidate.spareOnly === true && candidate.wholeFileEligible)
     ) {
       throw new RangeError("Explore source window candidates require unique indexes and positive sizes.");
     }
     indexes.add(candidate.index);
+  }
+
+  // Preserve every existing reservation, including whole-file promotions.
+  // Structural flow supplements may use only what that complete plan leaves.
+  if (candidates.some(candidate => candidate.spareOnly === true)) {
+    const primary = allocateExploreSourceWindowCharacters({ ...input,
+      candidates: candidates.filter(candidate => candidate.spareOnly !== true) });
+    const remaining = allocateExploreSourceWindowCharacters({
+      totalCharacterBudget: input.totalCharacterBudget,
+      primaryEmittedCharacters: input.primaryEmittedCharacters + primary.summary.allocatedCharacters,
+      candidates: candidates.filter(candidate => candidate.spareOnly === true)
+        .map(candidate => ({ ...candidate, spareOnly: false }))
+    });
+    return {
+      ...primary,
+      budget: { ...primary.budget, remainingPhase: {
+        availableCharacters: remaining.budget.availableCharacters,
+        relativeCliffThreshold: remaining.budget.relativeCliffThreshold
+      } },
+      summary: {
+        candidateCount: candidates.length,
+        generatedCandidates: primary.summary.generatedCandidates + remaining.summary.generatedCandidates,
+        cliffedWindows: primary.summary.cliffedWindows + remaining.summary.cliffedWindows,
+        wholeFileEligibleCandidates: primary.summary.wholeFileEligibleCandidates,
+        wholeFilePromotedWindows: primary.summary.wholeFilePromotedWindows,
+        requestedCharacters: primary.summary.requestedCharacters + remaining.summary.requestedCharacters,
+        baseAllocatedCharacters: primary.summary.baseAllocatedCharacters + remaining.summary.baseAllocatedCharacters,
+        allocatedCharacters: primary.summary.allocatedCharacters + remaining.summary.allocatedCharacters,
+        unusedCharacters: remaining.summary.unusedCharacters,
+        truncated: primary.summary.truncated || remaining.summary.truncated
+      },
+      windows: [...primary.windows, ...remaining.windows.map(window => ({ ...window,
+        allocationPhase: "remaining-budget" as const }))].sort((left, right) => left.index - right.index)
+    };
   }
 
   const availableCharacters = input.totalCharacterBudget - input.primaryEmittedCharacters;
@@ -499,7 +542,8 @@ export function planExploreSourceWindows(
   connections: readonly ExploreConnection[],
   pathSpinePlan?: ExplorePathSpinePlan,
   queryTerms: readonly string[] = [],
-  sourceDocuments?: ReadonlyMap<string, { readonly sourceText: string }>
+  sourceDocuments?: ReadonlyMap<string, { readonly sourceText: string }>,
+  executionIntent = false
 ): ExploreSourceWindowPlan {
   const focusBySymbolId = new Map(
     [...focuses]
@@ -561,7 +605,11 @@ export function planExploreSourceWindows(
   const calleeSites: WindowSite[] = [];
   const seenCallees = new Set<string>();
   const sourceCallees = new Map<string, { symbol: SymbolNode; site: WindowSite }>();
+  const flowCallees = new Map<string, { site: WindowSite; callLine: number; callColumn: number }>();
   for (const focus of [...focuses].sort((left, right) => left.rank - right.rank)) {
+    const namedFlow = executionIntent &&
+      focus.reasons.some(reason => reason === "exact-symbol-term" || reason === "qualified-symbol-term") &&
+      queryTerms.some(term => focus.matchedTerms.includes(term));
     for (const [direction, relations] of [["incoming", focus.callers.items], ["outgoing", focus.callees.items]] as const) {
       for (const relation of relations) {
         const edge = relation.edge;
@@ -569,6 +617,25 @@ export function planExploreSourceWindows(
         const callee = direction === "incoming" ? focus.symbol : relation.symbol;
         if (edge.kind !== "calls" || edge.resolution !== "exact" ||
             edge.sourceId !== caller.id || edge.targetId !== callee.id || edge.filePath !== caller.filePath) continue;
+        if (namedFlow && direction === "outgoing" && callee.id !== caller.id &&
+            availableFiles.has(callee.filePath) && sourceDocuments?.has(callee.filePath) &&
+            ["function", "method", "entrypoint"].includes(callee.kind) && !/\.d\.[cm]?ts$/iu.test(callee.filePath)) {
+          const current = flowCallees.get(callee.id);
+          if (current === undefined || (current.site.focus.rank === focus.rank &&
+              (edge.range.start.line < current.callLine ||
+               (edge.range.start.line === current.callLine && edge.range.start.column < current.callColumn) ||
+               (edge.range.start.line === current.callLine && edge.range.start.column === current.callColumn &&
+                compareText(edge.id, current.site.connectionEdgeIds[0]!) < 0)))) {
+            flowCallees.set(callee.id, { callLine: edge.range.start.line, callColumn: edge.range.start.column,
+              site: { focus, filePath: callee.filePath,
+                startLine: Math.max(1, callee.range.start.line - EXPLORE_SOURCE_WINDOW_LIMITS.contextPaddingLines),
+                endLine: callee.range.end.line + EXPLORE_SOURCE_WINDOW_LIMITS.contextPaddingLines,
+                evidenceStartLine: callee.range.start.line, evidenceEndLine: callee.range.end.line,
+                connectionEdgeIds: [edge.id], relatedSymbolIds: [callee.id], pathSpineIndexes: [],
+                relevanceWeight: focus.score, reason: "exact-flow-callee" }
+            });
+          }
+        }
         const calleeWords = new Set([callee.name.toLowerCase(), ...identifierWords(callee.name)]);
         if (direction === "outgoing" && availableFiles.has(callee.filePath) && !seenCallees.has(callee.id) &&
             ["function", "method", "entrypoint"].includes(callee.kind) &&
@@ -753,16 +820,35 @@ export function planExploreSourceWindows(
     selectedPerFocus.set(window.focusRank, (selectedPerFocus.get(window.focusRank) ?? 0) + 1);
   }
 
+  // A named flow's proven callees need not repeat the caller's identifier.
+  // Append only to spare slots; allocation also protects all earlier windows.
+  const flowCandidates: MutableWindow[] = [...flowCallees.values()]
+    .filter(({ site }) => !coveredByPrimarySource(site, focuses) && ![...selected, ...sourceCandidates].some(window =>
+      window.filePath === site.filePath && window.startLine <= site.evidenceStartLine && window.endLine >= site.evidenceEndLine))
+    .sort((left, right) => left.site.focus.rank - right.site.focus.rank ||
+      Number(right.site.filePath === right.site.focus.symbol.filePath) - Number(left.site.filePath === left.site.focus.symbol.filePath) ||
+      left.callLine - right.callLine || left.callColumn - right.callColumn ||
+      compareText(left.site.filePath, right.site.filePath) || left.site.startLine - right.site.startLine ||
+      compareText(left.site.connectionEdgeIds[0]!, right.site.connectionEdgeIds[0]!))
+    .map(({ site }) => ({ ...site, focusRank: site.focus.rank,
+      connectionEdgeIds: [...site.connectionEdgeIds], relatedSymbolIds: [...site.relatedSymbolIds], pathSpineIndexes: [] }));
+  const flowSlots = Math.min(EXPLORE_SOURCE_WINDOW_LIMITS.maximumFlowCalleeWindows,
+    EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows - selected.length);
+  for (const window of flowCandidates.slice(0, flowSlots)) {
+    selected.push(window);
+    selectedPerFocus.set(window.focusRank, (selectedPerFocus.get(window.focusRank) ?? 0) + 1);
+  }
+
   return {
     policy: EXPLORE_SOURCE_WINDOW_POLICY,
     limits: EXPLORE_SOURCE_WINDOW_LIMITS,
     ...(calleeSearch === undefined ? {} : { calleeSourceSearch: calleeSearch.receipt }),
     summary: {
-      candidateCount: candidates.length + impactCandidates.length + sourceCandidates.length,
+      candidateCount: candidates.length + impactCandidates.length + sourceCandidates.length + flowCandidates.length,
       selectedCount: selected.length,
       selectedFocusCount: selectedPerFocus.size,
       unavailableFileSiteCount: unavailableEdges.size,
-      truncated: selected.length < candidates.length + impactCandidates.length + sourceCandidates.length || calleeSearch?.receipt.truncated === true
+      truncated: selected.length < candidates.length + impactCandidates.length + sourceCandidates.length + flowCandidates.length || calleeSearch?.receipt.truncated === true
     },
     windows: selected.map((window, index) => ({
       index,

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/fastify/fastify",
+  "commit": "70b14e92c0b55e8201f5530ba2e6bab4e928c784",
+  "truthMethod": "Manual reading of pinned pluginUtils.js before implementing spare-budget callee source. This named-symbol flow task covers plugin metadata lookup, absent requirements, prerelease handling and version mismatch. Baseline and candidate outputs stay unopened until the implementation is frozen. This is a new task on an already known repository; unlisted files remain unjudged.",
+  "tasks": [{
+    "id": "plugin-version-metadata",
+    "split": "held-out",
+    "query": "Trace checkVersion flow",
+    "requiredFiles": ["lib/pluginUtils.js"],
+    "supportingFiles": ["lib/errors.js"],
+    "irrelevantFiles": ["lib/reply.js", "lib/handleRequest.js", "lib/validation.js"],
+    "evidence": [
+      { "file": "lib/pluginUtils.js", "line": 19, "text": "return fn[Symbol.for('plugin-meta')]" },
+      { "file": "lib/pluginUtils.js", "line": 111, "text": "if (meta?.fastify == null) return" },
+      { "file": "lib/pluginUtils.js", "line": 116, "text": "semver.gt(this.version, semver.coerce(requiredVersion)) === true" },
+      { "file": "lib/pluginUtils.js", "line": 122, "text": "semver.satisfies(this.version, requiredVersion, { includePrerelease: fastifyRc }) === false" },
+      { "file": "lib/pluginUtils.js", "line": 127, "text": "throw new FST_ERR_PLUGIN_VERSION_MISMATCH(meta.name, requiredVersion, this.version)" }
+    ]
+  }]
+}

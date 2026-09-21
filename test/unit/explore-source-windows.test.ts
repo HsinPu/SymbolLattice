@@ -15,6 +15,106 @@ import type { GraphEdge, SymbolNode } from "../../src/domain/types.js";
 import type { ImpactPath } from "../../src/domain/graph.js";
 import { matchExploreCalleeSource, EXPLORE_CALLEE_SOURCE_LIMITS } from "../../src/application/explore-callee-source.js";
 
+describe("spare-budget flow callee source", () => {
+  const caller = symbol("runTask", "src/run.ts", 1);
+  const targets = [30, 50, 70].map(line => symbol(`helper${line}`, caller.filePath, line));
+  const calls = targets.map((target, index) => edge(`call${index}`, caller, target, 2 + index).edge);
+  const documents = new Map([[caller.filePath, { sourceText: Array<string>(74).fill("// implementation").join("\n") }]]);
+  const primary = { ...focus(1, caller, 1, 5), callees: {
+    items: targets.map((target, index) => ({ symbol: target, edge: calls[index]! })), truncated: false
+  } };
+
+  it("fills spare slots for an explicitly named flow without requiring a repeated query word", () => {
+    const plan = planExploreSourceWindows([primary], [], undefined, ["runtask"], documents, true);
+    expect(plan.windows.map(window => window.reason)).toEqual(["exact-flow-callee", "exact-flow-callee"]);
+    expect(plan.windows[0]).toMatchObject({ relatedSymbolIds: [targets[0]!.id], connectionEdgeIds: [calls[0]!.id] });
+    expect(plan.windows.every(window => window.sourceMatches === undefined)).toBe(true);
+    expect(plan.summary).toMatchObject({ candidateCount: 3, selectedCount: 2, truncated: true });
+    expect(planExploreSourceWindows([{ ...primary, callees: { ...primary.callees,
+      items: [...primary.callees.items].reverse() } }], [], undefined, ["runtask"], documents, true)).toEqual(plan);
+  });
+
+  it("keeps ordinary searches, non-exact focuses, delivered bodies and unavailable source out of the fallback", () => {
+    expect(planExploreSourceWindows([primary], [], undefined, ["runtask"], documents).windows).toEqual([]);
+    expect(planExploreSourceWindows([{ ...primary, reasons: ["partial-symbol-term"] }], [], undefined, ["runtask"], documents, true).windows).toEqual([]);
+    expect(planExploreSourceWindows([primary], [], undefined, ["unrelated"], documents, true).windows).toEqual([]);
+    expect(planExploreSourceWindows([primary], [], undefined, ["runtask"], new Map(), true).windows).toEqual([]);
+    expect(planExploreSourceWindows([{ ...primary, source: focus(1, caller, 1, 74).source }], [], undefined, ["runtask"], documents, true).windows).toEqual([]);
+  });
+
+  it("requires exact directed calls and deduplicates repeated calls to the same target", () => {
+    for (const invalid of [{ ...calls[0]!, resolution: "heuristic" as const }, { ...calls[0]!, kind: "imports" as const },
+      { ...calls[0]!, sourceId: "wrong" }, { ...calls[0]!, targetId: "wrong" }, { ...calls[0]!, filePath: "wrong.ts" }]) {
+      const item = { ...primary, callees: { items: [{ symbol: targets[0]!, edge: invalid }], truncated: false } };
+      expect(planExploreSourceWindows([item], [], undefined, ["runtask"], documents, true).windows).toEqual([]);
+    }
+    const duplicate = { ...primary, callees: { items: [primary.callees.items[0]!, {
+      symbol: targets[0]!, edge: { ...calls[0]!, id: "repeat", range: { start: { line: 4, column: 3 }, end: { line: 4, column: 15 } } }
+    }], truncated: false } };
+    expect(planExploreSourceWindows([duplicate], [], undefined, ["runtask"], documents, true).windows).toHaveLength(1);
+    const external = { ...primary, callees: { items: [{ symbol: { ...targets[0]!, filePath: "other.ts" }, edge: calls[0]! }], truncated: false } };
+    expect(planExploreSourceWindows([external], [], undefined, ["runtask"], documents, true).windows).toEqual([]);
+  });
+
+  it("does not count lexical candidates twice or bypass their existing cap", () => {
+    const lines = Array<string>(74).fill("");
+    for (const target of targets) lines[target.range.start.line] = "  shutdown();";
+    const docs = new Map([[caller.filePath, { sourceText: lines.join("\n") }]]);
+    const original = planExploreSourceWindows([primary], [], undefined, ["runtask", "shutdown"], docs);
+    const result = planExploreSourceWindows([primary], [], undefined, ["runtask", "shutdown"], docs, true);
+    expect(result.windows).toEqual(original.windows);
+    expect(result.summary).toEqual(original.summary);
+  });
+
+  it("preserves every existing window when all eight slots are occupied", () => {
+    const full = [primary, ...[2, 3, 4].map(rank => focus(rank,
+      symbol(`root${rank}`, caller.filePath, rank * 100), rank * 100, rank * 100 + 4))]
+      .map(item => ({ ...item, callers: { truncated: false, items: [1, 2].map(offset => {
+        const upstream = symbol(`up${item.rank}-${offset}`, caller.filePath, item.rank * 100 + offset * 20);
+        return { symbol: upstream, edge: edge(upstream.id, upstream, item.symbol, upstream.range.start.line + 1).edge };
+      }) } }));
+    const original = planExploreSourceWindows(full, [], undefined, ["runtask"], documents);
+    const result = planExploreSourceWindows(full, [], undefined, ["runtask"], documents, true);
+    expect(original.windows).toHaveLength(8);
+    expect(result.windows).toEqual(original.windows);
+    expect(result.summary).toMatchObject({ candidateCount: 11, selectedCount: 8, truncated: true });
+  });
+});
+
+describe("spare source allocation", () => {
+  const base = { index: 0, filePath: "base.ts", requestedCharacters: 700, fullFileCharacters: 1000,
+    relevanceWeight: 100, wholeFileEligible: true };
+  const extra = { index: 1, filePath: "extra.ts", requestedCharacters: 400, fullFileCharacters: 400,
+    relevanceWeight: 5000, wholeFileEligible: false, spareOnly: true };
+
+  it("preserves existing reservations and whole-file promotions before spending remaining capacity", () => {
+    const input = { totalCharacterBudget: 2000, primaryEmittedCharacters: 200 };
+    const original = allocateExploreSourceWindowCharacters({ ...input, candidates: [base] });
+    const result = allocateExploreSourceWindowCharacters({ ...input, candidates: [extra, base] });
+    expect(original.windows[0]?.renderMode).toBe("whole-file");
+    expect(result.windows[0]).toEqual(original.windows[0]);
+    expect(result.windows[1]).toMatchObject({ allocatedCharacters: 400, allocationPhase: "remaining-budget" });
+    expect(result.budget.remainingPhase?.availableCharacters).toBe(800);
+    expect(result.summary.allocatedCharacters).toBe(1400);
+    expect(result.summary.unusedCharacters).toBe(400);
+  });
+
+  it("never reduces existing evidence when the envelope is exhausted", () => {
+    const input = { totalCharacterBudget: 800, primaryEmittedCharacters: 100 };
+    const original = allocateExploreSourceWindowCharacters({ ...input, candidates: [base] });
+    const result = allocateExploreSourceWindowCharacters({ ...input, candidates: [base, extra] });
+    expect(result.windows[0]).toEqual(original.windows[0]);
+    expect(result.windows[1]).toMatchObject({ allocatedCharacters: 0, truncated: true });
+    expect(result.summary).toMatchObject({ allocatedCharacters: 700, unusedCharacters: 0, truncated: true });
+  });
+
+  it("validates duplicate indexes across phases and disallows spare whole-file upgrades", () => {
+    const input = { totalCharacterBudget: 2000, primaryEmittedCharacters: 200 };
+    expect(() => allocateExploreSourceWindowCharacters({ ...input, candidates: [base, { ...extra, index: 0 }] })).toThrow(RangeError);
+    expect(() => allocateExploreSourceWindowCharacters({ ...input, candidates: [{ ...extra, wholeFileEligible: true }] })).toThrow(RangeError);
+  });
+});
+
 describe("literal source for differently named exact callees", () => {
   const caller = symbol("run", "src/run.ts", 1);
   const callee = symbol("finish", caller.filePath, 30);
@@ -645,7 +745,7 @@ describe("explore source window planning", () => {
     });
 
     expect(allocation).toMatchObject({
-      policy: "explore-source-window-allocation-v4",
+      policy: "explore-source-window-allocation-v5",
       budget: {
         wholeFileGraceFraction: 0.15,
         wholeFileGraceMaximumCharacters: 800,
@@ -880,7 +980,7 @@ describe("explore source window planning", () => {
     });
 
     expect(allocation).toMatchObject({
-      policy: "explore-source-window-allocation-v4",
+      policy: "explore-source-window-allocation-v5",
       budget: {
         generatedSourceWorth: 0.3,
         relativeCliffFraction: 0.15,

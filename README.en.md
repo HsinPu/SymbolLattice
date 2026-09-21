@@ -4,7 +4,7 @@ Local, source-backed code graphs for developers and AI agents to search code, tr
 
 [繁體中文](README.md) | English
 
-Current version: **v0.523.5** · Node.js **>=22.13 <25** · [MIT](LICENSE)
+Current version: **v0.523.6** · Node.js **>=22.13 <25** · [MIT](LICENSE)
 
 ## Features
 
@@ -50,7 +50,7 @@ Run from the root of the repository you want to analyze:
 SymbolLattice init .
 SymbolLattice status .
 SymbolLattice find createOrder --project . --json
-SymbolLattice explore "Trace createOrder to persistence" --project . --json
+SymbolLattice explore "Trace createOrder flow to persistence" --project . --json
 
 # Update the index after changing source files
 SymbolLattice sync .

@@ -4,7 +4,7 @@
 
 繁體中文 | [English](README.en.md)
 
-目前版本：**v0.523.5** · Node.js **>=22.13 <25** · [MIT](LICENSE)
+目前版本：**v0.523.6** · Node.js **>=22.13 <25** · [MIT](LICENSE)
 
 ## 能做什麼
 
@@ -50,7 +50,7 @@ if ($LASTEXITCODE -ne 0) { throw "Checkout failed" }
 SymbolLattice init .
 SymbolLattice status .
 SymbolLattice find createOrder --project . --json
-SymbolLattice explore "Trace createOrder to persistence" --project . --json
+SymbolLattice explore "Trace createOrder flow to persistence" --project . --json
 
 # 原始碼修改後更新索引
 SymbolLattice sync .

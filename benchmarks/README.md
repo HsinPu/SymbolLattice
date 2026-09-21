@@ -538,3 +538,38 @@ node benchmarks/mcp/task-retrieval.mjs --project /external/nest --manifest bench
 ```
 
 Run the other nine manifests on their corresponding pinned checkouts for the fourteen-task comparison. External artifacts under `SymbolLattice-evidence-05235` include `baseline-05234`, all `*-baseline.json` / `*-candidate.json` reports, `verification.json`, `planning-paired.json`, and archived retrieval/verification/planning runners (commands `node .tmp/retrieval-05235.mjs baseline`, `node .tmp/retrieval-05235.mjs candidate`, `node .tmp/verify-05235.mjs`, `node .tmp/planning-05235.mjs`). Typecheck, build and all 66 query-planning tests passed. The full suite passed 3,100 tests with four existing skips; its output is in `full-test.log`. Unchanged parsers were not re-audited against compiler corpora.
+
+### Direct helper evidence for named flows, v0.523.6
+
+The previous module-init task exposed a source-selection gap: `Trace callModuleInitHook flow` returned exact calls to `callOperator`, but omitted its body because that body did not repeat the query terms. This patch allows an exactly named flow focus to supplement its existing source with up to two exact direct callees in files already available to the query. It uses the existing bounded English execution-intent heuristic and excludes type-oriented queries. Ordinary searches and exact-symbol lookups retain their behavior.
+
+`explore-source-windows-v6` appends supplements only to spare slots within the existing eight-window limit. `explore-source-window-allocation-v5` allocates them only after preserving every existing reservation and whole-file promotion, within the unchanged 24,000-character envelope. Supplements carry an `exact-flow-callee` reason, an exact call edge and a `remaining-budget` allocation receipt; they do not fabricate literal matches. This remains bounded static evidence, not exhaustive callee coverage or proof of runtime execution. Query ranking, extractor `multi-language-ast-v425`, resolver `project-resolver-v204` and index compatibility are unchanged.
+
+Baseline: v0.523.5 commit `650947404b67dd066ce97c5339056d1528fb72c4`, build SHA-256 `9e2bd0210c34ab6a6a77e61cc22cc311af3595733cfb2af548d80d3bf6a41e8b`. Candidate v0.523.6 build: `8b53e98c65f232f61f53ac68cbd745b1c22bd28594340b1b9d83634454cbb488`. Both products used the same pinned NestJS, Fastify and Express checkouts and index generations recorded above, on Windows / Node v22.23.2, with three fresh CLI processes per task/product. No reindexing was needed.
+
+The fourteen existing tasks are regression cases. The new `mcp/fastify-plugin-version-tasks.json` defines one held-out named-symbol flow task on the already known Fastify repository. Required files and five source facts were fixed from pinned source before implementation, and baseline/candidate outputs stayed unopened until the implementation was frozen. This is not an unseen repository or a natural-language discovery task.
+
+All fifteen tasks retain 22/22 required task-file pairs, with unchanged file selections and query plans. Source facts improve from 54/56 to 56/56:
+
+| Task | Source facts, before → after | Source characters, before → after | Markdown bytes, before → after | CLI JSON bytes, before → after |
+| --- | --- | --- | --- | --- |
+| Module-init hook instances | 4/5 → 5/5 | 3,159 → 3,774 | 12,876 → 13,806 | 605,026 → 629,950 |
+| Plugin version metadata (held-out) | 4/5 → 5/5 | 1,043 → 1,222 | 2,367 → 2,636 | 55,275 → 60,327 |
+
+The new NestJS excerpts include `callOperator` and `hasOnModuleInitHook`, justified by calls at `on-module-init.hook.ts:50` and `:59`; the Fastify excerpt includes `getMeta`, justified by `pluginUtils.js:110`. These expose the missing source facts at lines 27 and 19 respectively. Every previous primary excerpt, supplemental window and per-window allocation receipt is unchanged. The other thirteen tasks retain their source-character counts and Markdown sizes; query-mode JSON adds the new limit metadata.
+
+All 164 candidate excerpts, 237 literal match receipts, three new direct-call receipts and one source-reuse receipt were checked against pinned source. Existing reuse still saves 5,123 canonical characters. Fixed task judgments remain 31 TP, zero FP, zero missing required files and 24 unjudged task-file selections. Unjudged files are not proven relevant; these results do not establish repository-wide precision or complete task evidence beyond the fixed truth.
+
+Reproduce with the unchanged harness and frozen indexed checkouts:
+
+```sh
+node benchmarks/mcp/task-retrieval.mjs --project /external/nest --manifest benchmarks/mcp/nest-module-init-tasks.json --product-root /external/baseline-05235 --repetitions 3 --output /external/evidence/module-init-before.json
+node benchmarks/mcp/task-retrieval.mjs --project /external/nest --manifest benchmarks/mcp/nest-module-init-tasks.json --repetitions 3 --output /external/evidence/module-init-after.json
+node benchmarks/mcp/task-retrieval.mjs --project /external/fastify --manifest benchmarks/mcp/fastify-plugin-version-tasks.json --repetitions 3 --output /external/evidence/plugin-version-after.json
+```
+
+Run the other ten manifests on their matching corpus for the full fifteen-task comparison. External artifacts under `SymbolLattice-evidence-05236` include the preserved `baseline-05235`, all `*-baseline.json` / `*-candidate.json` reports, `verification.json` and archived retrieval/verification runners (commands `node .tmp/retrieval-05236.mjs baseline`, `node .tmp/retrieval-05236.mjs candidate`, `node .tmp/verify-05236.mjs`). The verifier checks unchanged query plans, existing source and allocations, and every new direct-call receipt. External corpora, indexes and generated reports are not committed.
+
+The sequential baseline and candidate runs occurred in different sessions on September 21, 2026; their absolute times are not causal evidence of a speed change. A contemporaneous diagnostic therefore used one warmup per product and three alternating-order fresh-process pairs on five tasks, without concurrent tests, builds or indexing. Median process milliseconds, before → after: module-init 8,656 → 9,001; plugin metadata 4,175 → 3,878; validation 5,017 → 5,179; exact guard control 6,347 → 6,012; shutdown 7,259 → 7,294. The earlier shutdown increase from 3,937 to 7,323 ms did not reproduce as a comparable difference between products. These small samples do not establish a speedup, an SLO or performance on other workloads. First indexing, incremental sync and total agent task completion time/query count remain unmeasured. Samples, hardware metadata, product fingerprints and the runner are archived as `process-paired.json` / `process-timing-runner.mjs` (command `node .tmp/paired-process-05236.mjs`).
+
+Build, TypeScript test typecheck and version consistency checks pass. After timing completed, the full suite passed 3,109 tests with four existing skips (300 passing files, one skipped); output is archived in `full-test.log`. Added cases cover exact directed call validation, duplicate calls, unavailable or already delivered source, exhausted window/character limits, preserved whole-file promotions, and use of indexed source when live files are stale. These contract tests complement the actual corpus checks above; unchanged parsers were not re-audited against compiler corpora.

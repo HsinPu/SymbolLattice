@@ -2219,6 +2219,13 @@ function diversifyFileFocuses(
 }
 
 /** Builds a deterministic, bounded graph focus plan without reading live source. */
+/** Existing bounded English execution-intent heuristic, shared with source selection. */
+export function hasExploreExecutionIntent(query: string): boolean {
+  const bounded = query.trim().slice(0, EXPLORE_QUERY_LIMITS.maximumQueryCharacters);
+  return /\b(?:flow|runtime|execution|execute[sd]?|executing|runs?|running|invoke[sd]?|invoking|invocation|process(?:es|ing)?)\b/iu.test(bounded) &&
+    !/\b(?:types?|typings?|interfaces?|signatures?|declarations?|overloads?|generics?|typecheck(?:ing)?)\b/iu.test(bounded);
+}
+
 export function planExploreQuery(
   graph: ExploreQueryGraph,
   query: string,
@@ -2230,8 +2237,7 @@ export function planExploreQuery(
     icons: parsed.iconIntentTerms.length > 0,
     localization: parsed.localizationIntentTerms.length > 0
   };
-  const executionIntent = /\b(?:flow|runtime|execution|execute[sd]?|executing|runs?|running|invoke[sd]?|invoking|invocation|process(?:es|ing)?)\b/iu.test(parsed.boundedQuery) &&
-    !/\b(?:types?|typings?|interfaces?|signatures?|declarations?|overloads?|generics?|typecheck(?:ing)?)\b/iu.test(parsed.boundedQuery);
+  const executionIntent = hasExploreExecutionIntent(parsed.boundedQuery);
   const filesByPath = new Map((graph.files ?? []).map((file) => [file.path, file]));
   const sourceById = new Map((sourceLexical?.candidates ?? []).map((candidate) => [candidate.symbolId, candidate]));
   const lexicalCandidates = graph.symbols

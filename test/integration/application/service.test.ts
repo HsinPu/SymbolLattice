@@ -1141,12 +1141,12 @@ describe("SymbolLatticeService", () => {
         summary: { selectedSpineCount: 0, bridgeSymbolCount: 0 }
       },
       sourceWindowPlan: {
-        policy: "explore-source-windows-v5",
+        policy: "explore-source-windows-v6",
         summary: { candidateCount: 0, selectedCount: 0, truncated: false }
       },
       sourceWindows: [],
       sourceWindowAllocation: {
-        policy: "explore-source-window-allocation-v4",
+        policy: "explore-source-window-allocation-v5",
         budget: { totalCharacterBudget: 24_000 },
         summary: { candidateCount: 0, emittedWindows: 0 }
       }
@@ -1471,6 +1471,30 @@ describe("SymbolLatticeService", () => {
     expect(result.sourceWindowPlan?.calleeSourceSearch).toMatchObject({ matchedSymbols: 1, unavailableFiles: [], truncated: false });
     expect((result.sourceAllocation?.summary.emittedCharacters ?? 0) +
       (result.sourceWindowAllocation?.summary.emittedCharacters ?? 0)).toBeLessThanOrEqual(24_000);
+  });
+
+  it("delivers differently named direct helper bodies for named flow queries using the indexed source", async () => {
+    const source = ["export function executeTask() { return finish(); }", ...Array<string>(30).fill(""),
+      "function finish() {", "  return 'completed operation';", "}", ""].join("\n");
+    const projectPath = await createInlineProject({ "src/task.ts": source });
+    const service = createService();
+    await service.init({ projectPath });
+    await writeFile(join(projectPath, "src/task.ts"), source.replace("completed operation", "changed live source"));
+    const result = await service.explore(projectPath, "Trace executeTask flow");
+    const window = result.sourceWindows?.find(item => item.reason === "exact-flow-callee");
+    expect(result.status.stale).toBe(true);
+    expect(window?.source.text).toContain("completed operation");
+    expect(window?.source.text).not.toContain("changed live source");
+    expect(window?.sourceMatches).toBeUndefined();
+    expect(result.sourceWindowAllocation?.windows.find(item => item.index === window?.index)?.allocationPhase).toBe("remaining-budget");
+    expect((result.sourceAllocation?.summary.emittedCharacters ?? 0) +
+      (result.sourceWindowAllocation?.summary.emittedCharacters ?? 0)).toBeLessThanOrEqual(24_000);
+    const ordinary = await service.explore(projectPath, "executeTask behavior");
+    expect(ordinary.sourceWindows?.some(item => item.reason === "exact-flow-callee")).toBe(false);
+    const types = await service.explore(projectPath, "executeTask types flow");
+    expect(types.sourceWindows?.some(item => item.reason === "exact-flow-callee")).toBe(false);
+    const exact = await service.explore(projectPath, "src/task.ts#executeTask");
+    expect(exact.sourceWindows?.length ?? 0).toBe(0);
   });
 
   it("reserves source capacity for late call evidence after truncating a large callable", async () => {

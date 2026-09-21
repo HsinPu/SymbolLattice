@@ -135,6 +135,7 @@ import {
   EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS,
   EXPLORE_QUERY_LIMITS,
   planExploreQuery,
+  hasExploreExecutionIntent,
   exploreQuerySeedTerms,
   type ExploreQueryPlan
 } from "./explore-query.js";
@@ -5653,7 +5654,8 @@ export class SymbolLatticeService {
         return source === undefined || target === undefined ? [] : [{ source, target, edge }];
       });
 
-    const sourceWindowPlan = planExploreSourceWindows(focuses, connections, pathSpinePlan, plan.identifierTerms, documentsByFilePath);
+    const sourceWindowPlan = planExploreSourceWindows(focuses, connections, pathSpinePlan, plan.identifierTerms,
+      documentsByFilePath, hasExploreExecutionIntent(plan.query));
     const sourceWindowDrafts = new Map<number, ContextSourceDraft>();
     const sourceWindowWholeFileDrafts = new Map<number, ContextSourceDraft>();
     const focusFilePaths = new Set(focuses.map((focus) => focus.symbol.filePath));
@@ -5703,7 +5705,8 @@ export class SymbolLatticeService {
           generated: generated.generated,
           generatedClassifierVersion: generated.classifierVersion,
           generatedEvidenceRuleIds: generated.evidence.map((evidence) => evidence.ruleId),
-          cliffExempt: window.reason === "exact-path-spine"
+          cliffExempt: window.reason === "exact-path-spine",
+          spareOnly: window.reason === "exact-flow-callee"
         }];
       })
     });
