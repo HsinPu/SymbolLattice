@@ -498,3 +498,43 @@ node benchmarks/mcp/task-retrieval.mjs --project /external/express --manifest be
 ```
 
 Run the remaining eight manifests on their matching pinned corpus for the full thirteen-task comparison. External artifacts under `SymbolLattice-evidence-05233` include the preserved baseline build, `*-baseline.json` / final `*-final.json` reports, intermediate `*-candidate.json` and validation probes, paired timing samples/runners, build/full-test logs and `receipt-verification.json`. The archived `receipt-verification-runner.mjs` (command `node .tmp/verify-final-05233.mjs`) checks all final output and the four specified static hops; `retrieval-runner.mjs` records the complete task loop. No external corpus, index or generated report is committed. Unchanged parsers were not re-audited against compiler corpora for this query/source-allocation patch.
+
+### Shared parameter types in graph expansion, v0.523.5
+
+The provider-creation query incorrectly selected `before-app-shutdown.hook.ts` through two exact `accepts` edges: the queried function and the hook both accept `Module` (or `InstanceWrapper`). Those edges correctly describe their signatures, but sharing an input type alone is weak evidence of task relevance. The failure was reproduced on v0.523.4 and in a regression test before the fix.
+
+`explore-query-plan-v18` / `explore-query-graph-expansion-v3` no longer expands through a forward `accepts` edge immediately followed by a reverse `accepts` edge. Direct type dependencies, queries seeded at the type itself, independently matched symbols, explicit files, and alternative exact call paths remain eligible. Other relationship kinds retain their behavior; for example, a `returns` → reverse `accepts` path is still labeled as type relationships, not proof that values actually flow between those functions. This patch changes query selection only; extractor `multi-language-ast-v425`, resolver `project-resolver-v204`, stored edges, and index format are unchanged. It does not generally infer task intent or eliminate every kind of irrelevant graph neighbor.
+
+Acceptance required removing the known provider-flow false positive without losing required files or source facts on the thirteen existing tasks. `mcp/nest-module-init-tasks.json` adds one held-out named-symbol flow task on the already known NestJS repository. Its required files and five source facts were defined from pinned source before implementation; both outputs stayed unopened until the implementation was frozen. The original thirteen tasks are known regression cases in this comparison, regardless of their original manifest split labels.
+
+Baseline: v0.523.4 commit `d834226d0a1ea62c63ba012a2cbb10188fc8ee50`, build SHA-256 `e544933b2b6fb343fc9b6170d56a81989f9e7690c1c1e6994f8a4d65f6dd3072`. Candidate v0.523.5 build: `9e2bd0210c34ab6a6a77e61cc22cc311af3595733cfb2af548d80d3bf6a41e8b`. Windows / Node v22.23.2, three fresh CLI processes per task/product, identical manifest hashes and index generations, and the same pinned NestJS, Fastify and Express checkouts recorded above. No indexing, builds or tests ran concurrently with query timing.
+
+All fourteen tasks retain every required file: 21/21 task-file requirements in each version. The thirteen known tasks retain 46/46 source facts. The new module-init task retains 4/5 facts in both versions: the emitted source still omits the `onModuleInit()` invocation in the local `callOperator` at `on-module-init.hook.ts:27`. The candidate includes exact calls to `callOperator` at lines 50 and 53, but selects no supplemental source window despite 20,841 unused source characters. Its manifest preserves this unresolved source-selection gap for follow-up; it is not a fully passing evidence task.
+
+| Changed task | Required files, before → after | Source facts, before → after | Judged TP / FP / unjudged, before → after |
+| --- | --- | --- | --- |
+| Known provider loader | 1/1 → 1/1 | 1/1 → 1/1 | 3 / 0 / 1 → 3 / 0 / 1 |
+| Provider creation flow | 2/2 → 2/2 | 3/3 → 3/3 | 2 / 1 / 1 → 2 / 0 / 2 |
+| Module-init hook instances (new task) | 2/2 → 2/2 | 4/5 → 4/5 | 3 / 0 / 1 → 3 / 0 / 1 |
+
+The other eleven selected file sets are unchanged. Provider-flow judged precision improves from 2/3 to 2/2, while its judged fraction falls from 3/4 to 2/4; the two remaining unjudged files are not proven relevant. The module-init result now includes `on-app-bootstrap.hook.ts` as its unjudged fourth file. No new judged false positives were introduced in the fixed task judgments, but this does not establish global precision or the relevance of every replacement file.
+
+All 159 candidate excerpts, 237 literal match receipts and one source-reuse receipt passed checks against pinned source text, coordinates and identities. The existing Fastify reuse still saves 5,123 canonical characters. Selected expansion receipts contain no rejected shared-input-type pattern. These checks validate delivered evidence and the changed selection rule, not repository-wide relation precision or runtime feasibility.
+
+| Changed task | Median process ms, before → after | Markdown bytes, before → after | Source characters, before → after | CLI JSON bytes, before → after |
+| --- | --- | --- | --- | --- |
+| Known provider loader | 3,576 → 3,149 | 8,595 → 11,290 | 2,049 → 2,820 | 405,645 → 447,746 |
+| Provider creation flow | 3,260 → 3,287 | 27,163 → 21,053 | 12,443 → 10,469 | 1,021,175 → 819,016 |
+| Module-init hook instances | 3,140 → 3,174 | 13,426 → 12,876 | 3,068 → 3,159 | 630,258 → 605,026 |
+
+Provider-flow Markdown falls by 22.5%, but the known-provider query grows; this is not a universal output reduction. The other eleven tasks retain their Markdown size and source-character count. An isolated planner diagnostic used two warmups and 25 alternating-order repetitions on the same bounded snapshot for each of thirteen non-exact queries; the exact guard lookup bypasses that planner. Median changes range from −1.92 to +0.92 ms; provider flow is 46.37 → 46.20 ms. Full-plan determinism was checked outside timing. All timing preceded the full suite. These small samples do not establish a general speedup or latency SLO. First indexing, incremental sync, total agent completion time and query count were not measured.
+
+Reproduce with the unchanged harness and fixed indexed checkouts:
+
+```sh
+node benchmarks/mcp/task-retrieval.mjs --project /external/nest --manifest benchmarks/mcp/nest-retrieval-tasks.json --product-root /external/baseline-05234 --repetitions 3 --output /external/evidence/providers-before.json
+node benchmarks/mcp/task-retrieval.mjs --project /external/nest --manifest benchmarks/mcp/nest-retrieval-tasks.json --repetitions 3 --output /external/evidence/providers-after.json
+node benchmarks/mcp/task-retrieval.mjs --project /external/nest --manifest benchmarks/mcp/nest-module-init-tasks.json --repetitions 3 --output /external/evidence/module-init-after.json
+```
+
+Run the other nine manifests on their corresponding pinned checkouts for the fourteen-task comparison. External artifacts under `SymbolLattice-evidence-05235` include `baseline-05234`, all `*-baseline.json` / `*-candidate.json` reports, `verification.json`, `planning-paired.json`, and archived retrieval/verification/planning runners (commands `node .tmp/retrieval-05235.mjs baseline`, `node .tmp/retrieval-05235.mjs candidate`, `node .tmp/verify-05235.mjs`, `node .tmp/planning-05235.mjs`). Typecheck, build and all 66 query-planning tests passed. The full suite passed 3,100 tests with four existing skips; its output is in `full-test.log`. Unchanged parsers were not re-audited against compiler corpora.

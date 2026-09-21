@@ -276,6 +276,70 @@ function edge(id: string, sourceId: string, targetId: string): GraphEdge {
   };
 }
 
+describe("shared parameter types in graph expansion", () => {
+  function fixture(extraEdges: readonly GraphEdge[] = []) {
+    return {
+      symbols: [
+        symbol({ id: "seed", name: "submitOrder", filePath: "src/submit.ts" }),
+        symbol({ id: "type", name: "Session", filePath: "src/session.ts", kind: "interface" }),
+        symbol({ id: "peer", name: "clearCache", filePath: "src/cache.ts" }),
+        symbol({ id: "helper", name: "persistRecord", filePath: "src/storage.ts" })
+      ],
+      edges: [
+        { ...edge("seed-type", "seed", "type"), kind: "accepts" as const },
+        { ...edge("peer-type", "peer", "type"), kind: "accepts" as const },
+        ...extraEdges
+      ]
+    };
+  }
+
+  it("keeps the direct type dependency without expanding to unrelated consumers of that type", () => {
+    const graph = fixture();
+    const plan = planExploreQuery(graph, "submitOrder flow");
+    expect(plan.selection.map(item => item.symbol.id)).toEqual(["seed", "type"]);
+    expect(plan.selection[1]?.graphExpansion.path).toEqual([
+      expect.objectContaining({ edgeId: "seed-type", direction: "forward" })
+    ]);
+    expect(planExploreQuery({ ...graph, symbols: [...graph.symbols].reverse(), edges: [...graph.edges].reverse() },
+      "submitOrder flow")).toEqual(plan);
+  });
+
+  it("still finds consumers when the type itself is the requested symbol", () => {
+    const plan = planExploreQuery(fixture(), "Session usage");
+    expect(plan.selection.map(item => item.symbol.id)).toEqual(expect.arrayContaining(["type", "seed", "peer"]));
+    expect(plan.selection.find(item => item.symbol.id === "peer")?.graphExpansion.path).toEqual([
+      expect.objectContaining({ edgeId: "peer-type", direction: "reverse" })
+    ]);
+  });
+
+  it("retains separately requested consumers and explicit files", () => {
+    for (const query of ["submitOrder clearCache", "submitOrder src/cache.ts"]) {
+      expect(planExploreQuery(fixture(), query).selection.map(item => item.symbol.id)).toContain("peer");
+    }
+  });
+
+  it("can reach the same consumer along a real call path despite the shared type", () => {
+    const graph = fixture([edge("seed-helper", "seed", "helper"), edge("helper-peer", "helper", "peer")]);
+    const plan = planExploreQuery(graph, "submitOrder flow");
+    expect(plan.selection.find(item => item.symbol.id === "peer")?.graphExpansion.path).toEqual([
+      expect.objectContaining({ edgeId: "seed-helper", direction: "forward" }),
+      expect.objectContaining({ edgeId: "helper-peer", direction: "forward" })
+    ]);
+  });
+
+  it("keeps caller chains and producer-consumer type paths as separately labeled graph evidence", () => {
+    const graph = fixture();
+    const callGraph = { ...graph, edges: [edge("type-seed", "type", "seed"), edge("peer-type", "peer", "type")] };
+    expect(planExploreQuery(callGraph, "submitOrder flow").selection.map(item => item.symbol.id)).toContain("peer");
+    const producerGraph = { ...graph, edges: [
+      { ...edge("seed-type", "seed", "type"), kind: "returns" as const },
+      graph.edges[1]!
+    ] };
+    expect(planExploreQuery(producerGraph, "submitOrder flow").selection.find(item => item.symbol.id === "peer")
+      ?.graphExpansion.path.map(item => item.kind)).toEqual(["returns", "accepts"]);
+  });
+});
+
 describe("explore query planning", () => {
   it("ranks compound intent above unrelated exact generic words and handles inflections", () => {
     const implementation = symbol({ id: "resolve", name: "resolveConstructorParams", filePath: "src/z-engine.ts" });
@@ -321,7 +385,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v17",
+      policy: "explore-query-plan-v18",
       queryIntent: {
         tests: false,
         icons: false,
@@ -439,7 +503,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v17",
+      policy: "explore-query-plan-v18",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -671,7 +735,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v17",
+      policy: "explore-query-plan-v18",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1095,7 +1159,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v17",
+      policy: "explore-query-plan-v18",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v2",
@@ -1251,7 +1315,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan.ranking.graphExpansion).toMatchObject({
-      policy: "explore-query-graph-expansion-v2",
+      policy: "explore-query-graph-expansion-v3",
       reason: "completed",
       applied: true,
       maximumHops: 2,
@@ -1270,7 +1334,7 @@ describe("explore query planning", () => {
       matchedTerms: [],
       reasons: expect.arrayContaining(["graph-expanded"]),
       graphExpansion: {
-        policy: "explore-query-graph-expansion-v2",
+        policy: "explore-query-graph-expansion-v3",
         state: "expanded",
         seedSymbolId: "dispatch",
         seedFilePath: "src/dispatch.ts",
@@ -1794,7 +1858,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v17",
+      policy: "explore-query-plan-v18",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,

@@ -17,7 +17,7 @@ import { identifierTermGroups, identifierTermVariants, identifierWords } from ".
 import { SOURCE_LEXICAL_SCORING, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
 import { downstreamFocusPaths, type ExploreFlowFocus } from "./explore-flow-focus.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v17" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v18" as const;
 export const EXPLORE_QUERY_FOCUS_COVERAGE = {
   policy: "same-file-source-coverage-v1",
   minimumRelativeScore: 0.75,
@@ -38,7 +38,7 @@ export const EXPLORE_QUERY_SOURCE_LEXICAL_SCORING = {
 export const EXPLORE_QUERY_SOURCE_WORTH_POLICY = "explore-query-source-worth-v1" as const;
 export const EXPLORE_QUERY_GRAPH_MASS_POLICY = "explore-query-graph-mass-v2" as const;
 export const EXPLORE_QUERY_GRAPH_EXPANSION_POLICY =
-  "explore-query-graph-expansion-v2" as const;
+  "explore-query-graph-expansion-v3" as const;
 export const EXPLORE_QUERY_GRAPH_DIFFUSION_POLICY =
   "explore-query-graph-diffusion-v3" as const;
 export const EXPLORE_QUERY_LOW_VALUE_FILTER_POLICY =
@@ -1293,6 +1293,14 @@ function graphExpansionFor(
       if (current.path.length >= EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumHops) continue;
       for (const neighbor of adjacency.get(current.nodeId) ?? []) {
         if (seenForSeed.has(neighbor.neighborId)) continue;
+        // Sharing a parameter type is not sufficient evidence that two
+        // consumers belong to the same task. Keep the direct type dependency
+        // and searches seeded at the type, but do not fan out through it.
+        const previous = current.path.at(-1);
+        if (
+          previous?.kind === "accepts" && previous.direction === "forward" &&
+          neighbor.relationship.edge.kind === "accepts" && neighbor.direction === "reverse"
+        ) continue;
         if (
           !visitedRelationshipIds.has(neighbor.relationship.edge.id) &&
           visitedRelationshipIds.size >=

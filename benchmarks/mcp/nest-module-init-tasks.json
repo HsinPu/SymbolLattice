@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/nestjs/nest",
+  "commit": "35c3ded6dbf3f23f917ae88d0ed966932788cae6",
+  "truthMethod": "Manual reading of pinned on-module-init.hook.ts and transient-instances.ts before changing shared-parameter-type graph expansion. This named-symbol flow task checks hook invocation and the two instance categories. Baseline and candidate outputs stay unopened until the implementation is frozen. This is a new task on an already known repository; unlisted files remain unjudged, and static type compatibility does not establish runtime flow.",
+  "tasks": [{
+    "id": "module-init-hook-instances",
+    "split": "held-out",
+    "query": "Trace callModuleInitHook flow",
+    "requiredFiles": ["packages/core/hooks/on-module-init.hook.ts", "packages/core/injector/helpers/transient-instances.ts"],
+    "supportingFiles": ["packages/core/injector/module.ts", "packages/core/injector/instance-wrapper.ts", "packages/core/nest-application-context.ts"],
+    "irrelevantFiles": ["packages/core/hooks/before-app-shutdown.hook.ts", "packages/core/hooks/on-app-shutdown.hook.ts", "packages/core/pipes/pipes-consumer.ts"],
+    "evidence": [
+      { "file": "packages/core/hooks/on-module-init.hook.ts", "line": 27, "text": ".map(async instance => (instance as any as OnModuleInit).onModuleInit())" },
+      { "file": "packages/core/hooks/on-module-init.hook.ts", "line": 49, "text": "const nonTransientInstances = getNonTransientInstances(instances);" },
+      { "file": "packages/core/hooks/on-module-init.hook.ts", "line": 52, "text": "const transientInstances = getTransientInstances(instances);" },
+      { "file": "packages/core/injector/helpers/transient-instances.ts", "line": 14, "text": ".map(([_, wrapper]) => wrapper.getStaticTransientInstances())" },
+      { "file": "packages/core/injector/helpers/transient-instances.ts", "line": 31, "text": "wrapper.isDependencyTreeStatic() && !wrapper.isTransient," }
+    ]
+  }]
+}
