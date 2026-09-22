@@ -44,6 +44,8 @@ interface SourcePathEntry {
   readonly relativePath: string;
 }
 
+export const MAXIMUM_SCOPED_WALK_CONCURRENCY = 8;
+
 /** Stable byte-wise ordering for normalized project-relative paths. */
 export function compareScopedProjectPaths(left: string, right: string): number {
   return left === right ? 0 : left < right ? -1 : 1;
@@ -102,7 +104,7 @@ export async function canonicalizeScopedProjectRoots(
 }
 
 /**
- * One deterministic traversal shared by source, freshness, and configuration
+ * One traversal with deterministic output shared by source, freshness, and configuration
  * discovery. Nested ignore files are evaluated relative to their directory.
  */
 export async function walkScopedProject(
@@ -127,6 +129,11 @@ export async function walkScopedProject(
   const sources: SourcePathEntry[] = [];
   const configurationPaths = new Set<string>();
   const collectsConfiguration = options.isConfigurationCandidateFileName !== undefined;
+  const pending: {
+    directoryPath: string;
+    directoryRelativePath: string;
+    inheritedFrames: readonly IgnoreFrame[];
+  }[] = [];
 
   async function visit(
     directoryPath: string,
@@ -192,7 +199,7 @@ export async function walkScopedProject(
         ) {
           continue;
         }
-        await visit(entryPath, entryRelativePath, frames);
+        pending.push({ directoryPath: entryPath, directoryRelativePath: entryRelativePath, inheritedFrames: frames });
         continue;
       }
 
@@ -220,7 +227,19 @@ export async function walkScopedProject(
   }
 
   if (collectsConfiguration || (options.isSourceCandidate !== undefined && sourceScopeRoots.length > 0)) {
-    await visit(normalizedProjectPath, ".", []);
+    pending.push({ directoryPath: normalizedProjectPath, directoryRelativePath: ".", inheritedFrames: [] });
+    while (pending.length > 0) {
+      // Parents load their ignore rules before scheduling children. Bound work
+      // across the entire tree, rather than multiplying concurrency per level.
+      const batch = pending.splice(-MAXIMUM_SCOPED_WALK_CONCURRENCY);
+      const results = await Promise.allSettled(batch.map((job) =>
+        visit(job.directoryPath, job.directoryRelativePath, job.inheritedFrames)
+      ));
+      // Drain active reads before propagating unexpected errors. Access errors
+      // are collected separately and reported in stable path order below.
+      const failed = results.find((result) => result.status === "rejected");
+      if (failed?.status === "rejected") throw failed.reason;
+    }
   }
   access.throwIfAny();
 

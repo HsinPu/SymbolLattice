@@ -9,7 +9,7 @@ import {
   nativeProjectFilesystemReader,
   type ProjectFilesystemReader
 } from "../../../src/infrastructure/filesystem/project-filesystem.js";
-import { walkScopedProject } from "../../../src/infrastructure/filesystem/scoped-walker.js";
+import { MAXIMUM_SCOPED_WALK_CONCURRENCY, walkScopedProject } from "../../../src/infrastructure/filesystem/scoped-walker.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -46,6 +46,69 @@ afterEach(async () => {
 });
 
 describe("shared scoped project walker", () => {
+  it("bounds concurrent reads across sibling and nested directories while preserving sorted output", async () => {
+    const projectPath = await createProject();
+    const files = Array.from({ length: 24 }, (_, index) => `dir-${String(index).padStart(2, "0")}/nested/deep/source.ts`);
+    await Promise.all(files.map((file) => writeProjectFile(projectPath, file)));
+    let active = 0;
+    let peak = 0;
+    const reader: ProjectFilesystemReader = {
+      ...nativeProjectFilesystemReader,
+      async readdir(directoryPath) {
+        active += 1;
+        peak = Math.max(peak, active);
+        try {
+          await new Promise<void>((done) => setImmediate(done));
+          return await nativeProjectFilesystemReader.readdir(directoryPath);
+        } finally {
+          active -= 1;
+        }
+      }
+    };
+    const result = await walkScopedProject(projectPath, { reader, isSourceCandidate: typescriptSource });
+    expect(relativeSourcePaths(projectPath, result.sourcePaths)).toEqual(files);
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(MAXIMUM_SCOPED_WALK_CONCURRENCY);
+    expect(active).toBe(0);
+  });
+
+  it("drains sibling reads before returning an unexpected failure", async () => {
+    const projectPath = await createProject();
+    await writeProjectFile(projectPath, "a/source.ts");
+    await writeProjectFile(projectPath, "b/source.ts");
+    let release!: () => void;
+    let started!: () => void;
+    const blocked = new Promise<void>((done) => { release = done; });
+    const siblingStarted = new Promise<void>((done) => { started = done; });
+    const failure = new Error("unexpected read failure");
+    let finished = false;
+    const reader: ProjectFilesystemReader = {
+      ...nativeProjectFilesystemReader,
+      async readdir(directoryPath) {
+        if (directoryPath === join(projectPath, "a")) {
+          await siblingStarted;
+          throw failure;
+        }
+        if (directoryPath === join(projectPath, "b")) {
+          started();
+          await blocked;
+          finished = true;
+        }
+        return nativeProjectFilesystemReader.readdir(directoryPath);
+      }
+    };
+    const walk = walkScopedProject(projectPath, { reader, isSourceCandidate: typescriptSource });
+    let settled = false;
+    void walk.catch(() => { settled = true; });
+    await siblingStarted;
+    await new Promise<void>((done) => setImmediate(done));
+    const returnedBeforeSibling = settled;
+    release();
+    await expect(walk).rejects.toBe(failure);
+    expect(returnedBeforeSibling).toBe(false);
+    expect(finished).toBe(true);
+  });
+
   it("prunes every dot directory by default without traversing it", async () => {
     const projectPath = await createProject();
     await writeProjectFile(projectPath, ".tmp/pytest-history/blocked.ts");

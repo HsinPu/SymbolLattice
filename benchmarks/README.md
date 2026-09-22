@@ -76,6 +76,34 @@ Run `mcp/task-retrieval.mjs` with the fixed manifests, `--repetitions 3`, and th
 
 Release checks passed: `npm run check`, `npm run build`, `npm run verify:language-depth`, and the full suite (3,142 passed, 4 skipped; 304 test files passed, one skipped). The minor version reflects a new queryable Python declaration capability; existing public interfaces remain compatible.
 
+## v0.524.1 bounded directory scanning
+
+Scoped discovery schedules at most eight directories across the entire tree. Parents load local ignore rules before children are scheduled; source and configuration paths are sorted before returning. Known access failures still aggregate into sorted evidence, and unexpected failures wait for active sibling reads to settle. Source and configuration content hashing remains unchanged; no metadata-only freshness shortcut or cross-query cache was added.
+
+On Windows/Node 24.19.0, complete `FileSystemSourceCatalog.verifyFreshness` calls were compared with v0.524.0 on the same existing pinned Fastify, NestJS and Django indexes listed above. One warmup pair preceded five measured pairs, alternating build order. Every receipt, excluding timing fields, matched the baseline and reported complete `proven-unchanged` verification. Single-call medians were:
+
+| Corpus | v0.524.0 | v0.524.1 | Difference |
+| --- | ---: | ---: | ---: |
+| Fastify | 88.0 ms | 86.7 ms | −1.3 ms |
+| NestJS | 562.8 ms | 419.4 ms | −143.4 ms |
+| Django | 2,201.7 ms | 1,188.6 ms | −1,013.1 ms |
+
+These are freshness-stage measurements, not end-to-end CLI latency or an SLO. No tests or indexing ran alongside measurements. External evidence is retained in `SymbolLattice-evidence-052401/freshness-paired.json`; the pre-change phase profile is `query-profile.json`, and the baseline build is `baseline-052400`. Focused tests cover the global concurrency cap, deterministic path results, nested ignore/scoping behavior, permission failures, full-content freshness and waiting for sibling reads before propagating unexpected failures (77 tests passed).
+
+`npm run check`, `npm run build` and the full test suite passed (3,144 passed, 4 skipped; 304 test files passed, one skipped). The patch release changes internal scheduling while retaining discovery and freshness contracts.
+
+End-to-end checks then compared v0.524.0 and v0.524.1 using all 21 fixed Fastify/NestJS/Django tasks, including the known Python binding lookup. Each task used three fresh CLI processes per build; build order alternated between manifests, on the same unchanged indexes. No tests or indexing ran alongside this comparison. All complete parsed JSON results were deeply equal, including selected symbols, relations, source windows, omissions and freshness status. Independent checks verified 254 source excerpts and 392 lexical matches. Required-file coverage remained 31/34 and cited-source coverage 75/82; the known Django default HTTP 500 discovery gap remains 0/3 files and 0/7 source facts.
+
+| Corpus | Tasks | CLI median change, v0.524.1 minus v0.524.0 |
+| --- | ---: | ---: |
+| Fastify | 10 | −127 to +80 ms |
+| NestJS | 7 | −611 to −160 ms |
+| Django | 4 | −2,238 to −1,926 ms |
+
+Django's three natural-language tasks changed from 8,948–9,280 ms to 6,763–7,114 ms; its known-binding query changed from 7,362 ms to 5,143 ms. These paired-run observations do not imply a universal latency bound; the small Fastify differences include both increases and decreases. Timings include startup, both strict freshness checks, query execution and serialization. Agent task completion time and semantic graph precision remain unmeasured.
+
+Use `mcp/task-retrieval.mjs` with the pinned manifests and `--repetitions 3` to reproduce the task checks. External evidence in `SymbolLattice-evidence-052401` includes `*-before.json`, `*-after.json`, `retrieval-comparison.json` and `full-test.log`. The v0.524.1 build fingerprint is `8c59c95a00181d0f380687f0e4b0b6d2b7b9dc8675f4de6a16fc08f8bde00534` (728 files, 11,087,400 bytes). Existing index generations were reused; no extractor or resolver version changed.
+
 ## Task retrieval checks
 
 `mcp/nest-retrieval-tasks.json` fixes a NestJS commit and manually reviewed task truth. It includes exact-name, natural-language and cross-file questions. Run against an indexed checkout with unmodified tracked source:
