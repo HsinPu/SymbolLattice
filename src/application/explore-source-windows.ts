@@ -6,7 +6,7 @@ import { EXPLORE_CALLEE_SOURCE_LIMITS, matchExploreCalleeSource, type ExploreCal
 import type { SourceLexicalMatch } from "../domain/source-lexical.js";
 import type { SymbolNode } from "../domain/types.js";
 
-export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v9" as const;
+export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v10" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY =
   "explore-source-window-allocation-v5" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS = {
@@ -755,7 +755,7 @@ export function planExploreSourceWindows(
   // but never connection, callee-body or spine evidence. Full receipts remain
   // in focus.impact.paths; a static assignment label does not prove dispatch.
   const impactCandidates: MutableWindow[] = [];
-  const impactPriority = new Map<MutableWindow, { readonly concepts: number; readonly entryId: string; readonly targetId: string; readonly caller: SymbolNode }>();
+  const impactPriority = new Map<MutableWindow, { readonly concepts: number; readonly entryId: string; readonly targetId: string; readonly caller: SymbolNode; readonly completeCaller: boolean }>();
   const queryGroups = identifierTermGroups(queryTerms);
   const seenImpactEdges = new Set<string>();
   for (const focus of [...focuses].sort((left, right) => left.rank - right.rank)) {
@@ -801,8 +801,11 @@ export function planExploreSourceWindows(
           connectionEdgeIds: [...site.connectionEdgeIds], relatedSymbolIds: [...site.relatedSymbolIds],
           pathSpineIndexes: [] };
         impactCandidates.push(candidate);
-        impactPriority.set(candidate, { concepts, entryId: terminal.id, targetId: edge.targetId!,
-          caller: path.symbols.find(symbol => symbol.id === edge.sourceId)! });
+        const caller = path.symbols.find(symbol => symbol.id === edge.sourceId)!;
+        const completeCaller = caller.range.end.line - caller.range.start.line + 1 <=
+          EXPLORE_SOURCE_WINDOW_LIMITS.maximumImpactCallerLines &&
+          edge.range.start.line >= caller.range.start.line && edge.range.end.line <= caller.range.end.line;
+        impactPriority.set(candidate, { concepts, entryId: terminal.id, targetId: edge.targetId!, caller, completeCaller });
       }
     }
   }
@@ -811,12 +814,16 @@ export function planExploreSourceWindows(
   let admittedImpactWindows = 0;
   let replacedLowerRankedCallWindowCount = 0;
   const pendingImpact = [...impactCandidates];
+  const continuationTargets = new Set(impactCandidates.map(window => impactPriority.get(window)!.targetId));
   const upstreamEntries = new Map<string, number>();
   while (pendingImpact.length > 0 && admittedImpactWindows < EXPLORE_SOURCE_WINDOW_LIMITS.maximumImpactWindows) {
     pendingImpact.sort((left, right) => {
       const a = impactPriority.get(left)!, b = impactPriority.get(right)!;
       return Number(upstreamEntries.has(b.targetId)) - Number(upstreamEntries.has(a.targetId)) ||
         b.concepts - a.concepts || left.focusRank - right.focusRank ||
+        Number(continuationTargets.has(b.entryId)) - Number(continuationTargets.has(a.entryId)) ||
+        (upstreamEntries.has(a.targetId) || upstreamEntries.has(b.targetId)
+          ? 0 : Number(b.completeCaller) - Number(a.completeCaller)) ||
         compareText(left.filePath, right.filePath) || left.startLine - right.startLine ||
         compareText(left.connectionEdgeIds.join("\u0000"), right.connectionEdgeIds.join("\u0000"));
     });
@@ -839,10 +846,9 @@ export function planExploreSourceWindows(
       else selectedPerFocus.set(removed!.focusRank, remaining);
       replacedLowerRankedCallWindowCount += 1;
     }
-    // Continue an admitted exact path without losing its short caller's guard.
-    // Keep the original focus/edge attribution; only admission inherits rank.
-    if (upstreamRank !== undefined && priority.caller.range.end.line - priority.caller.range.start.line + 1 <=
-        EXPLORE_SOURCE_WINDOW_LIMITS.maximumImpactCallerLines) {
+    // Preserve upstream guards. Other short callers may add trailing context
+    // only: new leading padding could push the call out of a clipped excerpt.
+    if (priority.completeCaller && (upstreamRank !== undefined || window.startLine <= priority.caller.range.start.line)) {
       window.startLine = Math.min(window.startLine, priority.caller.range.start.line);
       window.endLine = Math.max(window.endLine, priority.caller.range.end.line);
     }

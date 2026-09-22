@@ -808,3 +808,47 @@ Fresh-process timing includes startup, freshness checking and serialization. Sma
 Baseline/candidate built-file SHA-256 values are `666aa9385d2efa2b06b4a6f847108407152d523ae55ceb4f12449fe0e24371e8` / `61ae38f9a7177ac6085c9d4577f4f293e537135c0a651d5bc8e423258cb3c96b`. Reproduce all `fastify-*-tasks.json` and `nest-*-tasks.json` manifests with `benchmarks/mcp/task-retrieval.mjs`, the matching pinned indexed corpus, `--repetitions 3` and external output paths; use `--product-root /external/baseline-052316` for the baseline. `%TEMP%/SymbolLattice-evidence-052317` retains the baseline, raw reports, `retrieval-comparison.json`, `bundle-paired.json`, `casefold-experiment.json`, preliminary profiles and test log. Archived runners `retrieval-052317.mjs`, `bundle-paired-052317.mjs` and `casefold-experiment-052317.mjs` execute from ignored `.tmp/`. Fastify remains under `%TEMP%/SymbolLattice-evidence-052310/fastify`, and NestJS under `%TEMP%/SymbolLattice-evidence-052316/nest`.
 
 Typecheck, build, version consistency and the full test suite pass: 3,132 tests passed, four existing skips (302 passing files, one skipped), using `npm test -- --maxWorkers 2` after all timings. The candidate-cap regression now covers both camel-case and uppercase names among 300 generic matches. Existing tests cover qualified names, dotted identifiers, source-only candidates, deterministic adjacency, receipt preservation, caps, generation mismatches and fallback behavior. Output is retained in `full-test.log`.
+
+### Preserving continuations before compact caller tie breaks, v0.523.18
+
+The outgoing-hook query already had exact `wrapOnSendEnd → onErrorHook → handleError` impact receipts, but only one replaceable source slot remained. Three paths tied on concept coverage and focus rank; file/line order selected an earlier serialization callback. Policy `explore-source-windows-v10` breaks those ties by first favoring entries with an available validated upstream continuation, then callers within the existing twenty-line bound when starting a new path. Compactness does not reorder continuations of an already admitted path. Already admitted continuations retain their existing higher priority. Query coverage and focus rank still precede these new tie breaks.
+
+For newly selected compact callers, the planner may extend trailing context to the declaration end only when the existing window already begins at or before the caller. It does not prepend new context that could displace a late call under character clipping. Existing admitted-continuation context behavior remains. The call range must lie within the caller's line range for compact eligibility. All source still uses the fixed window and character envelopes; a compact declaration is not a promise that its entire body fits the delivered character allocation. No graph traversal, callback-dispatch inference, resolver change or index rebuild is introduced. This is a patch correction to existing evidence selection.
+
+The first experiment favored compact callers without protecting potential continuations. It supplied the outgoing-hook fact but regressed the serialization-hook guard at `reply.js:488`, replacing its continuation with a short side branch. The harness rejected the change on lost source facts. Its build and partial reports remain in `first-attempt/`. The final rule protects such continuations before considering compactness, and the regression test includes a competing short side branch. A proposed expansion of clipping anchors was not retained; avoiding new leading context addresses the newly introduced clipping risk without changing existing clipping behavior.
+The second experiment retained possible continuations but still preferred a compact Web Stream adapter over the existing stream branch while extending an admitted path, losing the required call at `reply.js:640`. Its partial reports and build remain in `second-attempt/`. Compactness now applies only to new paths; the continuation regression test contains both a competing compact entry and a compact alternative continuation. Neither failed experiment was committed or accepted by relaxing the fixed truth.
+
+Final validation uses Windows / Node v24.19.0, baseline v0.523.17 (`beb3158`), and the same pinned Fastify and NestJS repositories and index generations documented for v0.523.16. These seventeen fixed tasks are regression cases, not unseen validation. The final run reran both builds after the two rejected experiments; an earlier interrupted run and its fingerprint-checked resumption are retained separately. The truth manifests were not changed.
+
+Required task-file pairs remain 27/27, and specified source facts improve 61/62 → 62/62. Outgoing-hook errors improve 4/5 → 5/5 with `reply.js:544` now present; all previous facts are retained. Independent source checks cover 207 excerpts and 303 lexical matches. Judgments remain 37 TP, 0 FP, 0 FN and 26 unjudged selections (judged precision 37/37, judgment coverage 37/63). These partial judgments and selected facts do not establish repository-wide precision or complete runtime-flow understanding.
+
+Independent Espree checks confirm the calls and declaration ranges at `reply.js:544` and `:812`, including the CommonJS import/export receipt for `handleError`. They also confirm `wrapOnSendEnd` is passed at `:535` and the non-null error guard is at `:543`. This verifies source syntax and attribution; passing a function argument alone does not prove runtime callback dispatch.
+
+Query plans, connections, path spines and primary source allocations remain deeply equal. Fixed window limits and the 24,000-character total source envelope are preserved. Only two tasks change supplemental source: outgoing hooks replace lines 500–506 (133 characters) with the complete callback at 541–548 (153 characters, not truncated), while Markdown changes 40,647 → 40,656 bytes; NestJS constructor dependencies extend an existing selected caller from lines 165–171 to 165–186 (243 → 639 characters), with Markdown 31,655 → 32,111 bytes. The other fifteen tasks retain their supplemental source. The source audit and raw reports retain all budget and truncation metadata.
+
+Each task/build uses three sequential fresh CLI processes, alternating build-first order between manifests. Median milliseconds before → after are:
+
+| Task | Median fresh CLI process ms |
+| --- | --- |
+| Multiple cookie headers | 2,650 → 2,554 |
+| Error response status | 2,697 → 2,554 |
+| Header-write errors | 2,728 → 2,726 |
+| Outgoing-hook errors | 2,661 → 2,598 |
+| Plugin dependencies | 2,568 → 2,473 |
+| Plugin version metadata | 2,089 → 2,024 |
+| Request validation | 2,657 → 2,572 |
+| Serialization-hook errors | 2,638 → 2,578 |
+| Serializer selection | 2,642 → 2,617 |
+| Stream failures | 2,609 → 2,545 |
+| Module initialization | 4,807 → 4,822 |
+| Constructor dependencies | 5,004 → 5,078 |
+| Known provider loader | 4,567 → 4,607 |
+| Provider creation | 4,885 → 4,918 |
+| Request pipes | 5,088 → 5,090 |
+| Shutdown listeners | 5,116 → 5,008 |
+| Exact guard body | 4,393 → 4,480 |
+
+A separate fixed-input planner comparison covers the sixteen query-mode tasks (the exact-symbol case has no window plan), with source loaded outside timing, two warmups and 25 alternating-order pairs. Median differences range from -0.116 to +0.074 ms; outgoing hooks change 0.9334 → 0.9274 ms. Full CLI differences are mixed and include startup, freshness checks and serialization; these small samples do not establish a speedup or SLO. No tests, builds or indexing ran during final timing. First-index, incremental-sync, peak-memory and total agent completion time/query counts were not measured.
+
+Baseline/candidate built-file SHA-256 values are `61ae38f9a7177ac6085c9d4577f4f293e537135c0a651d5bc8e423258cb3c96b` / `226ca19d0b1230e37e02e60082fd6174368822972ab227fa071233bd700d9b5a`. Reproduce the seventeen tasks with `benchmarks/mcp/task-retrieval.mjs`, matching pinned indexed corpora, `--repetitions 3`, external outputs and `--product-root /external/baseline-052317` for baseline runs. `%TEMP%/SymbolLattice-evidence-052318` retains the baseline, rejected `first-attempt/` and `second-attempt/`, final task reports, `retrieval-comparison.json`, `windows-paired.json`, `upstream-verification.json`, `window-audit.json` and test logs. Archived runners `retrieval-052318.mjs`, `windows-paired-052318.mjs`, `verify-upstream-052318.mjs` and `audit-windows-052318.mjs` execute from ignored `.tmp/`; the retrieval runner defaults to fresh measurements. Corpora remain under `%TEMP%/SymbolLattice-evidence-052310/fastify` and `%TEMP%/SymbolLattice-evidence-052316/nest`.
+Typecheck, build, version consistency and complete `npm test -- --maxWorkers 2` pass: 3,135 tests passed, four existing skips (302 passing files, one skipped). Added cases cover the twenty-line eligibility boundary, stable ordering under reversed inputs, and preserving late calls without new leading padding. Existing continuation cases now include compact competing entries and compact alternate continuations; protected evidence, rank protection, malformed/heuristic paths, budgets and source freshness remain covered. Targeted tests passed before final timing; the full suite ran afterward, with output in `full-test.log`.
