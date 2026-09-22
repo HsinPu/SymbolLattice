@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -1380,7 +1381,10 @@ export function createProgram(
   operationJournalFactory: OperationDiagnosticJournalFactory = (projectPath, writable) =>
     new SqliteOperationDiagnosticJournal(projectPath, { writable })
 ): Command {
-  const coreService = service ?? createService();
+  const cliReadReceipts = new AsyncLocalStorage<ReadQueryFreshnessReceipt>();
+  const coreService = service ?? createService({
+    readQueryFreshnessReceipt: () => cliReadReceipts.getStore() ?? null
+  });
   const strictCliFreshness = service === undefined
     ? new StrictFreshReadCoordinator({ service: coreService, writerEnabled: false })
     : null;
@@ -1389,7 +1393,7 @@ export function createProgram(
     query: () => Promise<Result>
   ): Promise<Result> => strictCliFreshness === null
     ? query()
-    : strictCliFreshness.execute(projectPath, async () => query());
+    : strictCliFreshness.execute(projectPath, (receipt) => cliReadReceipts.run(receipt, query));
   const indexingService = async (
     projectPath: string,
     options: PluginCommandOptions

@@ -852,3 +852,39 @@ A separate fixed-input planner comparison covers the sixteen query-mode tasks (t
 
 Baseline/candidate built-file SHA-256 values are `61ae38f9a7177ac6085c9d4577f4f293e537135c0a651d5bc8e423258cb3c96b` / `226ca19d0b1230e37e02e60082fd6174368822972ab227fa071233bd700d9b5a`. Reproduce the seventeen tasks with `benchmarks/mcp/task-retrieval.mjs`, matching pinned indexed corpora, `--repetitions 3`, external outputs and `--product-root /external/baseline-052317` for baseline runs. `%TEMP%/SymbolLattice-evidence-052318` retains the baseline, rejected `first-attempt/` and `second-attempt/`, final task reports, `retrieval-comparison.json`, `windows-paired.json`, `upstream-verification.json`, `window-audit.json` and test logs. Archived runners `retrieval-052318.mjs`, `windows-paired-052318.mjs`, `verify-upstream-052318.mjs` and `audit-windows-052318.mjs` execute from ignored `.tmp/`; the retrieval runner defaults to fresh measurements. Corpora remain under `%TEMP%/SymbolLattice-evidence-052310/fastify` and `%TEMP%/SymbolLattice-evidence-052316/nest`.
 Typecheck, build, version consistency and complete `npm test -- --maxWorkers 2` pass: 3,135 tests passed, four existing skips (302 passing files, one skipped). Added cases cover the twenty-line eligibility boundary, stable ordering under reversed inputs, and preserving late calls without new leading padding. Existing continuation cases now include compact competing entries and compact alternate continuations; protected evidence, rank protection, malformed/heuristic paths, budgets and source freshness remain covered. Targeted tests passed before final timing; the full suite ran afterward, with output in `full-test.log`.
+
+### Reusing the CLI's scoped freshness admission, v0.523.19
+
+The CLI's strict coordinator already verifies freshness before and after a live read, but discarded the admission receipt when invoking the query. The default service therefore performed another full content/configuration check while constructing query status. The CLI now passes the coordinator-issued receipt through a per-program `AsyncLocalStorage` scope into the existing service receipt interface. The query reuses only the admitted project's matching generation; before/after observations remain outside that scope. Independent commands and later reads do not inherit it, and post-query changes still prevent result publication. Injected-service behavior is unchanged. This is a patch performance correction, with no schema, public query or index compatibility change.
+
+The targeted integration test checks two full verifications per live read across successive commands, generation-bound bounded retrieval, and a separate status command that performs its own verification. Another test changes source after query admission and checks that the postcheck blocks output. Existing stale-before-read and coordinator retry/lease tests also pass.
+
+Earlier read-only experiments tried merging bidirectional edge queries, excluding already returned directions, and deferring edge-evidence hydration. They retained complete bundles on the two diagnostic queries, but had mixed or worse timings: merged queries changed NestJS 1,170.73 → 1,189.68 ms and Fastify 588.49 → 607.57 ms; deferred hydration improved NestJS about 55–65 ms but increased Fastify about 7–9 ms. None of those SQL experiments changed production code. Their runners, CPU profile and raw samples are retained externally; they are not evidence of a shipped optimization.
+Windows / Node v24.19.0 comparisons use baseline v0.523.18 (`eeedbdd`) and the same pinned Fastify and NestJS repositories and active index generations recorded for v0.523.16. All seventeen fixed tasks are regression cases. Each task/build uses three fresh CLI processes, with build-first order alternating between manifests. The final comparison asserts deep equality of complete JSON results, not only recall scores.
+
+All 27/27 required task-file pairs and 62/62 specified source facts are retained. Ranking, relationships, source text, truncation metadata and Markdown sizes are unchanged. Independent checks verify 207 excerpts and 303 lexical matches. Judged selections remain 37 TP, 0 FP, 0 FN and 26 unjudged: judged precision is 37/37 with judgment coverage 37/63, not repository-wide precision. No truth manifest changed.
+
+| Task | Median fresh CLI process ms, before → after |
+| --- | --- |
+| Multiple cookie headers | 2,615 → 2,508 |
+| Error response status | 2,696 → 2,497 |
+| Header-write errors | 2,679 → 2,547 |
+| Outgoing-hook errors | 2,674 → 2,540 |
+| Plugin dependencies | 2,615 → 2,466 |
+| Plugin version metadata | 2,148 → 2,004 |
+| Request validation | 2,715 → 2,579 |
+| Serialization-hook errors | 2,738 → 2,579 |
+| Serializer selection | 2,706 → 2,560 |
+| Stream failures | 2,656 → 2,509 |
+| Module initialization | 4,771 → 4,061 |
+| Constructor dependencies | 5,230 → 4,404 |
+| Known provider loader | 4,710 → 3,912 |
+| Provider creation | 4,735 → 4,229 |
+| Request pipes | 5,331 → 4,614 |
+| Shutdown listeners | 5,217 → 4,552 |
+| Exact guard body | 4,539 → 3,890 |
+
+The measured median reduction is 107–199 ms on these Fastify tasks and 505–826 ms on these NestJS tasks. Times include process startup, the remaining before/after freshness checks, retrieval and serialization. Three samples per task/build do not establish an SLO or universal speedup. This change targets CLI reads; MCP worker performance was not measured. First-index, incremental-sync, peak-memory and total agent completion time/query counts were not measured. No builds, tests or indexing ran during the final comparison.
+
+Baseline/candidate built-file SHA-256 values are `226ca19d0b1230e37e02e60082fd6174368822972ab227fa071233bd700d9b5a` / `31c0fac2d00e85d2b568af2ef11af87ab175b2ff1b1b9179a9e45e18ecccd8aa`. Reproduce the seventeen `fastify-*-tasks.json` and `nest-*-tasks.json` tasks with `benchmarks/mcp/task-retrieval.mjs`, the matching pinned indexed corpus, `--repetitions 3` and external outputs; use `--product-root /external/baseline-052318` for baseline runs. `%TEMP%/SymbolLattice-evidence-052319` retains the baseline, raw reports, `retrieval-comparison.json`, profiles, rejected SQL experiments and test logs. Archived `retrieval-052319.mjs` runs from ignored `.tmp/`, using corpora under `%TEMP%/SymbolLattice-evidence-052310/fastify` and `%TEMP%/SymbolLattice-evidence-052316/nest`.
+Typecheck, build, version consistency and complete `npm test -- --maxWorkers 2` pass: 3,138 tests passed, four existing skips (302 passing files, one skipped). The new integration cases cover admission reuse and scope cleanup, post-admission source changes that block publication, and an external writer replacing the generation so the CLI must obtain a new admission and retry before emitting a single fresh result. The initial targeted freshness tests passed before timing; the full suite ran afterward. Logs are `targeted-test.log` and `full-test.log`.
