@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/fastify/fastify",
+  "commit": "70b14e92c0b55e8201f5530ba2e6bab4e928c784",
+  "truthMethod": "Manually checked pinned reply.js and error-handler.js before querying either frozen build for this task. Held out from the source-window continuation repair developed on serialization-hook errors; same known repository, not an unseen project. The guard, callback argument and error calls are source facts; static direct calls do not establish callback runtime ordering. File judgments are incomplete.",
+  "tasks": [{
+    "id": "outgoing-hook-errors",
+    "split": "held-out",
+    "query": "How are outgoing response hooks run, and how do their failures enter error handling?",
+    "requiredFiles": ["lib/reply.js", "lib/error-handler.js"],
+    "supportingFiles": ["lib/hooks.js", "lib/route.js"],
+    "irrelevantFiles": ["lib/pluginUtils.js", "lib/pluginOverride.js"],
+    "evidence": [
+      { "file": "lib/reply.js", "line": 529, "text": "if (reply[kRouteContext].onSend !== null)" },
+      { "file": "lib/reply.js", "line": 535, "text": "wrapOnSendEnd" },
+      { "file": "lib/reply.js", "line": 544, "text": "onErrorHook(reply, err)" },
+      { "file": "lib/reply.js", "line": 815, "text": "handleError(reply, error, cb)" },
+      { "file": "lib/error-handler.js", "line": 51, "text": "const errorHandler = reply[kReplyNextErrorHandler] || context.errorHandler" }
+    ]
+  }]
+}

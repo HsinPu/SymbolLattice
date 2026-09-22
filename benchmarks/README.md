@@ -34,7 +34,7 @@ These tools generate or validate large-project evidence outside the published np
 | `r/` | `lifecycle.mjs` | manual |
 | `mcp/` | `read-query-concurrency.mjs` | manual |
 | `mcp/` | `strict-fresh-read-lifecycle.mjs` | manual |
-| `mcp/` | `task-retrieval.mjs`, `nest-retrieval-tasks.json`, `nest-source-tasks.json`, `nest-shutdown-tasks.json`, `fastify-retrieval-tasks.json`, `fastify-plugin-tasks.json`, `fastify-error-tasks.json`, `fastify-serializer-tasks.json`, `fastify-cookie-tasks.json`, `fastify-stream-error-tasks.json`, `fastify-serialization-hook-error-tasks.json`, `fastify-header-write-error-tasks.json` | automatic scorer/source verifier contracts; manual pinned-corpus execution |
+| `mcp/` | `task-retrieval.mjs`, `nest-retrieval-tasks.json`, `nest-source-tasks.json`, `nest-shutdown-tasks.json`, `fastify-retrieval-tasks.json`, `fastify-plugin-tasks.json`, `fastify-error-tasks.json`, `fastify-serializer-tasks.json`, `fastify-cookie-tasks.json`, `fastify-stream-error-tasks.json`, `fastify-serialization-hook-error-tasks.json`, `fastify-header-write-error-tasks.json`, `fastify-outgoing-hook-error-tasks.json` | automatic scorer/source verifier contracts; manual pinned-corpus execution |
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
@@ -722,3 +722,34 @@ Each task/build used three fresh processes, alternating which build ran first be
 Typecheck, build and version consistency pass. `npm run verify:mcp-worker-generation` passes: the same ready worker observes the synchronized generation with no crash or fallback. The complete `npm test -- --maxWorkers 2` sweep passes 3,122 tests with four existing skips (301 passing files, one skipped). A subsequent targeted run of both independent-process loader tests also passes, including the newly added cold Git-hunk entry point. An ESM loader hook verifies that construction, indexed reads and unchanged sync do not load the extraction entry point, while indexing and changed sync do. The cold Git test verifies both immutable source sides without graph or live-source access. Full-suite coverage includes existing custom extractor, framework plugin, Lua, Git-hunk and freshness behavior. Logs are `full-test.log` and `cold-entrypoints-test.log`.
 
 Reproduce the nine manifests with the existing task harness, `--repetitions 3`, the pinned indexed corpus and explicit external report paths; use `--product-root /external/baseline-052313` for baseline runs. `%TEMP%/SymbolLattice-evidence-052314` archives the baseline, `import-paired.json`, all task reports and `retrieval-comparison.json`. Runners `import-paired-052314.mjs` and `retrieval-052314.mjs` execute from ignored `.tmp/` using the corpus under `%TEMP%/SymbolLattice-evidence-052310/fastify`. No corpus or generated report is committed.
+
+### Preserving short upstream caller context, v0.523.15
+
+The serialization-hook task contained both `handleError ← onErrorHook ← preSerializationHookEnd` and `onErrorHook ← preSerializationHookEnd ← preSerializationHook`. The latter focus ranked sixth, so its continuation could not replace a rank-five plain call window even after the rank-one path was selected. Policy `explore-source-windows-v8` lets a proven call into an admitted upstream entry inherit that path's admission rank. It retains the original focus rank and full edge attribution in output. For such continuations only, the selected source range includes the caller declaration when it is at most twenty lines (`maximumImpactCallerLines`); longer callers keep the existing local call-site range. This supplies nearby guards without expanding every caller body.
+
+The eight-window, two-impact-window, two-hop-per-input-path and total character caps remain unchanged. There is no new graph traversal. Protected connection/callee/spine evidence remains protected, and an inherited rank cannot displace an equal or better ranked plain call. This is a patch correction to existing evidence selection, not a new resolver or callback execution analysis. No reindexing is required.
+
+Windows / Node v24.19.0 runs used the same pinned Fastify repository and generation as above. Baseline v0.523.14 is commit `bfadfd4`; baseline/candidate built-file SHA-256 values are `fee9595ec19d66ee755082bcabab24cc493bab5f21c36e00c6ab6b2ead4156c9` / `f82e96257bfae6a0c8c1e8991b29087de7883168a00b85e3c669cbe41416b932`. Nine existing regression tasks retain 15/15 required files and improve from 35/36 to 36/36 specified facts. The serialization-hook task now supplies `reply.js:488` and reaches 4/4 facts; Markdown grows from 40,736 to 40,918 bytes within the existing source budget.
+
+The new outgoing-hook question was fixed from pinned source after implementation froze and before inspecting either build's output. It is a held-out task on this known repository, not an unseen project. It retains both required files and 3/5 facts; `reply.js:544` and `:815` remain absent. Across all ten tasks, required files are 17/17 and specified facts increase 38/41 → 39/41, with no previously present fact lost. Judgments are 24 TP, 0 FP, 14 unjudged (judged precision 24/24, judgment coverage 24/38); this is not overall precision. Independent source checks cover 137 excerpts and 235 lexical matches. Query plans, connections, path spines and primary source allocations match the baseline.
+
+Espree independently verifies call identifiers and owning/target declaration ranges at `reply.js:497`, `:503` and `:812`, including the CommonJS import/export receipt for `handleError`. The call at `:497` is in the no-hook `else` branch: it proves a static source dependency, not execution of the hook callback or a runtime error route through that branch. The added guard is verified against pinned source. The returned snippets provide source context without inventing a callback-resolution edge.
+
+| Task | Median fresh CLI process ms, before → after |
+| --- | --- |
+| Multiple cookie headers | 2,723 → 2,711 |
+| Error response status | 2,690 → 2,668 |
+| Header-write errors | 2,761 → 2,749 |
+| Outgoing-hook errors (held out) | 2,796 → 2,764 |
+| Plugin dependencies | 2,620 → 2,554 |
+| Plugin version metadata | 2,087 → 2,080 |
+| Request validation | 2,741 → 2,701 |
+| Serialization-hook errors | 2,777 → 2,751 |
+| Serializer selection | 2,771 → 2,698 |
+| Stream failures | 2,689 → 2,664 |
+
+Each task/build used three fresh processes, with build-first order alternating between tasks. A separate fixed-input window-planner measurement used two warmups and 25 alternating-order pairs, with source loaded outside timing. Median differences ranged from -0.0378 to +0.0250 ms; the serialization task changed 1.3462 → 1.3309 ms. These small-sample diagnostics do not establish a speedup or SLO. Timing preceded full tests without concurrent builds or indexing. First indexing, incremental sync, memory peaks and total agent completion time/query count were not measured.
+
+Typecheck, build, version consistency and complete `npm test -- --maxWorkers 2` pass: 3,125 tests passed, four existing skips (301 passing files, one skipped). New cases cover continuation from a lower-ranked focus within an exhausted window envelope, retained original edge/focus attribution, short caller context and the long-caller cap. Existing connection protection, rank protection, invalid/heuristic/cyclic path rejection and source-budget tests also pass. Full tests followed performance measurements.
+
+Reproduce all ten `fastify-*-tasks.json` manifests with `benchmarks/mcp/task-retrieval.mjs`, `--repetitions 3` and external outputs; use `--product-root /external/baseline-052314` for baseline runs. `%TEMP%/SymbolLattice-evidence-052315` contains the baseline, task reports, `retrieval-comparison.json`, `upstream-verification.json`, `windows-paired.json` and test log. Archived runners `retrieval-052315.mjs`, `verify-upstream-052315.mjs` and `windows-paired-052315.mjs` run from ignored `.tmp/` using the corpus under `%TEMP%/SymbolLattice-evidence-052310/fastify`.

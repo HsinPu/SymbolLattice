@@ -292,6 +292,37 @@ describe("query-relevant upstream call evidence", () => {
     expect(plan.summary.replacedLowerRankedCallWindowCount).toBe(0);
   });
 
+  it.each([165, 190])("continues a higher-ranked path through a lower-ranked focus with caller end %i", endLine => {
+    const file = "src/body.ts";
+    const root = symbol("errorHandler", file, 1), hook = symbol("errorHook", file, 40);
+    const body = symbol("processBody", file, 80);
+    const entry = { ...symbol("prepareBody", file, 150), range: {
+      start: { line: 150, column: 1 }, end: { line: endLine, column: 2 }
+    } };
+    const first = edge("hook-root", hook, root, 41).edge;
+    const second = edge("body-hook", body, hook, 91).edge;
+    const third = edge("entry-body", entry, body, 162).edge;
+    const fillers = [2, 3, 4, 5].map(rank => {
+      const item = focus(rank, symbol(`other-${rank}`, file, rank * 200), rank * 200, rank * 200 + 4);
+      return { ...item, callers: { truncated: false, items: [20, 40].map(offset => {
+        const caller = symbol(`caller-${rank}-${offset}`, file, rank * 200 + offset);
+        return { symbol: caller, edge: edge(caller.id, caller, item.symbol, caller.range.start.line + 1).edge };
+      }) } };
+    });
+    const plan = planExploreSourceWindows([
+      { ...focus(1, root, 1, 5), impact: { paths: [impactPath([root, hook, body], [first, second])], truncated: false } },
+      ...fillers,
+      { ...focus(6, hook, 40, 44), impact: { paths: [impactPath([hook, body, entry], [second, third])], truncated: false } }
+    ], [], undefined, ["body", "error", "handler"]);
+    expect(plan.windows).toHaveLength(8);
+    expect(plan.windows.filter(window => window.reason === "exact-impact-call")).toEqual([
+      expect.objectContaining({ focusRank: 1, startLine: 88, connectionEdgeIds: [first.id, second.id] }),
+      expect.objectContaining({ focusRank: 6, startLine: endLine === 165 ? 150 : 159,
+        endLine: 165, connectionEdgeIds: [second.id, third.id] })
+    ]);
+    expect(plan.summary.replacedLowerRankedCallWindowCount).toBe(2);
+  });
+
   it("prioritizes concept-rich paths and then their proven upstream entry over side branches", () => {
     const file = "src/payments.ts";
     const audit = symbol("auditSink", file, 1), auditBridge = symbol("auditPayment", file, 30);

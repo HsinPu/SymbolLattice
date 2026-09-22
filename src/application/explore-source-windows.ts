@@ -6,7 +6,7 @@ import { EXPLORE_CALLEE_SOURCE_LIMITS, matchExploreCalleeSource, type ExploreCal
 import type { SourceLexicalMatch } from "../domain/source-lexical.js";
 import type { SymbolNode } from "../domain/types.js";
 
-export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v7" as const;
+export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v8" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY =
   "explore-source-window-allocation-v5" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS = {
@@ -28,6 +28,7 @@ export const EXPLORE_SOURCE_WINDOW_LIMITS = {
   maximumWindowsPerFocus: 2,
   maximumImpactHops: 2,
   maximumImpactWindows: 2,
+  maximumImpactCallerLines: 20,
   maximumFlowCalleeWindows: 2,
   pathSpineWindowsExemptPerFocus: true
 } as const;
@@ -754,7 +755,7 @@ export function planExploreSourceWindows(
   // but never connection, callee-body or spine evidence. Full receipts remain
   // in focus.impact.paths; a static assignment label does not prove dispatch.
   const impactCandidates: MutableWindow[] = [];
-  const impactPriority = new Map<MutableWindow, { readonly concepts: number; readonly entryId: string; readonly targetId: string }>();
+  const impactPriority = new Map<MutableWindow, { readonly concepts: number; readonly entryId: string; readonly targetId: string; readonly caller: SymbolNode }>();
   const queryGroups = identifierTermGroups(queryTerms);
   const seenImpactEdges = new Set<string>();
   for (const focus of [...focuses].sort((left, right) => left.rank - right.rank)) {
@@ -800,7 +801,8 @@ export function planExploreSourceWindows(
           connectionEdgeIds: [...site.connectionEdgeIds], relatedSymbolIds: [...site.relatedSymbolIds],
           pathSpineIndexes: [] };
         impactCandidates.push(candidate);
-        impactPriority.set(candidate, { concepts, entryId: terminal.id, targetId: edge.targetId! });
+        impactPriority.set(candidate, { concepts, entryId: terminal.id, targetId: edge.targetId!,
+          caller: path.symbols.find(symbol => symbol.id === edge.sourceId)! });
       }
     }
   }
@@ -809,7 +811,7 @@ export function planExploreSourceWindows(
   let admittedImpactWindows = 0;
   let replacedLowerRankedCallWindowCount = 0;
   const pendingImpact = [...impactCandidates];
-  const upstreamEntries = new Set<string>();
+  const upstreamEntries = new Map<string, number>();
   while (pendingImpact.length > 0 && admittedImpactWindows < EXPLORE_SOURCE_WINDOW_LIMITS.maximumImpactWindows) {
     pendingImpact.sort((left, right) => {
       const a = impactPriority.get(left)!, b = impactPriority.get(right)!;
@@ -819,11 +821,14 @@ export function planExploreSourceWindows(
         compareText(left.connectionEdgeIds.join("\u0000"), right.connectionEdgeIds.join("\u0000"));
     });
     const window = pendingImpact.shift()!;
+    const priority = impactPriority.get(window)!;
+    const upstreamRank = upstreamEntries.get(priority.targetId);
+    const admissionRank = Math.min(window.focusRank, upstreamRank ?? window.focusRank);
     if (selected.length >= EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows) {
       let replacementIndex = -1;
       for (let index = 0; index < selected.length; index += 1) {
         const candidate = selected[index]!;
-        if (candidate.reason !== "exact-focus-call" || candidate.focusRank <= window.focusRank ||
+        if (candidate.reason !== "exact-focus-call" || candidate.focusRank <= admissionRank ||
             candidate.pathSpineIndexes.length > 0 || candidate.connectionEdgeIds.some(id => protectedEdgeIds.has(id))) continue;
         if (replacementIndex < 0 || candidate.focusRank >= selected[replacementIndex]!.focusRank) replacementIndex = index;
       }
@@ -834,10 +839,17 @@ export function planExploreSourceWindows(
       else selectedPerFocus.set(removed!.focusRank, remaining);
       replacedLowerRankedCallWindowCount += 1;
     }
+    // Continue an admitted exact path without losing its short caller's guard.
+    // Keep the original focus/edge attribution; only admission inherits rank.
+    if (upstreamRank !== undefined && priority.caller.range.end.line - priority.caller.range.start.line + 1 <=
+        EXPLORE_SOURCE_WINDOW_LIMITS.maximumImpactCallerLines) {
+      window.startLine = Math.min(window.startLine, priority.caller.range.start.line);
+      window.endLine = Math.max(window.endLine, priority.caller.range.end.line);
+    }
     selected.push(window);
     selectedPerFocus.set(window.focusRank, (selectedPerFocus.get(window.focusRank) ?? 0) + 1);
     admittedImpactWindows += 1;
-    upstreamEntries.add(impactPriority.get(window)!.entryId);
+    upstreamEntries.set(priority.entryId, admissionRank);
   }
 
   const uncoveredCallees = [...sourceCallees.values()].filter(({ site }) => !selected.some((window) =>
