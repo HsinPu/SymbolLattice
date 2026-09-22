@@ -771,3 +771,40 @@ Three fresh CLI processes per task/build alternated which build ran first betwee
 Typecheck, build, version consistency and complete `npm test -- --maxWorkers 2` pass: 3,131 tests passed and four existing skips (302 passing files, one skipped). New cases cover complete evidence lines, nearby and distant anchors, following context, absent/oversized/outside-window anchors and UTF-16/CRLF boundaries. The actual-corpus clipping audit additionally verifies leading-omission truncation metadata and unchanged budgets. All performance comparisons completed before the full suite; its output is `full-test.log`.
 
 Baseline v0.523.15 is commit `9fd7f3f`, built-file SHA-256 `f82e96257bfae6a0c8c1e8991b29087de7883168a00b85e3c669cbe41416b932`; candidate SHA-256 is `666aa9385d2efa2b06b4a6f847108407152d523ae55ceb4f12449fe0e24371e8`. Reproduce all `fastify-*-tasks.json` and `nest-*-tasks.json` manifests through `benchmarks/mcp/task-retrieval.mjs`, with the matching pinned indexed corpus, `--repetitions 3` and external output paths. Use `--product-root /external/baseline-052315` for the baseline. `%TEMP%/SymbolLattice-evidence-052316` archives the baseline, NestJS checkout/index, `first-attempt/`, final task reports, `retrieval-comparison.json`, `clipping-verification.json` and test log. Archived runners `retrieval-052316.mjs` and `verify-window-clipping-052316.mjs` execute from ignored `.tmp/`; Fastify remains under `%TEMP%/SymbolLattice-evidence-052310/fastify`.
+
+### Reusing name case folding in multi-concept scans, v0.523.17
+
+Repeated `lower(name)` and `lower(qualified_name)` evaluation was a measurable part of bounded candidate retrieval. Multi-concept scans now materialize those two SQLite expressions once per symbol in a statement-local CTE and reuse them for filtering and coverage ranking. Exact and single-concept queries retain their previous SQL path. Parameters, ordering, limits and SQLite's own case-folding semantics are unchanged; no persistent cache, schema migration or index rebuild is introduced. This is a patch performance correction with no new public contract. Materializing rows can consume temporary storage; peak memory and temporary I/O were not measured.
+
+Validation uses the same pinned Fastify and NestJS repositories and index generations documented for v0.523.16, on Windows / Node v24.19.0. Baseline v0.523.16 is commit `0b219f0`. All seventeen existing tasks are regression cases for this change; their historical held-out labels do not imply unseen validation here. Truth manifests were not changed.
+
+The preliminary SQL experiment used the constructor-dependencies and outgoing-hook questions, one warmup and seven alternating-order pairs per statement. All four returned ordered row arrays were deeply equal (256 rows each). Median statement execution changed 217.55 → 134.74 and 216.28 → 135.77 ms for NestJS, and 122.84 → 57.25 and 107.93 → 56.33 ms for Fastify. These isolate SQL execution with prepared statements reused and are not whole-query timings.
+
+The production bounded-bundle comparison uses one untimed call per build and five alternating-order pairs per case, with full bundle equality checked outside timing. All seventeen tasks plus exact-name, missing-name and file-path controls retain complete results. Examples of median milliseconds: constructor dependencies 1,310.98 → 1,145.89; request pipes 1,413.49 → 1,227.24; shutdown listeners 1,497.64 → 1,261.11; outgoing-hook errors 687.95 → 574.23. Exact-name and file-path controls are approximately unchanged. These measurements include bounded retrieval, but exclude CLI startup and the service's source/freshness work.
+End-to-end validation runs three fresh CLI processes per task/build, alternating build-first order between manifests. Complete JSON results are deeply equal, including ranking, paths, source text, budgets and truncation metadata. All 27/27 required task-file pairs and 61/62 specified facts are retained; the previously missing outgoing-hook fact at `reply.js:544` remains absent. Independent checks verify 207 excerpts and 303 lexical matches. Judged results are 37 TP, 0 FP, 0 FN and 26 unjudged selections: judged precision is 37/37, judgment coverage 37/63; these partial judgments do not establish overall precision.
+
+| Task | Median fresh CLI process ms, before → after |
+| --- | --- |
+| Multiple cookie headers | 2,707 → 2,552 |
+| Error response status | 2,682 → 2,585 |
+| Header-write errors | 2,769 → 2,589 |
+| Outgoing-hook errors | 2,747 → 2,603 |
+| Plugin dependencies | 2,595 → 2,477 |
+| Plugin version metadata | 2,078 → 2,055 |
+| Request validation | 2,715 → 2,576 |
+| Serialization-hook errors | 2,749 → 2,624 |
+| Serializer selection | 2,721 → 2,616 |
+| Stream failures | 2,689 → 2,581 |
+| Module initialization | 4,637 → 4,602 |
+| Constructor dependencies | 5,247 → 5,010 |
+| Known provider loader | 4,538 → 4,542 |
+| Provider creation | 4,805 → 4,769 |
+| Request pipes | 5,330 → 5,183 |
+| Shutdown listeners | 5,350 → 5,001 |
+| Exact guard body | 4,541 → 4,450 |
+
+Fresh-process timing includes startup, freshness checking and serialization. Small differences in unchanged query paths illustrate measurement variability; three samples are not an SLO or a universal speedup claim. No builds, tests or indexing ran during performance measurements. First-index, incremental-sync and total agent completion time/query counts were not measured.
+
+Baseline/candidate built-file SHA-256 values are `666aa9385d2efa2b06b4a6f847108407152d523ae55ceb4f12449fe0e24371e8` / `61ae38f9a7177ac6085c9d4577f4f293e537135c0a651d5bc8e423258cb3c96b`. Reproduce all `fastify-*-tasks.json` and `nest-*-tasks.json` manifests with `benchmarks/mcp/task-retrieval.mjs`, the matching pinned indexed corpus, `--repetitions 3` and external output paths; use `--product-root /external/baseline-052316` for the baseline. `%TEMP%/SymbolLattice-evidence-052317` retains the baseline, raw reports, `retrieval-comparison.json`, `bundle-paired.json`, `casefold-experiment.json`, preliminary profiles and test log. Archived runners `retrieval-052317.mjs`, `bundle-paired-052317.mjs` and `casefold-experiment-052317.mjs` execute from ignored `.tmp/`. Fastify remains under `%TEMP%/SymbolLattice-evidence-052310/fastify`, and NestJS under `%TEMP%/SymbolLattice-evidence-052316/nest`.
+
+Typecheck, build, version consistency and the full test suite pass: 3,132 tests passed, four existing skips (302 passing files, one skipped), using `npm test -- --maxWorkers 2` after all timings. The candidate-cap regression now covers both camel-case and uppercase names among 300 generic matches. Existing tests cover qualified names, dotted identifiers, source-only candidates, deterministic adjacency, receipt preservation, caps, generation mismatches and fallback behavior. Output is retained in `full-test.log`.

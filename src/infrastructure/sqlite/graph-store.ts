@@ -2059,11 +2059,11 @@ function readBoundedSourceSeedPaths(
   return rows.map((row) => row.file_path);
 }
 
-function symbolProjectionSelect(): string {
+function symbolProjectionSelect(table: "symbols" | "symbol_casefolds" = "symbols"): string {
   return `SELECT id, name, qualified_name, kind, file_path,
     start_line, start_column, end_line, end_column,
     is_exported, declaration_ordinal
-    FROM symbols`;
+    FROM ${table}`;
 }
 
 function readBoundedSymbolRows(
@@ -2078,6 +2078,12 @@ function readBoundedSymbolRows(
     return [];
   }
 
+  // Multi-concept scans reuse SQLite's own case folding across filtering and
+  // ranking. Exact/single-concept queries keep their existing index access.
+  const reuseCasefolds = lexicalGroups.length >= 2;
+  const lowerName = reuseCasefolds ? "folded_name" : "lower(name)";
+  const lowerQualifiedName = reuseCasefolds ? "folded_qualified_name" : "lower(qualified_name)";
+
   const where: string[] = [];
   const parameters: (string | number)[] = [];
   if (identifierTerms.length > 0) {
@@ -2086,8 +2092,8 @@ function readBoundedSymbolRows(
     const lowerPlaceholders = lowerTerms.map(() => "?").join(", ");
     where.push(
       `(name IN (${placeholders}) OR qualified_name IN (${placeholders})
-        OR lower(name) IN (${lowerPlaceholders})
-        OR lower(qualified_name) IN (${lowerPlaceholders}))`
+        OR ${lowerName} IN (${lowerPlaceholders})
+        OR ${lowerQualifiedName} IN (${lowerPlaceholders}))`
     );
     parameters.push(
       ...identifierTerms,
@@ -2106,9 +2112,9 @@ function readBoundedSymbolRows(
   if (partialTerms.length > 0) {
     const partialClauses: string[] = [];
     for (const term of partialTerms) {
-      partialClauses.push("lower(name) LIKE ? ESCAPE '\\'");
+      partialClauses.push(`${lowerName} LIKE ? ESCAPE '\\'`);
       parameters.push(`${escapeLike(term.toLowerCase())}%`);
-      partialClauses.push("instr(lower(qualified_name), ?) > 0");
+      partialClauses.push(`instr(${lowerQualifiedName}, ?) > 0`);
       parameters.push(term.toLowerCase());
     }
     where.push(`(${partialClauses.join(" OR ")})`);
@@ -2130,8 +2136,8 @@ function readBoundedSymbolRows(
           );
           return `CASE WHEN name IN (${placeholders})
               OR qualified_name IN (${placeholders})
-              OR lower(name) IN (${lowerPlaceholders})
-              OR lower(qualified_name) IN (${lowerPlaceholders})
+              OR ${lowerName} IN (${lowerPlaceholders})
+              OR ${lowerQualifiedName} IN (${lowerPlaceholders})
             THEN 0
             WHEN file_path IN (${filePaths.map(() => "?").join(", ") || "NULL"}) THEN 1
             ELSE 2 END`;
@@ -2145,12 +2151,18 @@ function readBoundedSymbolRows(
   const coverageParameters: string[] = [];
   const coverageOrder = lexicalGroups.length < 2 ? "0 + 0" : lexicalGroups.map((group) => {
     coverageParameters.push(...group);
-    return `(CASE WHEN ${group.map(() => "instr(lower(name), ?) > 0").join(" OR ")} THEN 1 ELSE 0 END)`;
+    return `(CASE WHEN ${group.map(() => `instr(${lowerName}, ?) > 0`).join(" OR ")} THEN 1 ELSE 0 END)`;
   }).join(" + ");
+
+  const projection = reuseCasefolds
+    ? `WITH symbol_casefolds AS MATERIALIZED (
+        SELECT *, lower(name) AS folded_name, lower(qualified_name) AS folded_qualified_name FROM symbols
+      ) ${symbolProjectionSelect("symbol_casefolds")}`
+    : symbolProjectionSelect();
 
   return database
     .prepare(
-      `${symbolProjectionSelect()}
+      `${projection}
        WHERE ${where.join(" OR ")}
        ORDER BY (${coverageOrder}) DESC, ${exactOrder}, file_path, start_line, start_column, name, id
        LIMIT ?`

@@ -2329,7 +2329,7 @@ describe("SqliteGraphStore", () => {
     expect(file?.snapshot.symbols.map((node) => node.id)).toContain("c-tail");
   });
 
-  it("keeps multi-concept candidates before SQL and file caps despite hundreds of generic matches", async () => {
+  it.each(["resolveConstructorParams", "RESOLVECONSTRUCTORPARAMS"])("keeps multi-concept candidate %s before SQL and file caps despite hundreds of generic matches", async (name) => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();
     const template = boundedGraphSnapshot();
@@ -2337,8 +2337,8 @@ describe("SqliteGraphStore", () => {
       ...template.symbols[0]!, id: `generic-${index}`, name: "constructor",
       qualifiedName: `src/a${index}.ts#constructor`, filePath: `src/a${index}.ts`
     }));
-    symbols.push({ ...template.symbols[0]!, id: "implementation", name: "resolveConstructorParams",
-      qualifiedName: "src/z-engine.ts#resolveConstructorParams", filePath: "src/z-engine.ts" });
+    symbols.push({ ...template.symbols[0]!, id: "implementation", name,
+      qualifiedName: `src/z-engine.ts#${name}`, filePath: "src/z-engine.ts" });
     const graphSnapshot = { ...template, symbols, edges: [], pendingReferences: [],
       files: symbols.map((node) => ({ ...template.files[0]!, path: node.filePath })) };
     store.replaceProjectFacts({ projectPath, snapshot: graphSnapshot,
