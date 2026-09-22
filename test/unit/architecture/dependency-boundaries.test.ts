@@ -58,6 +58,7 @@ describe("architecture boundaries", () => {
     expect(service).not.toMatch(
       /import\s+(?!type\b)[^;]+from\s+["']\.\.\/extraction\//
     );
-    expect(service.replace(/\r\n/g, "\n")).toContain("isMainThread\n  ? await import(\"../extraction/index.js\")");
+    expect(service).toContain("async function ensureExtractionRuntime()");
+    expect(service).toContain('extractionRuntimePromise ??= import("../extraction/index.js")');
   });
 });

@@ -696,3 +696,29 @@ Three fresh processes per task/build, with build-first order alternating between
 Typecheck, build, version consistency and full `npm test -- --maxWorkers 2` pass: 3,121 tests passed and four existing skips (300 passing files, one skipped). A new regression preserves 600 distinct calls sharing endpoints, a following graph hop, and the exact first ten receipts under a relationship cap. Existing ordering, query isolation, freshness, generation mismatch and bounded traversal tests also pass. The complete test run followed all performance measurements; its output is archived as `full-test.log`.
 
 Baseline/candidate built-file SHA-256 values are `6f7526e209e358855fbda9ca2fa079ad3dc0dcaccdca9b877c6226f94e889e97` / `b4c9504349b830eb1ce9e5253e6ad93b397f2af4e2a161d20b6e5549c12da1c7`. Reproduce the nine manifests with `benchmarks/mcp/task-retrieval.mjs --project /external/fastify --manifest <manifest> --repetitions 3 --output <external-report>`, adding `--product-root /external/baseline-052312` for baseline runs. External workspace `%TEMP%/SymbolLattice-evidence-052313` contains the baseline, CPU profile, `query-profile.json`, `bundle-paired.json`, full task reports and `retrieval-comparison.json`. Archived runners `profile-query-052313.mjs`, `bundle-paired-052313.mjs` and `retrieval-052313.mjs` run from this repository's ignored `.tmp/` directory using `node .tmp/<runner>`; the corpus remains under `%TEMP%/SymbolLattice-evidence-052310/fastify`.
+
+### Deferring default parser loading on read paths, v0.523.14
+
+Main-thread service imports previously loaded the complete extraction entry point even for an indexed read. The default extractor now loads on the first operation that actually parses source, sharing the pending import across callers. Indexing, changed-file synchronization and immutable Git revision attribution await that load. Custom extractors keep their synchronous contract and version identity; framework plugin composition remains available at construction. Lua retains its existing worker path. Read-only workers retain their extraction restriction. This is a patch startup optimization with unchanged query policies, evidence semantics and index versions; it does not accelerate the parser's work or claim a warm MCP worker speedup.
+
+Validation used Windows / Node v24.19.0, baseline v0.523.13 commit `fdcea9f`, and the same pinned Fastify checkout and index generation as above. Baseline/candidate built-file SHA-256 values are `b4c9504349b830eb1ce9e5253e6ad93b397f2af4e2a161d20b6e5549c12da1c7` / `fee9595ec19d66ee755082bcabab24cc493bab5f21c36e00c6ab6b2ead4156c9`. One untimed fresh process per build followed by seven alternating-order fresh-process pairs measured dynamic service-module import: median 891.69 → 157.91 ms. This excludes process startup, construction, indexing and query work; it is not a whole-query percentage.
+
+All nine full CLI responses are deeply equal, including ranking, status, source windows, graph receipts and truncation. Required files remain 15/15 and source facts 35/36, with the known `reply.js:488` serialization guard gap unchanged. Independent checks cover 121 source excerpts and 207 lexical matches. Judgments remain 21 TP, 0 FP and 13 unjudged selections (judged precision 21/21; judgment coverage 21/34). These are known regression tasks, not unseen-project validation or a new graph precision audit.
+
+| Task | Median fresh CLI process ms, before → after |
+| --- | --- |
+| Multiple cookie headers | 3,038 → 2,709 |
+| Error response status | 2,986 → 2,634 |
+| Header-write errors | 3,058 → 2,749 |
+| Plugin dependencies | 2,871 → 2,589 |
+| Plugin version metadata | 2,388 → 2,071 |
+| Request validation | 3,070 → 2,716 |
+| Serialization-hook errors | 3,096 → 2,717 |
+| Serializer selection | 3,001 → 2,691 |
+| Stream failures | 3,012 → 2,667 |
+
+Each task/build used three fresh processes, alternating which build ran first between tasks. Timing completed before verification tests; no builds, tests or indexing ran concurrently. The measured 283–379 ms reduction is smaller than the isolated service import difference because the CLI has other module dependencies. These small samples do not establish an SLO or all-project speedup. First parser use pays the deferred import cost; first-index, incremental-sync, peak-memory and total agent completion performance were not measured.
+
+Typecheck, build and version consistency pass. `npm run verify:mcp-worker-generation` passes: the same ready worker observes the synchronized generation with no crash or fallback. The complete `npm test -- --maxWorkers 2` sweep passes 3,122 tests with four existing skips (301 passing files, one skipped). A subsequent targeted run of both independent-process loader tests also passes, including the newly added cold Git-hunk entry point. An ESM loader hook verifies that construction, indexed reads and unchanged sync do not load the extraction entry point, while indexing and changed sync do. The cold Git test verifies both immutable source sides without graph or live-source access. Full-suite coverage includes existing custom extractor, framework plugin, Lua, Git-hunk and freshness behavior. Logs are `full-test.log` and `cold-entrypoints-test.log`.
+
+Reproduce the nine manifests with the existing task harness, `--repetitions 3`, the pinned indexed corpus and explicit external report paths; use `--product-root /external/baseline-052313` for baseline runs. `%TEMP%/SymbolLattice-evidence-052314` archives the baseline, `import-paired.json`, all task reports and `retrieval-comparison.json`. Runners `import-paired-052314.mjs` and `retrieval-052314.mjs` execute from ignored `.tmp/` using the corpus under `%TEMP%/SymbolLattice-evidence-052310/fastify`. No corpus or generated report is committed.

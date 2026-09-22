@@ -248,8 +248,17 @@ import {
   type QueryTimingSink
 } from "./query-timing.js";
 
-const extractionRuntime = isMainThread
-  ? await import("../extraction/index.js")
+type ExtractionRuntime = typeof import("../extraction/index.js");
+let extractionRuntime: ExtractionRuntime | undefined;
+let extractionRuntimePromise: Promise<ExtractionRuntime> | undefined;
+async function ensureExtractionRuntime(): Promise<void> {
+  if (!isMainThread) {
+    throw new Error("Artifact extraction is unavailable in a read-only query worker.");
+  }
+  extractionRuntime ??= await (extractionRuntimePromise ??= import("../extraction/index.js"));
+}
+const frameworkFactRuntime = isMainThread
+  ? await import("../extraction/framework-fact-plugins.js")
   : null;
 const luaStructuralRuntime = isMainThread
   ? await import("../extraction/lua-structural.js")
@@ -257,10 +266,13 @@ const luaStructuralRuntime = isMainThread
 const luaWorkerRuntimeModule = isMainThread
   ? await import("../extraction/lua-worker-runtime.js")
   : null;
-const extractFileFacts = extractionRuntime?.extractFileFacts ?? (() => {
-  throw new Error("Artifact extraction is unavailable in a read-only query worker.");
-});
-const createFrameworkFactPluginExtractor = extractionRuntime?.createFrameworkFactPluginExtractor ?? (() => {
+const extractFileFacts: ArtifactFactsExtractor = (input) => {
+  if (extractionRuntime === undefined) {
+    throw new Error("Artifact extraction runtime has not been loaded.");
+  }
+  return extractionRuntime.extractFileFacts(input);
+};
+const createFrameworkFactPluginExtractor = frameworkFactRuntime?.createFrameworkFactPluginExtractor ?? (() => {
   throw new Error("Framework extraction is unavailable in a read-only query worker.");
 });
 type ProjectLuaStructuralFacts =
@@ -1544,6 +1556,7 @@ export class SymbolLatticeService {
   private readonly graphStore: GraphStore;
   private readonly sourceCatalog: SourceCatalog;
   private readonly artifactFactsExtractor: ArtifactFactsExtractor;
+  private readonly usesDefaultArtifactFactsExtractor: boolean;
   private readonly gitChangeSetProvider: GitChangeSetProvider | undefined;
   private readonly gitRevisionHunkProvider: GitRevisionHunkProvider | undefined;
   private readonly referenceResolverPlugins: ReferenceResolverPluginRegistry | undefined;
@@ -1576,6 +1589,7 @@ export class SymbolLatticeService {
       typeof artifactFactsExtractorOrExtensions === "function"
         ? artifactFactsExtractorOrExtensions
         : extensions?.artifactFactsExtractor ?? extractFileFacts;
+    this.usesDefaultArtifactFactsExtractor = baseArtifactFactsExtractor === extractFileFacts;
     this.artifactFactsExtractor =
       extensions?.frameworkFactPlugins === undefined
         ? baseArtifactFactsExtractor
@@ -2901,8 +2915,8 @@ export class SymbolLatticeService {
     const items: GitHunkResultItem[] = [];
     const files = [...hunkSet.files].sort(compareGitRevisionHunkFile);
     for (const file of files) {
-      const oldFacts = this.extractGitRevisionSourceFacts(file.previous);
-      const newFacts = this.extractGitRevisionSourceFacts(file.current);
+      const oldFacts = await this.extractGitRevisionSourceFacts(file.previous);
+      const newFacts = await this.extractGitRevisionSourceFacts(file.current);
       for (const hunk of [...file.hunks].sort(compareGitUnifiedHunk)) {
         items.push(this.toGitHunkResultItem(file, hunk, oldFacts, newFacts));
       }
@@ -3681,11 +3695,12 @@ export class SymbolLatticeService {
     }
   }
 
-  private extractGitRevisionSourceFacts(source: GitRevisionSource): ExtractedFileFacts | null {
+  private async extractGitRevisionSourceFacts(source: GitRevisionSource): Promise<ExtractedFileFacts | null> {
     if (source.availability !== "available") {
       return null;
     }
 
+    if (this.usesDefaultArtifactFactsExtractor) await ensureExtractionRuntime();
     return this.artifactFactsExtractor({
       filePath: source.filePath,
       sourceText: source.sourceText,
@@ -5220,6 +5235,9 @@ export class SymbolLatticeService {
     document: SourceDocument,
     frameworkEvidence?: ExtractFileFactsInput["frameworkEvidence"]
   ): Promise<PersistedArtifactFacts> {
+    if (document.language !== "lua" && this.usesDefaultArtifactFactsExtractor) {
+      await ensureExtractionRuntime();
+    }
     const extracted = document.language === "lua"
       ? projectLuaStructuralFacts({
           filePath: document.relativePath,
