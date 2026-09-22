@@ -1,12 +1,12 @@
 import type { ExploreConnection, ExploreFocus } from "./types.js";
-import { identifierTermVariants, identifierWords } from "../domain/identifier-search.js";
+import { identifierTermGroups, identifierTermVariants, identifierWords } from "../domain/identifier-search.js";
 import type { ExplorePathSpinePlan } from "./explore-path-spines.js";
 import { EXPLORE_GENERATED_SOURCE_WORTH } from "./explore-query.js";
 import { EXPLORE_CALLEE_SOURCE_LIMITS, matchExploreCalleeSource, type ExploreCalleeSourceSearch } from "./explore-callee-source.js";
 import type { SourceLexicalMatch } from "../domain/source-lexical.js";
 import type { SymbolNode } from "../domain/types.js";
 
-export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v6" as const;
+export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v7" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY =
   "explore-source-window-allocation-v5" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS = {
@@ -55,6 +55,7 @@ export interface ExploreSourceWindowPlan {
     readonly selectedCount: number;
     readonly selectedFocusCount: number;
     readonly unavailableFileSiteCount: number;
+    readonly replacedLowerRankedCallWindowCount?: number;
     readonly truncated: boolean;
   };
   readonly windows: readonly ExploreSourceWindowPlanItem[];
@@ -749,10 +750,12 @@ export function planExploreSourceWindows(
   }
 
   // Existing impact paths already contain bounded incoming-call evidence.
-  // Spend only spare window slots on query-relevant upstream callers, after
-  // preserving the primary direct-call/spine plan. Full edge receipts remain
+  // Query-relevant upstream paths may displace lower-ranked plain call sites,
+  // but never connection, callee-body or spine evidence. Full receipts remain
   // in focus.impact.paths; a static assignment label does not prove dispatch.
   const impactCandidates: MutableWindow[] = [];
+  const impactPriority = new Map<MutableWindow, { readonly concepts: number; readonly entryId: string; readonly targetId: string }>();
+  const queryGroups = identifierTermGroups(queryTerms);
   const seenImpactEdges = new Set<string>();
   for (const focus of [...focuses].sort((left, right) => left.rank - right.rank)) {
     for (const path of focus.impact.paths) {
@@ -761,8 +764,11 @@ export function planExploreSourceWindows(
           path.edges.length < 2 || path.edges.length > EXPLORE_SOURCE_WINDOW_LIMITS.maximumImpactHops ||
           path.symbols.length !== path.edges.length + 1 ||
           new Set(path.symbols.map((symbol) => symbol.id)).size !== path.symbols.length) continue;
-      const words = new Set(identifierWords(terminal.name).flatMap(identifierTermVariants));
+      const words = new Set(path.symbols.slice(1).flatMap(symbol =>
+        identifierWords(symbol.name).flatMap(identifierTermVariants)));
       if (!queryTerms.some((term) => identifierTermVariants(term).some((variant) => words.has(variant)))) continue;
+      const pathWords = new Set(path.symbols.flatMap(symbol => identifierWords(symbol.name).flatMap(identifierTermVariants)));
+      const concepts = queryGroups.filter(group => group.some(term => pathWords.has(term))).length;
       if (!path.edges.every((edge, index) => {
         const caller = path.symbols[index + 1]!;
         return edge.kind === "calls" && edge.resolution === "exact" &&
@@ -790,17 +796,48 @@ export function planExploreSourceWindows(
           window.endLine >= site.evidenceEndLine) || impactCandidates.some((window) =>
           window.filePath === site.filePath && window.startLine <= site.evidenceStartLine &&
           window.endLine >= site.evidenceEndLine)) continue;
-        impactCandidates.push({ ...site, focusRank: focus.rank,
+        const candidate: MutableWindow = { ...site, focusRank: focus.rank,
           connectionEdgeIds: [...site.connectionEdgeIds], relatedSymbolIds: [...site.relatedSymbolIds],
-          pathSpineIndexes: [] });
+          pathSpineIndexes: [] };
+        impactCandidates.push(candidate);
+        impactPriority.set(candidate, { concepts, entryId: terminal.id, targetId: edge.targetId! });
       }
     }
   }
-  const impactSlots = Math.min(EXPLORE_SOURCE_WINDOW_LIMITS.maximumImpactWindows,
-    EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows - selected.length);
-  for (const window of impactCandidates.slice(0, impactSlots)) {
+  const protectedEdgeIds = new Set([...connectionSites, ...spineSites, ...calleeSites]
+    .flatMap(site => site.connectionEdgeIds));
+  let admittedImpactWindows = 0;
+  let replacedLowerRankedCallWindowCount = 0;
+  const pendingImpact = [...impactCandidates];
+  const upstreamEntries = new Set<string>();
+  while (pendingImpact.length > 0 && admittedImpactWindows < EXPLORE_SOURCE_WINDOW_LIMITS.maximumImpactWindows) {
+    pendingImpact.sort((left, right) => {
+      const a = impactPriority.get(left)!, b = impactPriority.get(right)!;
+      return Number(upstreamEntries.has(b.targetId)) - Number(upstreamEntries.has(a.targetId)) ||
+        b.concepts - a.concepts || left.focusRank - right.focusRank ||
+        compareText(left.filePath, right.filePath) || left.startLine - right.startLine ||
+        compareText(left.connectionEdgeIds.join("\u0000"), right.connectionEdgeIds.join("\u0000"));
+    });
+    const window = pendingImpact.shift()!;
+    if (selected.length >= EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows) {
+      let replacementIndex = -1;
+      for (let index = 0; index < selected.length; index += 1) {
+        const candidate = selected[index]!;
+        if (candidate.reason !== "exact-focus-call" || candidate.focusRank <= window.focusRank ||
+            candidate.pathSpineIndexes.length > 0 || candidate.connectionEdgeIds.some(id => protectedEdgeIds.has(id))) continue;
+        if (replacementIndex < 0 || candidate.focusRank >= selected[replacementIndex]!.focusRank) replacementIndex = index;
+      }
+      if (replacementIndex < 0) continue;
+      const [removed] = selected.splice(replacementIndex, 1);
+      const remaining = (selectedPerFocus.get(removed!.focusRank) ?? 1) - 1;
+      if (remaining === 0) selectedPerFocus.delete(removed!.focusRank);
+      else selectedPerFocus.set(removed!.focusRank, remaining);
+      replacedLowerRankedCallWindowCount += 1;
+    }
     selected.push(window);
     selectedPerFocus.set(window.focusRank, (selectedPerFocus.get(window.focusRank) ?? 0) + 1);
+    admittedImpactWindows += 1;
+    upstreamEntries.add(impactPriority.get(window)!.entryId);
   }
 
   const uncoveredCallees = [...sourceCallees.values()].filter(({ site }) => !selected.some((window) =>
@@ -848,6 +885,7 @@ export function planExploreSourceWindows(
       selectedCount: selected.length,
       selectedFocusCount: selectedPerFocus.size,
       unavailableFileSiteCount: unavailableEdges.size,
+      replacedLowerRankedCallWindowCount,
       truncated: selected.length < candidates.length + impactCandidates.length + sourceCandidates.length + flowCandidates.length || calleeSearch?.receipt.truncated === true
     },
     windows: selected.map((window, index) => ({

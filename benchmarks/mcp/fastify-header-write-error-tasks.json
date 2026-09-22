@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/fastify/fastify",
+  "commit": "70b14e92c0b55e8201f5530ba2e6bab4e928c784",
+  "truthMethod": "Manual reading of pinned reply.js lines 550-560 before querying either frozen product for this task. Held out from the final upstream-window selection refinement; same known repository, not an unseen project. File judgments are incomplete.",
+  "tasks": [{
+    "id": "header-write-errors",
+    "split": "held-out",
+    "query": "What happens when writing response headers fails because the response was already sent?",
+    "requiredFiles": ["lib/reply.js"],
+    "supportingFiles": ["lib/error-handler.js", "lib/route.js"],
+    "irrelevantFiles": ["lib/pluginUtils.js", "lib/pluginOverride.js"],
+    "evidence": [
+      { "file": "lib/reply.js", "line": 553, "text": "res.writeHead(statusCode, reply[kReplyHeaders])" },
+      { "file": "lib/reply.js", "line": 555, "text": "if (err.code === 'ERR_HTTP_HEADERS_SENT')" },
+      { "file": "lib/reply.js", "line": 558, "text": "throw err" }
+    ]
+  }]
+}

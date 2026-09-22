@@ -244,7 +244,7 @@ describe("query-relevant upstream call evidence", () => {
     expect(planExploreSourceWindows([delivered], [], undefined, ["sending"]).windows).toEqual([]);
   });
 
-  it("keeps existing windows when the total envelope is full", () => {
+  it("replaces lower-ranked direct calls with query-relevant upstream evidence within the full envelope", () => {
     const focuses = [primary, ...[2, 3, 4].map((rank) => focus(rank, symbol(`root-${rank}`, "src/reply.js", rank * 100), rank * 100, rank * 100 + 4))]
       .map((item) => ({ ...item, callers: { truncated: false, items: [1, 2].map((offset) => {
         const caller = symbol(`caller-${item.rank}-${offset}`, "src/reply.js", item.rank * 100 + offset * 20);
@@ -253,8 +253,67 @@ describe("query-relevant upstream call evidence", () => {
     const withoutImpact = planExploreSourceWindows(focuses.map((item) => ({ ...item, impact: { paths: [], truncated: false } })), [], undefined, ["sending"]);
     const withImpact = planExploreSourceWindows(focuses, [], undefined, ["sending"]);
     expect(withoutImpact.windows).toHaveLength(8);
-    expect(withImpact.windows).toEqual(withoutImpact.windows);
+    expect(withImpact.windows).toHaveLength(withoutImpact.windows.length);
+    expect(withImpact.windows.filter(window => window.reason === "exact-impact-call")).toHaveLength(2);
+    expect(withImpact.windows.filter(window => window.focusRank === 4)).toHaveLength(0);
+    expect(withImpact.summary).toMatchObject({ replacedLowerRankedCallWindowCount: 2, selectedFocusCount: 3 });
     expect(withImpact.summary.truncated).toBe(true);
+  });
+
+  it("accepts a matching intermediate caller without treating it as the terminal caller", () => {
+    const plan = planExploreSourceWindows([primary], [], undefined, ["failure"]);
+    expect(plan.windows.some(window => window.reason === "exact-impact-call" &&
+      window.startLine === 58 && window.connectionEdgeIds.includes(second.id))).toBe(true);
+  });
+
+  it("preserves explicit connection evidence when all window slots are protected", () => {
+    const focuses = [{ ...primary, callers: { items: [], truncated: false } }, ...[2, 3, 4].map(rank =>
+      focus(rank, symbol(`root-${rank}`, root.filePath, rank * 100), rank * 100, rank * 100 + 4))];
+    const connections = focuses.flatMap((item, index) => [20, 40].map(offset =>
+      edge(`connection-${index}-${offset}`, item.symbol, focuses[(index + 1) % focuses.length]!.symbol,
+        item.symbol.range.start.line + offset)));
+    const plan = planExploreSourceWindows(focuses, connections, undefined, ["sending"]);
+    expect(plan.windows).toHaveLength(8);
+    expect(plan.windows.every(window => window.reason === "exact-connection-site")).toBe(true);
+    expect(plan.summary.replacedLowerRankedCallWindowCount).toBe(0);
+  });
+
+  it("does not displace equally or better ranked calls", () => {
+    const earlier = [1, 2, 3, 4].map(rank => {
+      const item = focus(rank, symbol(`earlier-${rank}`, root.filePath, rank * 100), rank * 100, rank * 100 + 4);
+      return { ...item, callers: { truncated: false, items: [20, 40].map(offset => {
+        const caller = symbol(`caller-${rank}-${offset}`, root.filePath, rank * 100 + offset);
+        return { symbol: caller, edge: edge(caller.id, caller, item.symbol, caller.range.start.line + 1).edge };
+      }) } };
+    });
+    const plan = planExploreSourceWindows([...earlier, { ...primary, rank: 5 }], [], undefined, ["sending"]);
+    expect(plan.windows).toHaveLength(8);
+    expect(plan.windows.every(window => window.focusRank < 5)).toBe(true);
+    expect(plan.summary.replacedLowerRankedCallWindowCount).toBe(0);
+  });
+
+  it("prioritizes concept-rich paths and then their proven upstream entry over side branches", () => {
+    const file = "src/payments.ts";
+    const audit = symbol("auditSink", file, 1), auditBridge = symbol("auditPayment", file, 30);
+    const collector = symbol("collectPayment", file, 60);
+    const handler = symbol("refundHandler", file, 100), hook = symbol("refundHook", file, 130);
+    const logger = symbol("paymentLog", file, 200), entry = symbol("beginOrder", file, 230);
+    const auditPath = impactPath([audit, auditBridge, collector], [
+      edge("audit-bridge", auditBridge, audit, 31).edge, edge("collector-audit", collector, auditBridge, 61).edge
+    ]);
+    const hookCall = edge("hook-handler", hook, handler, 131).edge;
+    const handlerPath = impactPath([handler, hook, collector], [hookCall, edge("collector-hook", collector, hook, 71).edge]);
+    const logCall = edge("collector-log", collector, logger, 85).edge;
+    const logPath = impactPath([logger, collector, entry], [logCall, edge("entry-collector", entry, collector, 231).edge]);
+    const focuses = [
+      { ...focus(1, audit, 1, 5), impact: { paths: [auditPath], truncated: false } },
+      { ...focus(2, handler, 100, 104), callers: { items: [{ symbol: hook, edge: hookCall }], truncated: false },
+        impact: { paths: [handlerPath], truncated: false } },
+      { ...focus(3, logger, 200, 204), callers: { items: [{ symbol: collector, edge: logCall }], truncated: false },
+        impact: { paths: [logPath], truncated: false } }
+    ];
+    const plan = planExploreSourceWindows(focuses, [], undefined, ["payment", "refund", "handler"]);
+    expect(plan.windows.filter(window => window.reason === "exact-impact-call").map(window => window.startLine)).toEqual([68, 228]);
   });
 });
 
