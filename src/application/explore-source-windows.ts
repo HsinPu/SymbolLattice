@@ -5,8 +5,9 @@ import { EXPLORE_GENERATED_SOURCE_WORTH } from "./explore-query.js";
 import { EXPLORE_CALLEE_SOURCE_LIMITS, matchExploreCalleeSource, type ExploreCalleeSourceSearch } from "./explore-callee-source.js";
 import type { SourceLexicalMatch } from "../domain/source-lexical.js";
 import type { SymbolNode } from "../domain/types.js";
+import { exploreLexicalWindows, EXPLORE_LEXICAL_WINDOW_LIMITS, type ExploreLexicalWindowSearch } from "./explore-lexical-windows.js";
 
-export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v10" as const;
+export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v11" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY =
   "explore-source-window-allocation-v5" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS = {
@@ -43,7 +44,7 @@ export interface ExploreSourceWindowPlanItem {
   readonly relatedSymbolIds: readonly string[];
   readonly pathSpineIndexes: readonly number[];
   readonly relevanceWeight: number;
-  readonly reason: "exact-connection-site" | "exact-focus-call" | "exact-focus-callee" | "exact-path-spine" | "exact-impact-call" | "exact-callee-source" | "exact-flow-callee";
+  readonly reason: "exact-connection-site" | "exact-focus-call" | "exact-focus-callee" | "exact-path-spine" | "exact-impact-call" | "exact-callee-source" | "exact-flow-callee" | "focus-source-match";
   readonly sourceMatches?: readonly SourceLexicalMatch[];
 }
 
@@ -51,6 +52,7 @@ export interface ExploreSourceWindowPlan {
   readonly policy: typeof EXPLORE_SOURCE_WINDOW_POLICY;
   readonly limits: typeof EXPLORE_SOURCE_WINDOW_LIMITS;
   readonly calleeSourceSearch?: ExploreCalleeSourceSearch;
+  readonly lexicalWindowSearch?: ExploreLexicalWindowSearch;
   readonly summary: {
     readonly candidateCount: number;
     readonly selectedCount: number;
@@ -518,7 +520,7 @@ export function allocateExploreSourceWindowCharacters(input: {
   };
 }
 
-function coveredByPrimarySource(site: WindowSite, focuses: readonly ExploreFocus[]): boolean {
+function coveredByPrimarySource(site: Pick<WindowSite, "filePath" | "evidenceStartLine" | "evidenceEndLine">, focuses: readonly ExploreFocus[]): boolean {
   const ranges = focuses.flatMap(({ source }) => {
     if (source === null || source.filePath !== site.filePath || source.emittedCharacters === 0) return [];
     const start = source.startLine + (source.range.start.column > 1 ? 1 : 0);
@@ -858,6 +860,30 @@ export function planExploreSourceWindows(
     upstreamEntries.set(priority.entryId, admissionRank);
   }
 
+  const lexical = exploreLexicalWindows(focuses, queryTerms, sourceDocuments, match => coveredByPrimarySource({
+    filePath: match.filePath, evidenceStartLine: match.range.start.line, evidenceEndLine: match.range.end.line
+  }, focuses));
+  let lexicalSelected = 0, lexicalReplacements = 0;
+  for (const candidate of lexical.candidates) {
+    if (lexicalSelected >= EXPLORE_LEXICAL_WINDOW_LIMITS.maximumWindows) break;
+    if (selected.length >= EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows) {
+      const index = selected.findLastIndex(window => window.reason === "exact-focus-call" &&
+        window.focusRank >= candidate.focus.rank && !window.connectionEdgeIds.some(id => protectedEdgeIds.has(id)));
+      if (index < 0) continue;
+      const [removed] = selected.splice(index, 1);
+      const remaining = selectedPerFocus.get(removed!.focusRank)! - 1;
+      if (remaining === 0) selectedPerFocus.delete(removed!.focusRank);
+      else selectedPerFocus.set(removed!.focusRank, remaining);
+      lexicalReplacements++;
+    }
+    selected.push({ focusRank: candidate.focus.rank, filePath: candidate.focus.symbol.filePath,
+      startLine: candidate.startLine, endLine: candidate.endLine, connectionEdgeIds: [],
+      relatedSymbolIds: [candidate.focus.symbol.id], pathSpineIndexes: [], relevanceWeight: candidate.focus.score,
+      reason: "focus-source-match", sourceMatches: candidate.sourceMatches });
+    selectedPerFocus.set(candidate.focus.rank, (selectedPerFocus.get(candidate.focus.rank) ?? 0) + 1);
+    lexicalSelected++;
+  }
+
   const uncoveredCallees = [...sourceCallees.values()].filter(({ site }) => !selected.some((window) =>
     window.filePath === site.filePath && window.startLine <= site.evidenceStartLine && window.endLine >= site.evidenceEndLine));
   const calleeSearch = sourceDocuments === undefined || queryTerms.length === 0 ? undefined :
@@ -898,13 +924,16 @@ export function planExploreSourceWindows(
     policy: EXPLORE_SOURCE_WINDOW_POLICY,
     limits: EXPLORE_SOURCE_WINDOW_LIMITS,
     ...(calleeSearch === undefined ? {} : { calleeSourceSearch: calleeSearch.receipt }),
+    ...(lexical.receipt.verifiedMatches === 0 && lexical.receipt.rejectedMatches === 0 && lexical.receipt.unavailableFiles.length === 0 && !lexical.receipt.truncated
+      ? {} : { lexicalWindowSearch: { ...lexical.receipt, selectedCount: lexicalSelected, replacedCallWindowCount: lexicalReplacements,
+        truncated: lexical.receipt.truncated || lexicalSelected < lexical.candidates.length } }),
     summary: {
-      candidateCount: candidates.length + impactCandidates.length + sourceCandidates.length + flowCandidates.length,
+      candidateCount: candidates.length + impactCandidates.length + sourceCandidates.length + flowCandidates.length + lexical.candidates.length,
       selectedCount: selected.length,
       selectedFocusCount: selectedPerFocus.size,
       unavailableFileSiteCount: unavailableEdges.size,
       replacedLowerRankedCallWindowCount,
-      truncated: selected.length < candidates.length + impactCandidates.length + sourceCandidates.length + flowCandidates.length || calleeSearch?.receipt.truncated === true
+      truncated: selected.length < candidates.length + impactCandidates.length + sourceCandidates.length + flowCandidates.length + lexical.candidates.length || calleeSearch?.receipt.truncated === true || lexical.receipt.truncated
     },
     windows: selected.map((window, index) => ({
       index,

@@ -17,6 +17,24 @@ import { matchCallableSource, scoreCallableSource, SOURCE_LEXICAL_POLICY, SOURCE
 import { identifierTermGroups } from "../../src/domain/identifier-search.js";
 
 describe("source-backed same-file focus coverage", () => {
+  it("retains one supported numeric candidate when generic matches would consume all file slots", () => {
+    const generic = Array.from({ length: 5 }, (_, i) => symbol({ id: `generic${i}`,
+      name: "serverRequestBodyHttpAllowedSize", filePath: `src/generic${i}.ts` }));
+    const code = { ...symbol({ id: "codes", name: "codes", filePath: "src/errors.ts" }), kind: "variable" as const,
+      range: { start: { line: 1, column: 1 }, end: { line: 1, column: 27 } } };
+    const query = "server request body http 413 allowed size";
+    const matches = matchCallableSource("const codes = { body: 413 };", [code], identifierTermGroups(query.split(" ")));
+    const lexical = { policy: SOURCE_LEXICAL_POLICY, limits: SOURCE_LEXICAL_LIMITS, state: "searched" as const,
+      scannedFiles: 1, scannedSymbols: 1, scannedCharacters: 27, truncated: false, candidates: scoreCallableSource(matches.documents) };
+    const graph = { symbols: [...generic, code], edges: [] };
+    const result = planExploreQuery(graph, query, lexical);
+    expect(result.numericCoverage).toMatchObject({ symbolId: "codes", terms: ["413"] });
+    expect(result.selection.some(c => c.symbol.id === "codes")).toBe(true);
+    expect(result.selection.some(c => c.symbol.id.startsWith("generic"))).toBe(true);
+    expect(result.summary.selectedFileCount).toBeLessThanOrEqual(4);
+    expect(planExploreQuery(graph, "src/generic0.ts " + query, lexical).numericCoverage).toBeUndefined();
+    expect(planExploreQuery(graph, "server request body http allowed size").numericCoverage).toBeUndefined();
+  });
   it("retains numeric qualifiers and bounds extra context without expanding ordinary queries", () => {
     const graph = { symbols: [symbol({ id: "binding", name: "handler503", filePath: "settings.py" }),
       symbol({ id: "different", name: "handler5030", filePath: "other.py" })], edges: [] };
@@ -405,7 +423,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v19",
+      policy: "explore-query-plan-v20",
       queryIntent: {
         tests: false,
         icons: false,
@@ -523,7 +541,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v19",
+      policy: "explore-query-plan-v20",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -755,7 +773,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v19",
+      policy: "explore-query-plan-v20",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1179,7 +1197,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v19",
+      policy: "explore-query-plan-v20",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v2",
@@ -1878,7 +1896,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v19",
+      policy: "explore-query-plan-v20",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,

@@ -9,6 +9,17 @@ const callable = (start: number, end: number, kind: SymbolNode["kind"] = "functi
 });
 
 describe("callable source lexical evidence", () => {
+  it("admits a variable with a whole numeric literal, excluding unrelated and nested populations", () => {
+    const binding = { ...callable(1, 2, "variable"), name: "codes" };
+    expect(matchCallableSource("body_limit: 413\n}", [binding], [["413"], ["body"]]).candidates).toHaveLength(1);
+    expect(matchCallableSource("body_limit: 4130\n}", [binding], [["413"], ["body"]]).documents).toEqual([]);
+    expect(matchCallableSource("body_limit: 413\n}", [binding], [["limit"], ["body"]]).documents).toEqual([]);
+    const separated = ["body_limit: 100,", ...Array<string>(10).fill("// unrelated"), "other: 413", "}"].join("\n");
+    expect(matchCallableSource(separated, [{ ...binding, range: callable(1, 14).range }], [["413"], ["body"]]).candidates).toEqual([]);
+    const source = ["body_limit: 100,", ...Array<string>(10).fill("// unrelated"), "body_error: 413", "}"].join("\n");
+    const local = matchCallableSource(source, [{ ...binding, range: callable(1, 14).range }], [["413"], ["body"]]);
+    expect(local.candidates[0]?.matches.find(m => m.term === "body")?.range.start.line).toBe(12);
+  });
   it("preserves numeric tokens and admits only matching numeric-name bindings", () => {
     const source = "handler503 = defaults.server_error\n}";
     const binding = { ...callable(1, 2, "variable"), name: "handler503" };

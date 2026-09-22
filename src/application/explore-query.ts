@@ -17,7 +17,7 @@ import { identifierNumbers, numericIdentifierTerms, identifierTermGroups, identi
 import { SOURCE_LEXICAL_SCORING, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
 import { downstreamFocusPaths, type ExploreFlowFocus } from "./explore-flow-focus.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v19" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v20" as const;
 export const EXPLORE_NUMERIC_QUERY = {
   policy: "numeric-query-qualifiers-v1", maximumIdentifierTerms: 12, qualifierScore: 500
 } as const;
@@ -436,6 +436,7 @@ export interface ExploreQueryPlan {
   readonly fileHints: readonly string[];
   readonly identifierTerms: readonly string[];
   readonly numericQuery?: typeof EXPLORE_NUMERIC_QUERY;
+  readonly numericCoverage?: { readonly policy: "numeric-query-coverage-v1"; readonly symbolId: string; readonly terms: readonly string[] };
   readonly nameFollowupSearch?: import("./explore-name-followups.js").ExploreNameFollowupSearch;
   readonly sourceLexical?: (Omit<SourceLexicalRetrieval, "candidates"> & { readonly matchedSymbols: number }) | null;
   readonly queryIntent: {
@@ -2374,32 +2375,43 @@ export function planExploreQuery(
   const selectedFiles = new Set<string>();
   const selectedByFile = new Map<string, number>();
   const naturalLanguage = identifierTermGroups(parsed.identifierTerms).length > 1;
-  for (const candidate of ranked) {
-    if (selected.length >= EXPLORE_QUERY_LIMITS.maximumSymbols) break;
-    // A nested local already represented by a selected callable should not
-    // consume the second focus slot when it adds no query concept. Exact
-    // single-concept lookups and explicitly requested files retain all targets.
-    if (naturalLanguage && !candidate.explicitFile && candidate.symbol.kind === "variable" &&
-        selected.some((owner) =>
-          (owner.symbol.kind === "function" || owner.symbol.kind === "method" || owner.symbol.kind === "entrypoint") &&
-          owner.symbol.filePath === candidate.symbol.filePath &&
-          candidate.matchedTerms.every((term) => owner.matchedTerms.includes(term)) &&
-          (owner.symbol.range.start.line < candidate.symbol.range.start.line ||
-            (owner.symbol.range.start.line === candidate.symbol.range.start.line && owner.symbol.range.start.column <= candidate.symbol.range.start.column)) &&
-          (owner.symbol.range.end.line > candidate.symbol.range.end.line ||
-            (owner.symbol.range.end.line === candidate.symbol.range.end.line && owner.symbol.range.end.column >= candidate.symbol.range.end.column)))) continue;
-    const fileCount = selectedByFile.get(candidate.symbol.filePath) ?? 0;
-    if (fileCount >= EXPLORE_QUERY_LIMITS.maximumSymbolsPerFile) continue;
-    if (
-      fileCount === 0 &&
-      selectedFiles.size >= EXPLORE_QUERY_LIMITS.maximumFiles
-    ) {
-      continue;
+  const selectCandidates = (ordered: readonly Candidate[]) => {
+    selected.length = 0; selectedFiles.clear(); selectedByFile.clear();
+    for (const candidate of ordered) {
+      if (selected.length >= EXPLORE_QUERY_LIMITS.maximumSymbols) break;
+      // A nested local already represented by a selected callable should not
+      // consume the second focus slot when it adds no query concept. Exact
+      // single-concept lookups and explicitly requested files retain all targets.
+      if (naturalLanguage && !candidate.explicitFile && candidate.symbol.kind === "variable" &&
+          selected.some((owner) =>
+            (owner.symbol.kind === "function" || owner.symbol.kind === "method" || owner.symbol.kind === "entrypoint") &&
+            owner.symbol.filePath === candidate.symbol.filePath &&
+            candidate.matchedTerms.every((term) => owner.matchedTerms.includes(term)) &&
+            (owner.symbol.range.start.line < candidate.symbol.range.start.line ||
+              (owner.symbol.range.start.line === candidate.symbol.range.start.line && owner.symbol.range.start.column <= candidate.symbol.range.start.column)) &&
+            (owner.symbol.range.end.line > candidate.symbol.range.end.line ||
+              (owner.symbol.range.end.line === candidate.symbol.range.end.line && owner.symbol.range.end.column >= candidate.symbol.range.end.column)))) continue;
+      const fileCount = selectedByFile.get(candidate.symbol.filePath) ?? 0;
+      if (fileCount >= EXPLORE_QUERY_LIMITS.maximumSymbolsPerFile) continue;
+      if (
+        fileCount === 0 &&
+        selectedFiles.size >= EXPLORE_QUERY_LIMITS.maximumFiles
+      ) {
+        continue;
+      }
+      selected.push(candidate);
+      selectedFiles.add(candidate.symbol.filePath);
+      selectedByFile.set(candidate.symbol.filePath, fileCount + 1);
     }
-    selected.push(candidate);
-    selectedFiles.add(candidate.symbol.filePath);
-    selectedByFile.set(candidate.symbol.filePath, fileCount + 1);
-  }
+  };
+  selectCandidates(ranked);
+  // Preserve at least one literal/name numeric qualifier when generic words
+  // would otherwise consume every file slot. Other helpers remain eligible.
+  const numericAnchor = naturalLanguage && parsed.fileHints.length === 0 &&
+    !selected.some(candidate => candidate.numericQualifier !== undefined)
+    ? ranked.find(candidate => candidate.numericQualifier !== undefined && candidate.sourceRole.role === "production" &&
+      !candidate.generated.generated && identifierTermGroups(candidate.matchedTerms).length >= 2) : undefined;
+  if (numericAnchor !== undefined) selectCandidates([numericAnchor, ...ranked.filter(candidate => candidate !== numericAnchor)]);
 
   const coverageReceipts = naturalLanguage && parsed.fileHints.length === 0
     ? diversifyFileFocuses(selected, ranked, parsed.identifierTerms, graph, executionIntent)
@@ -2489,12 +2501,15 @@ export function planExploreQuery(
     fileHints: parsed.fileHints,
     identifierTerms: parsed.identifierTerms,
     ...(parsed.maximumIdentifierTerms === EXPLORE_NUMERIC_QUERY.maximumIdentifierTerms ? { numericQuery: EXPLORE_NUMERIC_QUERY } : {}),
+    ...(numericAnchor === undefined ? {} : { numericCoverage: { policy: "numeric-query-coverage-v1" as const,
+      symbolId: numericAnchor.symbol.id, terms: numericAnchor.numericQualifier!.terms } }),
     sourceLexical: sourceLexical === undefined ? null : {
       policy: sourceLexical.policy, limits: sourceLexical.limits, state: sourceLexical.state,
       scannedFiles: sourceLexical.scannedFiles, scannedSymbols: sourceLexical.scannedSymbols,
       scannedCharacters: sourceLexical.scannedCharacters, truncated: sourceLexical.truncated,
       matchedSymbols: sourceLexical.candidates.length,
-      ...(sourceLexical.numericBindingTerms === undefined ? {} : { numericBindingTerms: sourceLexical.numericBindingTerms })
+      ...(sourceLexical.numericBindingTerms === undefined ? {} : { numericBindingTerms: sourceLexical.numericBindingTerms }),
+      ...(sourceLexical.numericBindingContext === undefined ? {} : { numericBindingContext: sourceLexical.numericBindingContext })
     },
     queryIntent: {
       ...roleIntent,

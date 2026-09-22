@@ -6,10 +6,32 @@ import { join } from "node:path";
 import { scoreTask, verifySourceExcerpts, verifyLexicalMatches, verifySourceReuse, verifyUnresolvedCalls, verifyNameFollowups, verifyNumericQualifiers, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
 
 describe("task retrieval benchmark judgments", () => {
+  it("verifies lexical windows against their original owner and rejects invented relationship claims", () => {
+    const match = { term: '413', token: '413', filePath: 'a.ts', range: { start: { line: 2, column: 3 }, end: { line: 2, column: 6 } } };
+    const result = { focuses: [{ rank: 1, symbol: { id: 'codes', filePath: 'a.ts',
+      range: { start: { line: 1, column: 1 }, end: { line: 3, column: 2 } } }, sourceMatches: [match] }],
+      sourceWindows: [{ reason: 'focus-source-match', focusRank: 1, filePath: 'a.ts', startLine: 1, endLine: 3,
+        connectionEdgeIds: [], pathSpineIndexes: [], relatedSymbolIds: ['codes'], sourceMatches: [match] }] };
+    const read = () => 'const codes = {\n  413\n}';
+    expect(verifyLexicalMatches(result, read)).toEqual({ verifiedMatches: 2 });
+    for (const mutate of [r => { r.sourceWindows[0].connectionEdgeIds = ['invented']; },
+      r => { r.sourceWindows[0].focusRank = 2; }, r => { r.sourceWindows[0].sourceMatches[0].term = 'other'; },
+      r => { r.sourceWindows[0].startLine = 3; }, r => { r.sourceWindows[0].filePath = 'other.ts'; },
+      r => { r.sourceWindows[0].relatedSymbolIds = ['other']; }]) {
+      const copy = JSON.parse(JSON.stringify(result)); mutate(copy);
+      expect(() => verifyLexicalMatches(copy, read)).toThrow();
+    }
+  });
   it("rejects numeric qualifier claims based only on a digit prefix or an absent query term", () => {
     const result = { queryPlan: { identifierTerms: ['503'] }, focuses: [{ symbol: { name: 'handler503' },
       numericQualifier: { policy: 'numeric-query-qualifiers-v1', score: 500, terms: ['503'] } }] };
     expect(verifyNumericQualifiers(result)).toEqual({ verifiedQualifiers: 1 });
+    result.focuses[0].symbol.id = 'anchor';
+    result.queryPlan.numericCoverage = { policy: 'numeric-query-coverage-v1', symbolId: 'missing', terms: ['503'] };
+    expect(() => verifyNumericQualifiers(result)).toThrow('retain its qualified focus');
+    result.queryPlan.numericCoverage.symbolId = 'anchor';
+    expect(verifyNumericQualifiers(result)).toEqual({ verifiedQualifiers: 1 });
+    delete result.queryPlan.numericCoverage;
     result.focuses[0].symbol.name = 'handler5030';
     expect(() => verifyNumericQualifiers(result)).toThrow();
     result.focuses[0].sourceMatches = [{ term: '503', token: 'STATUS_503' }];

@@ -14,6 +14,81 @@ import type { ExplorePathSpinePlan } from "../../src/application/explore-path-sp
 import type { GraphEdge, SymbolNode } from "../../src/domain/types.js";
 import type { ImpactPath } from "../../src/domain/graph.js";
 import { matchExploreCalleeSource, EXPLORE_CALLEE_SOURCE_LIMITS } from "../../src/application/explore-callee-source.js";
+import { exploreLexicalWindows, EXPLORE_LEXICAL_WINDOW_LIMITS } from "../../src/application/explore-lexical-windows.js";
+
+describe("source windows for original lexical hits", () => {
+  const node = { ...symbol("codes", "src/errors.ts", 1), kind: "variable" as const,
+    range: { start: { line: 1, column: 1 }, end: { line: 100, column: 2 } } };
+  const lines = Array<string>(100).fill("// unrelated"); lines[79] = "  body_limit: 413,";
+  const match = { term: "413", token: "413", filePath: node.filePath,
+    range: { start: { line: 80, column: 15 }, end: { line: 80, column: 18 } } };
+  // UTF-16 coordinates: the numeric token starts after two spaces and body_limit: .
+  const receipt = { ...match, range: { start: { line: 80, column: 15 }, end: { line: 80, column: 18 } } };
+  const primary = { ...focus(1, node, 1, 5), sourceMatches: [receipt] };
+  const docs = new Map([[node.filePath, { sourceText: lines.join("\r\n") }]]);
+
+  it("delivers a bounded hit-centered window without inventing an edge or rescanning delivered source", () => {
+    const result = planExploreSourceWindows([primary], [], undefined, ["413", "body"], docs);
+    expect(result.windows).toEqual([expect.objectContaining({ reason: "focus-source-match", startLine: 77,
+      endLine: 83, connectionEdgeIds: [], pathSpineIndexes: [], relatedSymbolIds: [node.id], sourceMatches: [receipt] })]);
+    expect(result.lexicalWindowSearch).toMatchObject({ verifiedMatches: 1, selectedCount: 1, rejectedMatches: 0, truncated: false });
+    const covered = planExploreSourceWindows([{ ...primary, source: focus(1, node, 1, 100).source }], [], undefined, ["413"], docs);
+    expect(covered.windows).toEqual([]);
+    expect(covered.lexicalWindowSearch).toBeUndefined();
+  });
+
+  it("rejects stale, foreign, out-of-owner and invalid coordinates and discloses missing documents", () => {
+    for (const invalid of [{ ...receipt, token: "503" }, { ...receipt, filePath: "elsewhere.ts" },
+      { ...receipt, term: "unrequested" }, { ...receipt, range: { start: { line: 80, column: 0 }, end: receipt.range.end } },
+      { ...receipt, range: { start: { line: 101, column: 1 }, end: { line: 101, column: 4 } } }]) {
+      const plan = planExploreSourceWindows([{ ...primary, sourceMatches: [invalid] }], [], undefined, ["413"], docs);
+      expect(plan.windows).toEqual([]);
+      expect(plan.lexicalWindowSearch?.rejectedMatches).toBe(1);
+    }
+    const missing = planExploreSourceWindows([primary], [], undefined, ["413"], new Map());
+    expect(missing.windows).toEqual([]);
+    expect(missing.lexicalWindowSearch?.unavailableFiles).toEqual([node.filePath]);
+  });
+
+  it("deduplicates receipts, merges nearby hits and prioritizes numeric hits within fixed slots", () => {
+    const many = [10, 40, 80].map((line, i) => ({ ...receipt, term: i === 2 ? "413" : "body",
+      token: i === 2 ? "413" : "body_limit", range: { start: { line, column: i === 2 ? 15 : 3 }, end: { line, column: i === 2 ? 18 : 13 } } }));
+    const text = [...lines]; text[9] = lines[79]!; text[39] = lines[79]!;
+    const result = planExploreSourceWindows([{ ...primary, sourceMatches: [...many, many[2]!] }], [], undefined,
+      ["body", "413"], new Map([[node.filePath, { sourceText: text.join("\n") }]]));
+    expect(result.windows.map(w => w.startLine)).toEqual([77, 7]);
+    expect(result.lexicalWindowSearch).toMatchObject({ verifiedMatches: 3, candidateCount: 3, selectedCount: 2, truncated: true });
+  });
+
+  it("bounds source reads and refuses a token cut at the file boundary", () => {
+    const prefix = " ".repeat(EXPLORE_LEXICAL_WINDOW_LIMITS.maximumFileCharacters - 2);
+    const source = prefix + "4130";
+    const input = { ...primary, symbol: { ...node, range: { start: { line: 1, column: 1 }, end: { line: 1, column: source.length + 1 } } },
+      sourceMatches: [{ ...receipt, range: { start: { line: 1, column: prefix.length + 1 }, end: { line: 1, column: prefix.length + 4 } } }] };
+    const result = exploreLexicalWindows([input], ["413"], new Map([[node.filePath, { sourceText: source }]]), () => false);
+    expect(result.candidates).toEqual([]);
+    expect(result.receipt).toMatchObject({ sourceCharacters: 65536, verifiedMatches: 0, truncated: true });
+  });
+
+  it("protects exact connections at a full budget and can replace a plain lower-ranked call window", () => {
+    const inputs = [primary, ...Array.from({ length: 7 }, (_, i) => {
+      const other = { ...node, id: `other${i}`, filePath: `src/other${i}.ts` };
+      return focus(i + 2, other, 1, 5);
+    })];
+    const calls = inputs.map((item, i) => edge(`call${i}`, item.symbol,
+      { ...symbol(`target${i}`, item.symbol.filePath, 90), kind: "variable" }, 30));
+    const protectedPlan = planExploreSourceWindows(inputs, calls, undefined, ["413"], docs);
+    expect(protectedPlan.windows).toHaveLength(8);
+    expect(protectedPlan.windows.every(w => w.reason === "exact-connection-site")).toBe(true);
+    expect(protectedPlan.lexicalWindowSearch).toMatchObject({ candidateCount: 1, selectedCount: 0, truncated: true });
+    const plain = inputs.map((item, i) => ({ ...item, callees: { items: [{ symbol: calls[i]!.target, edge: calls[i]!.edge }], truncated: false } }));
+    const plan = planExploreSourceWindows(plain, [], undefined, ["413"], docs);
+    expect(plan.windows).toHaveLength(8);
+    expect(plan.windows.filter(w => w.reason === "focus-source-match")).toHaveLength(1);
+    expect(plan.lexicalWindowSearch).toMatchObject({ selectedCount: 1, replacedCallWindowCount: 1 });
+    expect(plan.summary.truncated).toBe(true);
+  });
+});
 
 describe("spare-budget flow callee source", () => {
   const caller = symbol("runTask", "src/run.ts", 1);

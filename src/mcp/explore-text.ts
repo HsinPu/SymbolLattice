@@ -196,6 +196,7 @@ function renderFocuses(result: UnknownRecord): string[] {
   const focuses = records(result.focuses);
   if (focuses.length === 0) return [];
   const output = [`Found ${focuses.length} ranked focus${focuses.length === 1 ? "" : "es"}.`, "", "**Focuses**", ""];
+  if (record(record(result.queryPlan)?.numericCoverage) !== null) output.push("Numeric coverage reserves a file slot for a supported numeric match so generic terms do not discard every numeric qualifier.", "");
   for (const focus of focuses) {
     const reference = symbolReference(focus) ?? text(focus.reference) ?? "unknown symbol";
     const symbol = symbolFrom(focus);
@@ -368,6 +369,10 @@ function renderLimitations(result: UnknownRecord): string[] {
     notes.add("Source windows were limited; additional call-site source may be omitted.");
   }
   const unavailableSites = finiteNumber(record(record(result.sourceWindowPlan)?.summary)?.unavailableFileSiteCount) ?? 0;
+  const lexicalSearch = record(record(result.sourceWindowPlan)?.lexicalWindowSearch);
+  if (lexicalSearch?.truncated === true) notes.add("Some lexical hit windows were omitted by source or window limits; follow the cited match coordinates for more source.");
+  if ((finiteNumber(lexicalSearch?.rejectedMatches) ?? 0) > 0) notes.add("Some lexical receipts did not match the available source or owning declaration and were excluded.");
+  if (Array.isArray(lexicalSearch?.unavailableFiles) && lexicalSearch.unavailableFiles.length > 0) notes.add("Source for some lexical hits was unavailable in this read.");
   const calleeSearch = record(record(result.sourceWindowPlan)?.calleeSourceSearch);
   if (record(record(result.queryPlan)?.input)?.identifierTermsTruncated === true) notes.add(
     "Query terms exceeded the bounded term budget; later terms were omitted. Shorten the query to retain essential qualifiers.");

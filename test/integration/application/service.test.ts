@@ -1047,6 +1047,30 @@ describe("SymbolLatticeService", () => {
     store.close();
   });
 
+  it("delivers the actual numeric hit deep inside a binding and drops it after source sync", async () => {
+    const content = (status: number) => ["export const codes = {", ...Array<string>(80).fill("// unrelated padding"),
+      `  body_limit: ${status},`, "};"].join("\r\n");
+    const projectPath = await createInlineProject({ "errors.ts": content(413) });
+    const store = new SqliteGraphStore();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    const result = await service.explore(projectPath, "body limit 413");
+    expect(result.focuses?.some(f => f.symbol.name === "codes")).toBe(true);
+    const window = result.sourceWindows?.find(w => w.reason === "focus-source-match");
+    expect(window?.source.text).toContain("body_limit: 413");
+    expect(window?.connectionEdgeIds).toEqual([]);
+    expect(window?.sourceMatches?.some(m => m.token === "413" && m.range.start.line === 82)).toBe(true);
+    expect((result.sourceWindows ?? []).reduce((n, w) => n + w.source.emittedCharacters, 0) +
+      (result.focuses ?? []).reduce((n, f) => n + (f.source?.emittedCharacters ?? 0), 0)).toBeLessThanOrEqual(24000);
+    await writeFile(join(projectPath, "errors.ts"), content(414), "utf8");
+    await service.sync({ projectPath });
+    const changed = await service.explore(projectPath, "body limit 413");
+    expect(changed.status.generationId).not.toBe(result.status.generationId);
+    expect(changed.focuses?.some(f => f.sourceMatches?.some(m => m.token === "413"))).toBe(false);
+    expect(changed.sourceWindows?.some(w => w.source.text.includes("body_limit: 413"))).toBe(false);
+    store.close();
+  });
+
   it("retrieves source for a corroborated same-name lead and does not reuse it after sync", async () => {
     const body = (member: string) => `def error_view_handler503(resolver):\n    return resolver.${member}(503)\n`;
     const projectPath = await createInlineProject({
@@ -1135,7 +1159,7 @@ describe("SymbolLatticeService", () => {
       sourceAvailability: "not-applicable",
       source: null,
       queryPlan: {
-        policy: "explore-query-plan-v19",
+        policy: "explore-query-plan-v20",
         ranking: {
           graphDiffusion: {
             policy: "explore-query-graph-diffusion-v3",
@@ -1218,7 +1242,7 @@ describe("SymbolLatticeService", () => {
         summary: { selectedSpineCount: 0, bridgeSymbolCount: 0 }
       },
       sourceWindowPlan: {
-        policy: "explore-source-windows-v10",
+        policy: "explore-source-windows-v11",
         summary: { candidateCount: 0, selectedCount: 0, truncated: false }
       },
       sourceWindows: [],
@@ -1261,7 +1285,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v19",
+      policy: "explore-query-plan-v20",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -1338,7 +1362,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "dispatch behavior");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v19",
+      policy: "explore-query-plan-v20",
       ranking: {
         graphExpansion: {
           policy: "explore-query-graph-expansion-v3",
@@ -1475,7 +1499,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "dispatch pipeline");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v19",
+      policy: "explore-query-plan-v20",
       scoreFloor: {
         policy: "explore-query-relative-file-score-floor-v1",
         reason: "relative-floor-applied",
@@ -1636,7 +1660,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v19",
+      policy: "explore-query-plan-v20",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1682,7 +1706,7 @@ describe("SymbolLatticeService", () => {
 
     const general = await service.explore(projectPath, "renderAsset");
     expect(general.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v19",
+      policy: "explore-query-plan-v20",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",

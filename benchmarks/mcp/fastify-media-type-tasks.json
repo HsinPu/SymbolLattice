@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/fastify/fastify",
+  "commit": "70b14e92c0b55e8201f5530ba2e6bab4e928c784",
+  "truthMethod": "Manual reading of pinned lib/contentTypeParser.js and lib/errors.js before querying either product with this task. Defined after freezing the numeric-neighborhood, numeric-coverage and lexical-window behavior, as a separate task not used to tune it. A pre-run source-line audit corrected the parser guard coordinate from blank line 176 to line 177, independently of product output. Covers the built-in rejection path when no parser is found and the request is not a 404 fallback. The external error factory and runtime dispatch are not assumed resolved. Required facts are source-level evidence, not an exhaustive judgment of all returned files. Keep this truth unchanged for later regression runs.",
+  "tasks": [
+    {
+      "id": "unsupported-media-http-415",
+      "split": "held-out",
+      "query": "Where does the server return HTTP 415 for an unsupported request media type?",
+      "requiredFiles": ["lib/contentTypeParser.js", "lib/errors.js"],
+      "supportingFiles": ["lib/reply.js", "lib/error-handler.js"],
+      "irrelevantFiles": [],
+      "evidence": [
+        {"file": "lib/contentTypeParser.js", "line": 177, "text": "if (parser === undefined)"},
+        {"file": "lib/contentTypeParser.js", "line": 183, "text": "reply[kReplyIsError] = true"},
+        {"file": "lib/contentTypeParser.js", "line": 184, "text": "reply.send(new FST_ERR_CTP_INVALID_MEDIA_TYPE(contentType || undefined))"},
+        {"file": "lib/errors.js", "line": 111, "text": "FST_ERR_CTP_INVALID_MEDIA_TYPE: createError("},
+        {"file": "lib/errors.js", "line": 114, "text": "415"}
+      ]
+    }
+  ]
+}

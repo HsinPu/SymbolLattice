@@ -68,6 +68,13 @@ export function verifyNameFollowups(result) {
 }
 
 export function verifyNumericQualifiers(result) {
+  if (result.queryPlan?.numericCoverage) {
+    const coverage = result.queryPlan.numericCoverage;
+    assert.equal(coverage.policy, 'numeric-query-coverage-v1');
+    const anchor = (result.focuses ?? []).find(f => f.symbol.id === coverage.symbolId);
+    assert.ok(anchor?.numericQualifier, 'Numeric coverage must retain its qualified focus');
+    assert.deepEqual(coverage.terms, anchor.numericQualifier.terms);
+  }
   let verifiedQualifiers = 0;
   for (const focus of result.focuses ?? []) {
     const receipt = focus.numericQualifier;
@@ -146,6 +153,20 @@ export function verifyLexicalMatches(result, readSource) {
   }
   for (const window of result.sourceWindows ?? []) {
     if (!window.sourceMatches?.length) continue;
+    if (window.reason === 'focus-source-match') {
+      const owner = (result.focuses ?? []).find(focus => focus.rank === window.focusRank);
+      assert.ok(owner, 'Lexical window requires its original focus');
+      assert.equal(window.filePath, owner.symbol.filePath);
+      assert.deepEqual(window.connectionEdgeIds, [], 'Lexical window must not invent relation evidence');
+      assert.deepEqual(window.pathSpineIndexes, []);
+      assert.deepEqual(window.relatedSymbolIds, [owner.symbol.id]);
+      for (const match of window.sourceMatches) {
+        assert.ok((owner.sourceMatches ?? []).some(original => JSON.stringify(original) === JSON.stringify(match)), 'Lexical window must retain an original receipt');
+        assert.ok(match.range.start.line >= window.startLine && match.range.end.line <= window.endLine);
+        verify(match, owner.symbol);
+      }
+      continue;
+    }
     const owners = (result.focuses ?? []).flatMap((focus) => (focus.callees?.items ?? []).filter(({ symbol, edge }) =>
       window.connectionEdgeIds.includes(edge.id) && window.relatedSymbolIds.includes(symbol.id) &&
       edge.kind === "calls" && edge.resolution === "exact" && edge.sourceId === focus.symbol.id &&

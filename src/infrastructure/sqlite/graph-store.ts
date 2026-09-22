@@ -27,7 +27,7 @@ import type { GeneratedFileClassification } from "../../domain/generated-files.j
 import type { SourceRoleClassification } from "../../domain/source-roles.js";
 import { identifierWords, identifierTermVariants, numericIdentifierTerms } from "../../domain/identifier-search.js";
 import {
-  matchCallableSource, scoreCallableSource, SOURCE_LEXICAL_LIMITS, SOURCE_LEXICAL_POLICY,
+  matchCallableSource, scoreCallableSource, SOURCE_LEXICAL_LIMITS, SOURCE_LEXICAL_POLICY, NUMERIC_BINDING_CONTEXT_LIMITS,
   type SourceLexicalDocument, type SourceLexicalRetrieval
 } from "../../domain/source-lexical.js";
 import {
@@ -2228,7 +2228,8 @@ function readBoundedSourceLexical(
   }
   return { retrieval: { policy: SOURCE_LEXICAL_POLICY, limits, state,
     scannedFiles, scannedSymbols, scannedCharacters, truncated, candidates: scoreCallableSource(documents),
-    ...(numericBindingTerms.length === 0 ? {} : { numericBindingTerms }) }, rows };
+    ...(numericBindingTerms.length === 0 ? {} : { numericBindingTerms,
+      numericBindingContext: { policy: "numeric-binding-context-v1" as const, limits: NUMERIC_BINDING_CONTEXT_LIMITS } }) }, rows };
 }
 
 function toSymbolNode(row: SymbolRow): SymbolNode {

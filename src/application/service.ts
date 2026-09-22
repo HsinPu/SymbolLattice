@@ -5763,7 +5763,7 @@ export class SymbolLatticeService {
             const edge = spineEdgesById.get(id);
             return edge?.resolution === "exact" && edge.filePath === draft.filePath ? [edge.range] : [];
           })
-        : [];
+        : window?.reason === "focus-source-match" ? (window.sourceMatches ?? []).map(match => match.range) : [];
       const source = renderContextSource(draft, allocation.allocatedCharacters, evidenceRanges);
       if (source !== null) renderedSourceWindows.set(allocation.index, source);
     }

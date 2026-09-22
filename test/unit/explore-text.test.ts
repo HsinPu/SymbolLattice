@@ -4,6 +4,15 @@ import { sourceDeliveryIdentityFromText } from "../../src/application/source-del
 import { McpSourceSession } from "../../src/mcp/source-session.js";
 
 describe("MCP explore text rendering", () => {
+  it("discloses numeric coverage ordering and lexical-window omissions without claiming a relation", () => {
+    const output = renderExploreText({ focuses: [{ symbol: { name: "codes" } }],
+      queryPlan: { numericCoverage: { symbolId: "codes" } }, sourceWindowPlan: { lexicalWindowSearch: {
+        truncated: true, rejectedMatches: 1, unavailableFiles: ["a.ts"] } } });
+    expect(output).toContain("Numeric coverage reserves a file slot");
+    expect(output).toContain("Some lexical hit windows were omitted");
+    expect(output).toContain("Some lexical receipts did not match");
+    expect(output).toContain("Source for some lexical hits was unavailable");
+  });
   it("labels supplementary same-name declarations as unresolved and cites the originating calls", () => {
     const output = renderExploreText({ queryPlan: { nameFollowupSearch: { state: "searched", callsTruncated: true } }, focuses: [{
       symbol: { name: "resolve_error_handler" }, numericQualifier: { terms: ["503"] },

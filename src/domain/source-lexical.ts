@@ -10,6 +10,7 @@ export const SOURCE_LEXICAL_LIMITS = {
   maximumFileCharacters: 65_536,
   maximumDeclarationCharacters: 8192
 } as const;
+export const NUMERIC_BINDING_CONTEXT_LIMITS = { paddingLines: 3, maximumAnchors: 4 } as const;
 
 /** Literal indexed-source evidence. Comments and strings can match; this is not a resolved relation. */
 export interface SourceLexicalMatch {
@@ -61,8 +62,9 @@ export interface SourceLexicalRetrieval {
   readonly scannedCharacters: number;
   readonly truncated: boolean;
   readonly candidates: readonly SourceLexicalCandidate[];
-  /** Numeric-name bindings were additionally considered within the same scan bounds. */
+  /** Numeric-bearing bindings were additionally considered within the same scan bounds. */
   readonly numericBindingTerms?: readonly string[];
+  readonly numericBindingContext?: { readonly policy: "numeric-binding-context-v1"; readonly limits: typeof NUMERIC_BINDING_CONTEXT_LIMITS };
 }
 
 /** Match whole identifier parts inside each callable's own indexed range. */
@@ -85,12 +87,37 @@ export function matchCallableSource(
   let truncated = false;
   for (const symbol of symbols) {
     if (!callableKinds.includes(symbol.kind)) {
-      if (symbol.kind !== "variable" || !numericTerms.some(term => identifierNumbers(symbol.name).includes(term))) continue;
+      if (symbol.kind !== "variable" || numericTerms.length === 0) continue;
       // Avoid borrowing a nested callable's body for its enclosing binding.
       // This only inspects the supplied bounded declaration population.
       if (callables.some(child => child.filePath === symbol.filePath && child.id !== symbol.id &&
           (child.range.start.line > symbol.range.start.line || child.range.start.line === symbol.range.start.line && child.range.start.column >= symbol.range.start.column) &&
           (child.range.end.line < symbol.range.end.line || child.range.end.line === symbol.range.end.line && child.range.end.column <= symbol.range.end.column))) continue;
+    }
+    // An unnamed numeric container must not combine unrelated properties into
+    // one relevance claim. Only tokenize neighborhoods of actual numeric hits.
+    let numericLines: Set<number> | undefined;
+    if (symbol.kind === "variable" && !numericTerms.some(term => identifierNumbers(symbol.name).includes(term))) {
+      numericLines = new Set();
+      let budget: number = SOURCE_LEXICAL_LIMITS.maximumDeclarationCharacters;
+      let anchors = 0;
+      for (let line = symbol.range.start.line; line <= Math.min(symbol.range.end.line, lines.length) && budget > 0; line++) {
+        const text = lines[line - 1] ?? "";
+        const scoped = text.slice(line === symbol.range.start.line ? symbol.range.start.column - 1 : 0,
+          line === symbol.range.end.line ? symbol.range.end.column - 1 : text.length);
+        const bounded = scoped.slice(0, budget);
+        for (const match of bounded.matchAll(/(?<![\p{L}\p{N}_$])\p{N}{3,}(?![\p{L}\p{N}_$])/gu)) {
+          if (!numericTerms.includes(match[0].normalize("NFKC")) ||
+              match.index + match[0].length === bounded.length && bounded.length < scoped.length && /[\p{L}\p{N}_$]/u.test(scoped[bounded.length]!)) continue;
+          if (anchors >= NUMERIC_BINDING_CONTEXT_LIMITS.maximumAnchors) { truncated = true; break; }
+          anchors++;
+          for (let context = Math.max(symbol.range.start.line, line - NUMERIC_BINDING_CONTEXT_LIMITS.paddingLines);
+            context <= Math.min(symbol.range.end.line, line + NUMERIC_BINDING_CONTEXT_LIMITS.paddingLines); context++) numericLines.add(context);
+        }
+        budget -= bounded.length + 1;
+        if (bounded.length < scoped.length || budget <= 0 && line < symbol.range.end.line) truncated = true;
+      }
+      if (numericLines.size === 0) continue;
     }
     const found = new Map<number, SourceLexicalMatch>();
     const frequencies = groups.map(() => 0);
@@ -105,7 +132,7 @@ export function matchCallableSource(
       const scoped = original.slice(start, end);
       if (scoped.length > remaining) truncated = true;
       const bounded = scoped.slice(0, remaining);
-      for (const match of bounded.matchAll(tokenExpression)) {
+      for (const match of (numericLines === undefined || numericLines.has(line) ? bounded : "").matchAll(tokenExpression)) {
         const token = match[0];
         if (token.length > 128) continue;
         // A character budget must not create a fabricated partial identifier.
@@ -139,6 +166,8 @@ export function matchCallableSource(
     }
     // A lone incidental word is insufficient to introduce a body-only candidate.
     const matches = [...found.entries()].sort(([left], [right]) => left - right).map(([, match]) => match);
+    if (symbol.kind === "variable" && !numericTerms.some(term => identifierNumbers(symbol.name).includes(term) ||
+        matches.some(match => match.token.normalize("NFKC") === term))) continue;
     if (found.size >= 2) candidates.push({ symbolId: symbol.id, matches });
     documents.push({ symbolId: symbol.id, matches, tokens, frequencies });
   }

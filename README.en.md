@@ -4,13 +4,13 @@ Local, source-backed code graphs for developers and AI agents to search code, tr
 
 [繁體中文](README.md) | English
 
-Current version: **v0.526.0** · Node.js **>=22.13 <25** · [MIT](LICENSE)
+Current version: **v0.527.0** · Node.js **>=22.13 <25** · [MIT](LICENSE)
 
 ## Features
 
 Query a repository through the CLI or MCP, with a local index in `.SymbolLattice/`.
 
-- Find task-relevant files and symbols with source code, line numbers, and relationship evidence, retaining numeric query terms such as HTTP 500.
+- Find task-relevant files and symbols with source code, line numbers, and relationship evidence, retaining numeric query terms such as HTTP 500 and adding bounded source excerpts around actual matches.
 - Trace calls, inheritance, imports, and framework entry points to assess change impact.
 - Update the index incrementally and inspect history and differences.
 
