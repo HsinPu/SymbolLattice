@@ -7,6 +7,33 @@ exports[`Django Ninja router resolver pre-move parity golden > does not cross a 
       "confidence": 1,
       "evidence": {
         "candidateSymbolIds": [
+          "symbol:api%2Fmain.py:api%2Fmain.py%23api:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/main.py",
+      "id": "edge:symbol%3Aapi%252Fmain.py%3Aapi%252Fmain.py%3Afile%3A0:symbol%3Aapi%252Fmain.py%3Aapi%252Fmain.py%2523api%3Avariable%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "api",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fmain.py:api%2Fmain.py:file:0",
+      "targetId": "symbol:api%2Fmain.py:api%2Fmain.py%23api:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
           "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23health:function:0",
         ],
         "ruleId": "syntax.containment",
@@ -29,6 +56,33 @@ exports[`Django Ninja router resolver pre-move parity golden > does not cross a 
       "resolution": "exact",
       "sourceId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py:file:0",
       "targetId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23health:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23router:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/routers/catalog.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fcatalog.py%3Aapi%252Frouters%252Fcatalog.py%3Afile%3A0:symbol%3Aapi%252Frouters%252Fcatalog.py%3Aapi%252Frouters%252Fcatalog.py%2523router%3Avariable%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "router",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py:file:0",
+      "targetId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23router:variable:0",
     },
   ],
   "files": [
@@ -83,6 +137,25 @@ exports[`Django Ninja router resolver pre-move parity golden > does not cross a 
   ],
   "pendingReferences": [],
   "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/main.py",
+      "id": "symbol:api%2Fmain.py:api%2Fmain.py%23api:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "api",
+      "qualifiedName": "api/main.py#api",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
     {
       "declarationOrdinal": 0,
       "filePath": "api/main.py",
@@ -143,6 +216,25 @@ exports[`Django Ninja router resolver pre-move parity golden > does not cross a 
     {
       "declarationOrdinal": 0,
       "filePath": "api/routers/catalog.py",
+      "id": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23router:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "router",
+      "qualifiedName": "api/routers/catalog.py#router",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/catalog.py",
       "id": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -170,6 +262,60 @@ exports[`Django Ninja router resolver pre-move parity golden > keeps missing and
       "confidence": 1,
       "evidence": {
         "candidateSymbolIds": [
+          "symbol:api%2Fmain.py:api%2Fmain.py%23api:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/main.py",
+      "id": "edge:symbol%3Aapi%252Fmain.py%3Aapi%252Fmain.py%3Afile%3A0:symbol%3Aapi%252Fmain.py%3Aapi%252Fmain.py%2523api%3Avariable%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "api",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fmain.py:api%2Fmain.py:file:0",
+      "targetId": "symbol:api%2Fmain.py:api%2Fmain.py%23api:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fmain.py:api%2Fmain.py%23prefix:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/main.py",
+      "id": "edge:symbol%3Aapi%252Fmain.py%3Aapi%252Fmain.py%3Afile%3A0:symbol%3Aapi%252Fmain.py%3Aapi%252Fmain.py%2523prefix%3Avariable%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "prefix",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fmain.py:api%2Fmain.py:file:0",
+      "targetId": "symbol:api%2Fmain.py:api%2Fmain.py%23prefix:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
           "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py%23dynamic:function:0",
         ],
         "ruleId": "syntax.containment",
@@ -192,6 +338,60 @@ exports[`Django Ninja router resolver pre-move parity golden > keeps missing and
       "resolution": "exact",
       "sourceId": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py:file:0",
       "targetId": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py%23dynamic:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py%23prefix:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/routers/dynamic.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fdynamic.py%3Aapi%252Frouters%252Fdynamic.py%3Afile%3A0:symbol%3Aapi%252Frouters%252Fdynamic.py%3Aapi%252Frouters%252Fdynamic.py%2523prefix%3Avariable%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "prefix",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py:file:0",
+      "targetId": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py%23prefix:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py%23router:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/routers/dynamic.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fdynamic.py%3Aapi%252Frouters%252Fdynamic.py%3Afile%3A0:symbol%3Aapi%252Frouters%252Fdynamic.py%3Aapi%252Frouters%252Fdynamic.py%2523router%3Avariable%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "router",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py:file:0",
+      "targetId": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py%23router:variable:0",
     },
   ],
   "files": [
@@ -284,6 +484,44 @@ exports[`Django Ninja router resolver pre-move parity golden > keeps missing and
     {
       "declarationOrdinal": 0,
       "filePath": "api/main.py",
+      "id": "symbol:api%2Fmain.py:api%2Fmain.py%23api:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "api",
+      "qualifiedName": "api/main.py#api",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/main.py",
+      "id": "symbol:api%2Fmain.py:api%2Fmain.py%23prefix:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "prefix",
+      "qualifiedName": "api/main.py#prefix",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/main.py",
       "id": "symbol:api%2Fmain.py:api%2Fmain.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -341,6 +579,44 @@ exports[`Django Ninja router resolver pre-move parity golden > keeps missing and
     {
       "declarationOrdinal": 0,
       "filePath": "api/routers/dynamic.py",
+      "id": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py%23prefix:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "prefix",
+      "qualifiedName": "api/routers/dynamic.py#prefix",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/dynamic.py",
+      "id": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py%23router:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "router",
+      "qualifiedName": "api/routers/dynamic.py#router",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/dynamic.py",
       "id": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -364,6 +640,33 @@ exports[`Django Ninja router resolver pre-move parity golden > keeps missing and
 exports[`Django Ninja router resolver pre-move parity golden > preserves relative, absolute, and initializer re-export Router routes 1`] = `
 {
   "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fmain.py:api%2Fmain.py%23api:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/main.py",
+      "id": "edge:symbol%3Aapi%252Fmain.py%3Aapi%252Fmain.py%3Afile%3A0:symbol%3Aapi%252Fmain.py%3Aapi%252Fmain.py%2523api%3Avariable%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "api",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fmain.py:api%2Fmain.py:file:0",
+      "targetId": "symbol:api%2Fmain.py:api%2Fmain.py%23api:variable:0",
+    },
     {
       "confidence": 1,
       "evidence": {
@@ -507,6 +810,33 @@ exports[`Django Ninja router resolver pre-move parity golden > preserves relativ
       "resolution": "exact",
       "sourceId": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py:file:0",
       "targetId": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23route%3ADELETE%20%2Fabsolute-reexport%2Fadmin:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23router:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/routers/admin.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fadmin.py%3Aapi%252Frouters%252Fadmin.py%3Afile%3A0:symbol%3Aapi%252Frouters%252Fadmin.py%3Aapi%252Frouters%252Fadmin.py%2523router%3Avariable%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "router",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py:file:0",
+      "targetId": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23router:variable:0",
     },
     {
       "confidence": 1,
@@ -890,6 +1220,33 @@ exports[`Django Ninja router resolver pre-move parity golden > preserves relativ
       "confidence": 1,
       "evidence": {
         "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23router:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/routers/catalog.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fcatalog.py%3Aapi%252Frouters%252Fcatalog.py%3Afile%3A0:symbol%3Aapi%252Frouters%252Fcatalog.py%3Aapi%252Frouters%252Fcatalog.py%2523router%3Avariable%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "router",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py:file:0",
+      "targetId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23router:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
           "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23upsert_order:function:0",
         ],
         "ruleId": "syntax.containment",
@@ -1020,6 +1377,25 @@ exports[`Django Ninja router resolver pre-move parity golden > preserves relativ
     {
       "declarationOrdinal": 0,
       "filePath": "api/main.py",
+      "id": "symbol:api%2Fmain.py:api%2Fmain.py%23api:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "api",
+      "qualifiedName": "api/main.py#api",
+      "range": {
+        "end": {
+          "column": 17,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/main.py",
       "id": "symbol:api%2Fmain.py:api%2Fmain.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -1109,6 +1485,25 @@ exports[`Django Ninja router resolver pre-move parity golden > preserves relativ
         "start": {
           "column": 1,
           "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/admin.py",
+      "id": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23router:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "router",
+      "qualifiedName": "api/routers/admin.py#router",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
         },
       },
     },
@@ -1261,6 +1656,25 @@ exports[`Django Ninja router resolver pre-move parity golden > preserves relativ
         "start": {
           "column": 1,
           "line": 8,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/catalog.py",
+      "id": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23router:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "router",
+      "qualifiedName": "api/routers/catalog.py#router",
+      "range": {
+        "end": {
+          "column": 18,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
         },
       },
     },

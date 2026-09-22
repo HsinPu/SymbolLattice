@@ -7,6 +7,33 @@ exports[`FastAPI router resolver pre-move parity golden > does not cross a missi
       "confidence": 1,
       "evidence": {
         "candidateSymbolIds": [
+          "symbol:api%2Fmain.py:api%2Fmain.py%23app:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/main.py",
+      "id": "edge:symbol%3Aapi%252Fmain.py%3Aapi%252Fmain.py%3Afile%3A0:symbol%3Aapi%252Fmain.py%3Aapi%252Fmain.py%2523app%3Avariable%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "app",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fmain.py:api%2Fmain.py:file:0",
+      "targetId": "symbol:api%2Fmain.py:api%2Fmain.py%23app:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
           "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23health:function:0",
         ],
         "ruleId": "syntax.containment",
@@ -29,6 +56,33 @@ exports[`FastAPI router resolver pre-move parity golden > does not cross a missi
       "resolution": "exact",
       "sourceId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py:file:0",
       "targetId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23health:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23router:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/routers/catalog.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fcatalog.py%3Aapi%252Frouters%252Fcatalog.py%3Afile%3A0:symbol%3Aapi%252Frouters%252Fcatalog.py%3Aapi%252Frouters%252Fcatalog.py%2523router%3Avariable%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "router",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py:file:0",
+      "targetId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23router:variable:0",
     },
   ],
   "files": [
@@ -83,6 +137,25 @@ exports[`FastAPI router resolver pre-move parity golden > does not cross a missi
   ],
   "pendingReferences": [],
   "symbols": [
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/main.py",
+      "id": "symbol:api%2Fmain.py:api%2Fmain.py%23app:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "app",
+      "qualifiedName": "api/main.py#app",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
     {
       "declarationOrdinal": 0,
       "filePath": "api/main.py",
@@ -143,6 +216,25 @@ exports[`FastAPI router resolver pre-move parity golden > does not cross a missi
     {
       "declarationOrdinal": 0,
       "filePath": "api/routers/catalog.py",
+      "id": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23router:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "router",
+      "qualifiedName": "api/routers/catalog.py#router",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/catalog.py",
       "id": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -170,6 +262,33 @@ exports[`FastAPI router resolver pre-move parity golden > keeps missing and unsu
       "confidence": 1,
       "evidence": {
         "candidateSymbolIds": [
+          "symbol:api%2Fmain.py:api%2Fmain.py%23app:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/main.py",
+      "id": "edge:symbol%3Aapi%252Fmain.py%3Aapi%252Fmain.py%3Afile%3A0:symbol%3Aapi%252Fmain.py%3Aapi%252Fmain.py%2523app%3Avariable%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "app",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fmain.py:api%2Fmain.py:file:0",
+      "targetId": "symbol:api%2Fmain.py:api%2Fmain.py%23app:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
           "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py%23dynamic:function:0",
         ],
         "ruleId": "syntax.containment",
@@ -192,6 +311,60 @@ exports[`FastAPI router resolver pre-move parity golden > keeps missing and unsu
       "resolution": "exact",
       "sourceId": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py:file:0",
       "targetId": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py%23dynamic:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py%23prefix:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/routers/dynamic.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fdynamic.py%3Aapi%252Frouters%252Fdynamic.py%3Afile%3A0:symbol%3Aapi%252Frouters%252Fdynamic.py%3Aapi%252Frouters%252Fdynamic.py%2523prefix%3Avariable%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "prefix",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py:file:0",
+      "targetId": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py%23prefix:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py%23router:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/routers/dynamic.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fdynamic.py%3Aapi%252Frouters%252Fdynamic.py%3Afile%3A0:symbol%3Aapi%252Frouters%252Fdynamic.py%3Aapi%252Frouters%252Fdynamic.py%2523router%3Avariable%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "router",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py:file:0",
+      "targetId": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py%23router:variable:0",
     },
   ],
   "files": [
@@ -284,6 +457,25 @@ exports[`FastAPI router resolver pre-move parity golden > keeps missing and unsu
     {
       "declarationOrdinal": 0,
       "filePath": "api/main.py",
+      "id": "symbol:api%2Fmain.py:api%2Fmain.py%23app:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "app",
+      "qualifiedName": "api/main.py#app",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/main.py",
       "id": "symbol:api%2Fmain.py:api%2Fmain.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -341,6 +533,44 @@ exports[`FastAPI router resolver pre-move parity golden > keeps missing and unsu
     {
       "declarationOrdinal": 0,
       "filePath": "api/routers/dynamic.py",
+      "id": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py%23prefix:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "prefix",
+      "qualifiedName": "api/routers/dynamic.py#prefix",
+      "range": {
+        "end": {
+          "column": 20,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/dynamic.py",
+      "id": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py%23router:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "router",
+      "qualifiedName": "api/routers/dynamic.py#router",
+      "range": {
+        "end": {
+          "column": 34,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/dynamic.py",
       "id": "symbol:api%2Frouters%2Fdynamic.py:api%2Frouters%2Fdynamic.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -364,6 +594,33 @@ exports[`FastAPI router resolver pre-move parity golden > keeps missing and unsu
 exports[`FastAPI router resolver pre-move parity golden > preserves direct, project-absolute, and initializer re-export routes 1`] = `
 {
   "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Fmain.py:api%2Fmain.py%23app:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/main.py",
+      "id": "edge:symbol%3Aapi%252Fmain.py%3Aapi%252Fmain.py%3Afile%3A0:symbol%3Aapi%252Fmain.py%3Aapi%252Fmain.py%2523app%3Avariable%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "app",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Fmain.py:api%2Fmain.py:file:0",
+      "targetId": "symbol:api%2Fmain.py:api%2Fmain.py%23app:variable:0",
+    },
     {
       "confidence": 1,
       "evidence": {
@@ -512,6 +769,33 @@ exports[`FastAPI router resolver pre-move parity golden > preserves direct, proj
       "confidence": 1,
       "evidence": {
         "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23router:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/routers/admin.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fadmin.py%3Aapi%252Frouters%252Fadmin.py%3Afile%3A0:symbol%3Aapi%252Frouters%252Fadmin.py%3Aapi%252Frouters%252Fadmin.py%2523router%3Avariable%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "router",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py:file:0",
+      "targetId": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23router:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
           "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23health:function:0",
         ],
         "resolutionPath": [
@@ -652,6 +936,33 @@ exports[`FastAPI router resolver pre-move parity golden > preserves direct, proj
       "sourceId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py:file:0",
       "targetId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23route%3AGET%20%2Frelative-reexport%2Fcatalog%2Fhealth:route:0",
     },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23router:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "api/routers/catalog.py",
+      "id": "edge:symbol%3Aapi%252Frouters%252Fcatalog.py%3Aapi%252Frouters%252Fcatalog.py%3Afile%3A0:symbol%3Aapi%252Frouters%252Fcatalog.py%3Aapi%252Frouters%252Fcatalog.py%2523router%3Avariable%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "router",
+      "resolution": "exact",
+      "sourceId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py:file:0",
+      "targetId": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23router:variable:0",
+    },
   ],
   "files": [
     {
@@ -759,6 +1070,25 @@ exports[`FastAPI router resolver pre-move parity golden > preserves direct, proj
     {
       "declarationOrdinal": 0,
       "filePath": "api/main.py",
+      "id": "symbol:api%2Fmain.py:api%2Fmain.py%23app:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "app",
+      "qualifiedName": "api/main.py#app",
+      "range": {
+        "end": {
+          "column": 16,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/main.py",
       "id": "symbol:api%2Fmain.py:api%2Fmain.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -854,6 +1184,25 @@ exports[`FastAPI router resolver pre-move parity golden > preserves direct, proj
     {
       "declarationOrdinal": 0,
       "filePath": "api/routers/admin.py",
+      "id": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py%23router:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "router",
+      "qualifiedName": "api/routers/admin.py#router",
+      "range": {
+        "end": {
+          "column": 36,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/admin.py",
       "id": "symbol:api%2Frouters%2Fadmin.py:api%2Frouters%2Fadmin.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -924,6 +1273,25 @@ exports[`FastAPI router resolver pre-move parity golden > preserves direct, proj
         "start": {
           "column": 1,
           "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "api/routers/catalog.py",
+      "id": "symbol:api%2Frouters%2Fcatalog.py:api%2Frouters%2Fcatalog.py%23router:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "router",
+      "qualifiedName": "api/routers/catalog.py#router",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
         },
       },
     },

@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/django/django",
+  "commit": "bc833e8883db4a333a6485d91637b78c85e2b13b",
+  "truthMethod": "Manual reading of pinned Django 5.2.1 source before inspecting product query output. Tasks distinguish synchronous middleware construction, non-debug default error-handler selection, and exception middleware dispatch. Required files and cited facts are fixed independently of retrieval. Default error selection assumes DEBUG_PROPAGATE_EXCEPTIONS is false and no custom handler500 exists. Dynamic middleware factories, settings-dependent attributes, resolver callbacks and view dispatch are not assumed to be statically resolved. File judgments are incomplete. The held-out task stays unopened until any implementation change is frozen; later uses are regression validation.",
+  "tasks": [
+    {
+      "id": "synchronous-middleware-exception-wrapping",
+      "split": "development",
+      "query": "How is synchronous request middleware assembled so thrown exceptions become responses?",
+      "requiredFiles": ["django/core/handlers/base.py", "django/core/handlers/exception.py"],
+      "supportingFiles": ["django/utils/module_loading.py"],
+      "irrelevantFiles": [],
+      "evidence": [
+        { "file": "django/core/handlers/base.py", "line": 39, "text": "for middleware_path in reversed(settings.MIDDLEWARE):" },
+        { "file": "django/core/handlers/base.py", "line": 61, "text": "mw_instance = middleware(adapted_handler)" },
+        { "file": "django/core/handlers/base.py", "line": 95, "text": "handler = convert_exception_to_response(mw_instance)" },
+        { "file": "django/core/handlers/base.py", "line": 102, "text": "self._middleware_chain = handler" },
+        { "file": "django/core/handlers/exception.py", "line": 55, "text": "response = get_response(request)" },
+        { "file": "django/core/handlers/exception.py", "line": 57, "text": "response = response_for_exception(request, exc)" }
+      ]
+    },
+    {
+      "id": "default-server-error-view",
+      "split": "development",
+      "query": "How is the default HTTP 500 error view selected when debugging is off and no custom handler is configured?",
+      "requiredFiles": ["django/core/handlers/exception.py", "django/urls/resolvers.py", "django/conf/urls/__init__.py"],
+      "supportingFiles": ["django/views/defaults.py", "django/urls/utils.py", "django/views/debug.py"],
+      "irrelevantFiles": [],
+      "evidence": [
+        { "file": "django/core/handlers/exception.py", "line": 177, "text": "if settings.DEBUG_PROPAGATE_EXCEPTIONS:" },
+        { "file": "django/core/handlers/exception.py", "line": 180, "text": "if settings.DEBUG:" },
+        { "file": "django/core/handlers/exception.py", "line": 184, "text": "callback = resolver.resolve_error_handler(500)" },
+        { "file": "django/urls/resolvers.py", "line": 732, "text": "callback = getattr(self.urlconf_module, \"handler%s\" % view_type, None)" },
+        { "file": "django/urls/resolvers.py", "line": 738, "text": "callback = getattr(urls, \"handler%s\" % view_type)" },
+        { "file": "django/urls/resolvers.py", "line": 739, "text": "return get_callable(callback)" },
+        { "file": "django/conf/urls/__init__.py", "line": 9, "text": "handler500 = defaults.server_error" }
+      ]
+    },
+    {
+      "id": "synchronous-view-exception-middleware",
+      "split": "held-out",
+      "query": "In a synchronous request, how are view exceptions offered to exception middleware before being re-raised?",
+      "requiredFiles": ["django/core/handlers/base.py"],
+      "supportingFiles": ["django/core/handlers/exception.py"],
+      "irrelevantFiles": [],
+      "evidence": [
+        { "file": "django/core/handlers/base.py", "line": 197, "text": "response = wrapped_callback(request, *callback_args, **callback_kwargs)" },
+        { "file": "django/core/handlers/base.py", "line": 199, "text": "response = self.process_exception_by_middleware(e, request)" },
+        { "file": "django/core/handlers/base.py", "line": 201, "text": "raise" },
+        { "file": "django/core/handlers/base.py", "line": 361, "text": "for middleware_method in self._exception_middleware:" },
+        { "file": "django/core/handlers/base.py", "line": 362, "text": "response = middleware_method(request, exception)" },
+        { "file": "django/core/handlers/base.py", "line": 365, "text": "return None" }
+      ]
+    }
+  ]
+}

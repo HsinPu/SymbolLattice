@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/django/django",
+  "commit": "bc833e8883db4a333a6485d91637b78c85e2b13b",
+  "truthMethod": "Manual reading of pinned Django 5.2.1 django/conf/urls/__init__.py before running this exact-reference task. This is an explicitly known-symbol lookup, not natural-language discovery or a held-out task. The assignment source proves the written binding only; its runtime value, imported alias target and execution path are not claimed. File judgments are incomplete.",
+  "tasks": [
+    {
+      "id": "known-default-server-error-binding",
+      "split": "development",
+      "query": "django/conf/urls/__init__.py#handler500",
+      "requiredFiles": ["django/conf/urls/__init__.py"],
+      "supportingFiles": [],
+      "irrelevantFiles": [],
+      "evidence": [
+        { "file": "django/conf/urls/__init__.py", "line": 9, "text": "handler500 = defaults.server_error" }
+      ]
+    }
+  ]
+}

@@ -1151,6 +1151,33 @@ exports[`Python resolver module-move parity > preserves rebound target nonclaims
       "sourceId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py:file:0",
       "targetId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:0",
     },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "pkg/helpers.py",
+      "id": "edge:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%3Afile%3A0:symbol%3Apkg%252Fhelpers.py%3Apkg%252Fhelpers.py%2523helper%3Avariable%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "helper",
+      "resolution": "exact",
+      "sourceId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py:file:0",
+      "targetId": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:variable:0",
+    },
   ],
   "files": [
     {
@@ -1277,6 +1304,25 @@ exports[`Python resolver module-move parity > preserves rebound target nonclaims
         "start": {
           "column": 1,
           "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "pkg/helpers.py",
+      "id": "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "helper",
+      "qualifiedName": "pkg/helpers.py#helper",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
         },
       },
     },

@@ -7,6 +7,60 @@ exports[`Sanic Blueprint resolver pre-move parity golden > does not cross a miss
       "confidence": 1,
       "evidence": {
         "candidateSymbolIds": [
+          "symbol:app%2Fmain.py:app%2Fmain.py%23app:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/main.py",
+      "id": "edge:symbol%3Aapp%252Fmain.py%3Aapp%252Fmain.py%3Afile%3A0:symbol%3Aapp%252Fmain.py%3Aapp%252Fmain.py%2523app%3Avariable%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "app",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Fmain.py:app%2Fmain.py:file:0",
+      "targetId": "symbol:app%2Fmain.py:app%2Fmain.py%23app:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23catalog:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/catalog.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fcatalog.py%3Aapp%252Froutes%252Fcatalog.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fcatalog.py%3Aapp%252Froutes%252Fcatalog.py%2523catalog%3Avariable%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "catalog",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23catalog:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
           "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23items:function:0",
         ],
         "ruleId": "syntax.containment",
@@ -86,6 +140,25 @@ exports[`Sanic Blueprint resolver pre-move parity golden > does not cross a miss
     {
       "declarationOrdinal": 0,
       "filePath": "app/main.py",
+      "id": "symbol:app%2Fmain.py:app%2Fmain.py%23app:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "app",
+      "qualifiedName": "app/main.py#app",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/main.py",
       "id": "symbol:app%2Fmain.py:app%2Fmain.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -118,6 +191,25 @@ exports[`Sanic Blueprint resolver pre-move parity golden > does not cross a miss
         "start": {
           "column": 1,
           "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/catalog.py",
+      "id": "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23catalog:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "catalog",
+      "qualifiedName": "app/routes/catalog.py#catalog",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
         },
       },
     },
@@ -166,6 +258,87 @@ exports[`Sanic Blueprint resolver pre-move parity golden > does not cross a miss
 exports[`Sanic Blueprint resolver pre-move parity golden > keeps distinct repeated named group mounts exact 1`] = `
 {
   "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Fmain.py:app%2Fmain.py%23app:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/main.py",
+      "id": "edge:symbol%3Aapp%252Fmain.py%3Aapp%252Fmain.py%3Afile%3A0:symbol%3Aapp%252Fmain.py%3Aapp%252Fmain.py%2523app%3Avariable%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "app",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Fmain.py:app%2Fmain.py:file:0",
+      "targetId": "symbol:app%2Fmain.py:app%2Fmain.py%23app:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fadmin.py:app%2Froutes%2Fadmin.py%23admin:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/admin.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fadmin.py%3Aapp%252Froutes%252Fadmin.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fadmin.py%3Aapp%252Froutes%252Fadmin.py%2523admin%3Avariable%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 80,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "admin",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fadmin.py:app%2Froutes%2Fadmin.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fadmin.py:app%2Froutes%2Fadmin.py%23admin:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23public:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/public.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fpublic.py%3Aapp%252Froutes%252Fpublic.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fpublic.py%3Aapp%252Froutes%252Fpublic.py%2523public%3Avariable%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 83,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "public",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23public:variable:0",
+    },
     {
       "confidence": 1,
       "evidence": {
@@ -311,6 +484,33 @@ exports[`Sanic Blueprint resolver pre-move parity golden > keeps distinct repeat
       "sourceId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py:file:0",
       "targetId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23route%3AGET%20%2Fv2%2Fadmin%2Fusers%2Fhealth:route:0",
     },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23users:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/users.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%2523users%3Avariable%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "users",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23users:variable:0",
+    },
   ],
   "files": [
     {
@@ -434,6 +634,25 @@ exports[`Sanic Blueprint resolver pre-move parity golden > keeps distinct repeat
     {
       "declarationOrdinal": 0,
       "filePath": "app/main.py",
+      "id": "symbol:app%2Fmain.py:app%2Fmain.py%23app:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "app",
+      "qualifiedName": "app/main.py#app",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/main.py",
       "id": "symbol:app%2Fmain.py:app%2Fmain.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -472,6 +691,25 @@ exports[`Sanic Blueprint resolver pre-move parity golden > keeps distinct repeat
     {
       "declarationOrdinal": 0,
       "filePath": "app/routes/admin.py",
+      "id": "symbol:app%2Froutes%2Fadmin.py:app%2Froutes%2Fadmin.py%23admin:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "admin",
+      "qualifiedName": "app/routes/admin.py#admin",
+      "range": {
+        "end": {
+          "column": 80,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/admin.py",
       "id": "symbol:app%2Froutes%2Fadmin.py:app%2Froutes%2Fadmin.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -485,6 +723,25 @@ exports[`Sanic Blueprint resolver pre-move parity golden > keeps distinct repeat
         "start": {
           "column": 1,
           "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/public.py",
+      "id": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23public:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "public",
+      "qualifiedName": "app/routes/public.py#public",
+      "range": {
+        "end": {
+          "column": 83,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
         },
       },
     },
@@ -567,6 +824,25 @@ exports[`Sanic Blueprint resolver pre-move parity golden > keeps distinct repeat
     {
       "declarationOrdinal": 0,
       "filePath": "app/routes/users.py",
+      "id": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23users:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "users",
+      "qualifiedName": "app/routes/users.py#users",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/users.py",
       "id": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -590,6 +866,33 @@ exports[`Sanic Blueprint resolver pre-move parity golden > keeps distinct repeat
 exports[`Sanic Blueprint resolver pre-move parity golden > preserves re-exported nested Blueprint groups and literal route prefixes 1`] = `
 {
   "edges": [
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Fmain.py:app%2Fmain.py%23app:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/main.py",
+      "id": "edge:symbol%3Aapp%252Fmain.py%3Aapp%252Fmain.py%3Afile%3A0:symbol%3Aapp%252Fmain.py%3Aapp%252Fmain.py%2523app%3Avariable%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "app",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Fmain.py:app%2Fmain.py:file:0",
+      "targetId": "symbol:app%2Fmain.py:app%2Fmain.py%23app:variable:0",
+    },
     {
       "confidence": 1,
       "evidence": {
@@ -621,6 +924,60 @@ exports[`Sanic Blueprint resolver pre-move parity golden > preserves re-exported
       "resolution": "exact",
       "sourceId": "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py%23route%3AGET%20%2Fv2%2Fapi%2Freports%2Fsummary:route:0",
       "targetId": "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py%23summary:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py%23api:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/api.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fapi.py%3Aapp%252Froutes%252Fapi.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fapi.py%3Aapp%252Froutes%252Fapi.py%2523api%3Avariable%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 81,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "api",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py%23api:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py%23reports:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/api.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fapi.py%3Aapp%252Froutes%252Fapi.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fapi.py%3Aapp%252Froutes%252Fapi.py%2523reports%3Avariable%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "reports",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py%23reports:variable:0",
     },
     {
       "confidence": 1,
@@ -713,6 +1070,33 @@ exports[`Sanic Blueprint resolver pre-move parity golden > preserves re-exported
       "confidence": 1,
       "evidence": {
         "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23catalog:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/catalog.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fcatalog.py%3Aapp%252Froutes%252Fcatalog.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fcatalog.py%3Aapp%252Froutes%252Fcatalog.py%2523catalog%3Avariable%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "catalog",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23catalog:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
           "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23items:function:0",
         ],
         "ruleId": "syntax.containment",
@@ -767,6 +1151,33 @@ exports[`Sanic Blueprint resolver pre-move parity golden > preserves re-exported
       "confidence": 1,
       "evidence": {
         "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fcontent.py:app%2Froutes%2Fcontent.py%23content:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/content.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fcontent.py%3Aapp%252Froutes%252Fcontent.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fcontent.py%3Aapp%252Froutes%252Fcontent.py%2523content%3Avariable%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 63,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "content",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fcontent.py:app%2Froutes%2Fcontent.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fcontent.py:app%2Froutes%2Fcontent.py%23content:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
           "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23status:function:0",
         ],
         "resolutionPath": [
@@ -794,6 +1205,33 @@ exports[`Sanic Blueprint resolver pre-move parity golden > preserves re-exported
       "resolution": "exact",
       "sourceId": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23route%3AGET%20%2Fv1%2Fpublic%2Fstatus:route:0",
       "targetId": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23status:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23public:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/public.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fpublic.py%3Aapp%252Froutes%252Fpublic.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fpublic.py%3Aapp%252Froutes%252Fpublic.py%2523public%3Avariable%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "public",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23public:variable:0",
     },
     {
       "confidence": 1,
@@ -936,6 +1374,33 @@ exports[`Sanic Blueprint resolver pre-move parity golden > preserves re-exported
       "resolution": "exact",
       "sourceId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py:file:0",
       "targetId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23route%3AGET%20%2Fv2%2Fapi%2Fcontent%2Fusers%2Fhealth:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23users:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/users.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%2523users%3Avariable%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "users",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23users:variable:0",
     },
   ],
   "files": [
@@ -1092,6 +1557,25 @@ exports[`Sanic Blueprint resolver pre-move parity golden > preserves re-exported
     {
       "declarationOrdinal": 0,
       "filePath": "app/main.py",
+      "id": "symbol:app%2Fmain.py:app%2Fmain.py%23app:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "app",
+      "qualifiedName": "app/main.py#app",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/main.py",
       "id": "symbol:app%2Fmain.py:app%2Fmain.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -1124,6 +1608,44 @@ exports[`Sanic Blueprint resolver pre-move parity golden > preserves re-exported
         "start": {
           "column": 1,
           "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/api.py",
+      "id": "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py%23api:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "api",
+      "qualifiedName": "app/routes/api.py#api",
+      "range": {
+        "end": {
+          "column": 81,
+          "line": 5,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/api.py",
+      "id": "symbol:app%2Froutes%2Fapi.py:app%2Froutes%2Fapi.py%23reports:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "reports",
+      "qualifiedName": "app/routes/api.py#reports",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
         },
       },
     },
@@ -1187,6 +1709,25 @@ exports[`Sanic Blueprint resolver pre-move parity golden > preserves re-exported
     {
       "declarationOrdinal": 0,
       "filePath": "app/routes/catalog.py",
+      "id": "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23catalog:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "catalog",
+      "qualifiedName": "app/routes/catalog.py#catalog",
+      "range": {
+        "end": {
+          "column": 51,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/catalog.py",
       "id": "symbol:app%2Froutes%2Fcatalog.py:app%2Froutes%2Fcatalog.py%23items:function:0",
       "isExported": false,
       "kind": "function",
@@ -1244,6 +1785,25 @@ exports[`Sanic Blueprint resolver pre-move parity golden > preserves re-exported
     {
       "declarationOrdinal": 0,
       "filePath": "app/routes/content.py",
+      "id": "symbol:app%2Froutes%2Fcontent.py:app%2Froutes%2Fcontent.py%23content:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "content",
+      "qualifiedName": "app/routes/content.py#content",
+      "range": {
+        "end": {
+          "column": 63,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/content.py",
       "id": "symbol:app%2Froutes%2Fcontent.py:app%2Froutes%2Fcontent.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -1257,6 +1817,25 @@ exports[`Sanic Blueprint resolver pre-move parity golden > preserves re-exported
         "start": {
           "column": 1,
           "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/public.py",
+      "id": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23public:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "public",
+      "qualifiedName": "app/routes/public.py#public",
+      "range": {
+        "end": {
+          "column": 48,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
         },
       },
     },
@@ -1358,6 +1937,25 @@ exports[`Sanic Blueprint resolver pre-move parity golden > preserves re-exported
     {
       "declarationOrdinal": 0,
       "filePath": "app/routes/users.py",
+      "id": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23users:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "users",
+      "qualifiedName": "app/routes/users.py#users",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/users.py",
       "id": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -1385,6 +1983,87 @@ exports[`Sanic Blueprint resolver pre-move parity golden > rejects repeated grou
       "confidence": 1,
       "evidence": {
         "candidateSymbolIds": [
+          "symbol:app%2Fmain.py:app%2Fmain.py%23app:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/main.py",
+      "id": "edge:symbol%3Aapp%252Fmain.py%3Aapp%252Fmain.py%3Afile%3A0:symbol%3Aapp%252Fmain.py%3Aapp%252Fmain.py%2523app%3Avariable%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "app",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Fmain.py:app%2Fmain.py:file:0",
+      "targetId": "symbol:app%2Fmain.py:app%2Fmain.py%23app:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fadmin.py:app%2Froutes%2Fadmin.py%23admin:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/admin.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fadmin.py%3Aapp%252Froutes%252Fadmin.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fadmin.py%3Aapp%252Froutes%252Fadmin.py%2523admin%3Avariable%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 59,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "admin",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fadmin.py:app%2Froutes%2Fadmin.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fadmin.py:app%2Froutes%2Fadmin.py%23admin:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23public:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/public.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fpublic.py%3Aapp%252Froutes%252Fpublic.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fpublic.py%3Aapp%252Froutes%252Fpublic.py%2523public%3Avariable%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 61,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "public",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23public:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
           "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23health:function:0",
         ],
         "ruleId": "syntax.containment",
@@ -1407,6 +2086,33 @@ exports[`Sanic Blueprint resolver pre-move parity golden > rejects repeated grou
       "resolution": "exact",
       "sourceId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py:file:0",
       "targetId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23health:function:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23users:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "app/routes/users.py",
+      "id": "edge:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%3Afile%3A0:symbol%3Aapp%252Froutes%252Fusers.py%3Aapp%252Froutes%252Fusers.py%2523users%3Avariable%3A0:contains:2:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
+        },
+      },
+      "referenceName": "users",
+      "resolution": "exact",
+      "sourceId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py:file:0",
+      "targetId": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23users:variable:0",
     },
   ],
   "files": [
@@ -1531,6 +2237,25 @@ exports[`Sanic Blueprint resolver pre-move parity golden > rejects repeated grou
     {
       "declarationOrdinal": 0,
       "filePath": "app/main.py",
+      "id": "symbol:app%2Fmain.py:app%2Fmain.py%23app:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "app",
+      "qualifiedName": "app/main.py#app",
+      "range": {
+        "end": {
+          "column": 27,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/main.py",
       "id": "symbol:app%2Fmain.py:app%2Fmain.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -1569,6 +2294,25 @@ exports[`Sanic Blueprint resolver pre-move parity golden > rejects repeated grou
     {
       "declarationOrdinal": 0,
       "filePath": "app/routes/admin.py",
+      "id": "symbol:app%2Froutes%2Fadmin.py:app%2Froutes%2Fadmin.py%23admin:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "admin",
+      "qualifiedName": "app/routes/admin.py#admin",
+      "range": {
+        "end": {
+          "column": 59,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/admin.py",
       "id": "symbol:app%2Froutes%2Fadmin.py:app%2Froutes%2Fadmin.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -1582,6 +2326,25 @@ exports[`Sanic Blueprint resolver pre-move parity golden > rejects repeated grou
         "start": {
           "column": 1,
           "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/public.py",
+      "id": "symbol:app%2Froutes%2Fpublic.py:app%2Froutes%2Fpublic.py%23public:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "public",
+      "qualifiedName": "app/routes/public.py#public",
+      "range": {
+        "end": {
+          "column": 61,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
         },
       },
     },
@@ -1620,6 +2383,25 @@ exports[`Sanic Blueprint resolver pre-move parity golden > rejects repeated grou
         "start": {
           "column": 1,
           "line": 5,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "app/routes/users.py",
+      "id": "symbol:app%2Froutes%2Fusers.py:app%2Froutes%2Fusers.py%23users:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "users",
+      "qualifiedName": "app/routes/users.py#users",
+      "range": {
+        "end": {
+          "column": 45,
+          "line": 2,
+        },
+        "start": {
+          "column": 1,
+          "line": 2,
         },
       },
     },

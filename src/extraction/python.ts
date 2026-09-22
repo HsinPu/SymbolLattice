@@ -4995,11 +4995,13 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       return null;
     }
     const kind: SymbolKind =
-      node.name === "ClassDefinition"
-        ? "class"
-        : owner.kind === "class" || isClassScopedFunction(node)
-          ? "method"
-          : "function";
+      node.name === "AssignStatement"
+        ? "variable"
+        : node.name === "ClassDefinition"
+          ? "class"
+          : owner.kind === "class" || isClassScopedFunction(node)
+            ? "method"
+            : "function";
     const qualifiedName =
       owner.kind === "file" ? `${input.filePath}#${name}` : `${owner.qualifiedName}.${name}`;
     const identity = `${qualifiedName}\u0000${kind}`;
@@ -5821,8 +5823,21 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     }
   } else if (recoveryCompatibility?.mode === "full") {
     const topLevelNodes = directChildren(root);
+    const cleanModule = !hasSyntaxError(root);
     for (const node of topLevelNodes) {
       visit(node, fileNode);
+      // Record the written binding, not its runtime value or an alias relation.
+      // Conditional, destructuring, chained, attribute and annotation-only
+      // assignments deliberately remain outside this direct-declaration scope.
+      if (cleanModule && node.name === "AssignStatement") {
+        const children = directChildren(node).filter((child) => child.name !== "Comment");
+        const operatorIndex = children[1]?.name === "TypeDef" ? 2 : 1;
+        if (children[0]?.name === "VariableName" &&
+            children[operatorIndex]?.name === "AssignOp" &&
+            children.length === operatorIndex + 2) {
+          addDeclaration(node, fileNode);
+        }
+      }
     }
     const pythonRelativeNamedImports = hasPythonWildcardImport(input, topLevelNodes)
       ? []

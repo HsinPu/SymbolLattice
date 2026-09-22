@@ -84,6 +84,60 @@ exports[`Django URLconf resolver pre-move parity golden > does not cross a missi
       "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
       "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fitems%2F:route:0",
     },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23urlpatterns:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%3Afile%3A0:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523urlpatterns%3Avariable%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "urlpatterns",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
+      "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23urlpatterns:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Furls.py:project%2Furls.py%23urlpatterns:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/urls.py",
+      "id": "edge:symbol%3Aproject%252Furls.py%3Aproject%252Furls.py%3Afile%3A0:symbol%3Aproject%252Furls.py%3Aproject%252Furls.py%2523urlpatterns%3Avariable%3A0:contains:4:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
+        },
+      },
+      "referenceName": "urlpatterns",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Furls.py:project%2Furls.py:file:0",
+      "targetId": "symbol:project%2Furls.py:project%2Furls.py%23urlpatterns:variable:0",
+    },
   ],
   "files": [
     {
@@ -162,6 +216,25 @@ exports[`Django URLconf resolver pre-move parity golden > does not cross a missi
     {
       "declarationOrdinal": 0,
       "filePath": "project/catalog/urls.py",
+      "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23urlpatterns:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "urlpatterns",
+      "qualifiedName": "project/catalog/urls.py#urlpatterns",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/urls.py",
       "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -175,6 +248,25 @@ exports[`Django URLconf resolver pre-move parity golden > does not cross a missi
         "start": {
           "column": 1,
           "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/urls.py",
+      "id": "symbol:project%2Furls.py:project%2Furls.py%23urlpatterns:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "urlpatterns",
+      "qualifiedName": "project/urls.py#urlpatterns",
+      "range": {
+        "end": {
+          "column": 52,
+          "line": 4,
+        },
+        "start": {
+          "column": 1,
+          "line": 4,
         },
       },
     },
@@ -284,6 +376,87 @@ exports[`Django URLconf resolver pre-move parity golden > keeps dynamic, malform
       "resolution": "exact",
       "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
       "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fitems%2F:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23urlpatterns:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%3Afile%3A0:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523urlpatterns%3Avariable%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "urlpatterns",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
+      "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23urlpatterns:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Furls.py:project%2Furls.py%23prefix:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/urls.py",
+      "id": "edge:symbol%3Aproject%252Furls.py%3Aproject%252Furls.py%3Afile%3A0:symbol%3Aproject%252Furls.py%3Aproject%252Furls.py%2523prefix%3Avariable%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "prefix",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Furls.py:project%2Furls.py:file:0",
+      "targetId": "symbol:project%2Furls.py:project%2Furls.py%23prefix:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Furls.py:project%2Furls.py%23urlpatterns:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/urls.py",
+      "id": "edge:symbol%3Aproject%252Furls.py%3Aproject%252Furls.py%3Afile%3A0:symbol%3Aproject%252Furls.py%3Aproject%252Furls.py%2523urlpatterns%3Avariable%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "urlpatterns",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Furls.py:project%2Furls.py:file:0",
+      "targetId": "symbol:project%2Furls.py:project%2Furls.py%23urlpatterns:variable:0",
     },
   ],
   "files": [
@@ -433,6 +606,25 @@ exports[`Django URLconf resolver pre-move parity golden > keeps dynamic, malform
     {
       "declarationOrdinal": 0,
       "filePath": "project/catalog/urls.py",
+      "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23urlpatterns:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "urlpatterns",
+      "qualifiedName": "project/catalog/urls.py#urlpatterns",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/urls.py",
       "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -446,6 +638,44 @@ exports[`Django URLconf resolver pre-move parity golden > keeps dynamic, malform
         "start": {
           "column": 1,
           "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/urls.py",
+      "id": "symbol:project%2Furls.py:project%2Furls.py%23prefix:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "prefix",
+      "qualifiedName": "project/urls.py#prefix",
+      "range": {
+        "end": {
+          "column": 21,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/urls.py",
+      "id": "symbol:project%2Furls.py:project%2Furls.py%23urlpatterns:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "urlpatterns",
+      "qualifiedName": "project/urls.py#urlpatterns",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
         },
       },
     },
@@ -676,6 +906,33 @@ exports[`Django URLconf resolver pre-move parity golden > preserves relative imp
       "confidence": 1,
       "evidence": {
         "candidateSymbolIds": [
+          "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23urlpatterns:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%3Afile%3A0:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523urlpatterns%3Avariable%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "urlpatterns",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
+      "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23urlpatterns:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
           "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py%23health:function:0",
         ],
         "ruleId": "framework.django.direct-urlpatterns.re-path.local-function",
@@ -811,6 +1068,60 @@ exports[`Django URLconf resolver pre-move parity golden > preserves relative imp
       "resolution": "exact",
       "sourceId": "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py:file:0",
       "targetId": "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py%23route%3AALL%20%2Fv1%2Fhealth%2F:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py%23urlpatterns:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/routes/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Froutes%252Fcatalog%252Furls.py%3Aproject%252Froutes%252Fcatalog%252Furls.py%3Afile%3A0:symbol%3Aproject%252Froutes%252Fcatalog%252Furls.py%3Aproject%252Froutes%252Fcatalog%252Furls.py%2523urlpatterns%3Avariable%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 46,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "urlpatterns",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py:file:0",
+      "targetId": "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py%23urlpatterns:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Furls.py:project%2Furls.py%23urlpatterns:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/urls.py",
+      "id": "edge:symbol%3Aproject%252Furls.py%3Aproject%252Furls.py%3Afile%3A0:symbol%3Aproject%252Furls.py%3Aproject%252Furls.py%2523urlpatterns%3Avariable%3A0:contains:5:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
+        },
+      },
+      "referenceName": "urlpatterns",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Furls.py:project%2Furls.py:file:0",
+      "targetId": "symbol:project%2Furls.py:project%2Furls.py%23urlpatterns:variable:0",
     },
   ],
   "files": [
@@ -1046,6 +1357,25 @@ exports[`Django URLconf resolver pre-move parity golden > preserves relative imp
     {
       "declarationOrdinal": 0,
       "filePath": "project/catalog/urls.py",
+      "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23urlpatterns:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "urlpatterns",
+      "qualifiedName": "project/catalog/urls.py#urlpatterns",
+      "range": {
+        "end": {
+          "column": 38,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/urls.py",
       "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -1160,6 +1490,25 @@ exports[`Django URLconf resolver pre-move parity golden > preserves relative imp
     {
       "declarationOrdinal": 0,
       "filePath": "project/routes/catalog/urls.py",
+      "id": "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py%23urlpatterns:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "urlpatterns",
+      "qualifiedName": "project/routes/catalog/urls.py#urlpatterns",
+      "range": {
+        "end": {
+          "column": 46,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/routes/catalog/urls.py",
       "id": "symbol:project%2Froutes%2Fcatalog%2Furls.py:project%2Froutes%2Fcatalog%2Furls.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -1173,6 +1522,25 @@ exports[`Django URLconf resolver pre-move parity golden > preserves relative imp
         "start": {
           "column": 1,
           "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/urls.py",
+      "id": "symbol:project%2Furls.py:project%2Furls.py%23urlpatterns:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "urlpatterns",
+      "qualifiedName": "project/urls.py#urlpatterns",
+      "range": {
+        "end": {
+          "column": 2,
+          "line": 9,
+        },
+        "start": {
+          "column": 1,
+          "line": 5,
         },
       },
     },
@@ -1282,6 +1650,60 @@ exports[`Django URLconf resolver pre-move parity golden > rejects a child URL pa
       "resolution": "exact",
       "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
       "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23route%3AALL%20%2Fitems%2F%2F:route:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23urlpatterns:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/catalog/urls.py",
+      "id": "edge:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%3Afile%3A0:symbol%3Aproject%252Fcatalog%252Furls.py%3Aproject%252Fcatalog%252Furls.py%2523urlpatterns%3Avariable%3A0:contains:6:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 39,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+      "referenceName": "urlpatterns",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
+      "targetId": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23urlpatterns:variable:0",
+    },
+    {
+      "confidence": 1,
+      "evidence": {
+        "candidateSymbolIds": [
+          "symbol:project%2Furls.py:project%2Furls.py%23urlpatterns:variable:0",
+        ],
+        "ruleId": "syntax.containment",
+        "stage": "syntax",
+      },
+      "filePath": "project/urls.py",
+      "id": "edge:symbol%3Aproject%252Furls.py%3Aproject%252Furls.py%3Afile%3A0:symbol%3Aproject%252Furls.py%3Aproject%252Furls.py%2523urlpatterns%3Avariable%3A0:contains:3:1",
+      "kind": "contains",
+      "range": {
+        "end": {
+          "column": 62,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
+        },
+      },
+      "referenceName": "urlpatterns",
+      "resolution": "exact",
+      "sourceId": "symbol:project%2Furls.py:project%2Furls.py:file:0",
+      "targetId": "symbol:project%2Furls.py:project%2Furls.py%23urlpatterns:variable:0",
     },
   ],
   "files": [
@@ -1431,6 +1853,25 @@ exports[`Django URLconf resolver pre-move parity golden > rejects a child URL pa
     {
       "declarationOrdinal": 0,
       "filePath": "project/catalog/urls.py",
+      "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py%23urlpatterns:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "urlpatterns",
+      "qualifiedName": "project/catalog/urls.py#urlpatterns",
+      "range": {
+        "end": {
+          "column": 39,
+          "line": 6,
+        },
+        "start": {
+          "column": 1,
+          "line": 6,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/catalog/urls.py",
       "id": "symbol:project%2Fcatalog%2Furls.py:project%2Fcatalog%2Furls.py:file:0",
       "isExported": true,
       "kind": "file",
@@ -1444,6 +1885,25 @@ exports[`Django URLconf resolver pre-move parity golden > rejects a child URL pa
         "start": {
           "column": 1,
           "line": 1,
+        },
+      },
+    },
+    {
+      "declarationOrdinal": 0,
+      "filePath": "project/urls.py",
+      "id": "symbol:project%2Furls.py:project%2Furls.py%23urlpatterns:variable:0",
+      "isExported": false,
+      "kind": "variable",
+      "name": "urlpatterns",
+      "qualifiedName": "project/urls.py#urlpatterns",
+      "range": {
+        "end": {
+          "column": 62,
+          "line": 3,
+        },
+        "start": {
+          "column": 1,
+          "line": 3,
         },
       },
     },

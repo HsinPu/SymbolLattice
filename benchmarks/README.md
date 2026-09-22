@@ -17,6 +17,7 @@ These tools generate or validate large-project evidence outside the published np
 | `javascript/` | `assigned-callables.mjs` | automatic anonymous-assignment/ownership scorer contract; manual pinned-corpus execution |
 | `javascript/` | `commonjs-call-evidence.mjs`, `fastify-commonjs-truth.json` | automatic source-receipt verifier contract; manual pinned-corpus execution |
 | `python/` | `correctness-oracle.mjs`, `PythonOracle.py` | manual CPython stdlib AST oracle |
+| `python/` | `module-bindings.mjs`, `ModuleBindingOracle.py` | manual CPython AST declaration/source-range audit; optional baseline fact comparison |
 | `sfc/` | `correctness-oracle.mjs` | manual Vue/Svelte/Astro component relation oracle |
 | `shell/` | `correctness-oracle.mjs` | manual mvdan ABI v2 direct-call oracle |
 | `solidity/` | `correctness-oracle.mjs` | automatic solc AST private fixed-arity call oracle |
@@ -38,6 +39,42 @@ These tools generate or validate large-project evidence outside the published np
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## Python module binding audit
+
+`python/module-bindings.mjs` checks direct module assignments against independent CPython AST truth from every tracked `.py` file in a clean checkout. The scope is one ASCII name assigned a value, optionally annotated. Conditional, chained, destructuring, attribute and annotation-only writes are excluded. It checks exact names and source ranges; declarations do not establish runtime values, export visibility or alias targets. CPython-rejected files and bindings in Lezer-rejected files are reported separately from the eligible precision/recall denominator. An optional previous product directory verifies that existing facts remain unchanged after removing the newly added variables and their containment edges.
+
+```sh
+node benchmarks/python/module-bindings.mjs /external/django /path/to/python /external/evidence/python-bindings.json /external/baseline-product
+```
+
+The output records the repository URL, commit, Python/Node/product versions, command, TP/FP/FN and unsupported counts. Its sibling `.truth.json` preserves CPython truth and source hashes. This declaration audit does not prove natural-language retrieval quality; use `mcp/django-request-errors-tasks.json` for separately defined task and source-evidence checks.
+
+### v0.524.0 declaration evidence
+
+Django 5.2.1 (`https://github.com/django/django.git`, commit `bc833e8883db4a333a6485d91637b78c85e2b13b`) was checked with Node 24.19.0 and CPython 3.12.4. The audit enumerated all 2,818 tracked Python files: one was rejected by CPython; 180 eligible assignments were in files rejected by Lezer and remain unsupported. Among the remaining assignments, exact declaration-name/range scoring yielded TP 2,483, FP 0 and FN 0 (precision/recall 100% within the parser-accepted scope). Including the unsupported subset, 2,483 of 2,663 known direct assignments were recovered (93.2%). This does not measure general Python support or task retrieval recall.
+
+Across the 2,817 CPython-accepted files, all prior extraction facts matched v0.523.19 after removing only the new variables and their containment edges. Separately, the six Python/framework parity snapshot files retained all prior facts: 18 snapshots added 54 variables and containment edges; all 22 associated tests passed after those additions were verified. The new lifecycle test starts with extractor v425 facts, checks staleness, syncs to v426, and confirms exact variable lookup returns its assignment source. The extractor version change invalidates old raw facts; `sync` performs re-extraction.
+
+Reproduction uses `python/module-bindings.mjs` as above with a v0.523.19 baseline product. Local reports and the baseline build are under the external `SymbolLattice-evidence-052320` workspace (`python-bindings-final.json`, its `.truth.json`, and `snapshot-audit.json`); these generated artifacts are not committed. The snapshot audit compares complete old/new snapshot objects after removing only new variable symbols and exact containment edges, rather than accepting snapshots merely because the test updater generated them.
+
+The 20 existing Fastify/NestJS/Django task queries retained every previously recovered required file and source fact: required-file coverage remained 30/33 and cited-source coverage 74/81. Source verification checked 253 excerpts and 392 lexical matches against pinned files. The Django default HTTP 500 discovery task still returned 0/3 required files and 0/7 cited facts; the two other Django tasks retained all required evidence. The independent known-symbol task in `mcp/django-module-bindings-tasks.json` returned `django/conf/urls/__init__.py#handler500` exactly, with the line 9 assignment verified (1/1 required file and 1/1 source fact). Its three-process median was 6,562 ms. These are separate exact-lookup and natural-language results; overall discovery is still incomplete.
+
+Three fresh CLI processes per task/build included startup, strict freshness checks and JSON serialization on Windows/Node 24.19.0. All v0.523.19 runs preceded index synchronization and v0.524.0 runs, so cache/order effects are not isolated. No tests or other indexing ran alongside these timings. The observed per-task median changes were:
+
+| Corpus | Tasks | v0.524.0 minus v0.523.19 |
+| --- | ---: | ---: |
+| Fastify, `70b14e92c0b55e8201f5530ba2e6bab4e928c784` | 10 | −287 to −73 ms |
+| NestJS, `35c3ded6dbf3f23f917ae88d0ed966932788cae6` | 7 | −474 to +68 ms |
+| Django, commit above | 3 | +3 to +133 ms |
+
+This is a small-sample regression check, not evidence of an algorithmic speedup or a latency SLO. Django natural-language queries still take about 8.0–8.5 seconds. Agent completion time and semantic graph precision were not measured; incomplete file judgments do not establish overall precision.
+
+Django's version-upgrade sync reported 87.590 seconds, retaining 3,366 files and 2,071 pending references while adding exactly 2,483 symbols and containment edges (58,495 symbols and 65,947 edges total). This measures re-extraction after an extractor-version change, not first indexing or normal unchanged-source sync. The resulting generation was `generation:12d28925-1182-4eed-9efa-96ca0a6ab1c1`. The verified v0.524.0 build fingerprint was `2a43e6119fe95eabe957c103a72d45bfce9e2334eab1991788377ed6d54c366e` (728 files, 11,085,662 bytes).
+
+Run `mcp/task-retrieval.mjs` with the fixed manifests, `--repetitions 3`, and the pinned indexed projects to reproduce the task checks. External reports are `*-052400-before.json`, `*-052400-after.json`, `retrieval-comparison-052400.json`, `sync-*-052400.json`, and `django-module-bindings-final.json`. The Django held-out task was first evaluated only after the implementation was frozen; subsequent uses are regression cases.
+
+Release checks passed: `npm run check`, `npm run build`, `npm run verify:language-depth`, and the full suite (3,142 passed, 4 skipped; 304 test files passed, one skipped). The minor version reflects a new queryable Python declaration capability; existing public interfaces remain compatible.
 
 ## Task retrieval checks
 
