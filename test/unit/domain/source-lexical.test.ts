@@ -9,6 +9,39 @@ const callable = (start: number, end: number, kind: SymbolNode["kind"] = "functi
 });
 
 describe("callable source lexical evidence", () => {
+  it("preserves per-declaration frequencies and first occurrence receipts for repeated tokens", () => {
+    const source = "payment refund payment\n  refund payment refund\n}";
+    const second = { ...callable(2, 3), id: "second", filePath: "src/second.ts" };
+    const result = matchCallableSource(source, [callable(1, 3), second], [["payment"], ["refund"]]);
+    expect(result.documents.map(({ tokens, frequencies }) => ({ tokens, frequencies }))).toEqual([
+      { tokens: 6, frequencies: [3, 3] }, { tokens: 3, frequencies: [1, 2] }
+    ]);
+    expect(result.documents[1]!.matches).toEqual([
+      { term: "payment", token: "payment", filePath: "src/second.ts",
+        range: { start: { line: 2, column: 10 }, end: { line: 2, column: 17 } } },
+      { term: "refund", token: "refund", filePath: "src/second.ts",
+        range: { start: { line: 2, column: 3 }, end: { line: 2, column: 9 } } }
+    ]);
+    const changedQuery = matchCallableSource(source, [second], [["refund"], ["absent"]]);
+    expect(changedQuery.documents[0]!.frequencies).toEqual([2, 0]);
+    expect(changedQuery.candidates).toEqual([]);
+  });
+
+  it("keeps matching after many distinct tokens and does not conflate identifier spellings", () => {
+    const source = Array.from({ length: 4200 }, (_, index) => `unique${index}`).join("\n") +
+      "\npayment refund\npaymentRefund payment_refund\n}";
+    const symbols = Array.from({ length: 43 }, (_, index) => ({
+      ...callable(index * 100 + 1, Math.min(index * 100 + 100, 4203)), id: String(index)
+    }));
+    const result = matchCallableSource(source, symbols, [["payment"], ["refund"]]);
+    const last = result.documents.at(-1)!;
+    expect(last.frequencies).toEqual([3, 3]);
+    expect(last.matches.map(({ token, range }) => [token, range.start.line])).toEqual([
+      ["payment", 4201], ["refund", 4201]
+    ]);
+    expect(result.truncated).toBe(false);
+  });
+
   it("prefers concentrated evidence over the same terms buried in a long declaration and bounds repetition", () => {
     const matches = matchCallableSource("function run() {\n refund(payment);\n}", [callable(1, 3)], [["payment"], ["refund"]]).candidates[0]!.matches;
     const scored = scoreCallableSource([

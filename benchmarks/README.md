@@ -573,3 +573,37 @@ Run the other ten manifests on their matching corpus for the full fifteen-task c
 The sequential baseline and candidate runs occurred in different sessions on September 21, 2026; their absolute times are not causal evidence of a speed change. A contemporaneous diagnostic therefore used one warmup per product and three alternating-order fresh-process pairs on five tasks, without concurrent tests, builds or indexing. Median process milliseconds, before → after: module-init 8,656 → 9,001; plugin metadata 4,175 → 3,878; validation 5,017 → 5,179; exact guard control 6,347 → 6,012; shutdown 7,259 → 7,294. The earlier shutdown increase from 3,937 to 7,323 ms did not reproduce as a comparable difference between products. These small samples do not establish a speedup, an SLO or performance on other workloads. First indexing, incremental sync and total agent task completion time/query count remain unmeasured. Samples, hardware metadata, product fingerprints and the runner are archived as `process-paired.json` / `process-timing-runner.mjs` (command `node .tmp/paired-process-05236.mjs`).
 
 Build, TypeScript test typecheck and version consistency checks pass. After timing completed, the full suite passed 3,109 tests with four existing skips (300 passing files, one skipped); output is archived in `full-test.log`. Added cases cover exact directed call validation, duplicate calls, unavailable or already delivered source, exhausted window/character limits, preserved whole-file promotions, and use of indexed source when live files are stale. These contract tests complement the actual corpus checks above; unchanged parsers were not re-audited against compiler corpora.
+
+### Bounded lexical reuse, v0.523.10
+
+Callable-source matching now reuses token-to-query-group membership within one invocation, capped at 4,096 distinct spellings. Every occurrence still contributes its own frequency, and every receipt is built from its actual declaration, file and UTF-16 coordinates. The cache retains neither source receipts nor data across queries. Saturation falls back to ordinary matching. This is a patch optimization: query/source policies, output semantics, scoring and index compatibility are unchanged.
+
+Validation used Fastify `https://github.com/fastify/fastify` at `70b14e92c0b55e8201f5530ba2e6bab4e928c784`, Windows and Node v24.19.0. The v0.523.9 baseline is product commit `1b25d62`; baseline/candidate built-file SHA-256 values are `357e5ac5d8a4b35f3c3f9d771935516d1291e57ea7d18d21971ab1cdd9237f7c` / `06183d947ad650eae002a147af6011f3d43e05e93f2c55293a34461ebdc3306a`. Both query runs reused index generation `generation:961fba85-180e-40e9-b5e6-395486ac20d9` (338 files, 8,531 symbols, 18,938 edges); no reindexing was needed for this change.
+
+An independent Espree 11.2.0 traversal supplied 7,599 function declaration/expression/arrow ranges from all 248 tracked `*.js` files. Three fixed concept groups covered request/validation/handler, plugin/dependency/register and serialize/response/schema. Complete matcher outputs, token frequencies, truncation flags and BM25 scores matched the baseline. All 7,813 emitted lexical receipts were checked against the pinned text. Baseline equality is a compatibility check, not independent proof of semantic relevance; the parser ranges and receipt checks are independent of product extraction. No new language coverage is claimed.
+
+After one warmup per build, nine alternating-order pairs measured the complete matcher across those inputs. Median time fell from 2,915.50 to 716.92 ms (75.4% less). This isolated measurement excludes parsing, indexing, source retrieval, scoring, process startup and serialization; it is not a 75% improvement in whole-query latency. The bounded matcher still applies its existing 8,192-character declaration budget. All diagnostic inputs and outputs were compared outside the timed region.
+
+The six existing Fastify task manifests are regression cases, not unseen validation. All 10/10 required task-file pairs and 25/25 specified source facts remained available (required-file FN 0). All query plans, focus evidence, connections, path spines, source allocations/windows and evidence paths were deeply equal; Markdown sizes were unchanged. The independent harness verified 77 excerpts and 124 lexical matches. Fixed task judgments were 12 TP, 0 FP and 10 unjudged selections: judged precision is 12/12 with judgment coverage 12/22, not overall precision. These results do not establish completeness beyond the fixed truth or test other languages and projects.
+
+| Task | Median fresh-process ms, v0.523.9 → v0.523.10 |
+| --- | --- |
+| Multiple cookie headers | 3,131 → 3,026 |
+| Error response status | 3,141 → 2,939 |
+| Plugin dependencies | 3,008 → 2,901 |
+| Plugin version metadata | 2,373 → 2,307 |
+| Request validation | 3,101 → 2,960 |
+| Serializer selection | 3,123 → 2,968 |
+
+Each task/build used three sequential fresh CLI processes, alternating which build went first between tasks. These small-sample diagnostics include startup and freshness checks; they do not isolate causal end-to-end speedup or establish an SLO. First-index/incremental performance, memory peaks and agent completion time/query count were not measured. Timing completed before the full test suite.
+
+Reproduce the task checks with the existing harness, repeating for all six `fastify-*-tasks.json` manifests:
+
+```sh
+node benchmarks/mcp/task-retrieval.mjs --project /external/fastify --manifest benchmarks/mcp/fastify-retrieval-tasks.json --product-root /external/baseline-05239 --repetitions 3 --output /external/evidence/validation-before.json
+node benchmarks/mcp/task-retrieval.mjs --project /external/fastify --manifest benchmarks/mcp/fastify-retrieval-tasks.json --repetitions 3 --output /external/evidence/validation-after.json
+```
+
+Typecheck, build, version consistency and 107 focused tests passed. The complete sweep (`node node_modules/vitest/vitest.mjs run --maxWorkers 2`) reported 3,110 passed, one failed and four skipped: the installer-prefix test could not locate npm because directly invoking Vitest with the bundled Node executable omitted `npm_execpath`. Re-running that entire test file through the npm CLI (`npm test -- test/unit/github-source-install-contract.test.mjs`) passed all eight tests without code changes. Thus every non-skipped test passed across the sweep and targeted rerun; the initial full run itself was not green. New regressions check declaration-specific positions and counts, query isolation, spelling distinctions and cache saturation. This does not validate all languages on external corpora.
+
+External artifacts are in `%TEMP%/SymbolLattice-evidence-052310`: the pinned corpus and baseline build, `lexical-paired.json`, all task reports, `retrieval-comparison.json`, `full-test.log`, and archived `lexical-052310.mjs` / `retrieval-052310.mjs` runners. The runners execute from this repository's ignored `.tmp/` directory with the external workspace at that path (`node .tmp/lexical-052310.mjs`, `node .tmp/retrieval-052310.mjs`). No external corpus, index or generated report is committed.

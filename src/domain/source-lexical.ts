@@ -72,6 +72,9 @@ export function matchCallableSource(
   const lines = sourceText.split(/\r\n|\r|\n|\u2028|\u2029/u);
   const candidates: SourceLexicalCandidate[] = [];
   const documents: SourceLexicalDocument[] = [];
+  // Keep only token-to-concept membership, never source locations or frequencies.
+  // Scope the bounded cache to this file/query so receipts remain occurrence-specific.
+  const matchingGroupsByToken = new Map<string, readonly number[]>();
   let truncated = false;
   for (const symbol of symbols) {
     if (!["function", "method", "entrypoint"].includes(symbol.kind)) continue;
@@ -95,10 +98,18 @@ export function matchCallableSource(
         if (match.index + token.length === bounded.length && bounded.length < scoped.length &&
             /[\p{L}\p{N}_$]/u.test(scoped[bounded.length]!)) continue;
         tokens += 1;
-        const variants = new Set([token.normalize("NFKC").toLowerCase(),
-          ...identifierWords(token).flatMap(identifierTermVariants)]);
-        for (let index = 0; index < groups.length; index += 1) {
-          if (!groups[index]!.some((term) => variants.has(term))) continue;
+        let matchingGroups = matchingGroupsByToken.get(token);
+        if (matchingGroups === undefined) {
+          const variants = new Set([token.normalize("NFKC").toLowerCase(),
+            ...identifierWords(token).flatMap(identifierTermVariants)]);
+          const matchedIndexes: number[] = [];
+          for (let index = 0; index < groups.length; index += 1) {
+            if (groups[index]!.some((term) => variants.has(term))) matchedIndexes.push(index);
+          }
+          matchingGroups = matchedIndexes;
+          if (matchingGroupsByToken.size < 4096) matchingGroupsByToken.set(token, matchingGroups);
+        }
+        for (const index of matchingGroups) {
           frequencies[index]! += 1;
           if (found.has(index)) continue;
           const column = start + match.index + 1;
