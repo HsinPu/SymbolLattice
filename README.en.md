@@ -1,22 +1,21 @@
 # SymbolLattice
 
-Local, source-backed code graphs for developers and AI agents to search code, trace calls, and assess change impact.
+Help AI agents find task-relevant code with source evidence they can verify.
 
 [繁體中文](README.md) | English
 
-Current version: **v0.527.0** · Node.js **>=22.13 <25** · [MIT](LICENSE)
+Current version: **v0.527.1** · Node.js **>=22.13 <25** · [MIT](LICENSE)
 
-## Features
+SymbolLattice builds a local code index and exposes file, symbol, and cross-file relationship queries through a CLI or MCP. Use it to find relevant implementations in an unfamiliar repository, investigate a bug, or prepare a change, then follow the source evidence.
 
-Query a repository through the CLI or MCP, with a local index in `.SymbolLattice/`.
+## What you can do
 
-- Find task-relevant files and symbols with source code, line numbers, and relationship evidence, retaining numeric query terms such as HTTP 500 and adding bounded source excerpts around actual matches.
-- Trace calls, inheritance, imports, and framework entry points to assess change impact.
-- Update the index incrementally and inspect history and differences.
+- **Find implementations** using symbol names, file paths, or natural-language task descriptions.
+- **Check evidence** through source paths, line numbers, code excerpts, and the basis for reported relationships.
+- **Trace relationships** through resolved calls, imports, inheritance, and framework entry points to assess change impact.
+- **Keep the index current** with incremental synchronization and inspect retained index history and differences.
 
-Static analysis may not resolve dynamic calls, reflection, macros, or external dependencies. `explore` includes bounded unresolved call sites recorded in the index. Python static dotted member calls retain these source receipts without inferring receiver types or targets. Same-name declarations may appear as supplementary leads while call targets remain explicitly unresolved. Unresolved, unrecorded, or truncated results do not prove related code is absent.
-
-See the [validation notes](benchmarks/README.md#numeric-query-and-unresolved-name-evidence) for query scope, limitations, and measured results.
+The index lives in the analyzed project's `.SymbolLattice/` directory. Results report unresolved relationships, source freshness, and truncation. Static analysis has limits; search results cannot guarantee complete impact coverage.
 
 ## Installation
 
@@ -46,86 +45,81 @@ After installation, you can remove the temporary checkout identified by `$bootst
 
 ## Quick start
 
-Run from the root of the repository you want to analyze:
+Run from the **root of the project you want to analyze**, rather than the SymbolLattice installation directory:
 
 ```powershell
+# Create the index and inspect its status
 SymbolLattice init .
 SymbolLattice status .
-SymbolLattice find createOrder --project . --json
-SymbolLattice explore "Trace createOrder flow to persistence" --project . --json
 
-# Update the index after changing source files
+# Explore a task without knowing symbol names
+SymbolLattice explore "Where are incoming requests validated?" --project . --json
+
+# Look up a known symbol; replace this with a name from your project
+SymbolLattice find createOrder --project . --json
+
+# Sync after changing source files or upgrading SymbolLattice
 SymbolLattice sync .
 ```
 
-| Command | Purpose |
+Review the returned files and source excerpts, then follow the relationship evidence. If the index is stale, run `sync` before retrying. Live queries may refuse to return results when index freshness cannot be verified.
+
+| Need | Commands |
 | --- | --- |
-| `init` / `sync` | Create or update the index. |
-| `find` / `search` / `file` | Search symbols and source, and read persisted source. |
-| `callers` / `callees` / `hierarchy` | Trace calls and inheritance. |
-| `impact` / `affected` | Assess change impact. |
-| `context` / `explore` / `investigate` | Retrieve source-backed agent context. |
+| Find symbols, search text, or read file source | `find`, `search`, `file` |
+| Trace calls and inheritance | `callers`, `callees`, `hierarchy` |
+| Assess change impact | `impact`, `affected` |
+| Retrieve task context with source evidence | `explore`, `context`, `investigate` |
+| Create, update, and inspect an index | `init`, `sync`, `status` |
 
-Run `SymbolLattice <command> --help` for all options.
+Run `SymbolLattice <command> --help` for arguments.
 
-## Codex and MCP
+## Use with AI agents
+
+### Codex integration
 
 ```powershell
-# Preview integration settings, then apply
+# Preview, apply, then check the settings
 SymbolLattice install codex
 SymbolLattice install codex --apply --yes
 SymbolLattice doctor codex
 ```
 
-Integration backs up and updates `mcp_servers.SymbolLattice` in `~/.codex/config.toml` and the managed block in `~/.codex/AGENTS.md`. Settings use absolute paths to Node and `dist/cli/main.js`. After moving or reinstalling the CLI, repeat integration installation, then restart Codex or open a new task.
+Integration backs up and updates `mcp_servers.SymbolLattice` in `~/.codex/config.toml` and the managed block in `~/.codex/AGENTS.md`. Restart Codex or open a new task afterward.
 
-Integration installation does not create indexes. Run `SymbolLattice init .` at the repository root when analysis is needed: index a monorepo sharing one `.git` once, and each independent repository in a workspace separately.
+Integration does not create project indexes. Run `SymbolLattice init .` in the target project first. Index a monorepo sharing one `.git` once; index independent repositories in a workspace separately.
 
-You can also start MCP directly:
+Settings use absolute paths to Node and the CLI. Repeat integration after moving or reinstalling the CLI. To remove it, preview with `SymbolLattice uninstall codex`, then add `--apply --yes` to apply.
+
+### Other MCP clients
+
+Use this command to start the MCP server, replacing the project path with its actual location:
 
 ```powershell
 SymbolLattice serve --mcp --project C:\path\to\project
 ```
 
-- By default, MCP exposes `SymbolLattice_explore` with numbered source lines, relationship evidence, and explicit truncation and uncertainty. Use CLI `explore --json` when you need JSON.
-- Queries are read-only; the server can update indexes in the background by default. Add `--no-auto-sync` to disable this.
-- Query repositories separately using `projectPath`. Create each index first; queries do not initialize or merge indexes.
+- The default tool, `SymbolLattice_explore`, returns Markdown with numbered source lines, relationship evidence, and limitations. Use CLI `explore --json` for JSON output.
+- Queries are read-only. The server can update indexes in the background by default; add `--no-auto-sync` to disable background updates.
+- Use `projectPath` to query different repositories after creating each index. Queries do not initialize or merge indexes.
 - Set `SYMBOL_LATTICE_MCP_TOOLS=node,impact` to add tools, or `all` to expose every tool.
 
-Remove the integration with:
+## Scope and limitations
 
-```powershell
-SymbolLattice uninstall codex
-SymbolLattice uninstall codex --apply --yes
-```
+Discoverable languages and formats include TypeScript/JavaScript, Python, Java, Go, Rust, C/C++, C#, and web templates. **Declaration extraction, cross-file resolution, and framework support vary by language.** See the [language capability definitions](src/domain/language-depth.ts) for details.
 
-## Language support and evidence
+- Dynamic calls, reflection, macros, and external dependencies may remain unresolved. A missing relationship does not prove that no relationship exists.
+- `explore` can include bounded unresolved call sites recorded in the index and same-name declaration leads. These leads are not confirmed call targets.
+- Source excerpts, relationship traversal, and result counts have limits. Check truncation information and follow-up query guidance; partial results are not complete coverage.
+- Retrieval quality and speed depend on the project and query. Results from fixed test projects do not establish the same performance everywhere.
 
-Discovery covers 58 languages and formats, including TypeScript/JavaScript, Python, Java, Go, Rust, C/C++, C#, and web templates. **Analysis depth varies by language; this is not a claim of complete language support.**
+See the [validation documentation](benchmarks/README.md) for measured results, known gaps, and reproduction steps.
 
-Python direct module assignments expose variable names and source evidence, without resolving runtime values or alias targets.
+## Upgrading
 
-See [language scope and limitations](src/domain/language-depth.ts) and [real-project and performance validation](benchmarks/README.md). Passing small fixtures does not establish validation across all large projects.
+Use the installation flow above with a new fixed commit or existing tag. After reinstalling, repeat Codex integration and run `SymbolLattice sync .` in each project. The project is in `0.x` development; check the target version's compatibility and migration notes before upgrading.
 
-JavaScript/TypeScript retain sources for named functions and anonymous functions assigned to static properties. Supported JavaScript CommonJS calls include import/export locations; dynamic exports, mutations and cycles remain limited. Run `SymbolLattice sync .` after upgrading to update an existing index.
-
-## Development
-
-```bash
-npm ci
-npm run check
-npm run build
-npm test
-npm run verify:language-depth
-npm run verify:mcp-worker-generation
-npm pack --dry-run
-```
-
-Build before testing so tests that require `dist/` and parser assets have their runtime artifacts. `npm pack --dry-run` still invokes `prepack`, which builds the package and checks language depth.
-
-See [AGENTS.md](AGENTS.md) for development rules and [scripts/README.md](scripts/README.md) for tooling.
-
-## Upgrading from v0.420.0 or earlier
+### From v0.420.0 or earlier
 
 Old package names and indexes are not migrated automatically. Keep a recoverable copy, then remove the old integration and CLI:
 
@@ -144,6 +138,27 @@ SymbolLattice init .
 
 Remove old data only after confirming the new CLI, MCP, and `.SymbolLattice` index work correctly.
 
+## Development
+
+Run from a checkout of this repository:
+
+```bash
+npm ci
+npm run check
+npm run build
+npm test
+```
+
+Build before testing so `dist/` and parser assets are available. Run these additional checks as required by the change:
+
+```bash
+npm run verify:language-depth
+npm run verify:mcp-worker-generation
+npm pack --dry-run
+```
+
+`npm pack --dry-run` still invokes `prepack`, which builds the package and checks language depth. See [AGENTS.md](AGENTS.md) for development and validation requirements and [scripts/README.md](scripts/README.md) for tooling entry points.
+
 ## License
 
-[MIT](LICENSE). Parser assets retain their third-party licenses and provenance under `src/assets/`.
+[MIT](LICENSE). Third-party parser licenses and provenance are retained under `src/assets/`.
