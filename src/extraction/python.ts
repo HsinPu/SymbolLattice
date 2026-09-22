@@ -7377,6 +7377,56 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     }
   }
 
+  // Preserve written member invocations even when the receiver's runtime type
+  // is unknown. These are source receipts, not name-based target guesses.
+  if (recoveryCompatibility?.mode === "full" && !hasSyntaxError(root)) {
+    const resolvedCalls = new Set(edges.filter((edge) => edge.kind === "calls" && edge.resolution === "exact")
+      .map((edge) => `${edge.sourceId}:${edge.range.end.line}:${edge.range.end.column}`));
+    function staticMemberName(node: PythonSyntaxNode): string | null {
+      if (node.name === "VariableName" || node.name === "PropertyName") return nodeText(input, node);
+      if (node.name !== "MemberExpression") return null;
+      const children = directChildren(node);
+      if (children.length !== 3 || children[1]?.name !== "." || children[2] === undefined ||
+          !["VariableName", "PropertyName"].includes(children[2].name)) return null;
+      const receiver = children[0] === undefined ? null : staticMemberName(children[0]);
+      return receiver === null ? null : `${receiver}.${nodeText(input, children[2])}`;
+    }
+    function preserveMemberCalls(node: PythonSyntaxNode, owner: SymbolNode | null): void {
+      if (node.name === "LambdaExpression") return;
+      if (node.name === "DecoratedStatement") {
+        const definition = decoratedDefinition(node);
+        if (definition !== null) preserveMemberCalls(definition, owner);
+        return;
+      }
+      if (node.name === "FunctionDefinition" || node.name === "ClassDefinition") {
+        const callable = node.name === "FunctionDefinition" ? symbolsByNodeKey.get(nodeKey(node)) ?? null : null;
+        for (const body of directChildren(node).filter((child) => child.name === "Body")) {
+          preserveMemberCalls(body, callable);
+        }
+        return;
+      }
+      if (owner !== null && node.name === "CallExpression") {
+        const callee = directChildren(node)[0];
+        const referenceName = callee?.name === "MemberExpression" ? staticMemberName(callee) : null;
+        if (callee !== undefined && referenceName !== null) {
+          const range = rangeFor(lineStarts, callee.from, callee.to);
+          const alreadyResolved = resolvedCalls.has(`${owner.id}:${range.end.line}:${range.end.column}`);
+          if (!alreadyResolved) {
+            edges.push({
+              id: createEdgeId({ sourceId: owner.id, targetId: null, kind: "calls",
+                line: range.start.line, column: range.start.column, referenceName }),
+              sourceId: owner.id, targetId: null, kind: "calls", filePath: input.filePath, range,
+              resolution: "unresolved", confidence: 0, referenceName,
+              evidence: { ruleId: "syntax.python.member-call.unknown-receiver", stage: "syntax", candidateSymbolIds: [] }
+            });
+          }
+        }
+      }
+      for (const child of directChildren(node)) preserveMemberCalls(child, owner);
+    }
+    preserveMemberCalls(root, null);
+  }
+
   return {
     symbols,
     edges,

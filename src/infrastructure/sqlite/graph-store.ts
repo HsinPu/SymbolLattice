@@ -47,6 +47,7 @@ import type {
   ActiveFileSummaryRequest,
   ActiveSourceDocumentsBundle,
   ActiveSourceDocumentsProjection,
+  ActiveUnresolvedCallsProjection,
   ActiveSourceSearchBundle,
   BoundedGraphQueryRequest,
   BoundedGraphQueryDiagnostics,
@@ -2845,6 +2846,36 @@ export class SqliteGraphStore implements GraphStore {
               filePaths
             )
           : []
+      };
+    });
+  }
+
+  public getActiveUnresolvedCalls(
+    projectPath: string,
+    expectedGenerationId: string,
+    sourceIds: readonly string[],
+    limitPerSymbol: number
+  ): ActiveUnresolvedCallsProjection {
+    const normalizedProjectPath = resolve(projectPath);
+    if (!this.isInitialized(normalizedProjectPath)) return { generationMatched: false, calls: [] };
+    const ids = [...new Set(sourceIds)];
+    if (ids.length > 64 || !Number.isInteger(limitPerSymbol) || limitPerSymbol < 0 || limitPerSymbol > 64) {
+      throw new RangeError("Unresolved-call projection allows at most 64 symbols and 0–64 calls per symbol.");
+    }
+    return this.withReadDatabase(normalizedProjectPath, (database) => {
+      // This projection needs only generation identity, not table counts or
+      // the previous indexing work log. Keep the guard inside this snapshot.
+      if (getActiveGenerationId(database) !== expectedGenerationId) return { generationMatched: false, calls: [] };
+      const statement = database.prepare(`SELECT e.*, ee.evidence_json FROM edges AS e
+        LEFT JOIN edge_evidence AS ee ON ee.generation_id = ? AND ee.edge_id = e.id
+        WHERE e.source_id = ? AND e.kind = 'calls' AND e.resolution = 'unresolved' AND e.target_id IS NULL
+        ORDER BY e.file_path, e.start_line, e.start_column, e.id LIMIT ?`);
+      return {
+        generationMatched: true,
+        calls: ids.map((sourceId) => {
+          const rows = statement.all(expectedGenerationId, sourceId, limitPerSymbol + 1) as unknown as EdgeRow[];
+          return { sourceId, items: rows.slice(0, limitPerSymbol).map(toGraphEdge), truncated: rows.length > limitPerSymbol };
+        })
       };
     });
   }

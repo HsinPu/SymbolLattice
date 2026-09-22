@@ -4,7 +4,7 @@ Local, source-backed code graphs for developers and AI agents to search code, tr
 
 [繁體中文](README.md) | English
 
-Current version: **v0.524.1** · Node.js **>=22.13 <25** · [MIT](LICENSE)
+Current version: **v0.525.0** · Node.js **>=22.13 <25** · [MIT](LICENSE)
 
 ## Features
 
@@ -14,7 +14,7 @@ Query a repository through the CLI or MCP, with a local index in `.SymbolLattice
 - Trace calls, inheritance, imports, and framework entry points to assess change impact.
 - Update the index incrementally and inspect history and differences.
 
-Static analysis may not resolve dynamic calls, reflection, macros, or external dependencies. Unresolved or truncated results do not prove related code is absent.
+Static analysis may not resolve dynamic calls, reflection, macros, or external dependencies. `explore` includes bounded unresolved call sites recorded in the index. Python static dotted member calls retain these source receipts without inferring receiver types or targets. Unresolved, unrecorded, or truncated results do not prove related code is absent.
 
 ## Installation
 

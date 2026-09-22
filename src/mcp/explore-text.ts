@@ -401,6 +401,26 @@ function renderLimitations(result: UnknownRecord): string[] {
     "", "For omitted source, read the cited file and line range, or use `SymbolLattice file <path> --offset <line> --limit <count> --project <project>`. For relationships, explore the cited qualified symbol. These bounded results do not prove that other files or relationships are absent."];
 }
 
+function renderUnresolvedCalls(result: UnknownRecord): string[] {
+  const lines: string[] = [];
+  const contexts = records(result.focuses).length > 0 ? records(result.focuses) : [result];
+  for (const context of contexts) {
+    const evidence = record(context.unresolvedCalls);
+    if (evidence === null) continue;
+    const owner = symbolReference(record(context.symbol) ?? record(record(context.match)?.symbol)) ?? "selected symbol";
+    if (evidence.state !== "available") {
+      lines.push(`- \`${owner}\`: unresolved-call evidence ${text(evidence.state) ?? "unavailable"}.`);
+      continue;
+    }
+    for (const edge of records(evidence.items)) {
+      lines.push(`- \`${owner}\` invokes \`${text(edge.referenceName) ?? "unknown member"}\`${edgeDetails(edge)}; target unknown.`);
+    }
+    if (evidence.truncated === true) lines.push(`- Additional recorded calls for \`${owner}\` were truncated; inspect its cited source.`);
+  }
+  return lines.length === 0 ? [] : ["**Unresolved Call Sites**", "", ...lines,
+    "These source locations do not prove a target or runtime dispatch. Missing records do not prove that other calls are absent."];
+}
+
 /** Renders the primary MCP explore result for agents and humans without diagnostic JSON. */
 export function renderExploreText(value: Record<string, unknown>): string {
   const match = record(value.match);
@@ -411,6 +431,7 @@ export function renderExploreText(value: Record<string, unknown>): string {
     renderFocuses(value),
     renderMatch(value),
     renderRelations(value),
+    renderUnresolvedCalls(value),
     renderEvidencePaths(value),
     renderLimitations(value)
   ].filter((section) => section.length > 0);

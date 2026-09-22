@@ -655,6 +655,34 @@ afterEach(async () => {
 });
 
 describe("SqliteGraphStore", () => {
+  it("projects only bounded unresolved call receipts from the requested generation and owners", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const base = snapshot([symbol("caller", "caller"), symbol("other", "other")]);
+    const unknown: GraphEdge[] = [3, 1, 2].map((line) => ({
+      id: `unknown-${line}`, sourceId: "caller", targetId: null, kind: "calls", filePath: "src/example.ts",
+      range: { start: { line, column: 1 }, end: { line, column: 9 } }, resolution: "unresolved", confidence: 0,
+      referenceName: `obj.run${line}`, evidence: { ruleId: "test.unknown", stage: "syntax", candidateSymbolIds: [] }
+    }));
+    const graphSnapshot = { ...base, edges: [...base.edges, ...unknown,
+      { ...unknown[0]!, id: "other-call", sourceId: "other" }] };
+    store.replaceProjectFacts({ projectPath, snapshot: graphSnapshot, indexedAt: "2026-09-22T00:00:00.000Z",
+      artifactFacts: persistedFacts(graphSnapshot), indexInputs: indexInputs("unknown-calls"), resolverVersion: "test-resolver" });
+    const generation = store.getStatus(projectPath).generationId!;
+    const result = store.getActiveUnresolvedCalls(projectPath, generation, ["caller", "caller", "other"], 2);
+    expect(result.generationMatched).toBe(true);
+    expect(result.calls).toEqual([
+      { sourceId: "caller", items: [unknown[1], unknown[2]], truncated: true },
+      { sourceId: "other", items: [{ ...unknown[0]!, id: "other-call", sourceId: "other" }], truncated: false }
+    ]);
+    expect(store.getActiveUnresolvedCalls(projectPath, generation, ["caller"], 0).calls)
+      .toEqual([{ sourceId: "caller", items: [], truncated: true }]);
+    expect(store.getActiveUnresolvedCalls(projectPath, "stale", ["caller"], 2))
+      .toEqual({ generationMatched: false, calls: [] });
+    expect(() => store.getActiveUnresolvedCalls(projectPath, generation, ["caller"], 65)).toThrow(RangeError);
+    store.close();
+  });
+
   it("keeps an uninitialized project read-only until initialization", async () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();

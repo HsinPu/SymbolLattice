@@ -4,6 +4,21 @@ import { sourceDeliveryIdentityFromText } from "../../src/application/source-del
 import { McpSourceSession } from "../../src/mcp/source-session.js";
 
 describe("MCP explore text rendering", () => {
+  it("renders unknown call sites without claiming a target and discloses partial or mismatched reads", () => {
+    const output = renderExploreText({ focuses: [
+      { symbol: { name: "handle" }, unresolvedCalls: { state: "available", truncated: true, items: [{
+        referenceName: "resolver.resolve_error_handler", resolution: "unresolved", filePath: "handler.py",
+        range: { start: { line: 184, column: 16 } }, evidence: { ruleId: "syntax.python.member-call.unknown-receiver", stage: "syntax" }
+      }] } },
+      { symbol: { name: "changed" }, unresolvedCalls: { state: "generation-mismatch", items: [], truncated: false } }
+    ] });
+    expect(output).toContain("`handle` invokes `resolver.resolve_error_handler`");
+    expect(output).toContain("handler.py:184");
+    expect(output).toContain("target unknown");
+    expect(output).toContain("Additional recorded calls for `handle` were truncated");
+    expect(output).toContain("generation-mismatch");
+    expect(output).not.toContain("`handle` → `resolver.resolve_error_handler`");
+  });
   it("cites shared source and every selected flow step even without a path-spine slot", () => {
     const text = renderExploreText({ focuses: [{ symbol: { name: "later" }, sourceReuse: { segments: [{
       referenceIndex: 0, filePath: "a.ts", range: { start: { line: 8 } }

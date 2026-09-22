@@ -87,6 +87,16 @@ export interface ActiveSourceDocumentsProjection {
   readonly documents: readonly IndexedSourceDocument[];
 }
 
+/** Recorded unknown targets only; an empty result does not prove that no dynamic calls exist. */
+export interface ActiveUnresolvedCallsProjection {
+  readonly generationMatched: boolean;
+  readonly calls: readonly {
+    readonly sourceId: string;
+    readonly items: readonly GraphSnapshot["edges"][number][];
+    readonly truncated: boolean;
+  }[];
+}
+
 /**
  * Bounded query input for the SQLite-backed explore read projection. The
  * limits are deliberately carried by the request so the application can keep
@@ -235,6 +245,13 @@ export interface GraphStore {
     expectedGenerationId: string,
     filePaths: readonly string[]
   ): ActiveSourceDocumentsProjection;
+  /** Bounded call-site evidence for selected symbols, without loading the full graph. */
+  getActiveUnresolvedCalls?(
+    projectPath: string,
+    expectedGenerationId: string,
+    sourceIds: readonly string[],
+    limitPerSymbol: number
+  ): ActiveUnresolvedCallsProjection;
   /** Optional SQLite-driven bounded graph projection for explore queries. */
   getActiveBoundedGraphBundle?(
     projectPath: string,

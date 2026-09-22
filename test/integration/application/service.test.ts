@@ -998,6 +998,55 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("exposes bounded unknown call sites in exact and query exploration without guessing same-named targets", async () => {
+    const projectPath = await createInlineProject({ "payments.py": [
+      "def refund(): pass", "def refund_payment(client):",
+      ...Array.from({ length: 12 }, () => "    client.refund()")
+    ].join("\n") });
+    const service = createService();
+    await service.init({ projectPath });
+    const exact = await service.explore(projectPath, "payments.py#refund_payment");
+    expect(exact.unresolvedCalls).toMatchObject({ state: "available", truncated: false });
+    expect(exact.unresolvedCalls?.items).toHaveLength(12);
+    expect(exact.unresolvedCalls?.items.every((edge) => edge.referenceName === "client.refund" &&
+      edge.targetId === null && edge.resolution === "unresolved")).toBe(true);
+    expect(exact.callees).toEqual([]);
+    const query = await service.explore(projectPath, "How is payment refunded?");
+    const focus = query.focuses?.find((focus) => focus.symbol.name === "refund_payment");
+    expect(focus?.unresolvedCalls).toMatchObject({ state: "available", truncated: true });
+    expect(focus?.unresolvedCalls?.items).toHaveLength(8);
+    expect(focus?.unresolvedCalls?.items[0]?.range.start).toEqual({ line: 3, column: 5 });
+    expect(query.connections).toEqual([]);
+    await writeFile(join(projectPath, "payments.py"), "def refund(): pass\ndef refund_payment(client):\n    client.cancel()\n", "utf8");
+    const synced = await service.sync({ projectPath });
+    expect(synced.generationId).not.toBe(exact.status.generationId);
+    const updated = await service.explore(projectPath, "payments.py#refund_payment");
+    expect(updated.unresolvedCalls).toMatchObject({ state: "available", truncated: false });
+    expect(updated.unresolvedCalls?.items.map((edge) => edge.referenceName)).toEqual(["client.cancel"]);
+    expect(updated.callees).toEqual([]);
+  });
+
+  it("reports generation mismatch instead of mixing unresolved calls into exploration", async () => {
+    const projectPath = await createInlineProject({ "payments.py": "def refund_payment(client):\n    client.refund()\n" });
+    const store = new SqliteGraphStore();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    const expectedGeneration = store.getStatus(projectPath).generationId;
+    let reads = 0;
+    store.getActiveUnresolvedCalls = (_path, generation, ids) => {
+      reads++;
+      expect(generation).toBe(expectedGeneration);
+      expect(ids.length).toBeGreaterThan(0);
+      return { generationMatched: false, calls: [] };
+    };
+    const exact = await service.explore(projectPath, "payments.py#refund_payment");
+    expect(exact.unresolvedCalls).toEqual({ state: "generation-mismatch", items: [], truncated: false });
+    const query = await service.explore(projectPath, "How is payment refunded?");
+    expect(query.focuses?.[0]?.unresolvedCalls).toEqual({ state: "generation-mismatch", items: [], truncated: false });
+    expect(reads).toBe(2);
+    store.close();
+  });
+
   it("uses named-file-first graph focus for a bounded natural-language explore query", async () => {
     const projectPath = await createInlineProject({
       "src/api/orders.ts": [

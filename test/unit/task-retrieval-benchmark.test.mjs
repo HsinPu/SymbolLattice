@@ -3,9 +3,24 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { scoreTask, verifySourceExcerpts, verifyLexicalMatches, verifySourceReuse, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
+import { scoreTask, verifySourceExcerpts, verifyLexicalMatches, verifySourceReuse, verifyUnresolvedCalls, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
 
 describe("task retrieval benchmark judgments", () => {
+  it("independently rejects invented unknown-call targets, names, owners and source positions", () => {
+    const edge = { sourceId: "owner", targetId: null, kind: "calls", resolution: "unresolved", confidence: 0,
+      filePath: "a.py", referenceName: "client.send", range: { start: { line: 2, column: 5 }, end: { line: 2, column: 16 } },
+      evidence: { ruleId: "syntax.python.member-call.unknown-receiver", candidateSymbolIds: [] } };
+    const result = { focuses: [{ symbol: { id: "owner", filePath: "a.py",
+      range: { start: { line: 1, column: 1 }, end: { line: 2, column: 18 } } },
+      unresolvedCalls: { state: "available", items: [edge], truncated: false } }] };
+    const read = () => "def run(client):\n    client.send()";
+    expect(verifyUnresolvedCalls(result, read)).toEqual({ verifiedCalls: 1, verifiedPythonCallees: 1 });
+    for (const mutate of [e => { e.targetId = 'guessed'; }, e => { e.referenceName = 'client.other'; },
+      e => { e.sourceId = 'other'; }, e => { e.range.start.column = 1; }, e => { e.range.end.line = 3; }]) {
+      const changed = structuredClone(result); mutate(changed.focuses[0].unresolvedCalls.items[0]);
+      expect(() => verifyUnresolvedCalls(changed, read)).toThrow();
+    }
+  });
   it("rejects shared prefixes that cite missing, different or insufficient source owners", () => {
     const owner = { reference: "outer", source: { filePath: "a.ts", emittedCharacters: 8,
       range: { start: { line: 1, column: 1 }, end: { line: 3, column: 1 } },

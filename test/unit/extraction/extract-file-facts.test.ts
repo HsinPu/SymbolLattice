@@ -3198,6 +3198,11 @@ describe("source extraction", () => {
           stage: "syntax",
           candidateSymbolIds: [expect.any(String)]
         }
+      },
+      {
+        source: "comparison_fixture.py#member_and_chain", target: undefined,
+        referenceName: "obj.comparison_python_helper", resolution: "unresolved", confidence: 0,
+        evidence: { ruleId: "syntax.python.member-call.unknown-receiver", stage: "syntax", candidateSymbolIds: [] }
       }
     ]);
   });

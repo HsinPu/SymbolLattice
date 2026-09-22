@@ -5631,6 +5631,8 @@ export class SymbolLatticeService {
       () => this.symbolContextPack(read, bounds, graphView, true),
       { focusCount: matches.length }
     );
+    const unresolvedCalls = this.exploreUnresolvedCalls(normalizedProjectPath, bundle,
+      plan.selection.map((selection) => selection.symbol.id), bounds.relationLimit);
     const focuses: readonly ExploreFocus[] = plan.selection.map((selection, index) => ({
       ...selection,
       ...(contextPack.contexts[index] ?? this.toSymbolContext(
@@ -5645,7 +5647,8 @@ export class SymbolLatticeService {
         bounds,
         null,
         graphView
-      ))
+      )),
+      unresolvedCalls: unresolvedCalls.get(selection.symbol.id)!
     }));
     const rankBySymbolId = new Map(
       plan.selection.map((selection) => [selection.symbol.id, selection.rank])
@@ -5814,6 +5817,35 @@ export class SymbolLatticeService {
     };
   }
 
+  private exploreUnresolvedCalls(
+    projectPath: string,
+    bundle: ActiveGraphBundle,
+    sourceIds: readonly string[],
+    limit: number
+  ): ReadonlyMap<string, NonNullable<ExploreResult["unresolvedCalls"]>> {
+    const read = this.graphStore.getActiveUnresolvedCalls;
+    const generationId = bundle.status.generationId;
+    if (typeof read === "function" && generationId !== null) {
+      const projection = read.call(this.graphStore, projectPath, generationId, sourceIds, Math.min(limit, 64));
+      return new Map(sourceIds.map((sourceId) => {
+        const calls = projection.calls.find((calls) => calls.sourceId === sourceId);
+        return [sourceId, !projection.generationMatched
+          ? { state: "generation-mismatch", items: [], truncated: false }
+          : calls === undefined ? { state: "unavailable", items: [], truncated: false }
+          : { state: "available", items: calls.items, truncated: calls.truncated }];
+      }));
+    }
+    return new Map<string, NonNullable<ExploreResult["unresolvedCalls"]>>(sourceIds.map((sourceId) => {
+      // A legacy full snapshot can expose its recorded calls. A bounded graph
+      // intentionally omits them, so absence there cannot establish completeness.
+      if ("diagnostics" in bundle) return [sourceId, { state: "unavailable", items: [], truncated: false }];
+      const calls = bundle.snapshot.edges.filter((edge) => edge.sourceId === sourceId &&
+        edge.kind === "calls" && edge.resolution === "unresolved" && edge.targetId === null)
+        .sort((a, b) => a.range.start.line - b.range.start.line || a.range.start.column - b.range.start.column || compareText(a.id, b.id));
+      return [sourceId, { state: "available", items: calls.slice(0, limit), truncated: calls.length > limit }];
+    }));
+  }
+
   private async exploreResultForBundle(
     normalizedProjectPath: string,
     reference: string,
@@ -5865,6 +5897,7 @@ export class SymbolLatticeService {
       source,
       callers: relations.callers,
       callees: relations.callees,
+      unresolvedCalls: this.exploreUnresolvedCalls(normalizedProjectPath, bundle, [match.symbol.id], NODE_RELATION_LIMIT).get(match.symbol.id)!,
       impact: relations.impact,
       queryPlan: null,
       focuses: [],

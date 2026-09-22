@@ -668,6 +668,13 @@ export interface GitHunksResult {
   };
 }
 
+export interface UnresolvedCallEvidence {
+  readonly state: "available" | "unavailable" | "generation-mismatch";
+  /** Syntax receipts with unknown targets; never a confirmed link to a same-named declaration. */
+  readonly items: readonly GraphEdge[];
+  readonly truncated: boolean;
+}
+
 export interface ExploreResult {
   readonly status: IndexStatus;
   readonly match: SymbolMatch;
@@ -679,6 +686,7 @@ export interface ExploreResult {
   readonly source: DeliveredSourceExcerpt | null;
   readonly callers: readonly GraphRelation[];
   readonly callees: readonly GraphRelation[];
+  readonly unresolvedCalls?: UnresolvedCallEvidence;
   readonly impact: readonly ImpactPath[];
   /** Additive unified-explore mode; omitted only by compatible legacy embeddings. */
   readonly mode?: "exact-symbol" | "query";
@@ -915,6 +923,7 @@ export interface SymbolContext {
   readonly sourceReuse?: import("./explore-source-reuse.js").ExploreSourceReuse;
   readonly callers: BoundedRelations;
   readonly callees: BoundedRelations;
+  readonly unresolvedCalls?: UnresolvedCallEvidence;
   readonly impact: BoundedImpactPaths;
 }
 

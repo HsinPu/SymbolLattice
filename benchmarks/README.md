@@ -18,6 +18,7 @@ These tools generate or validate large-project evidence outside the published np
 | `javascript/` | `commonjs-call-evidence.mjs`, `fastify-commonjs-truth.json` | automatic source-receipt verifier contract; manual pinned-corpus execution |
 | `python/` | `correctness-oracle.mjs`, `PythonOracle.py` | manual CPython stdlib AST oracle |
 | `python/` | `module-bindings.mjs`, `ModuleBindingOracle.py` | manual CPython AST declaration/source-range audit; optional baseline fact comparison |
+| `python/` | `member-calls.mjs`, `MemberCallOracle.py` | manual CPython AST unresolved member-call name, ownership and source-range audit; required baseline fact preservation check |
 | `sfc/` | `correctness-oracle.mjs` | manual Vue/Svelte/Astro component relation oracle |
 | `shell/` | `correctness-oracle.mjs` | manual mvdan ABI v2 direct-call oracle |
 | `solidity/` | `correctness-oracle.mjs` | automatic solc AST private fixed-arity call oracle |
@@ -39,6 +40,40 @@ These tools generate or validate large-project evidence outside the published np
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## Python unresolved member-call audit
+
+`python/member-calls.mjs` checks written dotted-name invocations against independent CPython AST truth from every tracked Python file. It verifies callee names, UTF-16 source ranges and lexical function ownership; it does not infer receiver types, runtime targets or dispatch. Async, decorated and nested function/method bodies are included. Lambda bodies, module/class execution, decorators, default arguments and computed receivers are excluded. Parser-rejected files remain a separately reported unsupported subset, after the existing eligible closed CRLF recovery rule. Existing exact calls are outside the new unresolved-call denominator.
+
+```sh
+node benchmarks/python/member-calls.mjs /external/django /path/to/python /external/evidence/member-calls.json /external/baseline-product
+```
+
+The required baseline must predate this addition. The audit compares all extraction facts after removing only the new unresolved edges, verifies clean pinned sources and hashes, and records runtime/product versions, command, precision/recall and unsupported counts. The sibling `.truth.json` contains independent CPython evidence. This is a call-site extraction audit, not a claim of correct dynamic target resolution or improved task retrieval.
+
+For `v0.525.0`, Django 5.2.1 at `bc833e8883db4a333a6485d91637b78c85e2b13b` was audited with Node 24.19.0 and CPython 3.12.4. Of 2,818 tracked Python files, one was rejected by CPython. Within the accepted extraction scope, TP was 86,877, FP 0 and FN 0 for exact owner/name/range tuples. Another 14,856 known invocations were in unsupported parser scopes; they are excluded from the 100% in-scope precision/recall claim. All prior extraction facts matched v0.524.1. Reports are in the external `SymbolLattice-evidence-052500` workspace.
+
+Explore exposes recorded unknown calls separately from resolved callees and exact paths. Natural-language focuses return up to eight calls each; exact exploration returns up to 25. SQLite reads only selected source IDs, takes one extra row to detect truncation, and checks the expected active generation in the same read transaction. A generation mismatch or unavailable projection is explicit. Empty recorded evidence does not establish absence. The task-retrieval verifier independently checks returned unknown-call ownership, range, null target and resolution; Python callee spelling is checked against the pinned source.
+
+### v0.525.0 retrieval and cost evidence
+
+The existing 21 fixed Fastify/NestJS/Django tasks retained the same selected symbols and every previously recovered required file and source fact (31/34 task-file pairs and 75/82 source facts). Independent verification covered 254 source excerpts, 392 lexical receipts and 144 returned unknown-call receipts, of which 56 were Python callee spellings. These receipt counts may include repeated source sites across tasks. The known-symbol lookup `django/core/handlers/exception.py#handle_uncaught_exception` separately returned two checked unknown calls, including `resolver.resolve_error_handler` at line 184, with null targets. The natural-language default HTTP 500 task still returned 0/3 required files and 0/7 required facts; retaining unknown call sites does not by itself fix that ranking gap or establish a target for the call.
+
+Three fresh CLI processes per task/build included startup, strict freshness checks and JSON serialization on Windows/Node 24.19.0. All v0.524.1 runs preceded index migration and the new-build runs. An initial v0.525.0 pass showed variable regressions, including +1,886 ms on one Django task. Profiling isolated 46–55 ms for the added call-site projection. Removing unnecessary status/count reads reduced that projection's five-pair median after one warm-up pair: Fastify 18.05 → 12.67 ms, NestJS 28.86 → 13.52 ms, Django 49.10 → 13.29 ms. Pair order alternated, both implementations read the same indexes, and every complete projection result was identical. This local improvement does not explain all process-level timing variation.
+
+The final build reran all 21 tasks, three processes each; complete parsed responses matched the initial v0.525.0 pass. No tests or indexing ran alongside query timings. Final median changes relative to v0.524.1 were:
+
+| Corpus and pinned commit | Tasks | Final v0.525.0 minus v0.524.1 |
+| --- | ---: | ---: |
+| Fastify, `70b14e92c0b55e8201f5530ba2e6bab4e928c784` | 10 | −129 to +174 ms |
+| NestJS, `35c3ded6dbf3f23f917ae88d0ed966932788cae6` | 7 | −1,072 to +133 ms |
+| Django, commit above | 4 | −35 to +158 ms |
+
+These sequential measurements do not isolate cache/order effects or prove an overall speedup. Extractor v427 migration re-extracted the corpora in 12.0 s, 43.7 s and 110.4 s respectively; these are upgrade timings, not first-index or changed-file incremental timings. Django kept 58,495 symbols and added 86,877 unresolved edges (65,947 → 152,824 total edges). Its database grew from 955,695,104 to 1,639,743,488 bytes, including retained generations and allocated SQLite pages; this is not a standalone size measurement of the new active facts. A focused lifecycle test verifies changed calls replace old receipts on incremental synchronization.
+
+Final build fingerprint: `acdc02d25893edb549ac926eed756d39af8a8140636b7f6352117f9330e7fe95` (728 files, 11,105,231 bytes). External reports are `*-before.json`, `*-after.json`, `*-final.json`, `retrieval-final-summary.json`, `projection-comparison.json`, `sync-summary.json`, and `exact-unknown-handler.json` under `SymbolLattice-evidence-052500`. Reproduce retrieval with `mcp/task-retrieval.mjs`, the existing manifests, three repetitions and explicit product roots; capture the baseline before migration. Quality claims remain limited to these pinned tasks and independent call-site audits.
+
+Release checks passed: `npm run check`, `npm run build`, `npm run verify:language-depth`, and the full test suite (3,152 passed, four skipped). These checks complement the pinned-corpus evidence; they do not establish complete Python dispatch support or eliminate the remaining retrieval gap.
 
 ## Python module binding audit
 

@@ -34,6 +34,44 @@ export function scoreTask(task, result) {
   };
 }
 
+export function verifyUnresolvedCalls(result, readSource) {
+  let verifiedCalls = 0, verifiedPythonCallees = 0;
+  const contexts = result.focuses?.length ? result.focuses : [{ symbol: result.match?.symbol, unresolvedCalls: result.unresolvedCalls }];
+  const compare = (a, b) => a.line - b.line || a.column - b.column;
+  for (const context of contexts) {
+    const evidence = context.unresolvedCalls;
+    if (!evidence) continue;
+    assert.equal(evidence.state, 'available', 'Expected a stable generation for call-site verification');
+    for (const edge of evidence.items) {
+      const owner = context.symbol;
+      assert.equal(edge.sourceId, owner.id);
+      assert.equal(edge.targetId, null);
+      assert.equal(edge.resolution, 'unresolved');
+      assert.equal(edge.kind, 'calls');
+      assert.equal(edge.filePath, owner.filePath);
+      assert.ok(compare(edge.range.start, owner.range.start) >= 0 && compare(edge.range.end, owner.range.end) <= 0);
+      assert.ok(compare(edge.range.start, edge.range.end) < 0);
+      const lines = readSource(edge.filePath).split(/\r\n|\r|\n|\u2028|\u2029/u);
+      for (const point of [edge.range.start, edge.range.end]) {
+        assert.ok(Number.isInteger(point.line) && Number.isInteger(point.column) && point.line >= 1 &&
+          point.line <= lines.length && point.column >= 1 && point.column <= lines[point.line - 1].length + 1);
+      }
+      const fragment = lines.slice(edge.range.start.line - 1, edge.range.end.line)
+        .map((line, index) => line.slice(index === 0 ? edge.range.start.column - 1 : 0,
+          index === edge.range.end.line - edge.range.start.line ? edge.range.end.column - 1 : undefined)).join('\n');
+      if (edge.evidence?.ruleId === 'syntax.python.member-call.unknown-receiver') {
+        assert.equal(fragment, fragment.trim(), 'Callee range must not include surrounding whitespace');
+        assert.equal(edge.confidence, 0);
+        assert.deepEqual(edge.evidence.candidateSymbolIds, []);
+        assert.equal(fragment.replace(/\\\n/g, '').replace(/#[^\n]*/g, '').replace(/\s/g, ''), edge.referenceName);
+        verifiedPythonCallees++;
+      }
+      verifiedCalls++;
+    }
+  }
+  return { verifiedCalls, verifiedPythonCallees };
+}
+
 export function verifyLexicalMatches(result, readSource) {
   let verifiedMatches = 0;
   const verify = (match, symbol) => {
@@ -217,6 +255,7 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
       processMilliseconds: durations, medianProcessMilliseconds: sorted[Math.floor(sorted.length / 2)],
       responseBytes: Buffer.byteLength(raw), markdownProjectionBytes: Buffer.byteLength(renderExploreText(response)),
       sourceVerification, lexicalVerification: verifyLexicalMatches(response, (file) => readFileSync(resolve(project, file), "utf8")),
+      unresolvedCallVerification: verifyUnresolvedCalls(response, (file) => readFileSync(resolve(project, file), "utf8")),
       reuseVerification: verifySourceReuse(response, (file) => readFileSync(resolve(project, file), "utf8")), result: response };
   });
   const report = {
