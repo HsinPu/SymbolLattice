@@ -2409,10 +2409,15 @@ function readActiveBoundedGraphBundle(
   const lexical = readBoundedSourceLexical(database, active.generationId, sourceSearchAvailable, sourcePaths, lexicalGroups);
   const sourceTerms = new Map(lexical.retrieval.candidates.map((candidate) =>
     [candidate.symbolId, new Set(candidate.matches.map((match) => match.term))]));
+  const coverageById = new Map<string, number>();
   const coverage = (row: SymbolRow): number => {
+    const cached = coverageById.get(row.id);
+    if (cached !== undefined) return cached;
     const words = new Set(identifierWords(row.name).flatMap(identifierTermVariants));
-    return lexicalGroups.filter((group) => sourceTerms.get(row.id)?.has(group[0]!) ||
+    const count = lexicalGroups.filter((group) => sourceTerms.get(row.id)?.has(group[0]!) ||
       group.some((term) => words.has(term) || row.name.toLowerCase().includes(term))).length;
+    coverageById.set(row.id, count);
+    return count;
   };
   const prioritizedRows = [...new Map([...directSymbolRows, ...lexical.rows].map((row) => [row.id, row])).values()]
     .sort((left, right) => lexicalGroups.length >= 2 ? coverage(right) - coverage(left) : 0);
@@ -2454,9 +2459,10 @@ function readActiveBoundedGraphBundle(
   for (let hop = 1; hop <= bounds.maxHops && frontier.length > 0; hop += 1) {
     const edgeRows = readBoundedEdgesByIds(database, active.generationId, frontier);
     if (edgeRows.length === 0) break;
-    const candidateIds = edgeRows.flatMap((row) =>
+    // Repeated endpoints need one existence lookup per hop, not one per edge.
+    const candidateIds = [...new Set(edgeRows.flatMap((row) =>
       row.target_id === null ? [row.source_id] : [row.source_id, row.target_id]
-    );
+    ))];
     const existingIds = readExistingSymbolIds(database, candidateIds);
     const nextFrontier: string[] = [];
     const nextFrontierSet = new Set<string>();

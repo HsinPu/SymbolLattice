@@ -2466,6 +2466,29 @@ describe("SqliteGraphStore", () => {
     expect(first?.snapshot.edges.map((edge) => edge.id)).toEqual(["edge-a-b", "edge-b-c"]);
   });
 
+  it("preserves distinct call receipts when hundreds of edges share endpoints", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const template = boundedGraphSnapshot();
+    const calls = Array.from({ length: 600 }, (_, index) => ({
+      ...boundedEdge(`repeated-${index}`, "a-root", "b-target", "src/a.ts"),
+      range: { start: { line: index + 1, column: 1 }, end: { line: index + 1, column: 8 } }
+    }));
+    const graphSnapshot = { ...template, edges: [...calls, template.edges[1]!] };
+    store.replaceProjectFacts({ projectPath, snapshot: graphSnapshot,
+      indexedAt: "2026-09-22T00:00:00.000Z", artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("shared-endpoints"), resolverVersion: "bounded-resolver-v1" });
+    const result = store.getActiveBoundedGraphBundle(projectPath, boundedRequest("Root"));
+    expect(result.snapshot.edges).toEqual(graphSnapshot.edges);
+    expect(result.snapshot.symbols.map(node => node.id)).toContain("c-tail");
+    expect(result.diagnostics.truncated).toBe(false);
+    const limited = store.getActiveBoundedGraphBundle(projectPath,
+      boundedRequest("Root", { maxRelationships: 10 }));
+    expect(limited.snapshot.edges).toEqual(calls.slice(0, 10));
+    expect(limited.diagnostics.truncated).toBe(true);
+    store.close();
+  });
+
   it("enforces node, relationship, seed-file, per-file, and hop caps", async () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();

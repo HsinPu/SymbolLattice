@@ -665,3 +665,34 @@ Each build used three fresh processes per task, alternating which build ran firs
 Typecheck, build, version consistency and the complete `npm test -- --maxWorkers 2` run pass: 3,120 tests passed, four existing skips (300 passing files, one skipped). Regression cases cover full-window replacement, intermediate caller matching, protected connections, rank protection and concept-rich paths followed by their upstream entry. Existing invalid, heuristic, cyclic and unavailable-path cases remain covered. Tests ran after performance measurement.
 
 Reproduce all nine `fastify-*-tasks.json` manifests through `benchmarks/mcp/task-retrieval.mjs` with the pinned indexed checkout and `--repetitions 3`, using `--product-root /external/baseline-052311` for baseline runs and explicit external output paths. `%TEMP%/SymbolLattice-evidence-052312` contains the baseline, task reports, `retrieval-comparison.json`, `upstream-verification.json`, `windows-paired.json`, first-attempt artifacts and test log. Archived runners `retrieval-052312.mjs`, `verify-upstream-052312.mjs` and `windows-paired-052312.mjs` run from the repository's ignored `.tmp/` directory and use the corpus under `%TEMP%/SymbolLattice-evidence-052310/fastify`. External corpora and generated evidence are not committed.
+
+### Reusing bounded retrieval calculations, v0.523.13
+
+CPU profiling identified repeated symbol-existence queries and candidate coverage calculations in bounded retrieval. Each hop now checks each distinct endpoint ID once while retaining every distinct edge receipt. Candidate sorting computes query coverage once per symbol within the current call; nothing is cached across requests or generations. Stable sorting, query policies, graph limits, freshness checks and source receipts are unchanged. This is a patch performance improvement; no schema migration or reindexing is required.
+
+The paired experiment uses Windows / Node v24.19.0, v0.523.12 commit `e8c0097` as baseline, and the same pinned Fastify checkout and index generation as the preceding section. Nine existing task questions plus three controls (`Reply.send`, `lib/reply.js`, and a nonexistent identifier) each receive one untimed call per build and five alternating-order timed pairs. Complete bounded bundles are deeply compared outside timing, including ordering, source matches, diagnostics and truncation. All twelve inputs match. These are compatibility checks on a known corpus, not independent proof of every graph relationship or unseen-project relevance.
+
+| Query | Median bounded retrieval ms, before → after |
+| --- | --- |
+| Multiple cookie headers | 729.61 → 697.88 |
+| Error response status | 668.51 → 642.17 |
+| Header-write errors | 733.69 → 709.26 |
+| Plugin dependencies | 612.14 → 608.04 |
+| Plugin version metadata | 206.51 → 204.25 |
+| Request validation | 653.74 → 626.98 |
+| Serialization-hook errors | 699.82 → 675.16 |
+| Serializer selection | 690.64 → 665.30 |
+| Stream failures | 672.85 → 645.85 |
+| Qualified identifier | 473.25 → 456.75 |
+| Nonexistent identifier | 49.57 → 48.60 |
+| File path | 369.17 → 351.66 |
+
+These timings cover the existing SQLite bounded-bundle method, including opening/reading the indexed store, seed retrieval and graph expansion. They exclude module startup, final query planning, freshness scanning and rendering; they are not whole-query speedup percentages. No tests, builds or indexing ran concurrently. First indexing, incremental sync, memory peaks and agent completion time/query count remain unmeasured.
+
+The nine full CLI task results are deeply equal between builds, including source plans, receipts, graph evidence, status and diagnostics. Required file recall remains 15/15 and source facts 35/36; the known serialization guard gap remains. The independent source verifier checks 121 excerpts and 207 lexical receipts. Judged selections remain 21 TP, 0 FP, 13 unjudged (judged precision 21/21, judgment coverage 21/34); unknown judgments are not counted as correct or incorrect. Markdown sizes are unchanged. No additional language or relevance coverage is claimed.
+
+Three fresh processes per task/build, with build-first order alternating between tasks, yielded these median full-process milliseconds: cookie headers 3,059 → 2,953; error status 3,032 → 2,910; header errors 3,062 → 3,008; plugin dependencies 2,924 → 2,867; version metadata 2,379 → 2,300; validation 3,121 → 2,932; serialization hooks 3,076 → 2,962; serializer selection 3,058 → 2,934; stream failures 3,044 → 2,941. These small samples include startup/freshness checks and are not a causal whole-query speedup estimate or SLO. The isolated paired measurements above better bound the changed operation's cost.
+
+Typecheck, build, version consistency and full `npm test -- --maxWorkers 2` pass: 3,121 tests passed and four existing skips (300 passing files, one skipped). A new regression preserves 600 distinct calls sharing endpoints, a following graph hop, and the exact first ten receipts under a relationship cap. Existing ordering, query isolation, freshness, generation mismatch and bounded traversal tests also pass. The complete test run followed all performance measurements; its output is archived as `full-test.log`.
+
+Baseline/candidate built-file SHA-256 values are `6f7526e209e358855fbda9ca2fa079ad3dc0dcaccdca9b877c6226f94e889e97` / `b4c9504349b830eb1ce9e5253e6ad93b397f2af4e2a161d20b6e5549c12da1c7`. Reproduce the nine manifests with `benchmarks/mcp/task-retrieval.mjs --project /external/fastify --manifest <manifest> --repetitions 3 --output <external-report>`, adding `--product-root /external/baseline-052312` for baseline runs. External workspace `%TEMP%/SymbolLattice-evidence-052313` contains the baseline, CPU profile, `query-profile.json`, `bundle-paired.json`, full task reports and `retrieval-comparison.json`. Archived runners `profile-query-052313.mjs`, `bundle-paired-052313.mjs` and `retrieval-052313.mjs` run from this repository's ignored `.tmp/` directory using `node .tmp/<runner>`; the corpus remains under `%TEMP%/SymbolLattice-evidence-052310/fastify`.
