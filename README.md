@@ -1,146 +1,97 @@
 # SymbolLattice
 
-讓 AI Agent 找到任務相關的程式碼，並帶回可核對的來源證據。
+**讓 AI Agent 找到相關程式碼，也找到判斷的依據。**
 
-繁體中文 | [English](README.en.md)
+SymbolLattice 是提供給開發者與 AI Agent 的本機程式碼搜尋工具。透過 CLI 或 MCP，用任務描述、符號名稱或檔案路徑查詢專案，取得原始碼、行號與跨檔關係證據。
 
-目前版本：**v0.527.1** · Node.js **>=22.13 <25** · [MIT](LICENSE)
+[English](README.en.md) · [開始使用](docs/getting-started.md) · [驗證與限制](benchmarks/README.md) · [回報問題](https://github.com/HsinPu/SymbolLattice/issues)
 
-SymbolLattice 在本機建立程式碼索引，透過 CLI 或 MCP 提供檔案、符號與跨檔關係查詢。適合在閱讀陌生專案、定位問題或準備修改時，先找到相關實作，再沿著來源證據追查。
+`v0.527.2` · Node.js `>=22.13 <25` · MIT
 
-## 你可以用它做什麼
+## 從「這段功能在哪裡？」開始
 
-- **找實作**：用符號名稱、檔案路徑或自然語言描述搜尋相關程式碼。
-- **核對證據**：查看來源路徑、行號、原始碼片段，以及支援關係判斷的依據。
-- **追蹤關係**：查詢已解析的呼叫、匯入、繼承與框架入口，協助評估修改影響。
-- **持續更新**：增量同步本機索引，查閱保留的索引歷史與差異。
-
-索引保存在被分析專案的 `.SymbolLattice/`。結果會標示未解析關係、來源新鮮度與截斷情況；靜態分析有其範圍，搜尋結果不能當作完整的影響保證。
-
-## 安裝
-
-需要 Git、Node.js `>=22.13 <25`、npm，以及 Windows PowerShell 5.1 或 PowerShell 7。
-
-目前未發布至 npm Registry。請使用官方 GitHub repository 的完整 40 字元 commit，或已存在的 `vX.Y.Z` tag；安裝器不接受 `main`、`HEAD` 等浮動 ref。
+接手陌生專案、追查錯誤或準備修改時，往往需要先找到實作，再確認它和其他檔案的關係。SymbolLattice 將程式碼建立為本機索引，讓這些查詢可以沿著來源繼續追查。
 
 ```powershell
-$ref = "<FULL_40_CHARACTER_COMMIT_OR_VX.Y.Z>"
-$bootstrap = Join-Path ([IO.Path]::GetTempPath()) ("SymbolLattice-bootstrap-" + [guid]::NewGuid().ToString("N"))
-
-git clone --filter=blob:none --no-checkout https://github.com/HsinPu/SymbolLattice.git $bootstrap
-if ($LASTEXITCODE -ne 0) { throw "Clone failed" }
-git -C $bootstrap fetch --depth 1 origin $ref
-if ($LASTEXITCODE -ne 0) { throw "Fetch failed" }
-git -C $bootstrap checkout --detach FETCH_HEAD
-if ($LASTEXITCODE -ne 0) { throw "Checkout failed" }
-
-# 預覽安裝計畫
-& (Join-Path $bootstrap "install.ps1") -Ref $ref
-
-# 確認預覽後，安裝到目前使用者的 npm global prefix
-& (Join-Path $bootstrap "install.ps1") -Ref $ref -Apply -Yes
+SymbolLattice explore "Where are incoming requests validated?" --project . --json
 ```
 
-完成後可刪除 `$bootstrap` 指向的暫存 checkout。安裝 CLI 不會修改 Codex 設定或建立專案索引。
+查詢結果可包含：
+
+- **相關檔案與符號**：從任務描述找到可能需要閱讀的實作。
+- **可核對的來源**：檔案路徑、行號與原始碼片段，方便確認判斷是否成立。
+- **程式碼之間的關係**：已解析的呼叫、匯入、繼承與框架入口。
+- **仍需追查的部分**：未解析呼叫、來源新鮮度與結果截斷資訊。
+
+你可以直接在終端機查詢，也可以讓支援 MCP 的 Agent 使用這些證據。
 
 ## 快速開始
 
-在**要分析的專案根目錄**執行，不是 SymbolLattice 的安裝目錄：
+需要 Git、npm、Node.js `>=22.13 <25`，以及 Windows PowerShell 5.1 或 PowerShell 7。目前透過 GitHub 原始碼安裝，尚未發布至 npm Registry。
+
+### 1. 安裝
+
+在 PowerShell 執行。以下會 clone 專案，取得該 checkout 的完整 commit，並用固定 commit 安裝：
 
 ```powershell
-# 建立索引並查看狀態
-SymbolLattice init .
-SymbolLattice status .
+git clone https://github.com/HsinPu/SymbolLattice.git
+if ($LASTEXITCODE -ne 0) { throw "Clone failed" }
+Set-Location SymbolLattice
+$ref = git rev-parse HEAD
+if ($LASTEXITCODE -ne 0) { throw "Cannot resolve commit" }
 
-# 不知道符號名稱時，用任務描述探索
-SymbolLattice explore "Where are incoming requests validated?" --project . --json
-
-# 已知符號名稱時精確查找；請換成專案中的名稱
-SymbolLattice find createOrder --project . --json
-
-# 修改原始碼或升級 SymbolLattice 後，同步索引
-SymbolLattice sync .
+# 先預覽安裝計畫，確認後再執行下一行
+.\install.ps1 -Ref $ref
+.\install.ps1 -Ref $ref -Apply -Yes
 ```
 
-先查看命中的檔案與來源片段，再依關係證據追查。若結果指出索引過期，先執行 `sync` 再重新查詢；即時查詢無法確認索引新鮮度時，可能拒絕回傳結果。
+安裝器使用完整 commit 或既有版本 tag，不接受 `main` 等浮動 ref。指定版本與安裝細節見[安裝指南](docs/getting-started.md#安裝)。
 
-| 需求 | 指令 |
-| --- | --- |
-| 搜尋符號、文字或讀取檔案來源 | `find`、`search`、`file` |
-| 追蹤呼叫與繼承 | `callers`、`callees`、`hierarchy` |
-| 評估修改影響 | `impact`、`affected` |
-| 取得附來源的任務脈絡 | `explore`、`context`、`investigate` |
-| 建立、更新與查看索引 | `init`、`sync`、`status` |
+### 2. 查詢你的專案
 
-執行 `SymbolLattice <command> --help` 查看參數。
-
-## 讓 AI Agent 使用
-
-### Codex 整合
+切換到**要分析的專案根目錄**，建立索引後開始查詢：
 
 ```powershell
-# 先預覽，再套用設定並檢查
+SymbolLattice init .
+SymbolLattice explore "Where are incoming requests validated?" --project . --json
+```
+
+索引保存在該專案的 `.SymbolLattice/`。修改原始碼或升級後，執行 `SymbolLattice sync .` 更新索引；已知符號名稱時，也可使用 `SymbolLattice find <name> --project . --json`。
+
+### 3. 接上 AI Agent
+
+Codex 使用者可預覽並套用整合設定：
+
+```powershell
 SymbolLattice install codex
 SymbolLattice install codex --apply --yes
 SymbolLattice doctor codex
 ```
 
-整合會備份並更新 `~/.codex/config.toml` 的 `mcp_servers.SymbolLattice`，以及 `~/.codex/AGENTS.md` 的受管理區塊。完成後重新啟動 Codex 或開啟新 task。
+整合會備份並更新 Codex 設定與受管理的 AGENTS 區塊；完成後重新啟動 Codex 或開啟新 task。專案仍須先建立索引。
 
-整合不會建立專案索引。請先在目標專案執行 `SymbolLattice init .`。共用一個 `.git` 的 monorepo 建立一次；workspace 中的獨立 repository 各自建立。
+其他 MCP 用戶端可使用 `SymbolLattice serve --mcp --project <project-path>` 啟動 server。預設提供 `SymbolLattice_explore`；查詢本身唯讀，server 預設可在背景同步索引。設定與停用方式見 [MCP 使用指南](docs/getting-started.md#其他-mcp-用戶端)。
 
-設定使用 Node 與 CLI 的絕對路徑。移動或重裝 CLI 後，請重新執行整合。需要移除時，先以 `SymbolLattice uninstall codex` 預覽，再加上 `--apply --yes` 套用。
+## 支援範圍
 
-### 其他 MCP 用戶端
+涵蓋 TypeScript／JavaScript、Python、Java、Go、Rust、C／C++、C# 與多種模板、設定格式。**各語言的解析深度不同**，可掃描不代表完整支援其型別、框架或跨檔語意。
 
-使用下列指令啟動 MCP server，專案路徑請替換成實際位置：
+SymbolLattice 使用靜態分析。動態呼叫、反射與外部依賴可能無法解析，同名宣告也不代表已確認的呼叫目標。結果有數量與來源片段上限；未找到關係不能用來保證修改或刪除安全。索引過期時請先同步，無法確認新鮮度的即時查詢可能拒絕回傳結果。
 
-```powershell
-SymbolLattice serve --mcp --project C:\path\to\project
-```
+詳見[語言能力與限制](src/domain/language-depth.ts)及[真實專案驗證](benchmarks/README.md)。查找品質與速度依專案及查詢而異。
 
-- 預設工具為 `SymbolLattice_explore`，回傳附行號來源、關係證據與限制說明的 Markdown；需要 JSON 時使用 CLI 的 `explore --json`。
-- 查詢本身唯讀，server 預設可在背景更新索引；加入 `--no-auto-sync` 可停用背景更新。
-- 可透過 `projectPath` 查詢不同 repository，但必須先各自建立索引；查詢不會初始化或合併索引。
-- 以環境變數 `SYMBOL_LATTICE_MCP_TOOLS=node,impact` 加入工具，或設為 `all` 提供全部工具。
+## 文件與參與
 
-## 支援範圍與限制
+| 想了解什麼 | 從這裡開始 |
+| --- | --- |
+| 安裝、指令、MCP 設定與移除 | [使用指南](docs/getting-started.md) |
+| 更新既有安裝 | [升級指南](docs/getting-started.md#升級) |
+| 品質、效能與已知缺口 | [驗證文件](benchmarks/README.md) |
+| 回報錯誤或提出需求 | [GitHub Issues](https://github.com/HsinPu/SymbolLattice/issues) |
 
-可掃描的語言與格式包含 TypeScript／JavaScript、Python、Java、Go、Rust、C／C++、C# 與 Web 模板。**各語言的宣告擷取、跨檔解析與框架支援深度不同。** 詳細範圍見[語言能力定義](src/domain/language-depth.ts)。
-
-- 動態呼叫、反射、巨集與外部依賴可能無法解析；未找到關係不代表關係不存在。
-- `explore` 可限量提供索引已記錄的未解析呼叫位置與同名宣告線索；這些線索不等於已確認的呼叫目標。
-- 原始碼片段、關係展開與結果數量都有上限。請查看截斷資訊與後續查詢提示，不將局部結果視為完整結果。
-- 查找品質與速度取決於專案和查詢。固定專案的測試結果不代表所有專案都能取得相同表現。
-
-實測結果、已知缺口與重現方式見[驗證文件](benchmarks/README.md)。
-
-## 升級
-
-使用上方安裝流程指定新的固定 commit 或既有 tag，重新安裝後執行 Codex 整合，並在各專案執行 `SymbolLattice sync .`。目前為 `0.x` 開發階段，升級前請核對對應版本的相容性與遷移說明。
-
-### 從 v0.420.0 或更早版本升級
-
-舊套件名稱與索引不會自動遷移。先保留可回復副本，再移除舊整合與 CLI：
-
-```powershell
-symbol-lattice uninstall codex --apply --yes
-npm uninstall -g @hsinpu/symbol-lattice
-```
-
-依上方 GitHub 固定 ref 流程安裝新 CLI，然後重新整合並建立索引：
-
-```powershell
-SymbolLattice install codex --apply --yes
-cd C:\path\to\project
-SymbolLattice init .
-```
-
-確認新 CLI、MCP 與 `.SymbolLattice` 索引正常後，再清理舊資料。
+目前為 `0.x` 開發階段，升級前請確認相容性說明。**v0.420.0 或更早版本的套件名稱與索引不會自動遷移**，請依升級指南處理。
 
 ## 開發
-
-在本專案 checkout 中執行：
 
 ```bash
 npm ci
@@ -149,16 +100,8 @@ npm run build
 npm test
 ```
 
-先建置再測試，確保 `dist/` 與 parser assets 可用。依修改範圍另執行：
-
-```bash
-npm run verify:language-depth
-npm run verify:mcp-worker-generation
-npm pack --dry-run
-```
-
-`npm pack --dry-run` 仍會觸發 `prepack`，執行建置與語言深度檢查。開發與驗證要求見 [AGENTS.md](AGENTS.md)，工具入口見 [scripts/README.md](scripts/README.md)。
+先建置再測試。完整檢查要求見 [AGENTS.md](AGENTS.md)，其他驗證與打包步驟見[開發指南](docs/getting-started.md#開發)，工具入口見 [scripts/README.md](scripts/README.md)。
 
 ## 授權
 
-[MIT](LICENSE)。Parser 資產的第三方授權與來源資訊保留於 `src/assets/`。
+[MIT](LICENSE)。Parser 資產另附第三方授權與來源資訊，保留於 `src/assets/`。
