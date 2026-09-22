@@ -7,9 +7,10 @@ import {
 import type { GraphSnapshot, SymbolNode } from "../domain/types.js";
 import type { ExploreQuerySelection } from "./explore-query.js";
 
-export const EXPLORE_PATH_SPINE_POLICY = "explore-path-spines-v2" as const;
+export const EXPLORE_PATH_SPINE_POLICY = "explore-path-spines-v3" as const;
 export const EXPLORE_PATH_SPINE_LIMITS = {
   maximumPairAttempts: 16,
+  maximumReversePairAttempts: 16,
   maximumHops: 4,
   maximumVisitedSymbolsPerPair: 500,
   maximumSpines: 4,
@@ -32,6 +33,7 @@ export interface ExplorePathSpinePlan {
   readonly summary: {
     readonly pairCandidateCount: number;
     readonly attemptedPairCount: number;
+    readonly reverseAttemptedPairCount?: number;
     readonly discoveredSpineCount: number;
     readonly selectedSpineCount: number;
     readonly bridgeSymbolCount: number;
@@ -85,9 +87,10 @@ export function planExplorePathSpines(
   const attemptedPairs = pairs.slice(0, EXPLORE_PATH_SPINE_LIMITS.maximumPairAttempts);
   const discovered: SpineCandidate[] = [];
   let traversalTruncated = false;
+  let reverseAttemptedPairCount = 0;
 
   for (const pair of attemptedPairs) {
-    const result = findEvidencePath(
+    let result = findEvidencePath(
       graph,
       pair.from.symbol.id,
       pair.to.symbol.id,
@@ -97,6 +100,18 @@ export function planExplorePathSpines(
       view
     );
     traversalTruncated ||= result.truncated;
+    let from = pair.from, to = pair.to;
+    // Ranking is not call direction. Preserve every original forward attempt,
+    // then recover only missing paths without reversing any evidence edge.
+    if (result.path === null && reverseAttemptedPairCount < EXPLORE_PATH_SPINE_LIMITS.maximumReversePairAttempts) {
+      reverseAttemptedPairCount += 1;
+      from = pair.to;
+      to = pair.from;
+      result = findEvidencePath(graph, from.symbol.id, to.symbol.id,
+        EXPLORE_PATH_SPINE_LIMITS.maximumHops, EXPLORE_PATH_SPINE_LIMITS.maximumVisitedSymbolsPerPair,
+        undefined, view);
+      traversalTruncated ||= result.truncated;
+    }
     const path = result.path;
     if (path === null || path.edges.length < 2) continue;
     const bridgeSymbols = path.symbols
@@ -104,8 +119,8 @@ export function planExplorePathSpines(
       .filter((symbol) => !selectedSymbolIds.has(symbol.id));
     if (bridgeSymbols.length === 0) continue;
     discovered.push({
-      fromFocusRank: pair.from.rank,
-      toFocusRank: pair.to.rank,
+      fromFocusRank: from.rank,
+      toFocusRank: to.rank,
       score: (pair.from.score + pair.to.score) / 2,
       path,
       bridgeSymbols,
@@ -145,6 +160,7 @@ export function planExplorePathSpines(
     summary: {
       pairCandidateCount: pairs.length,
       attemptedPairCount: attemptedPairs.length,
+      reverseAttemptedPairCount,
       discoveredSpineCount: discovered.length,
       selectedSpineCount: selected.length,
       bridgeSymbolCount: bridgeIds.size,

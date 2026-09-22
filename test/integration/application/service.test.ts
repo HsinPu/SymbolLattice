@@ -1137,7 +1137,7 @@ describe("SymbolLatticeService", () => {
         summary: { candidateCount: 4 }
       },
       pathSpinePlan: {
-        policy: "explore-path-spines-v2",
+        policy: "explore-path-spines-v3",
         summary: { selectedSpineCount: 0, bridgeSymbolCount: 0 }
       },
       sourceWindowPlan: {
@@ -1697,7 +1697,7 @@ describe("SymbolLatticeService", () => {
       mode: "query",
       status: { stale: true },
       pathSpinePlan: {
-        policy: "explore-path-spines-v2",
+        policy: "explore-path-spines-v3",
         summary: { selectedSpineCount: 1, bridgeSymbolCount: 1 },
         spines: [{ bridgeSymbols: [{ name: "bridgeFlow", filePath: "src/bridge.ts" }] }]
       }

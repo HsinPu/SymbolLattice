@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/fastify/fastify",
+  "commit": "70b14e92c0b55e8201f5530ba2e6bab4e928c784",
+  "truthMethod": "Manual reading of pinned reply.js and error-handler.js before opening either product's output for this task. Held out from the rank-direction repair developed on the existing error-response-status case; same known repository, not an unseen project. Static calls inside callbacks do not establish runtime ordering. File judgments are incomplete.",
+  "tasks": [{
+    "id": "stream-failure-error-handler",
+    "split": "held-out",
+    "query": "How do streamed response failures reach the error handler?",
+    "requiredFiles": ["lib/reply.js", "lib/error-handler.js"],
+    "supportingFiles": ["lib/hooks.js", "lib/route.js"],
+    "irrelevantFiles": ["lib/pluginUtils.js", "lib/pluginOverride.js"],
+    "evidence": [
+      { "file": "lib/reply.js", "line": 640, "text": "sendStream(payload, res, reply)" },
+      { "file": "lib/reply.js", "line": 707, "text": "onErrorHook(reply, err)" },
+      { "file": "lib/reply.js", "line": 815, "text": "handleError(reply, error, cb)" },
+      { "file": "lib/error-handler.js", "line": 51, "text": "const errorHandler = reply[kReplyNextErrorHandler] || context.errorHandler" }
+    ]
+  }]
+}
