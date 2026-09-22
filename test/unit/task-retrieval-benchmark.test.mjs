@@ -3,9 +3,38 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { scoreTask, verifySourceExcerpts, verifyLexicalMatches, verifySourceReuse, verifyUnresolvedCalls, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
+import { scoreTask, verifySourceExcerpts, verifyLexicalMatches, verifySourceReuse, verifyUnresolvedCalls, verifyNameFollowups, verifyNumericQualifiers, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
 
 describe("task retrieval benchmark judgments", () => {
+  it("rejects numeric qualifier claims based only on a digit prefix or an absent query term", () => {
+    const result = { queryPlan: { identifierTerms: ['503'] }, focuses: [{ symbol: { name: 'handler503' },
+      numericQualifier: { policy: 'numeric-query-qualifiers-v1', score: 500, terms: ['503'] } }] };
+    expect(verifyNumericQualifiers(result)).toEqual({ verifiedQualifiers: 1 });
+    result.focuses[0].symbol.name = 'handler5030';
+    expect(() => verifyNumericQualifiers(result)).toThrow();
+    result.focuses[0].sourceMatches = [{ term: '503', token: 'STATUS_503' }];
+    expect(verifyNumericQualifiers(result)).toEqual({ verifiedQualifiers: 1 });
+    result.queryPlan.identifierTerms = [];
+    expect(() => verifyNumericQualifiers(result)).toThrow();
+  });
+  it("requires supplementary names to cite two original unresolved call receipts", () => {
+    const calls = ['a', 'b'].map(id => ({ id, sourceId: id, targetId: null, kind: 'calls',
+      resolution: 'unresolved', filePath: `${id}.py`, referenceName: 'resolver.resolve_error' }));
+    const result = { queryPlan: { nameFollowupSearch: { emittedCount: 1 } }, focuses: [
+      ...calls.map(edge => ({ symbol: { id: edge.sourceId, filePath: edge.filePath },
+        unresolvedCalls: { state: 'available', items: [edge] } })),
+      { symbol: { id: 'target', name: 'resolve_error', filePath: 'target.py' }, nameFollowup: {
+        state: 'unresolved-name-match', scope: 'bounded-candidates', matchingDeclarationCount: 1, calls
+      } }
+    ] };
+    expect(verifyNameFollowups(result)).toEqual({ verifiedFollowups: 1, verifiedOrigins: 2 });
+    for (const mutate of [r => { r.focuses[2].nameFollowup.calls[0].targetId = 'target'; },
+      r => { r.focuses[2].nameFollowup.calls.pop(); }, r => { r.focuses[2].symbol.name = 'different'; },
+      r => { r.focuses[2].nameFollowup.calls[0].filePath = 'changed.py'; }]) {
+      const changed = structuredClone(result); mutate(changed);
+      expect(() => verifyNameFollowups(changed)).toThrow();
+    }
+  });
   it("independently rejects invented unknown-call targets, names, owners and source positions", () => {
     const edge = { sourceId: "owner", targetId: null, kind: "calls", resolution: "unresolved", confidence: 0,
       filePath: "a.py", referenceName: "client.send", range: { start: { line: 2, column: 5 }, end: { line: 2, column: 16 } },

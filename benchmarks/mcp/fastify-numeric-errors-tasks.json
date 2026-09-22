@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/fastify/fastify",
+  "commit": "70b14e92c0b55e8201f5530ba2e6bab4e928c784",
+  "truthMethod": "Manual reading of pinned source before running either query against the product. These tasks were first evaluated after freezing the numeric-context-followup prototype, independently of the Django development task. Subsequent runs are regression validation, not unseen evaluation. The header task covers the default client error path, assuming a writable socket and no custom client error handler. The body task covers the built-in buffered body parser, with both advertised and observed length enforcement. Dynamic dispatch and external createError implementation are not assumed exact. File judgments are incomplete; no product output was used to define or revise this truth.",
+  "tasks": [
+    {
+      "id": "oversized-headers-http-431",
+      "split": "held-out",
+      "query": "How does the server handle oversized request headers and send an HTTP 431 response?",
+      "requiredFiles": ["fastify.js"],
+      "supportingFiles": ["lib/server.js"],
+      "irrelevantFiles": [],
+      "evidence": [
+        {"file":"fastify.js","line":728,"text":"err.code === 'HPE_HEADER_OVERFLOW'"},
+        {"file":"fastify.js","line":729,"text":"errorCode = '431'"},
+        {"file":"fastify.js","line":731,"text":"statusCode\":431"},
+        {"file":"fastify.js","line":749,"text":"socket.write(`HTTP/1.1 ${errorCode} ${errorStatus}"}
+      ]
+    },
+    {
+      "id": "oversized-body-http-413",
+      "split": "held-out",
+      "query": "Where does the server reject a request body with HTTP 413 when it exceeds the allowed size?",
+      "requiredFiles": ["lib/contentTypeParser.js","lib/errors.js"],
+      "supportingFiles": ["lib/reply.js","lib/error-handler.js"],
+      "irrelevantFiles": [],
+      "evidence": [
+        {"file":"lib/contentTypeParser.js","line":224,"text":"options.limit === null ? parser.bodyLimit : options.limit"},
+        {"file":"lib/contentTypeParser.js","line":227,"text":"contentLength > limit"},
+        {"file":"lib/contentTypeParser.js","line":228,"text":"done(new FST_ERR_CTP_BODY_TOO_LARGE(), undefined)"},
+        {"file":"lib/contentTypeParser.js","line":251,"text":"receivedLength > limit || receivedEncodedLength > limit"},
+        {"file":"lib/contentTypeParser.js","line":255,"text":"done(new FST_ERR_CTP_BODY_TOO_LARGE(), undefined)"},
+        {"file":"lib/errors.js","line":105,"text":"FST_ERR_CTP_BODY_TOO_LARGE: createError("},
+        {"file":"lib/errors.js","line":108,"text":"413,"}
+      ]
+    }
+  ]
+}

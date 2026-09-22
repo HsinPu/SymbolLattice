@@ -13,11 +13,14 @@ import {
   type SymbolNode
 } from "../domain/index.js";
 
-import { identifierTermGroups, identifierTermVariants, identifierWords } from "../domain/identifier-search.js";
+import { identifierNumbers, numericIdentifierTerms, identifierTermGroups, identifierTermVariants, identifierWords } from "../domain/identifier-search.js";
 import { SOURCE_LEXICAL_SCORING, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
 import { downstreamFocusPaths, type ExploreFlowFocus } from "./explore-flow-focus.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v18" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v19" as const;
+export const EXPLORE_NUMERIC_QUERY = {
+  policy: "numeric-query-qualifiers-v1", maximumIdentifierTerms: 12, qualifierScore: 500
+} as const;
 export const EXPLORE_QUERY_FOCUS_COVERAGE = {
   policy: "same-file-source-coverage-v1",
   minimumRelativeScore: 0.75,
@@ -135,6 +138,12 @@ export type ExploreQuerySelectionReason =
   | "graph-connected"
   | "graph-mass"
   | "graph-diffusion";
+
+export interface ExploreNumericQualifier {
+  readonly policy: typeof EXPLORE_NUMERIC_QUERY.policy;
+  readonly terms: readonly string[];
+  readonly score: typeof EXPLORE_NUMERIC_QUERY.qualifierScore;
+}
 
 export interface ExploreQueryGraphMass {
   readonly policy: typeof EXPLORE_QUERY_GRAPH_MASS_POLICY;
@@ -328,6 +337,8 @@ export interface ExploreQuerySelection {
   readonly sourceMatches?: readonly SourceLexicalMatch[];
   readonly sourceScore?: number;
   readonly focusCoverage?: ExploreQueryFocusCoverage;
+  readonly numericQualifier?: ExploreNumericQualifier;
+  readonly nameFollowup?: import("./explore-name-followups.js").ExploreNameFollowup;
   readonly reasons: readonly ExploreQuerySelectionReason[];
 }
 
@@ -420,9 +431,12 @@ export interface ExploreQueryPlan {
     readonly characters: number;
     readonly usedCharacters: number;
     readonly truncated: boolean;
+    readonly identifierTermsTruncated?: boolean;
   };
   readonly fileHints: readonly string[];
   readonly identifierTerms: readonly string[];
+  readonly numericQuery?: typeof EXPLORE_NUMERIC_QUERY;
+  readonly nameFollowupSearch?: import("./explore-name-followups.js").ExploreNameFollowupSearch;
   readonly sourceLexical?: (Omit<SourceLexicalRetrieval, "candidates"> & { readonly matchedSymbols: number }) | null;
   readonly queryIntent: {
     readonly tests: boolean;
@@ -456,7 +470,10 @@ export interface ExploreQueryPlan {
     readonly graphExpansion: ExploreQueryGraphExpansionReceipt;
     readonly graphDiffusion: ExploreQueryGraphDiffusionReceipt;
   };
-  readonly limits: typeof EXPLORE_QUERY_LIMITS;
+  readonly limits: Omit<typeof EXPLORE_QUERY_LIMITS, "maximumIdentifierTerms" | "maximumFiles"> & {
+    readonly maximumIdentifierTerms: number;
+    readonly maximumFiles: number;
+  };
   readonly summary: {
     readonly candidateCount: number;
     readonly lexicalCandidateCount: number;
@@ -488,7 +505,7 @@ export interface ExploreQueryPlan {
   readonly selection: readonly ExploreQuerySelection[];
 }
 
-interface ExploreQueryGraph {
+export interface ExploreQueryGraph {
   readonly files?: readonly IndexedFile[];
   readonly symbols: readonly SymbolNode[];
   readonly edges: readonly GraphEdge[];
@@ -500,6 +517,7 @@ interface Candidate {
   readonly matchedTerms: readonly string[];
   readonly sourceMatches?: readonly SourceLexicalMatch[];
   readonly sourceScore?: number;
+  readonly numericQualifier?: ExploreNumericQualifier;
   readonly baseReasons: readonly ExploreQuerySelectionReason[];
   readonly baseScore: number;
   readonly generated: GeneratedFileClassification;
@@ -678,7 +696,7 @@ interface ExploreQueryRoleIntent {
 // Match unsafe path-looking tokens too so rejected traversal/absolute hints do
 // not leak back into identifier ranking as misleading `secret.ts` terms.
 const FILE_HINT_EXPRESSION = /(?:[^\s`"'<>]+[\\/])+[^\s`"'<>]+\.[\p{L}\p{N}]+(?::[1-9]\d*(?::\d+)?)?/gu;
-const IDENTIFIER_EXPRESSION = /[\p{L}_$][\p{L}\p{N}_$.-]*/gu;
+const IDENTIFIER_EXPRESSION = /[\p{L}\p{N}_$][\p{L}\p{N}_$.-]*/gu;
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -686,6 +704,13 @@ function compareText(left: string, right: string): number {
 
 function normalizedIdentifier(value: string): string {
   return value.normalize("NFKC").toLocaleLowerCase().replace(/[^\p{L}\p{N}_$]/gu, "");
+}
+
+function normalizedQueryIdentifier(value: string): string {
+  const normalized = value.normalize("NFKC");
+  // Do not invent integer 5030 from a decimal/version/range token such as 503.0.
+  if (/^\p{N}[\p{N}.-]*$/u.test(normalized) && !/^\p{N}+[.-]*$/u.test(normalized)) return "";
+  return normalizedIdentifier(normalized);
 }
 
 function canonicalFileHint(value: string): string | null {
@@ -711,6 +736,7 @@ function parseQuery(query: string): {
   readonly input: ExploreQueryPlan["input"];
   readonly fileHints: readonly string[];
   readonly identifierTerms: readonly string[];
+  readonly maximumIdentifierTerms: number;
   readonly testIntentTerms: readonly string[];
   readonly iconIntentTerms: readonly string[];
   readonly localizationIntentTerms: readonly string[];
@@ -747,8 +773,11 @@ function parseQuery(query: string): {
     }
   };
   const seenTerms = new Set<string>();
+  let identifierTermsTruncated = false;
+  const maximumTerms = numericIdentifierTerms([...withoutFiles.matchAll(IDENTIFIER_EXPRESSION)].map(match => normalizedQueryIdentifier(match[0]))).length > 0
+    ? EXPLORE_NUMERIC_QUERY.maximumIdentifierTerms : EXPLORE_QUERY_LIMITS.maximumIdentifierTerms;
   for (const match of withoutFiles.matchAll(IDENTIFIER_EXPRESSION)) {
-    const term = normalizedIdentifier(match[0]);
+    const term = normalizedQueryIdentifier(match[0]);
     if (TEST_INTENT_TERMS.has(term)) {
       recordIntentTerm(testIntentTerms, term);
       continue;
@@ -764,9 +793,12 @@ function parseQuery(query: string): {
     if (
       term.length < 3 ||
       STOP_WORDS.has(term) ||
-      seenTerms.has(term) ||
-      identifierTerms.length >= EXPLORE_QUERY_LIMITS.maximumIdentifierTerms
+      seenTerms.has(term)
     ) {
+      continue;
+    }
+    if (identifierTerms.length >= maximumTerms) {
+      identifierTermsTruncated = true;
       continue;
     }
     seenTerms.add(term);
@@ -781,10 +813,12 @@ function parseQuery(query: string): {
     input: {
       characters: query.length,
       usedCharacters: bounded.length,
-      truncated: trimmed.length > bounded.length
+      truncated: trimmed.length > bounded.length,
+      ...(identifierTermsTruncated ? { identifierTermsTruncated: true } : {})
     },
     fileHints,
     identifierTerms,
+    maximumIdentifierTerms: maximumTerms,
     testIntentTerms,
     iconIntentTerms,
     localizationIntentTerms,
@@ -891,7 +925,8 @@ function candidateFor(
   filesByPath: ReadonlyMap<string, IndexedFile>,
   sourceMatches: readonly SourceLexicalMatch[] = [],
   sourceScore = 0,
-  executionIntent = false
+  executionIntent = false,
+  numericQueryTerms: ReadonlySet<string> = new Set()
 ): Candidate | null {
   if (symbol.kind === "file") return null;
   const explicitFile = fileHints.includes(symbol.filePath);
@@ -899,6 +934,7 @@ function candidateFor(
   const qualifiedName = normalizedIdentifier(symbol.qualifiedName);
   const normalizedFileName = normalizedIdentifier(fileName(symbol.filePath));
   const nameWords = new Set(identifierWords(symbol.name));
+  const nameNumbers = numericQueryTerms.size === 0 ? [] : identifierNumbers(symbol.name);
   const matchedTerms: string[] = [];
   const coveredTerms: string[] = [];
   let exactSymbolTerm = false;
@@ -908,6 +944,16 @@ function candidateFor(
   let inflectedSymbolTerm = false;
 
   for (const term of identifierTerms) {
+    if (numericQueryTerms.has(term)) {
+      if (nameNumbers.includes(term)) {
+        if (name === term) exactSymbolTerm = true;
+        else if (qualifiedName.endsWith(term)) qualifiedSymbolTerm = true;
+        else partialSymbolTerm = true;
+        matchedTerms.push(term);
+        coveredTerms.push(term);
+      }
+      continue;
+    }
     if (name === term) {
       exactSymbolTerm = true;
       matchedTerms.push(term);
@@ -1009,6 +1055,12 @@ function candidateFor(
       baseReasons.push("declaration-source-only");
     }
   }
+  const numericTerms = [...numericQueryTerms].filter(term =>
+    nameNumbers.includes(term) || sourceMatches.some(match => match.term === term));
+  const numericQualifier: ExploreNumericQualifier | undefined = numericTerms.length === 0 ? undefined : {
+    policy: EXPLORE_NUMERIC_QUERY.policy, terms: numericTerms, score: EXPLORE_NUMERIC_QUERY.qualifierScore
+  };
+  if (numericQualifier !== undefined) baseScore += numericQualifier.score;
   const generated = generatedClassificationFor(filesByPath.get(symbol.filePath) ?? {});
   const sourceRole = sourceRoleClassificationFor(filesByPath.get(symbol.filePath) ?? {});
   const sourceRoleWorth = sourceRoleWorthFor(sourceRole.role, explicitFile, roleIntent);
@@ -1018,6 +1070,7 @@ function candidateFor(
     matchedTerms: [...new Set(matchedTerms)],
     sourceMatches,
     sourceScore,
+    ...(numericQualifier === undefined ? {} : { numericQualifier }),
     baseReasons,
     baseScore,
     generated,
@@ -2232,6 +2285,7 @@ export function planExploreQuery(
   sourceLexical?: SourceLexicalRetrieval
 ): ExploreQueryPlan {
   const parsed = parseQuery(query);
+  const numericQueryTerms = new Set(numericIdentifierTerms(parsed.identifierTerms));
   const roleIntent: ExploreQueryRoleIntent = {
     tests: parsed.testIntentTerms.length > 0,
     icons: parsed.iconIntentTerms.length > 0,
@@ -2249,7 +2303,8 @@ export function planExploreQuery(
       filesByPath,
       sourceById.get(symbol.id)?.matches,
       sourceById.get(symbol.id)?.score,
-      executionIntent
+      executionIntent,
+      numericQueryTerms
     ))
     .filter((candidate): candidate is Candidate => candidate !== null);
   const seedFiltering = filterLowValueCandidates(lexicalCandidates, roleIntent);
@@ -2358,6 +2413,7 @@ export function planExploreQuery(
       baseScore: candidate.baseScore,
       sourceMatches: candidate.sourceMatches ?? [],
       sourceScore: candidate.sourceScore ?? 0,
+      ...(candidate.numericQualifier === undefined ? {} : { numericQualifier: candidate.numericQualifier }),
       connectionScore: candidate.connectionScore,
       graphMass: {
         policy: EXPLORE_QUERY_GRAPH_MASS_POLICY,
@@ -2432,11 +2488,13 @@ export function planExploreQuery(
     input: parsed.input,
     fileHints: parsed.fileHints,
     identifierTerms: parsed.identifierTerms,
+    ...(parsed.maximumIdentifierTerms === EXPLORE_NUMERIC_QUERY.maximumIdentifierTerms ? { numericQuery: EXPLORE_NUMERIC_QUERY } : {}),
     sourceLexical: sourceLexical === undefined ? null : {
       policy: sourceLexical.policy, limits: sourceLexical.limits, state: sourceLexical.state,
       scannedFiles: sourceLexical.scannedFiles, scannedSymbols: sourceLexical.scannedSymbols,
       scannedCharacters: sourceLexical.scannedCharacters, truncated: sourceLexical.truncated,
-      matchedSymbols: sourceLexical.candidates.length
+      matchedSymbols: sourceLexical.candidates.length,
+      ...(sourceLexical.numericBindingTerms === undefined ? {} : { numericBindingTerms: sourceLexical.numericBindingTerms })
     },
     queryIntent: {
       ...roleIntent,
@@ -2478,7 +2536,7 @@ export function planExploreQuery(
       graphExpansion: graphExpansion.receipt,
       graphDiffusion: graphDiffusion.receipt
     },
-    limits: EXPLORE_QUERY_LIMITS,
+    limits: { ...EXPLORE_QUERY_LIMITS, maximumIdentifierTerms: parsed.maximumIdentifierTerms },
     summary: {
       candidateCount: candidates.length,
       lexicalCandidateCount: lexicalCandidates.length,

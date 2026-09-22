@@ -34,6 +34,59 @@ export function scoreTask(task, result) {
   };
 }
 
+export function verifyNameFollowups(result) {
+  let verifiedFollowups = 0, verifiedOrigins = 0;
+  const focuses = result.focuses ?? [];
+  for (const focus of focuses) {
+    const receipt = focus.nameFollowup;
+    if (!receipt) continue;
+    assert.equal(receipt.state, 'unresolved-name-match');
+    assert.equal(receipt.scope, 'bounded-candidates');
+    assert.ok(Number.isInteger(receipt.matchingDeclarationCount) && receipt.matchingDeclarationCount >= 1);
+    assert.ok(new Set(receipt.calls.map(edge => edge.filePath)).size >= 2);
+    for (const edge of receipt.calls) {
+      assert.equal(edge.targetId, null);
+      assert.equal(edge.resolution, 'unresolved');
+      assert.equal(edge.kind, 'calls');
+      assert.equal(edge.referenceName.split('.').at(-1), focus.symbol.name);
+      const owner = focuses.find(candidate => candidate.symbol.id === edge.sourceId && !candidate.nameFollowup);
+      assert.ok(owner, 'Follow-up must cite an original focus');
+      assert.equal(edge.filePath, owner.symbol.filePath);
+      assert.equal(owner.unresolvedCalls?.state, 'available');
+      assert.deepEqual(edge, owner.unresolvedCalls.items.find(item => item.id === edge.id));
+      verifiedOrigins++;
+    }
+    verifiedFollowups++;
+  }
+  assert.ok(verifiedFollowups <= 1);
+  if (verifiedFollowups > 0) {
+    assert.ok(focuses.length <= 8);
+    assert.ok(new Set(focuses.map(f => f.symbol.filePath)).size <= 5);
+    assert.equal(result.queryPlan.nameFollowupSearch.emittedCount, verifiedFollowups);
+  }
+  return { verifiedFollowups, verifiedOrigins };
+}
+
+export function verifyNumericQualifiers(result) {
+  let verifiedQualifiers = 0;
+  for (const focus of result.focuses ?? []) {
+    const receipt = focus.numericQualifier;
+    if (!receipt) continue;
+    assert.equal(receipt.policy, 'numeric-query-qualifiers-v1');
+    assert.equal(receipt.score, 500);
+    assert.ok(receipt.terms.length > 0);
+    for (const term of receipt.terms) {
+      assert.match(term, /^\p{N}{3,}$/u);
+      assert.ok(result.queryPlan.identifierTerms.includes(term));
+      const runs = value => value.normalize('NFKC').match(/\p{N}+/gu) ?? [];
+      assert.ok(runs(focus.symbol.name).includes(term) || (focus.sourceMatches ?? []).some(match =>
+        match.term === term && runs(match.token).includes(term)), 'Numeric qualifier lacks a matching name or source token');
+      verifiedQualifiers++;
+    }
+  }
+  return { verifiedQualifiers };
+}
+
 export function verifyUnresolvedCalls(result, readSource) {
   let verifiedCalls = 0, verifiedPythonCallees = 0;
   const contexts = result.focuses?.length ? result.focuses : [{ symbol: result.match?.symbol, unresolvedCalls: result.unresolvedCalls }];
@@ -256,6 +309,8 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
       responseBytes: Buffer.byteLength(raw), markdownProjectionBytes: Buffer.byteLength(renderExploreText(response)),
       sourceVerification, lexicalVerification: verifyLexicalMatches(response, (file) => readFileSync(resolve(project, file), "utf8")),
       unresolvedCallVerification: verifyUnresolvedCalls(response, (file) => readFileSync(resolve(project, file), "utf8")),
+      nameFollowupVerification: verifyNameFollowups(response),
+      numericQualifierVerification: verifyNumericQualifiers(response),
       reuseVerification: verifySourceReuse(response, (file) => readFileSync(resolve(project, file), "utf8")), result: response };
   });
   const report = {

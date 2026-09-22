@@ -1,4 +1,4 @@
-import { identifierTermVariants, identifierWords } from "./identifier-search.js";
+import { identifierNumbers, numericIdentifierTerms, identifierTermVariants, identifierWords } from "./identifier-search.js";
 import type { SourceRange, SymbolNode } from "./types.js";
 
 export const SOURCE_LEXICAL_POLICY = "callable-source-lexical-v1" as const;
@@ -61,6 +61,8 @@ export interface SourceLexicalRetrieval {
   readonly scannedCharacters: number;
   readonly truncated: boolean;
   readonly candidates: readonly SourceLexicalCandidate[];
+  /** Numeric-name bindings were additionally considered within the same scan bounds. */
+  readonly numericBindingTerms?: readonly string[];
 }
 
 /** Match whole identifier parts inside each callable's own indexed range. */
@@ -75,9 +77,21 @@ export function matchCallableSource(
   // Keep only token-to-concept membership, never source locations or frequencies.
   // Scope the bounded cache to this file/query so receipts remain occurrence-specific.
   const matchingGroupsByToken = new Map<string, readonly number[]>();
+  const numericTerms = numericIdentifierTerms(groups.flat());
+  const callableKinds = ["function", "method", "entrypoint"];
+  const callables = numericTerms.length === 0 ? [] : symbols.filter(symbol => callableKinds.includes(symbol.kind));
+  const tokenExpression = numericTerms.length > 0
+    ? /[\p{L}\p{N}_$][\p{L}\p{N}_$]*/gu : /[\p{L}_$][\p{L}\p{N}_$]*/gu;
   let truncated = false;
   for (const symbol of symbols) {
-    if (!["function", "method", "entrypoint"].includes(symbol.kind)) continue;
+    if (!callableKinds.includes(symbol.kind)) {
+      if (symbol.kind !== "variable" || !numericTerms.some(term => identifierNumbers(symbol.name).includes(term))) continue;
+      // Avoid borrowing a nested callable's body for its enclosing binding.
+      // This only inspects the supplied bounded declaration population.
+      if (callables.some(child => child.filePath === symbol.filePath && child.id !== symbol.id &&
+          (child.range.start.line > symbol.range.start.line || child.range.start.line === symbol.range.start.line && child.range.start.column >= symbol.range.start.column) &&
+          (child.range.end.line < symbol.range.end.line || child.range.end.line === symbol.range.end.line && child.range.end.column <= symbol.range.end.column))) continue;
+    }
     const found = new Map<number, SourceLexicalMatch>();
     const frequencies = groups.map(() => 0);
     let tokens = 0;
@@ -91,7 +105,7 @@ export function matchCallableSource(
       const scoped = original.slice(start, end);
       if (scoped.length > remaining) truncated = true;
       const bounded = scoped.slice(0, remaining);
-      for (const match of bounded.matchAll(/[\p{L}_$][\p{L}\p{N}_$]*/gu)) {
+      for (const match of bounded.matchAll(tokenExpression)) {
         const token = match[0];
         if (token.length > 128) continue;
         // A character budget must not create a fabricated partial identifier.

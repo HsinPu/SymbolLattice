@@ -17,6 +17,26 @@ import { matchCallableSource, scoreCallableSource, SOURCE_LEXICAL_POLICY, SOURCE
 import { identifierTermGroups } from "../../src/domain/identifier-search.js";
 
 describe("source-backed same-file focus coverage", () => {
+  it("retains numeric qualifiers and bounds extra context without expanding ordinary queries", () => {
+    const graph = { symbols: [symbol({ id: "binding", name: "handler503", filePath: "settings.py" }),
+      symbol({ id: "different", name: "handler5030", filePath: "other.py" })], edges: [] };
+    const plan = planExploreQuery(graph, "default HTTP 503 error view selected debugging off custom handler configured extra words trailing");
+    expect(plan.identifierTerms).toHaveLength(12);
+    expect(plan.identifierTerms).toContain("503");
+    expect(plan.numericQuery).toMatchObject({ maximumIdentifierTerms: 12 });
+    expect(plan.limits.maximumIdentifierTerms).toBe(12);
+    expect(plan.selection.find(item => item.symbol.id === "binding")?.numericQualifier).toMatchObject({ terms: ["503"], score: 500 });
+    expect(plan.selection.find(item => item.symbol.id === "binding")?.reasons).toContain("qualified-symbol-term");
+    expect(plan.selection.find(item => item.symbol.id === "different")?.numericQualifier).toBeUndefined();
+    expect(plan.selection.find(item => item.symbol.id === "different")?.matchedTerms).not.toContain("503");
+    expect(planExploreQuery(graph, "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo").identifierTerms).toHaveLength(8);
+    expect(planExploreQuery(graph, "alpha bravo charlie delta echo foxtrot golf hotel 503.").identifierTerms).toContain("503");
+    expect(planExploreQuery(graph, "error 503.0 503-504").identifierTerms).toEqual(["error"]);
+    const lateNumber = planExploreQuery(graph, "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike 503");
+    expect(lateNumber.identifierTerms).toHaveLength(12);
+    expect(lateNumber.limits.maximumIdentifierTerms).toBe(12);
+    expect(lateNumber.input.identifierTermsTruncated).toBe(true);
+  });
   function flowFixture(laterBody = "finish(request, run, route, handler)") {
     const names = ["handler", "handleRequest", "checkInput", "sendOutput", "finish"];
     const bodies = ["checkInput(request, validation, route)", "handler(request, run, route)",
@@ -385,7 +405,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v18",
+      policy: "explore-query-plan-v19",
       queryIntent: {
         tests: false,
         icons: false,
@@ -503,7 +523,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v18",
+      policy: "explore-query-plan-v19",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -735,7 +755,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v18",
+      policy: "explore-query-plan-v19",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1159,7 +1179,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v18",
+      policy: "explore-query-plan-v19",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v2",
@@ -1858,7 +1878,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v18",
+      policy: "explore-query-plan-v19",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,

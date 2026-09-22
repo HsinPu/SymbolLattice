@@ -41,6 +41,42 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## Numeric query and unresolved-name evidence
+
+`explore-query-plan-v19` retains whole numeric query terms of at least three digits (for example HTTP 500). Numeric queries allow up to twelve identifier terms; other queries retain eight. Both retain the 512-character input bound. Later terms can still be omitted; `input.identifierTermsTruncated` and the text response disclose the term limit. Decimal, version and range tokens such as `503.0` are not collapsed into invented integers. A matching complete digit run in a declaration name or a literal source token contributes a bounded 500-point qualifier receipt. It does not prove that a number represents an HTTP status, and 500 does not match the name `handler5000`.
+
+Within the existing bounded source scan, numeric queries additionally consider variables whose names contain the requested complete digit run, such as `handler500`. A binding containing an observed callable declaration is excluded from this additional source population. The supplied declaration population can itself be truncated; this is not a whole-file proof of leaf ownership. Ordinary queries retain their callable-only source population. `numericBindingTerms`, literal match ranges, scan bounds and truncation are exposed. Numeric values inside unindexed object properties are not independently retrieved by this rule.
+
+When an exploration has spare symbol capacity, `unresolved-name-followup-v1` can add one supplementary production declaration in one additional file. It requires the same written call name in at least two distinct original focus files, checks at most eight unresolved calls per original focus, and requires the candidate's own query relevance. Search stays within the existing graph, inspecting at most 4,096 supplied symbols even for legacy full snapshots. Total focuses remain at most eight; the file limit can become five and is reported explicitly. Full focus budgets and explicit file queries do not trigger this additional search.
+
+Each lead includes the original unresolved call receipts and a same-name declaration count scoped to the bounded candidates. Name agreement is not a resolved relation, receiver-type inference or repository-wide uniqueness claim. No edge, callee, path or graph score is manufactured. Unavailable, generation-mismatched or truncated inputs are disclosed. Evidence read during planning is reused only for that plan; source reads retain their generation fence. Source output remains within the existing 24,000-character envelope.
+
+The Fastify HTTP 431/413 truth in `mcp/fastify-numeric-errors-tasks.json` was manually defined before querying either prototype. It was first opened after freezing the prototype, then retained unchanged as regression coverage. HTTP 413 exposed a remaining gap: `FST_ERR_CTP_BODY_TOO_LARGE` is a property inside the large `codes` object, not an independently indexed declaration, and its constructor sites remain unresolved. Do not interpret this change as complete numeric or error-flow retrieval.
+
+### v0.526.0 retrieval validation
+
+On 2026-09-22, the 23 fixed Fastify/NestJS/Django tasks were compared with v0.525.0 on Windows and Node 24.19.0. Required task-file recall increased from 31/37 (83.8%) to 35/37 (94.6%); required source-fact recall increased from 75/93 (80.6%) to 86/93 (92.5%). The original 21 tasks now recover all 34 required task-file pairs and 82 facts. HTTP 431 additionally recovers its one required file and four facts. HTTP 413 still misses both required files and all seven facts: this is an observed retrieval failure, not an unavailable test environment. No previously recovered required file or fact was lost. These manually scoped tasks do not establish repository-wide recall; additional results outside the truth remain unjudged, so overall precision is not measured.
+
+Independent response checks verified 275 source excerpts, 450 lexical receipts, 139 unknown-call receipts, two original call receipts for one supplementary same-name lead, and seven numeric qualifiers. Counts can repeat sites across tasks. Every response stayed within 24,000 source characters. This verifies emitted source evidence, not resolution of the unknown call targets.
+
+Each task/build used three fresh CLI processes, including startup, freshness checks and serialization. Build order alternated between manifests; no tests or indexing ran alongside these measurements. Median latency differences were:
+
+| Corpus and pinned commit | Tasks | v0.526.0 minus v0.525.0 |
+| --- | ---: | ---: |
+| Fastify, `70b14e92c0b55e8201f5530ba2e6bab4e928c784` | 12 | −77 to +20 ms |
+| NestJS, `35c3ded6dbf3f23f917ae88d0ed966932788cae6` | 7 | −87 to +25 ms |
+| Django, `bc833e8883db4a333a6485d91637b78c85e2b13b` | 4 | −165 to +146 ms |
+
+These diagnostic samples do not isolate cache/order effects or prove an overall speedup. First indexing, incremental synchronization and total Agent completion time were not measured in this query-only batch. Existing extractor v427 indexes were reused, with matching generations checked between builds.
+
+Reports, complete responses, sample timings, pins and build fingerprints are retained outside the repository in `SymbolLattice-evidence-052600-final`. The baseline fingerprint is `acdc02d25893edb549ac926eed756d39af8a8140636b7f6352117f9330e7fe95`; the final build is `afbc758a72ddacf98f01b0b7646bfc4c40274f31c2f9a6cd61372f852ecea1ca`. Reproduce each matching `fastify-`, `nest-` and `django-` task manifest against its pinned indexed corpus and both built products, with a distinct external output path per run:
+
+```sh
+node benchmarks/mcp/task-retrieval.mjs --project /external/indexed-corpus --manifest benchmarks/mcp/fastify-numeric-errors-tasks.json --output /external/evidence/report.json --repetitions 3 --product-root /external/built-product
+```
+
+The final build passed `npm run check`, `npm run build` and the full test suite (3,167 passed, four skipped). The HTTP 413 gap remains open; these results are not complete numeric-query acceptance.
+
 ## Python unresolved member-call audit
 
 `python/member-calls.mjs` checks written dotted-name invocations against independent CPython AST truth from every tracked Python file. It verifies callee names, UTF-16 source ranges and lexical function ownership; it does not infer receiver types, runtime targets or dispatch. Async, decorated and nested function/method bodies are included. Lambda bodies, module/class execution, decorators, default arguments and computed receivers are excluded. Parser-rejected files remain a separately reported unsupported subset, after the existing eligible closed CRLF recovery rule. Existing exact calls are outside the new unresolved-call denominator.

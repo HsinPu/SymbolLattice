@@ -1047,6 +1047,34 @@ describe("SymbolLatticeService", () => {
     store.close();
   });
 
+  it("retrieves source for a corroborated same-name lead and does not reuse it after sync", async () => {
+    const body = (member: string) => `def error_view_handler503(resolver):\n    return resolver.${member}(503)\n`;
+    const projectPath = await createInlineProject({
+      "a.py": body("resolve_error_handler"), "b.py": body("resolve_error_handler"),
+      "c.py": body("resolve_error_handler"), "d.py": body("resolve_error_handler"),
+      "target.py": "def resolve_error_handler(view_type):\n    return default_error_view\n"
+    });
+    const store = new SqliteGraphStore();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    const query = "default HTTP 503 error view selected debugging off custom handler configured";
+    const before = await service.explore(projectPath, query);
+    const lead = before.focuses?.find(item => item.nameFollowup !== undefined);
+    expect(lead?.symbol.filePath).toBe("target.py");
+    expect(lead?.source?.text).toContain("return default_error_view");
+    expect(lead?.nameFollowup).toMatchObject({ state: "unresolved-name-match", matchingDeclarationCount: 1 });
+    expect(lead?.nameFollowup?.calls.every(edge => edge.targetId === null)).toBe(true);
+    expect(before.connections).toEqual([]);
+    expect(before.queryPlan?.summary.selectedFileCount).toBe(5);
+    expect(before.queryPlan?.limits.maximumFiles).toBe(5);
+    for (const path of ["b.py", "c.py", "d.py"]) await writeFile(join(projectPath, path), body("other_handler"), "utf8");
+    await service.sync({ projectPath });
+    const after = await service.explore(projectPath, query);
+    expect(after.status.generationId).not.toBe(before.status.generationId);
+    expect(after.focuses?.some(item => item.nameFollowup !== undefined)).toBe(false);
+    store.close();
+  });
+
   it("uses named-file-first graph focus for a bounded natural-language explore query", async () => {
     const projectPath = await createInlineProject({
       "src/api/orders.ts": [
@@ -1107,7 +1135,7 @@ describe("SymbolLatticeService", () => {
       sourceAvailability: "not-applicable",
       source: null,
       queryPlan: {
-        policy: "explore-query-plan-v18",
+        policy: "explore-query-plan-v19",
         ranking: {
           graphDiffusion: {
             policy: "explore-query-graph-diffusion-v3",
@@ -1233,7 +1261,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v18",
+      policy: "explore-query-plan-v19",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
@@ -1310,7 +1338,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "dispatch behavior");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v18",
+      policy: "explore-query-plan-v19",
       ranking: {
         graphExpansion: {
           policy: "explore-query-graph-expansion-v3",
@@ -1447,7 +1475,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "dispatch pipeline");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v18",
+      policy: "explore-query-plan-v19",
       scoreFloor: {
         policy: "explore-query-relative-file-score-floor-v1",
         reason: "relative-floor-applied",
@@ -1608,7 +1636,7 @@ describe("SymbolLatticeService", () => {
     const result = await service.explore(projectPath, "orderService");
 
     expect(result.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v18",
+      policy: "explore-query-plan-v19",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1654,7 +1682,7 @@ describe("SymbolLatticeService", () => {
 
     const general = await service.explore(projectPath, "renderAsset");
     expect(general.queryPlan).toMatchObject({
-      policy: "explore-query-plan-v18",
+      policy: "explore-query-plan-v19",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",

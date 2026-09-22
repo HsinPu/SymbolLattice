@@ -9,6 +9,25 @@ const callable = (start: number, end: number, kind: SymbolNode["kind"] = "functi
 });
 
 describe("callable source lexical evidence", () => {
+  it("preserves numeric tokens and admits only matching numeric-name bindings", () => {
+    const source = "handler503 = defaults.server_error\n}";
+    const binding = { ...callable(1, 2, "variable"), name: "handler503" };
+    const groups = identifierTermGroups(["503", "default", "error"]);
+    expect(matchCallableSource(source, [binding], groups).candidates).toHaveLength(1);
+    expect(matchCallableSource(source, [{ ...binding, name: "handler5030" }], groups).candidates).toEqual([]);
+    expect(matchCallableSource(source, [binding], identifierTermGroups(["default", "error"])).candidates).toEqual([]);
+    const result = matchCallableSource("respond(503, error); respond(5030, error);\n}", [callable(1, 2)], [["503"], ["error"]]);
+    expect(result.documents[0]!.frequencies).toEqual([1, 2]);
+    expect(result.candidates[0]!.matches[0]).toMatchObject({ term: "503", token: "503",
+      range: { start: { line: 1, column: 9 }, end: { line: 1, column: 12 } } });
+  });
+
+  it("does not borrow nested callable terms for a numeric binding", () => {
+    const source = "handler503 = wrapper(() => {\n default_error();\n})";
+    const binding = { ...callable(1, 3, "variable"), name: "handler503" };
+    const child = { ...callable(2, 2), id: "child", range: { start: { line: 2, column: 1 }, end: { line: 2, column: 18 } } };
+    expect(matchCallableSource(source, [binding, child], [["503"], ["default"], ["error"]]).candidates.some(c => c.symbolId === binding.id)).toBe(false);
+  });
   it("preserves per-declaration frequencies and first occurrence receipts for repeated tokens", () => {
     const source = "payment refund payment\n  refund payment refund\n}";
     const second = { ...callable(2, 3), id: "second", filePath: "src/second.ts" };

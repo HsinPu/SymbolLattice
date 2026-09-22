@@ -4,6 +4,19 @@ import { sourceDeliveryIdentityFromText } from "../../src/application/source-del
 import { McpSourceSession } from "../../src/mcp/source-session.js";
 
 describe("MCP explore text rendering", () => {
+  it("labels supplementary same-name declarations as unresolved and cites the originating calls", () => {
+    const output = renderExploreText({ queryPlan: { nameFollowupSearch: { state: "searched", callsTruncated: true } }, focuses: [{
+      symbol: { name: "resolve_error_handler" }, numericQualifier: { terms: ["503"] },
+      nameFollowup: { matchingDeclarationCount: 2, calls: [{ referenceName: "resolver.resolve_error_handler",
+        resolution: "unresolved", filePath: "request.py", range: { start: { line: 12, column: 5 } } }] }
+    }] });
+    expect(output).toContain("Supplementary same-name declaration; the call target remains unresolved");
+    expect(output).toContain("request.py:12");
+    expect(output).toContain("2 same-name declarations in the bounded candidates");
+    expect(output).toContain("not a repository-wide uniqueness claim");
+    expect(output).toContain("Numeric qualifier: `503`");
+    expect(output).toContain("follow-up search reached its call or candidate bounds");
+  });
   it("renders unknown call sites without claiming a target and discloses partial or mismatched reads", () => {
     const output = renderExploreText({ focuses: [
       { symbol: { name: "handle" }, unresolvedCalls: { state: "available", truncated: true, items: [{

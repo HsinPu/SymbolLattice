@@ -206,6 +206,16 @@ function renderFocuses(result: UnknownRecord): string[] {
     const sourceTerms = records(focus.sourceMatches).map((match) =>
       `\`${text(match.term) ?? "?"}\` → \`${text(match.token) ?? "?"}\` at \`${symbolLocation(match)}\``);
     if (sourceTerms.length > 0) output.push(`  Source terms (lexical, not resolved relationships): ${sourceTerms.join("; ")}.`);
+    const numeric = record(focus.numericQualifier);
+    if (numeric !== null && Array.isArray(numeric.terms)) output.push(
+      `  Numeric qualifier: ${numeric.terms.filter(term => typeof term === "string").map(term => `\`${term}\``).join(", ")} matches the declaration name or cited source token.`);
+    const followup = record(focus.nameFollowup);
+    if (followup !== null) {
+      output.push("  Supplementary same-name declaration; the call target remains unresolved.");
+      for (const edge of records(followup.calls)) output.push(
+        `  Written call \`${text(edge.referenceName) ?? "?"}\`${edgeDetails(edge)}.`);
+      output.push(`  ${finiteNumber(followup.matchingDeclarationCount) ?? "Unknown number of"} same-name declarations in the bounded candidates; this is not a repository-wide uniqueness claim.`);
+    }
     const reused = records(record(focus.sourceReuse)?.segments);
     if (reused.length > 0) output.push(`  Shared source: ${reused.map((segment) =>
       `focus #${(finiteNumber(segment.referenceIndex) ?? -1) + 1} at \`${symbolLocation(segment)}\``).join("; ")}.`);
@@ -359,6 +369,14 @@ function renderLimitations(result: UnknownRecord): string[] {
   }
   const unavailableSites = finiteNumber(record(record(result.sourceWindowPlan)?.summary)?.unavailableFileSiteCount) ?? 0;
   const calleeSearch = record(record(result.sourceWindowPlan)?.calleeSourceSearch);
+  if (record(record(result.queryPlan)?.input)?.identifierTermsTruncated === true) notes.add(
+    "Query terms exceeded the bounded term budget; later terms were omitted. Shorten the query to retain essential qualifiers.");
+  const followupSearch = record(record(result.queryPlan)?.nameFollowupSearch);
+  if (followupSearch !== null) {
+    if (followupSearch.state !== "searched") notes.add(`Same-name follow-up evidence ${text(followupSearch.state) ?? "unavailable"}; no call target was inferred.`);
+    if (followupSearch.callsTruncated === true || followupSearch.candidatesTruncated === true) notes.add(
+      "Same-name follow-up search reached its call or candidate bounds; inspect the cited unresolved calls for additional leads.");
+  }
   if (calleeSearch?.truncated === true) notes.add("Related callee source search reached its bounds; narrow the query or retrieve the cited callee directly.");
   const unavailableCalleeFiles = Array.isArray(calleeSearch?.unavailableFiles)
     ? calleeSearch.unavailableFiles.filter((file): file is string => typeof file === "string") : [];

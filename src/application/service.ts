@@ -140,6 +140,7 @@ import {
   exploreQuerySeedTerms,
   type ExploreQueryPlan
 } from "./explore-query.js";
+import { EXPLORE_NAME_FOLLOWUP_LIMITS, supplementExploreNameFollowups } from "./explore-name-followups.js";
 import {
   ReadQueryGenerationMismatchError,
   type ReadQueryFreshnessReceipt
@@ -1560,6 +1561,9 @@ function safeDiagnosticPath(value: string): string {
 }
 
 export class SymbolLatticeService {
+  // Per-plan evidence is generation-fenced when read; never reused by another query.
+  private readonly exploreCallEvidence = new WeakMap<ExploreQueryPlan,
+    ReadonlyMap<string, NonNullable<ExploreResult["unresolvedCalls"]>>>();
   private readonly graphStore: GraphStore;
   private readonly sourceCatalog: SourceCatalog;
   private readonly artifactFactsExtractor: ArtifactFactsExtractor;
@@ -3279,7 +3283,7 @@ export class SymbolLatticeService {
         const plan = measureQueryTiming(
           this.queryTimingSink,
           "planning",
-          () => planExploreQuery(bundle.snapshot, query, bundle.sourceLexical),
+          () => this.planExploreWithFollowups(normalizedProjectPath, bundle, query),
           { retry: attempt > 0 }
         );
         const pathSpinePlan = this.markBoundedTraversal(
@@ -3347,7 +3351,7 @@ export class SymbolLatticeService {
     }
 
     let graphView = createGraphQueryView(initialBundle.snapshot);
-    let plan = planExploreQuery(initialBundle.snapshot, query, initialBundle.sourceLexical);
+    let plan = this.planExploreWithFollowups(normalizedProjectPath, initialBundle, query);
     let pathSpinePlan = this.markBoundedTraversal(
       initialBundle,
       planExplorePathSpines(initialBundle.snapshot, plan.selection, graphView)
@@ -3373,7 +3377,7 @@ export class SymbolLatticeService {
         requestedFilePaths
       );
       graphView = createGraphQueryView(sourceBundle.snapshot);
-      plan = planExploreQuery(sourceBundle.snapshot, query, sourceBundle.sourceLexical);
+      plan = this.planExploreWithFollowups(normalizedProjectPath, sourceBundle, query);
       pathSpinePlan = this.markBoundedTraversal(
         sourceBundle,
         planExplorePathSpines(sourceBundle.snapshot, plan.selection, graphView)
@@ -3402,7 +3406,7 @@ export class SymbolLatticeService {
       );
     }
 
-    const fallbackPlan = planExploreQuery(initialBundle.snapshot, query, initialBundle.sourceLexical);
+    const fallbackPlan = this.planExploreWithFollowups(normalizedProjectPath, initialBundle, query);
     const fallbackGraphView = createGraphQueryView(initialBundle.snapshot);
     const fallbackPathSpinePlan = this.markBoundedTraversal(
       initialBundle,
@@ -5631,8 +5635,14 @@ export class SymbolLatticeService {
       () => this.symbolContextPack(read, bounds, graphView, true),
       { focusCount: matches.length }
     );
-    const unresolvedCalls = this.exploreUnresolvedCalls(normalizedProjectPath, bundle,
-      plan.selection.map((selection) => selection.symbol.id), bounds.relationLimit);
+    const cachedCalls = bounds.relationLimit === EXPLORE_NAME_FOLLOWUP_LIMITS.maximumCallsPerFocus
+      ? this.exploreCallEvidence.get(plan) : undefined;
+    const missingCallIds = plan.selection.map(selection => selection.symbol.id).filter(id => !cachedCalls?.has(id));
+    const unresolvedCalls = new Map([
+      ...(cachedCalls ?? []),
+      ...(missingCallIds.length === 0 ? [] : this.exploreUnresolvedCalls(normalizedProjectPath, bundle,
+        missingCallIds, bounds.relationLimit))
+    ]);
     const focuses: readonly ExploreFocus[] = plan.selection.map((selection, index) => ({
       ...selection,
       ...(contextPack.contexts[index] ?? this.toSymbolContext(
@@ -5815,6 +5825,17 @@ export class SymbolLatticeService {
         this.isBoundedTraversalTruncated(bundle)
       )
     };
+  }
+
+  private planExploreWithFollowups(projectPath: string, bundle: ActiveGraphBundle, query: string): ExploreQueryPlan {
+    const plan = planExploreQuery(bundle.snapshot, query, bundle.sourceLexical);
+    if (plan.selection.length === 0 || plan.selection.length >= EXPLORE_QUERY_LIMITS.maximumSymbols ||
+        plan.fileHints.length > 0 || plan.identifierTerms.length < 2) return plan;
+    const calls = this.exploreUnresolvedCalls(projectPath, bundle, plan.selection.map(item => item.symbol.id),
+      EXPLORE_NAME_FOLLOWUP_LIMITS.maximumCallsPerFocus);
+    const supplemented = supplementExploreNameFollowups(bundle.snapshot, plan, calls, bundle.sourceLexical);
+    this.exploreCallEvidence.set(supplemented, calls);
+    return supplemented;
   }
 
   private exploreUnresolvedCalls(

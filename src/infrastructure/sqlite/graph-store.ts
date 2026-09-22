@@ -25,7 +25,7 @@ import type {
 } from "../../domain/types.js";
 import type { GeneratedFileClassification } from "../../domain/generated-files.js";
 import type { SourceRoleClassification } from "../../domain/source-roles.js";
-import { identifierWords, identifierTermVariants } from "../../domain/identifier-search.js";
+import { identifierWords, identifierTermVariants, numericIdentifierTerms } from "../../domain/identifier-search.js";
 import {
   matchCallableSource, scoreCallableSource, SOURCE_LEXICAL_LIMITS, SOURCE_LEXICAL_POLICY,
   type SourceLexicalDocument, type SourceLexicalRetrieval
@@ -1972,7 +1972,7 @@ function likelyNaturalLanguageQuery(
 
 function boundedLexicalGroups(request: BoundedGraphQueryRequest): readonly (readonly string[])[] {
   if (request.lexicalTermGroups === undefined) return boundedLexicalTerms(request).map((term) => [term]);
-  return request.lexicalTermGroups.slice(0, 8)
+  return request.lexicalTermGroups.slice(0, 12)
     .map((group) => [...new Set(group.flatMap(sourceSearchTerms))].slice(0, 8))
     .filter((group) => group.length > 0);
 }
@@ -2179,6 +2179,7 @@ function readBoundedSourceLexical(
   groups: readonly (readonly string[])[]
 ): { retrieval: SourceLexicalRetrieval; rows: readonly SymbolRow[] } {
   const limits = SOURCE_LEXICAL_LIMITS;
+  const numericBindingTerms = numericIdentifierTerms(groups.flat());
   const state = groups.length < 2 ? "single-concept" : !available ? "unavailable" : "searched";
   let scannedFiles = 0;
   let scannedSymbols = 0;
@@ -2191,7 +2192,8 @@ function readBoundedSourceLexical(
     const readSource = database.prepare(`SELECT substr(source_text, 1, ?) AS source_text,
       length(source_text) AS characters FROM source_documents WHERE generation_id = ? AND file_path = ?`);
     const readSymbols = database.prepare(`${symbolProjectionSelect()}
-      WHERE file_path = ? AND kind IN ('function', 'method', 'entrypoint')
+      WHERE file_path = ? AND kind IN (${numericBindingTerms.length > 0
+        ? "'function', 'method', 'entrypoint', 'variable'" : "'function', 'method', 'entrypoint'"})
       ORDER BY start_line, start_column, id LIMIT ?`);
     for (const filePath of filePaths.slice(0, limits.maximumFiles)) {
       const remaining = limits.maximumCharacters - scannedCharacters;
@@ -2225,7 +2227,8 @@ function readBoundedSourceLexical(
     }
   }
   return { retrieval: { policy: SOURCE_LEXICAL_POLICY, limits, state,
-    scannedFiles, scannedSymbols, scannedCharacters, truncated, candidates: scoreCallableSource(documents) }, rows };
+    scannedFiles, scannedSymbols, scannedCharacters, truncated, candidates: scoreCallableSource(documents),
+    ...(numericBindingTerms.length === 0 ? {} : { numericBindingTerms }) }, rows };
 }
 
 function toSymbolNode(row: SymbolRow): SymbolNode {

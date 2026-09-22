@@ -1,4 +1,13 @@
 /** Query-time lexical helpers; these broaden candidates, never graph certainty. */
+export function numericIdentifierTerms(terms: readonly string[]): readonly string[] {
+  return [...new Set(terms.filter(term => /^\p{N}{3,}$/u.test(term)))];
+}
+
+/** Whole digit runs, so a qualifier such as 500 never matches handler5000. */
+export function identifierNumbers(name: string): readonly string[] {
+  return name.normalize("NFKC").match(/\p{N}+/gu) ?? [];
+}
+
 export function identifierWords(value: string): readonly string[] {
   return value.normalize("NFKC")
     .replace(/([\p{Ll}\d])([\p{Lu}])/gu, "$1 $2")
