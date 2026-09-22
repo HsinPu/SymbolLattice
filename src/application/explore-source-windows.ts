@@ -6,7 +6,7 @@ import { EXPLORE_CALLEE_SOURCE_LIMITS, matchExploreCalleeSource, type ExploreCal
 import type { SourceLexicalMatch } from "../domain/source-lexical.js";
 import type { SymbolNode } from "../domain/types.js";
 
-export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v8" as const;
+export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v9" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY =
   "explore-source-window-allocation-v5" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS = {

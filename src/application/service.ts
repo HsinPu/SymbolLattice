@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { isMainThread } from "node:worker_threads";
+import { evidenceWindowStart } from "./evidence-window-start.js";
 
 import {
   AFFECTED_TEST_EDGE_KINDS,
@@ -946,32 +947,38 @@ function sourceWindowDraftFromPersistedText(input: {
 
 function renderContextSource(
   draft: ContextSourceDraft,
-  allocatedCharacters: number
+  allocatedCharacters: number,
+  evidenceRanges: readonly SourceRange[] = []
 ): DeliveredSourceExcerpt | null {
-  let boundedEnd = Math.min(draft.endOffset, draft.startOffset + allocatedCharacters);
+  if (allocatedCharacters <= 0) return null;
+  const lineStarts = sourceLineStarts(draft.sourceText);
+  const startOffset = evidenceWindowStart({ lineStarts, sourceLength: draft.sourceText.length,
+    startOffset: draft.startOffset, endOffset: draft.endOffset,
+    characterBudget: allocatedCharacters, contextPaddingLines: EXPLORE_SOURCE_WINDOW_LIMITS.contextPaddingLines,
+    evidenceRanges });
+  let boundedEnd = Math.min(draft.endOffset, startOffset + allocatedCharacters);
   if (
-    boundedEnd > draft.startOffset &&
+    boundedEnd > startOffset &&
     boundedEnd < draft.endOffset &&
     draft.sourceText[boundedEnd - 1] === "\r" &&
     draft.sourceText[boundedEnd] === "\n"
   ) {
     boundedEnd -= 1;
   }
-  if (boundedEnd <= draft.startOffset) return null;
+  if (boundedEnd <= startOffset) return null;
   const delivery = canonicalSourceDeliverySlice({
     filePath: draft.filePath,
     sourceText: draft.sourceText,
-    fullFileCharacterOffsets: { start: draft.startOffset, end: boundedEnd }
+    fullFileCharacterOffsets: { start: startOffset, end: boundedEnd }
   });
-  const lineStarts = sourceLineStarts(draft.sourceText);
-  const start = sourceOffsetPosition(draft.sourceText, lineStarts, draft.startOffset);
+  const start = sourceOffsetPosition(draft.sourceText, lineStarts, startOffset);
   const end = sourceOffsetPosition(draft.sourceText, lineStarts, boundedEnd);
   if (start === null || end === null) return null;
   const texts = delivery.text.split("\n");
   if (delivery.text.endsWith("\n")) texts.pop();
   const lines = texts.map((text, index) => ({ line: start.line + index, text }));
   const requestedCharacters = draft.endOffset - draft.startOffset;
-  const truncated = boundedEnd < draft.endOffset;
+  const truncated = startOffset > draft.startOffset || boundedEnd < draft.endOffset;
   return {
     filePath: draft.filePath,
     startLine: start.line,
@@ -5729,13 +5736,22 @@ export class SymbolLatticeService {
       })
     });
     const renderedSourceWindows = new Map<number, DeliveredSourceExcerpt>();
+    const spineEdgesById = new Map(pathSpinePlan.spines.flatMap(spine =>
+      spine.path.edges.map(edge => [edge.id, edge] as const)));
     for (const allocation of sourceWindowReservation.windows) {
       if (allocation.allocatedCharacters === 0) continue;
       const draft = allocation.renderMode === "whole-file"
         ? sourceWindowWholeFileDrafts.get(allocation.index)
         : sourceWindowDrafts.get(allocation.index);
       if (draft === undefined) continue;
-      const source = renderContextSource(draft, allocation.allocatedCharacters);
+      const window = sourceWindowPlan.windows[allocation.index];
+      const evidenceRanges = allocation.renderMode === "window" && window?.reason === "exact-path-spine"
+        ? window.connectionEdgeIds.flatMap(id => {
+            const edge = spineEdgesById.get(id);
+            return edge?.resolution === "exact" && edge.filePath === draft.filePath ? [edge.range] : [];
+          })
+        : [];
+      const source = renderContextSource(draft, allocation.allocatedCharacters, evidenceRanges);
       if (source !== null) renderedSourceWindows.set(allocation.index, source);
     }
     const sourceWindows: ExploreSourceWindow[] = sourceWindowPlan.windows.flatMap((window) => {
