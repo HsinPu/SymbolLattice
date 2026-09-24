@@ -314,6 +314,69 @@ function edge(id: string, sourceId: string, targetId: string): GraphEdge {
   };
 }
 
+describe("source-proven property use followup", () => {
+  const property = symbol({ id: "body-code", name: "BODY_413", filePath: "src/errors.js", kind: "variable" });
+  const parser = symbol({ id: "parser", name: "decodePayload", filePath: "src/parser.js", line: 20 });
+  const testReader = symbol({ id: "test-reader", name: "inspectPayload", filePath: "test/parser.test.js" });
+  const generic = Array.from({ length: 4 }, (_, index) => symbol({ id: `generic-${index}`,
+    name: "serverRequestBody", filePath: `src/generic-${index}.js` }));
+  const reference = (id: string, source: SymbolNode): GraphEdge => ({ ...edge(id, source.id, property.id),
+    kind: "references", filePath: source.filePath, referenceName: "BODY_413",
+    evidence: { ruleId: "module.commonjs-object-property-reference", stage: "module",
+      resolutionPath: [source.filePath, property.filePath],
+      commonJsBinding: { policy: "javascript-commonjs-object-property-reference-v1",
+        moduleSpecifier: "./errors", importedName: "BODY_413", localName: "BODY_413",
+        importSite: { filePath: source.filePath, range: source.range },
+        exportSite: { filePath: property.filePath, range: property.range } } } });
+  const graph = {
+    files: [...generic, property, parser, testReader].map((item) => indexedFile(item.filePath, false,
+      item === testReader ? "test" : "production")),
+    symbols: [...generic, property, parser, testReader],
+    edges: [reference("parser-use", parser), reference("test-use", testReader)]
+  };
+  const query = "server request body 413";
+
+  it("replaces one generic file with a bounded exact production use and cites its edge", () => {
+    const plan = planExploreQuery(graph, query);
+    expect(plan.selection.some((item) => item.symbol.id === property.id)).toBe(true);
+    expect(plan.selection.some((item) => item.symbol.id === testReader.id)).toBe(false);
+    expect(plan.selection.find((item) => item.symbol.id === parser.id)).toMatchObject({
+      reasons: expect.arrayContaining(["source-property-use"]),
+      propertyUseFollowup: { policy: "source-property-use-followup-v1",
+        anchorSymbolId: property.id, candidateFileCount: 1, edgeIds: ["parser-use"],
+        replacedFilePath: expect.stringMatching(/^src\/generic-/u) }
+    });
+    expect(plan.summary.selectedFileCount).toBeLessThanOrEqual(4);
+    expect(plan.selection).toHaveLength(4);
+    expect(planExploreQuery({ ...graph, symbols: [...graph.symbols].reverse(),
+      edges: [...graph.edges].reverse() }, query).selection).toEqual(plan.selection);
+  });
+
+  it("does not promote an unverified, test-only, or explicitly scoped use", () => {
+    const unverified = { ...graph, edges: graph.edges.map((item) => item.id === "parser-use"
+      ? { ...item, resolution: "heuristic" as const } : item) };
+    expect(planExploreQuery(unverified, query).selection.some((item) => item.propertyUseFollowup)).toBe(false);
+    const missingMetadata = { ...graph, files: graph.files.filter((item) => item.path !== parser.filePath) };
+    expect(planExploreQuery(missingMetadata, query).selection.some((item) => item.propertyUseFollowup)).toBe(false);
+    const generated = { ...graph, files: graph.files.map((item) => item.path === parser.filePath
+      ? indexedFile(item.path, true) : item) };
+    expect(planExploreQuery(generated, query).selection.some((item) => item.propertyUseFollowup)).toBe(false);
+    expect(planExploreQuery(graph, `src/errors.js ${query}`).selection.some((item) => item.propertyUseFollowup)).toBe(false);
+    expect(planExploreQuery(graph, "server request body").selection.some((item) => item.propertyUseFollowup)).toBe(false);
+  });
+
+  it("limits followup to one production file even when multiple files cite the same property", () => {
+    const other = symbol({ id: "other-parser", name: "decodeAnotherPayload", filePath: "src/other-parser.js" });
+    const extended = { files: [...graph.files, indexedFile(other.filePath, false)],
+      symbols: [...graph.symbols, other], edges: [...graph.edges, reference("other-use", other)] };
+    const plan = planExploreQuery(extended, query);
+    const followups = plan.selection.filter((item) => item.propertyUseFollowup !== undefined);
+    expect(new Set(followups.map((item) => item.symbol.filePath)).size).toBe(1);
+    expect(followups).toHaveLength(1);
+    expect(followups[0]?.propertyUseFollowup?.candidateFileCount).toBe(2);
+  });
+});
+
 describe("shared parameter types in graph expansion", () => {
   function fixture(extraEdges: readonly GraphEdge[] = []) {
     return {
@@ -423,7 +486,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v20",
+      policy: "explore-query-plan-v21",
       queryIntent: {
         tests: false,
         icons: false,
@@ -541,7 +604,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v20",
+      policy: "explore-query-plan-v21",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -773,7 +836,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v20",
+      policy: "explore-query-plan-v21",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1197,7 +1260,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v20",
+      policy: "explore-query-plan-v21",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v2",
@@ -1896,7 +1959,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v20",
+      policy: "explore-query-plan-v21",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,

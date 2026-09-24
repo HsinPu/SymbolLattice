@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { scoreTask, verifySourceExcerpts, verifyLexicalMatches, verifySourceReuse, verifyUnresolvedCalls, verifyNameFollowups, verifyNumericQualifiers, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
+import { scoreTask, verifySourceExcerpts, verifyLexicalMatches, verifySourceReuse, verifyUnresolvedCalls, verifyNameFollowups, verifyPropertyUseFollowups, verifyNumericQualifiers, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
 
 describe("task retrieval benchmark judgments", () => {
   it("verifies lexical windows against their original owner and rejects invented relationship claims", () => {
@@ -56,6 +56,32 @@ describe("task retrieval benchmark judgments", () => {
       const changed = structuredClone(result); mutate(changed);
       expect(() => verifyNameFollowups(changed)).toThrow();
     }
+  });
+  it("requires a source-property followup to cite a selected exact reference", () => {
+    const anchor = { id: "code", name: "BODY_413", filePath: "errors.js", kind: "variable", isExported: true };
+    const source = { id: "run", name: "run", filePath: "parser.js", kind: "function" };
+    const edge = { id: "use", sourceId: source.id, targetId: anchor.id, filePath: source.filePath,
+      kind: "references", resolution: "exact", evidence: {
+        ruleId: "module.commonjs-object-property-reference", resolutionPath: [source.filePath, anchor.filePath],
+        commonJsBinding: { policy: "javascript-commonjs-object-property-reference-v1",
+          importSite: { filePath: source.filePath }, exportSite: { filePath: anchor.filePath } }
+      } };
+    const result = { focuses: [{ symbol: anchor }, { symbol: source, reasons: ["source-property-use"],
+      propertyUseFollowup: { policy: "source-property-use-followup-v1", anchorSymbolId: anchor.id,
+        replacedFilePath: "generic.js", candidateFileCount: 1, edgeIds: [edge.id] } }],
+      connections: [{ source, target: anchor, edge }], connectionsTruncated: false };
+    expect(verifyPropertyUseFollowups(result)).toEqual({ verifiedFollowups: 1, verifiedEdges: 1, unverifiedEdges: 0 });
+    for (const mutate of [
+      r => { r.connections[0].edge.resolution = "heuristic"; },
+      r => { r.connections[0].edge.evidence.resolutionPath[1] = "other.js"; },
+      r => { r.focuses[1].propertyUseFollowup.anchorSymbolId = "missing"; },
+      r => { r.connections[0].source.id = "other"; },
+      r => { r.focuses[1].propertyUseFollowup.edgeIds = ["missing"]; }
+    ]) { const corrupt = structuredClone(result); mutate(corrupt); expect(() => verifyPropertyUseFollowups(corrupt)).toThrow(); }
+    const truncated = structuredClone(result);
+    truncated.connections = [];
+    truncated.connectionsTruncated = true;
+    expect(verifyPropertyUseFollowups(truncated)).toEqual({ verifiedFollowups: 1, verifiedEdges: 0, unverifiedEdges: 1 });
   });
   it("independently rejects invented unknown-call targets, names, owners and source positions", () => {
     const edge = { sourceId: "owner", targetId: null, kind: "calls", resolution: "unresolved", confidence: 0,

@@ -67,6 +67,51 @@ export function verifyNameFollowups(result) {
   return { verifiedFollowups, verifiedOrigins };
 }
 
+/** Check that every emitted source-property followup cites selected exact source evidence. */
+export function verifyPropertyUseFollowups(result) {
+  const focuses = result.focuses ?? [];
+  const uses = focuses.filter((focus) => focus.propertyUseFollowup);
+  assert.ok(uses.length <= 2);
+  assert.ok(new Set(uses.map((focus) => focus.symbol.filePath)).size <= 1);
+  const byId = new Map(focuses.map((focus) => [focus.symbol.id, focus]));
+  const connections = new Map((result.connections ?? []).map((connection) => [connection.edge.id, connection]));
+  let verifiedEdges = 0, unverifiedEdges = 0;
+  for (const focus of uses) {
+    const receipt = focus.propertyUseFollowup;
+    assert.equal(receipt.policy, "source-property-use-followup-v1");
+    assert.ok(focus.reasons.includes("source-property-use"));
+    assert.ok(Number.isInteger(receipt.candidateFileCount) && receipt.candidateFileCount >= 1);
+    assert.ok(receipt.edgeIds.length > 0);
+    assert.equal(new Set(receipt.edgeIds).size, receipt.edgeIds.length);
+    const anchor = byId.get(receipt.anchorSymbolId);
+    assert.equal(anchor?.symbol.kind, "variable");
+    assert.equal(anchor?.symbol.isExported, true);
+    if (receipt.replacedFilePath !== null) {
+      assert.ok(!focuses.some((item) => item.symbol.filePath === receipt.replacedFilePath));
+    }
+    for (const id of receipt.edgeIds) {
+      const connection = connections.get(id);
+      if (!connection && result.connectionsTruncated) { unverifiedEdges++; continue; }
+      assert.ok(connection, `Missing selected property-use connection ${id}`);
+      const edge = connection.edge;
+      assert.equal(connection.source.id, focus.symbol.id);
+      assert.equal(connection.target.id, anchor.symbol.id);
+      assert.equal(edge.sourceId, focus.symbol.id);
+      assert.equal(edge.targetId, anchor.symbol.id);
+      assert.equal(edge.filePath, focus.symbol.filePath);
+      assert.equal(edge.kind, "references");
+      assert.equal(edge.resolution, "exact");
+      assert.equal(edge.evidence?.ruleId, "module.commonjs-object-property-reference");
+      assert.equal(edge.evidence?.commonJsBinding?.policy, "javascript-commonjs-object-property-reference-v1");
+      assert.deepEqual(edge.evidence?.resolutionPath, [focus.symbol.filePath, anchor.symbol.filePath]);
+      assert.equal(edge.evidence?.commonJsBinding?.importSite.filePath, focus.symbol.filePath);
+      assert.equal(edge.evidence?.commonJsBinding?.exportSite.filePath, anchor.symbol.filePath);
+      verifiedEdges++;
+    }
+  }
+  return { verifiedFollowups: uses.length, verifiedEdges, unverifiedEdges };
+}
+
 export function verifyNumericQualifiers(result) {
   if (result.queryPlan?.numericCoverage) {
     const coverage = result.queryPlan.numericCoverage;
@@ -331,6 +376,7 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
       sourceVerification, lexicalVerification: verifyLexicalMatches(response, (file) => readFileSync(resolve(project, file), "utf8")),
       unresolvedCallVerification: verifyUnresolvedCalls(response, (file) => readFileSync(resolve(project, file), "utf8")),
       nameFollowupVerification: verifyNameFollowups(response),
+      propertyUseFollowupVerification: verifyPropertyUseFollowups(response),
       numericQualifierVerification: verifyNumericQualifiers(response),
       reuseVerification: verifySourceReuse(response, (file) => readFileSync(resolve(project, file), "utf8")), result: response };
   });

@@ -17,7 +17,7 @@ import { identifierNumbers, numericIdentifierTerms, identifierTermGroups, identi
 import { SOURCE_LEXICAL_SCORING, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
 import { downstreamFocusPaths, type ExploreFlowFocus } from "./explore-flow-focus.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v20" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v21" as const;
 export const EXPLORE_NUMERIC_QUERY = {
   policy: "numeric-query-qualifiers-v1", maximumIdentifierTerms: 12, qualifierScore: 500
 } as const;
@@ -26,6 +26,9 @@ export const EXPLORE_QUERY_FOCUS_COVERAGE = {
   minimumRelativeScore: 0.75,
   minimumSourceConcepts: 2,
   maximumReplacementsPerFile: 1
+} as const;
+export const EXPLORE_QUERY_PROPERTY_USE_FOLLOWUP = {
+  policy: "source-property-use-followup-v1", maximumFiles: 1, maximumSymbolsPerFile: 2
 } as const;
 export const EXPLORE_QUERY_CONNECTION_LIMITS = { perNeighbor: 60, maximumScore: 240 } as const;
 export const EXPLORE_QUERY_SOURCE_LEXICAL_SCORING = {
@@ -141,7 +144,8 @@ export type ExploreQuerySelectionReason =
   | "graph-expanded"
   | "graph-connected"
   | "graph-mass"
-  | "graph-diffusion";
+  | "graph-diffusion"
+  | "source-property-use";
 
 export interface ExploreNumericQualifier {
   readonly policy: typeof EXPLORE_NUMERIC_QUERY.policy;
@@ -308,6 +312,14 @@ export interface ExploreQueryFocusCoverage {
   readonly flow?: ExploreFlowFocus;
 }
 
+export interface ExploreQueryPropertyUseFollowup {
+  readonly policy: typeof EXPLORE_QUERY_PROPERTY_USE_FOLLOWUP.policy;
+  readonly anchorSymbolId: string;
+  readonly replacedFilePath: string | null;
+  readonly candidateFileCount: number;
+  readonly edgeIds: readonly string[];
+}
+
 export interface ExploreQuerySelection {
   readonly rank: number;
   readonly symbol: SymbolNode;
@@ -341,6 +353,7 @@ export interface ExploreQuerySelection {
   readonly sourceMatches?: readonly SourceLexicalMatch[];
   readonly sourceScore?: number;
   readonly focusCoverage?: ExploreQueryFocusCoverage;
+  readonly propertyUseFollowup?: ExploreQueryPropertyUseFollowup;
   readonly numericQualifier?: ExploreNumericQualifier;
   readonly nameFollowup?: import("./explore-name-followups.js").ExploreNameFollowup;
   readonly reasons: readonly ExploreQuerySelectionReason[];
@@ -2278,6 +2291,115 @@ function diversifyFileFocuses(
   return receipts;
 }
 
+/** Admit a bounded source use of an explicitly matched exported property. */
+function selectPropertyUseFollowup(
+  selected: Candidate[], ranked: readonly Candidate[], graph: ExploreQueryGraph,
+  filesByPath: ReadonlyMap<string, IndexedFile>, roleIntent: ExploreQueryRoleIntent,
+  enabled: boolean
+): ReadonlyMap<string, ExploreQueryPropertyUseFollowup> {
+  const receipts = new Map<string, ExploreQueryPropertyUseFollowup>();
+  if (!enabled) return receipts;
+  const anchors = new Map(selected.flatMap((candidate, rank) =>
+    candidate.symbol.kind === "variable" && candidate.symbol.isExported && !candidate.explicitFile &&
+    (candidate.numericQualifier !== undefined || candidate.baseReasons.includes("exact-symbol-term") ||
+      candidate.baseReasons.includes("qualified-symbol-term"))
+      ? [[candidate.symbol.id, { candidate, rank }] as const] : []));
+  if (anchors.size === 0) return receipts;
+  const symbolsById = new Map(graph.symbols.map((symbol) => [symbol.id, symbol]));
+  const selectedFiles = new Set(selected.map((candidate) => candidate.symbol.filePath));
+  const files = new Map<string, {
+    readonly symbols: Map<string, { symbol: SymbolNode; anchorId: string; anchorRank: number; edges: GraphEdge[] }>;
+    edgeCount: number;
+    bestAnchorRank: number;
+  }>();
+  for (const edge of graph.edges) {
+    if (edge.kind !== "references" || edge.resolution !== "exact" ||
+        edge.evidence?.ruleId !== "module.commonjs-object-property-reference" || edge.targetId === null) continue;
+    const anchor = anchors.get(edge.targetId);
+    const source = symbolsById.get(edge.sourceId);
+    if (!anchor || !source || selectedFiles.has(source.filePath) ||
+        !["function", "method", "entrypoint"].includes(source.kind)) continue;
+    if (edge.filePath !== source.filePath ||
+        edge.evidence?.commonJsBinding?.policy !== "javascript-commonjs-object-property-reference-v1" ||
+        edge.evidence.commonJsBinding.importSite.filePath !== source.filePath ||
+        edge.evidence.commonJsBinding.exportSite.filePath !== anchor.candidate.symbol.filePath ||
+        edge.evidence.resolutionPath?.[0] !== source.filePath ||
+        edge.evidence.resolutionPath?.[1] !== anchor.candidate.symbol.filePath) continue;
+    const indexedSource = filesByPath.get(source.filePath);
+    if (indexedSource === undefined) continue;
+    const role = sourceRoleClassificationFor(indexedSource);
+    if (role.role !== "production" || generatedClassificationFor(indexedSource).generated) continue;
+    const file = files.get(source.filePath) ?? {
+      symbols: new Map(), edgeCount: 0, bestAnchorRank: anchor.rank
+    };
+    const use = file.symbols.get(source.id) ?? {
+      symbol: source, anchorId: edge.targetId, anchorRank: anchor.rank, edges: []
+    };
+    use.edges.push(edge);
+    if (anchor.rank < use.anchorRank) {
+      use.anchorId = edge.targetId;
+      use.anchorRank = anchor.rank;
+    }
+    file.symbols.set(source.id, use);
+    file.edgeCount += 1;
+    file.bestAnchorRank = Math.min(file.bestAnchorRank, anchor.rank);
+    files.set(source.filePath, file);
+  }
+  if (files.size === 0) return receipts;
+  const rankedById = new Map(ranked.map((candidate) => [candidate.symbol.id, candidate]));
+  const orderedFiles = [...files.entries()].sort((left, right) =>
+    left[1].bestAnchorRank - right[1].bestAnchorRank ||
+    right[1].edgeCount - left[1].edgeCount || compareText(left[0], right[0]));
+  for (const [filePath, file] of orderedFiles.slice(0, EXPLORE_QUERY_PROPERTY_USE_FOLLOWUP.maximumFiles)) {
+    const currentFiles = new Set(selected.map((candidate) => candidate.symbol.filePath));
+    const victims = [...currentFiles].filter((path) => selected.every((candidate) =>
+      candidate.symbol.filePath !== path ||
+      (!candidate.explicitFile && candidate.numericQualifier === undefined && !anchors.has(candidate.symbol.id))))
+      .map((path) => ({ path, score: Math.max(...selected.filter((candidate) =>
+        candidate.symbol.filePath === path).map(rankingScore)) }))
+      .sort((left, right) => left.score - right.score || compareText(left.path, right.path));
+    const replacedFilePath = currentFiles.size >= EXPLORE_QUERY_LIMITS.maximumFiles
+      ? victims[0]?.path : undefined;
+    if (currentFiles.size >= EXPLORE_QUERY_LIMITS.maximumFiles && replacedFilePath === undefined) continue;
+    const remaining = replacedFilePath === undefined ? selected.length :
+      selected.filter((candidate) => candidate.symbol.filePath !== replacedFilePath).length;
+    const available = Math.min(EXPLORE_QUERY_PROPERTY_USE_FOLLOWUP.maximumSymbolsPerFile,
+      EXPLORE_QUERY_LIMITS.maximumSymbols - remaining);
+    if (available <= 0) continue;
+    const uses = [...file.symbols.values()].sort((left, right) =>
+      left.anchorRank - right.anchorRank || right.edges.length - left.edges.length ||
+      left.symbol.range.start.line - right.symbol.range.start.line ||
+      compareText(left.symbol.id, right.symbol.id)).slice(0, available);
+    if (uses.length === 0) continue;
+    if (replacedFilePath !== undefined) {
+      for (let index = selected.length - 1; index >= 0; index -= 1) {
+        if (selected[index]!.symbol.filePath === replacedFilePath) selected.splice(index, 1);
+      }
+    }
+    let insertAt = selected.findIndex((candidate) => candidate.symbol.id === uses[0]!.anchorId) + 1;
+    for (const use of uses) {
+      const candidate = rankedById.get(use.symbol.id) ?? (() => {
+        const generated = generatedClassificationFor(filesByPath.get(filePath) ?? {});
+        const sourceRole = sourceRoleClassificationFor(filesByPath.get(filePath) ?? {});
+        return { symbol: use.symbol, explicitFile: false, matchedTerms: [], baseReasons: [], baseScore: 0,
+          generated, sourceWorth: 1, sourceRole,
+          sourceRoleWorth: sourceRoleWorthFor(sourceRole.role, false, roleIntent),
+          connectionScore: 0, graphMass: emptyGraphMass(), graphExpansion: emptyGraphExpansion(),
+          graphDiffusion: emptyGraphDiffusion() } satisfies Candidate;
+      })();
+      selected.splice(insertAt, 0, candidate);
+      insertAt += 1;
+      receipts.set(use.symbol.id, {
+        policy: EXPLORE_QUERY_PROPERTY_USE_FOLLOWUP.policy, anchorSymbolId: use.anchorId,
+        replacedFilePath: replacedFilePath ?? null, candidateFileCount: files.size,
+        edgeIds: use.edges.map((edge) => edge.id).sort(compareText)
+      });
+    }
+    break;
+  }
+  return receipts;
+}
+
 /** Builds a deterministic, bounded graph focus plan without reading live source. */
 /** Existing bounded English execution-intent heuristic, shared with source selection. */
 export function hasExploreExecutionIntent(query: string): boolean {
@@ -2423,6 +2545,8 @@ export function planExploreQuery(
   const coverageReceipts = naturalLanguage && parsed.fileHints.length === 0
     ? diversifyFileFocuses(selected, ranked, parsed.identifierTerms, graph, executionIntent)
     : new Map<string, ExploreQueryFocusCoverage>();
+  const propertyUseReceipts = selectPropertyUseFollowup(selected, ranked, graph, filesByPath,
+    roleIntent, naturalLanguage && parsed.fileHints.length === 0);
   const selection: ExploreQuerySelection[] = selected.map((candidate, index) => {
     const score = rawScore(candidate);
     return {
@@ -2484,8 +2608,10 @@ export function planExploreQuery(
       ),
       matchedTerms: candidate.matchedTerms,
       ...(coverageReceipts.has(candidate.symbol.id) ? { focusCoverage: coverageReceipts.get(candidate.symbol.id)! } : {}),
+      ...(propertyUseReceipts.has(candidate.symbol.id) ? { propertyUseFollowup: propertyUseReceipts.get(candidate.symbol.id)! } : {}),
       reasons: [
         ...candidate.baseReasons,
+        ...(propertyUseReceipts.has(candidate.symbol.id) ? ["source-property-use" as const] : []),
         ...(coverageReceipts.has(candidate.symbol.id) ? [coverageReceipts.get(candidate.symbol.id)?.flow === undefined
           ? "additional-query-concepts" as const : "downstream-flow-coverage" as const] : []),
         ...(candidate.connectionScore > 0 ? ["graph-connected" as const] : []),
@@ -2603,7 +2729,7 @@ export function planExploreQuery(
       selectedLocalizationCount: selection.filter(
         (candidate) => candidate.sourceRole.role === "localization"
       ).length,
-      selectedFileCount: selectedFiles.size,
+      selectedFileCount: new Set(selection.map((candidate) => candidate.symbol.filePath)).size,
       truncated: selection.length < candidates.length
     },
     selection
