@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { scoreTask, verifySourceExcerpts, verifyLexicalMatches, verifySourceReuse, verifyUnresolvedCalls, verifyNameFollowups, verifyPropertyUseFollowups, verifyNumericQualifiers, verifyNumericContainerFiltering, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
+import { scoreTask, verifySourceExcerpts, verifyGraphEvidence, verifyLexicalMatches, verifySourceReuse, verifyUnresolvedCalls, verifyNameFollowups, verifyPropertyUseFollowups, verifyNumericQualifiers, verifyNumericContainerFiltering, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
 
 describe("task retrieval benchmark judgments", () => {
   it("verifies lexical windows against their original owner and rejects invented relationship claims", () => {
@@ -217,5 +217,37 @@ describe("task retrieval benchmark judgments", () => {
     expect(verifySourceExcerpts({ source }, read)).toEqual({ verifiedExcerpts: 1, emittedCharacters: 6, emittedLines: 1 });
     expect(() => verifySourceExcerpts({ source: { ...source, text: "fake()" } }, read)).toThrow("Source text mismatch");
     expect(() => verifySourceExcerpts({ source: { ...source, lines: [{ line: 1, text: "run()" }] } }, read)).toThrow();
+  });
+
+  it("checks exact graph receipts against pinned source and directed endpoints", () => {
+    const source = { id: "source", filePath: "a.ts" };
+    const target = { id: "target", filePath: "a.ts" };
+    const edge = { id: "call", kind: "calls", resolution: "exact", sourceId: source.id,
+      targetId: target.id, filePath: "a.ts", range: { start: { line: 1, column: 1 },
+        end: { line: 1, column: 5 } }, evidence: { ruleId: "syntax.call" } };
+    const result = { connections: [{ source, target, edge }], pathSpinePlan: { spines: [{ path: {
+      symbols: [source, target], edges: [edge], steps: [{ from: source, to: target, edge }]
+    } }] } };
+    const read = () => "call()\n";
+    expect(verifyGraphEvidence(result, read)).toEqual({ verifiedEdges: 1,
+      verifiedConnections: 1, verifiedPathSteps: 1, verifiedReverseSteps: 0 });
+    const reverse = structuredClone(result);
+    reverse.impact = [{ symbols: [target, source], edges: [edge],
+      steps: [{ from: target, to: source, edge }] }];
+    expect(verifyGraphEvidence(reverse, read).verifiedReverseSteps).toBe(1);
+    reverse.impact[0].steps[0].to.id = "other";
+    expect(() => verifyGraphEvidence(reverse, read)).toThrow();
+    const wrongTarget = structuredClone(result);
+    wrongTarget.connections[0].edge.targetId = "other";
+    expect(() => verifyGraphEvidence(wrongTarget, read)).toThrow();
+    const wrongSite = structuredClone(result);
+    wrongSite.connections[0].edge.range.end.column = 99;
+    expect(() => verifyGraphEvidence(wrongSite, read)).toThrow("outside pinned source");
+    const missingRule = structuredClone(result);
+    delete missingRule.connections[0].edge.evidence.ruleId;
+    expect(() => verifyGraphEvidence(missingRule, read)).toThrow("lacks a source rule");
+    const wrongPath = structuredClone(result);
+    wrongPath.pathSpinePlan.spines[0].path.steps[0].to.id = "other";
+    expect(() => verifyGraphEvidence(wrongPath, read)).toThrow();
   });
 });

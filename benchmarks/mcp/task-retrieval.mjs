@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, mkdirSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 import { performance } from "node:perf_hooks";
@@ -357,6 +357,94 @@ export function verifySourceExcerpts(result, readSource) {
   return { verifiedExcerpts: sources.length, emittedCharacters: characters, emittedLines: lines };
 }
 
+/** Verify emitted graph receipts against pinned source coordinates and directed endpoints. */
+export function verifyGraphEvidence(result, readSource) {
+  const uniqueEdges = new Map();
+  const linesByPath = new Map();
+  let verifiedConnections = 0;
+  let verifiedPathSteps = 0;
+  let verifiedReverseSteps = 0;
+  const verifyEdge = (edge) => {
+    assert.equal(typeof edge.id, 'string');
+    assert.ok(edge.id.length > 0);
+    assert.ok(typeof edge.filePath === 'string' && edge.filePath.length > 0);
+    assert.ok(!isAbsolute(edge.filePath) && !edge.filePath.split(/[\\/]/u).includes('..'),
+      `Edge path leaves pinned checkout: ${edge.filePath}`);
+    assert.ok(edge.resolution !== 'exact' || typeof edge.evidence?.ruleId === 'string',
+      `Exact edge lacks a source rule: ${edge.id}`);
+    const signature = JSON.stringify([edge.kind, edge.resolution, edge.sourceId, edge.targetId,
+      edge.filePath, edge.range, edge.evidence]);
+    const previous = uniqueEdges.get(edge.id);
+    if (previous !== undefined) {
+      assert.equal(signature, previous, `Conflicting receipts for edge ${edge.id}`);
+      return;
+    }
+    const lines = linesByPath.get(edge.filePath) ??
+      readSource(edge.filePath).split(/\r\n|\r|\n|\u2028|\u2029/u);
+    linesByPath.set(edge.filePath, lines);
+    const start = edge.range?.start, end = edge.range?.end;
+    for (const point of [start, end]) {
+      assert.ok(Number.isSafeInteger(point?.line) && point.line >= 1 && point.line <= lines.length &&
+        Number.isSafeInteger(point.column) && point.column >= 1 &&
+        point.column <= lines[point.line - 1].length + 1,
+      `Edge site is outside pinned source: ${edge.id}`);
+    }
+    assert.ok(start.line < end.line || start.line === end.line && start.column <= end.column,
+      `Edge site is reversed: ${edge.id}`);
+    uniqueEdges.set(edge.id, signature);
+  };
+  const visit = (value) => {
+    if (Array.isArray(value)) { for (const child of value) visit(child); return; }
+    if (value === null || typeof value !== 'object') return;
+    if (typeof value.id === 'string' && typeof value.sourceId === 'string' &&
+      typeof value.kind === 'string' && typeof value.resolution === 'string' && value.range) {
+      verifyEdge(value);
+    }
+    for (const child of Object.values(value)) visit(child);
+  };
+  visit(result);
+  for (const connection of result.connections ?? []) {
+    assert.equal(connection.edge.resolution, 'exact');
+    assert.equal(connection.edge.sourceId, connection.source.id);
+    assert.equal(connection.edge.targetId, connection.target.id);
+    verifiedConnections++;
+  }
+  const paths = [
+    ...(result.pathSpinePlan?.spines ?? []).map(spine => spine.path),
+    ...(result.evidencePaths ?? []).filter(item => item.status === 'path').map(item => item.path),
+    ...(result.focuses ?? []).map(focus => focus.focusCoverage?.flow?.path).filter(Boolean)
+  ];
+  for (const path of paths) {
+    assert.equal(path.symbols.length, path.steps.length + 1);
+    assert.equal(path.edges.length, path.steps.length);
+    for (const [index, step] of path.steps.entries()) {
+      assert.equal(step.from.id, path.symbols[index].id);
+      assert.equal(step.to.id, path.symbols[index + 1].id);
+      assert.equal(step.edge.id, path.edges[index].id);
+      assert.equal(step.edge.resolution, 'exact');
+      assert.equal(step.edge.sourceId, step.from.id);
+      assert.equal(step.edge.targetId, step.to.id);
+      verifiedPathSteps++;
+    }
+  }
+  const reversePaths = [...(result.impact ?? []),
+    ...(result.focuses ?? []).flatMap(focus => focus.impact?.paths ?? [])];
+  for (const path of reversePaths) {
+    assert.equal(path.symbols.length, path.steps.length + 1);
+    assert.equal(path.edges.length, path.steps.length);
+    for (const [index, step] of path.steps.entries()) {
+      assert.equal(step.from.id, path.symbols[index].id);
+      assert.equal(step.to.id, path.symbols[index + 1].id);
+      assert.equal(step.edge.id, path.edges[index].id);
+      assert.equal(step.edge.sourceId, step.to.id);
+      assert.equal(step.edge.targetId, step.from.id);
+      verifiedReverseSteps++;
+    }
+  }
+  return { verifiedEdges: uniqueEdges.size, verifiedConnections, verifiedPathSteps,
+    verifiedReverseSteps };
+}
+
 export function productFingerprint(root) {
   const hash = createHash("sha256");
   let files = 0;
@@ -419,7 +507,9 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
     return { id: task.id, split: task.split, query: task.query, ...scoreTask(task, response),
       processMilliseconds: durations, medianProcessMilliseconds: sorted[Math.floor(sorted.length / 2)],
       responseBytes: Buffer.byteLength(raw), markdownProjectionBytes: Buffer.byteLength(renderExploreText(response)),
-      sourceVerification, lexicalVerification: verifyLexicalMatches(response, (file) => readFileSync(resolve(project, file), "utf8")),
+      sourceVerification, graphEvidenceVerification: verifyGraphEvidence(response,
+        (file) => readFileSync(resolve(project, file), "utf8")),
+      lexicalVerification: verifyLexicalMatches(response, (file) => readFileSync(resolve(project, file), "utf8")),
       unresolvedCallVerification: verifyUnresolvedCalls(response, (file) => readFileSync(resolve(project, file), "utf8")),
       nameFollowupVerification: verifyNameFollowups(response),
       propertyUseFollowupVerification: verifyPropertyUseFollowups(response),

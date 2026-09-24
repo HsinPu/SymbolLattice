@@ -2311,17 +2311,22 @@ function readBoundedEdgesByIds(
     const batch = ids.slice(start, start + BOUNDED_QUERY_PARAMETER_BATCH_SIZE);
     if (batch.length === 0) continue;
     const placeholders = batch.map(() => "?").join(", ");
-    const base = `SELECT e.id, e.source_id, e.target_id, e.kind, e.file_path,
+    const projection = `SELECT e.id, e.source_id, e.target_id, e.kind, e.file_path,
       e.start_line, e.start_column, e.end_line, e.end_column,
       e.resolution, e.confidence, e.reference_name
-      FROM edges AS e
-      INNER JOIN symbols AS source ON source.id = e.source_id
-      INNER JOIN symbols AS target ON target.id = e.target_id`;
+      FROM edges AS e`;
+    // Frontier IDs were read from symbols or admitted through a prior joined
+    // edge. Check only the opposite endpoint, while still excluding orphaned
+    // edges before they can consume the node and relationship bounds.
     const outgoing = database
-      .prepare(`${base} WHERE e.resolution = 'exact' AND e.source_id IN (${placeholders})`)
+      .prepare(`${projection}
+        INNER JOIN symbols AS target ON target.id = e.target_id
+        WHERE e.resolution = 'exact' AND e.source_id IN (${placeholders})`)
       .all(...batch) as unknown as EdgeRow[];
     const incoming = database
-      .prepare(`${base} WHERE e.resolution = 'exact' AND e.target_id IN (${placeholders})`)
+      .prepare(`${projection}
+        INNER JOIN symbols AS source ON source.id = e.source_id
+        WHERE e.resolution = 'exact' AND e.target_id IN (${placeholders})`)
       .all(...batch) as unknown as EdgeRow[];
     hadEdges ||= outgoing.length > 0 || incoming.length > 0;
     for (const row of outgoing) {
