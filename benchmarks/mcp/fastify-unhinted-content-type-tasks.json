@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/fastify/fastify",
+  "commit": "70b14e92c0b55e8201f5530ba2e6bab4e928c784",
+  "truthMethod": "Development tasks derived from manual reading of the pinned built-in content-type parser and error definition. The first natural-language query exposed a missing implementation file before this manifest was committed; neither task is held out. Neither query provides a symbol, file path, or HTTP status code. Both cover the built-in rejection path when no parser matches and the request is not a 404 fallback; the external error factory and runtime dispatch are not assumed resolved. Required facts and files were fixed before any future ranking change. File judgments are incomplete, and unjudged output is not a false positive.",
+  "tasks": [
+    {
+      "id": "unsupported-content-type-without-code",
+      "split": "development",
+      "query": "Where does Fastify reject a request with an unsupported content type?",
+      "requiredFiles": ["lib/contentTypeParser.js", "lib/errors.js"],
+      "supportingFiles": ["lib/reply.js", "lib/error-handler.js"],
+      "irrelevantFiles": [],
+      "evidence": [
+        {"file": "lib/contentTypeParser.js", "line": 177, "text": "if (parser === undefined)"},
+        {"file": "lib/contentTypeParser.js", "line": 183, "text": "reply[kReplyIsError] = true"},
+        {"file": "lib/contentTypeParser.js", "line": 184, "text": "reply.send(new FST_ERR_CTP_INVALID_MEDIA_TYPE(contentType || undefined))"},
+        {"file": "lib/errors.js", "line": 111, "text": "FST_ERR_CTP_INVALID_MEDIA_TYPE: createError("},
+        {"file": "lib/errors.js", "line": 114, "text": "415"}
+      ]
+    },
+    {
+      "id": "unknown-media-type-without-code",
+      "split": "development",
+      "query": "How is an unknown media type rejected?",
+      "requiredFiles": ["lib/contentTypeParser.js", "lib/errors.js"],
+      "supportingFiles": ["lib/reply.js", "lib/error-handler.js"],
+      "irrelevantFiles": [],
+      "evidence": [
+        {"file": "lib/contentTypeParser.js", "line": 177, "text": "if (parser === undefined)"},
+        {"file": "lib/contentTypeParser.js", "line": 183, "text": "reply[kReplyIsError] = true"},
+        {"file": "lib/contentTypeParser.js", "line": 184, "text": "reply.send(new FST_ERR_CTP_INVALID_MEDIA_TYPE(contentType || undefined))"},
+        {"file": "lib/errors.js", "line": 111, "text": "FST_ERR_CTP_INVALID_MEDIA_TYPE: createError("},
+        {"file": "lib/errors.js", "line": 114, "text": "415"}
+      ]
+    }
+  ]
+}

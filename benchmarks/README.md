@@ -37,10 +37,16 @@ These tools generate or validate large-project evidence outside the published np
 | `r/` | `lifecycle.mjs` | manual |
 | `mcp/` | `read-query-concurrency.mjs` | manual |
 | `mcp/` | `strict-fresh-read-lifecycle.mjs` | manual |
-| `mcp/` | `task-retrieval.mjs`, `nest-retrieval-tasks.json`, `nest-source-tasks.json`, `nest-shutdown-tasks.json`, `fastify-retrieval-tasks.json`, `fastify-plugin-tasks.json`, `fastify-error-tasks.json`, `fastify-serializer-tasks.json`, `fastify-cookie-tasks.json`, `fastify-stream-error-tasks.json`, `fastify-serialization-hook-error-tasks.json`, `fastify-header-write-error-tasks.json`, `fastify-outgoing-hook-error-tasks.json` | automatic scorer/source verifier contracts; manual pinned-corpus execution |
+| `mcp/` | `task-retrieval.mjs`, `nest-retrieval-tasks.json`, `nest-source-tasks.json`, `nest-shutdown-tasks.json`, `fastify-retrieval-tasks.json`, `fastify-plugin-tasks.json`, `fastify-error-tasks.json`, `fastify-serializer-tasks.json`, `fastify-cookie-tasks.json`, `fastify-stream-error-tasks.json`, `fastify-serialization-hook-error-tasks.json`, `fastify-header-write-error-tasks.json`, `fastify-outgoing-hook-error-tasks.json`, `fastify-unhinted-content-type-tasks.json` | automatic scorer/source verifier contracts; manual pinned-corpus execution |
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## v0.528.2 unhinted content-type task truth
+
+`mcp/fastify-unhinted-content-type-tasks.json` fixes two development queries on Fastify commit `70b14e92c0b55e8201f5530ba2e6bab4e928c784` without a symbol name, source path or HTTP status hint. The required parser rejection path in `lib/contentTypeParser.js` and the error definition in `lib/errors.js` were checked against the pinned source before future ranking changes. The truth covers the built-in no-parser branch, excluding the 404 fallback; it does not establish the external error factory's runtime behavior. File judgments are incomplete, so other returned files remain unjudged rather than false positives.
+
+On the unchanged v0.528.1 implementation and indexed generation, three fresh CLI processes per task found 0/2 required files and 0/5 required source facts for “Where does Fastify reject a request with an unsupported content type?” The related “How is an unknown media type rejected?” query found 2/2 files and 4/5 facts; the `415` definition line was not returned. Median process times were 2,598 ms and 2,556 ms, respectively, including startup, freshness checks, retrieval and serialization. These are baseline measurements, not a speed improvement or a completed retrieval fix. Run `node benchmarks/mcp/task-retrieval.mjs --project <pinned-indexed-fastify> --manifest benchmarks/mcp/fastify-unhinted-content-type-tasks.json --output <external-report.json> --repetitions 3` to reproduce the scoped checks. The raw baseline is under `%TEMP%/SymbolLattice-evidence-052901/unhinted-baseline.json`.
 
 ## v0.528.1 source-property-use followup
 
