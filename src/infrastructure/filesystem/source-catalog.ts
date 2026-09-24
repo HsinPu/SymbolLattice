@@ -14,7 +14,6 @@ import type {
   SourceCatalog,
   SourceDocument
 } from "../../ports/source-catalog.js";
-import { createTypeScriptProjectModuleResolver } from "../typescript/index.js";
 import {
   discoverFreshnessProjectPaths,
   fingerprintSourcePaths,
@@ -170,6 +169,7 @@ export class FileSystemSourceCatalog implements SourceCatalog {
     const astroConfigurationPath = astroProject.enabled
       ? astroProject.configurationInputs.find((input) => input.state === "present")?.path
       : undefined;
+    const { createTypeScriptProjectModuleResolver } = await import("../typescript/module-resolver.js");
     const typeScriptResolver = createTypeScriptProjectModuleResolver({
       projectPath: normalizedProjectPath,
       sourceDocuments,

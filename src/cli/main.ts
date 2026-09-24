@@ -111,12 +111,11 @@ import {
   SqliteGraphStore,
   SqliteOperationDiagnosticJournal
 } from "../infrastructure/sqlite/index.js";
-import {
-  startMcpServerWithReadQueryPool,
-  type AutoSyncDiagnosticJournalService,
-  type AutoSyncDiagnosticsService,
-  type AutoSyncStatusService,
-  type McpServerSession
+import type {
+  AutoSyncDiagnosticJournalService,
+  AutoSyncDiagnosticsService,
+  AutoSyncStatusService,
+  McpServerSession
 } from "../mcp/index.js";
 import { SYMBOL_LATTICE_VERSION } from "../version.js";
 import {
@@ -1081,7 +1080,7 @@ export async function runForegroundWatch(
 export async function runMcpWithAutoSync(
   service: SymbolLatticeService,
   options: McpAutoSyncOptions,
-  serverRunner: McpServerRunner = startMcpServerWithReadQueryPool,
+  serverRunner?: McpServerRunner,
   watchStarter: McpWatchStarter = startForegroundWatch,
   journalFactory: McpAutoSyncJournalFactory = (projectPath, writable) =>
     new SqliteAutoSyncDiagnosticJournal(projectPath, { writable }),
@@ -1189,7 +1188,8 @@ export async function runMcpWithAutoSync(
         recordReceipt(ownerLeaseUnavailableReceipt(options.projectPath, acquired.error));
       }
     }
-    mcpSession = await serverRunner(mcpService, options.projectPath, {
+    const runServer = serverRunner ?? (await import("../mcp/server.js")).startMcpServerWithReadQueryPool;
+    mcpSession = await runServer(mcpService, options.projectPath, {
       strictFreshReadCoordinator: new StrictFreshReadCoordinator({
         service,
         writerEnabled: autoSyncRequested,
