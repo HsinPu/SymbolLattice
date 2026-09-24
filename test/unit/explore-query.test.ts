@@ -169,6 +169,40 @@ function indexedFile(path: string, generated: boolean, role: SourceRole = "produ
 }
 
 describe("bounded lexical and relationship ranking", () => {
+  it("uses a precise numbered property instead of its broad duplicate source container", () => {
+    const container = { ...symbol({ id: "container", name: "codes", filePath: "src/errors.ts", kind: "variable" }),
+      range: { start: { line: 1, column: 1 }, end: { line: 200, column: 1 } } };
+    const specific = { ...symbol({ id: "specific", name: "codes.BODY_TOO_LARGE", filePath: "src/errors.ts", kind: "variable" }),
+      range: { start: { line: 80, column: 1 }, end: { line: 85, column: 1 } } };
+    const generic = symbol({ id: "generic", name: "serverRejectRequestBody", filePath: "src/server.ts" });
+    const query = "Where does the server reject a request body with HTTP 413?";
+    const matches = [
+      { term: "request", token: "Request", line: 82 },
+      { term: "body", token: "BODY_TOO_LARGE", line: 80 },
+      { term: "413", token: "413", line: 83 }
+    ].map(({ term, token, line }) => ({ term, token, filePath: container.filePath,
+      range: { start: { line, column: 3 }, end: { line, column: token.length + 3 } } }));
+    const lexical = { policy: SOURCE_LEXICAL_POLICY, limits: SOURCE_LEXICAL_LIMITS, state: "searched" as const,
+      scannedFiles: 1, scannedSymbols: 2, scannedCharacters: 2000, truncated: false,
+      candidates: [{ symbolId: container.id, score: 1000, matches },
+        { symbolId: specific.id, score: 900, matches }] };
+    const containment = { ...edge("contains-specific", container.id, specific.id), kind: "contains" as const,
+      filePath: container.filePath, range: specific.range };
+    const graph = { symbols: [generic, container, specific], edges: [containment] };
+    const plan = planExploreQuery(graph, query, lexical);
+    expect(plan.selection[0]?.symbol.id).toBe(specific.id);
+    expect(plan.selection.some(focus => focus.symbol.id === container.id)).toBe(false);
+    expect(plan.numericContainerFiltering?.omitted).toEqual([{ container,
+      coveredBySymbolId: specific.id, sourceMatches: matches, containmentEdge: containment }]);
+    expect(planExploreQuery(graph, `src/errors.ts ${query}`, lexical).numericContainerFiltering).toBeUndefined();
+    expect(planExploreQuery({ ...graph, edges: [] }, query, lexical).numericContainerFiltering).toBeUndefined();
+    expect(planExploreQuery({ ...graph, edges: [{ ...containment, evidence: undefined }] }, query, lexical)
+      .numericContainerFiltering).toBeUndefined();
+    const incomplete = { ...lexical, candidates: [lexical.candidates[0]!,
+      { ...lexical.candidates[1]!, matches: matches.slice(0, 2) }] };
+    expect(planExploreQuery(graph, query, incomplete).numericContainerFiltering).toBeUndefined();
+  });
+
   it("places a numbered implementation before a stronger generic action match", () => {
     const generic = symbol({ id: "generic", name: "handleRequestHeadersSendResponse", filePath: "src/handleRequest.ts" });
     const implementation = symbol({ id: "implementation", name: "clientError", filePath: "src/server.ts" });
@@ -581,7 +615,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v24",
+      policy: "explore-query-plan-v25",
       queryIntent: {
         tests: false,
         icons: false,
@@ -699,7 +733,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v24",
+      policy: "explore-query-plan-v25",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -931,7 +965,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v24",
+      policy: "explore-query-plan-v25",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1355,7 +1389,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v24",
+      policy: "explore-query-plan-v25",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v2",
@@ -2054,7 +2088,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v24",
+      policy: "explore-query-plan-v25",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,

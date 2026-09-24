@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { scoreTask, verifySourceExcerpts, verifyLexicalMatches, verifySourceReuse, verifyUnresolvedCalls, verifyNameFollowups, verifyPropertyUseFollowups, verifyNumericQualifiers, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
+import { scoreTask, verifySourceExcerpts, verifyLexicalMatches, verifySourceReuse, verifyUnresolvedCalls, verifyNameFollowups, verifyPropertyUseFollowups, verifyNumericQualifiers, verifyNumericContainerFiltering, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
 
 describe("task retrieval benchmark judgments", () => {
   it("verifies lexical windows against their original owner and rejects invented relationship claims", () => {
@@ -38,6 +38,35 @@ describe("task retrieval benchmark judgments", () => {
     expect(verifyNumericQualifiers(result)).toEqual({ verifiedQualifiers: 1 });
     result.queryPlan.identifierTerms = [];
     expect(() => verifyNumericQualifiers(result)).toThrow();
+  });
+  it("checks omitted numeric containers against exact containment and shared source coordinates", () => {
+    const lines = Array.from({ length: 100 }, () => "");
+    lines[79] = "  body: 413";
+    const filePath = "errors.js";
+    const container = { id: "codes", kind: "variable", filePath, qualifiedName: "errors.js#codes",
+      range: { start: { line: 1, column: 1 }, end: { line: 100, column: 1 } } };
+    const child = { id: "body-code", kind: "variable", filePath, qualifiedName: "errors.js#codes.BODY",
+      range: { start: { line: 80, column: 3 }, end: { line: 80, column: 12 } } };
+    const matches = [{ term: "body", token: "body", start: 3, end: 7 },
+      { term: "413", token: "413", start: 9, end: 12 }].map(match => ({ term: match.term,
+      token: match.token, filePath, range: { start: { line: 80, column: match.start },
+        end: { line: 80, column: match.end } } }));
+    const edge = { sourceId: container.id, targetId: child.id, kind: "contains", resolution: "exact",
+      filePath, range: child.range, evidence: { ruleId: "syntax.containment" } };
+    const result = { focuses: [{ symbol: child, sourceMatches: matches }], queryPlan: {
+      numericContainerFiltering: { policy: "numeric-contained-source-focus-v1", limits: {
+        policy: "numeric-contained-source-focus-v1", minimumContainerLines: 64, maximumChildLines: 32
+      }, omitted: [{ container, coveredBySymbolId: child.id, sourceMatches: matches, containmentEdge: edge }] }
+    } };
+    const read = () => lines.join("\n");
+    expect(verifyNumericContainerFiltering(result, read)).toEqual({ verifiedOmissions: 1, verifiedMatches: 2 });
+    for (const mutate of [r => { r.queryPlan.numericContainerFiltering.omitted[0].containmentEdge.resolution = "heuristic"; },
+      r => { r.queryPlan.numericContainerFiltering.omitted[0].sourceMatches[0].range.start.column = 4; },
+      r => { r.queryPlan.numericContainerFiltering.omitted[0].coveredBySymbolId = "missing"; },
+      r => { r.queryPlan.numericContainerFiltering.omitted[0].container.range.end.line = 50; }]) {
+      const corrupt = structuredClone(result); mutate(corrupt);
+      expect(() => verifyNumericContainerFiltering(corrupt, read)).toThrow();
+    }
   });
   it("requires supplementary names to cite two original unresolved call receipts", () => {
     const calls = ['a', 'b'].map(id => ({ id, sourceId: id, targetId: null, kind: 'calls',

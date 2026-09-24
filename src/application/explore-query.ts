@@ -17,7 +17,7 @@ import { identifierNumbers, numericIdentifierTerms, identifierTermGroups, identi
 import { SOURCE_LEXICAL_SCORING, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
 import { downstreamFocusPaths, type ExploreFlowFocus } from "./explore-flow-focus.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v24" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v25" as const;
 export const EXPLORE_QUERY_SOURCE_GAP_COVERAGE = {
   policy: "uncovered-source-concept-v1", maximumFiles: 1,
   minimumSourceConcepts: 2, minimumRelativeScore: 0.25, maximumLineGap: 5
@@ -27,6 +27,9 @@ export const EXPLORE_NUMERIC_QUERY = {
 } as const;
 export const EXPLORE_NUMERIC_EXECUTION_FILTER_POLICY = "numeric-execution-nonimplementation-filter-v1" as const;
 export const EXPLORE_NUMERIC_FOCUS_PRIORITY_POLICY = "numeric-implementation-first-v1" as const;
+export const EXPLORE_NUMERIC_CONTAINER_FILTER = {
+  policy: "numeric-contained-source-focus-v1", minimumContainerLines: 64, maximumChildLines: 32
+} as const;
 export const EXPLORE_QUERY_FOCUS_COVERAGE = {
   policy: "same-file-source-coverage-v1",
   minimumRelativeScore: 0.75,
@@ -479,6 +482,12 @@ export interface ExploreQueryPlan {
     readonly symbolId: string;
     readonly previousRank: number;
     readonly terms: readonly string[];
+  };
+  readonly numericContainerFiltering?: {
+    readonly policy: typeof EXPLORE_NUMERIC_CONTAINER_FILTER.policy;
+    readonly limits: typeof EXPLORE_NUMERIC_CONTAINER_FILTER;
+    readonly omitted: readonly { readonly container: SymbolNode; readonly coveredBySymbolId: string;
+      readonly sourceMatches: readonly SourceLexicalMatch[]; readonly containmentEdge: GraphEdge }[];
   };
   readonly numericExecutionFiltering?: {
     readonly policy: typeof EXPLORE_NUMERIC_EXECUTION_FILTER_POLICY;
@@ -2677,7 +2686,7 @@ export function planExploreQuery(
     naturalLanguage && parsed.fileHints.length === 0);
   const propertyUseReceipts = selectPropertyUseFollowup(selected, ranked, graph, filesByPath,
     roleIntent, naturalLanguage && parsed.fileHints.length === 0);
-  const numericImplementationAnchor = numericQueryTerms.size > 0 && parsed.fileHints.length === 0 &&
+  let numericImplementationAnchor = numericQueryTerms.size > 0 && parsed.fileHints.length === 0 &&
     hasNumericImplementationIntent(parsed.boundedQuery)
     ? selected.find(candidate => candidate.numericQualifier !== undefined &&
       candidate.sourceRole.role === "production" && !candidate.generated.generated &&
@@ -2705,12 +2714,70 @@ export function planExploreQuery(
       if (excludedIds.has(selected[index]!.symbol.id)) selected.splice(index, 1);
     }
   }
+  const omittedNumericContainers: { container: SymbolNode; coveredBySymbolId: string;
+    sourceMatches: readonly SourceLexicalMatch[]; containmentEdge: GraphEdge }[] = [];
+  if (numericImplementationAnchor !== undefined) {
+    const numericFocuses = selected.filter(candidate => candidate.numericQualifier !== undefined &&
+      candidate.sourceRole.role === "production" && !candidate.generated.generated);
+    for (let index = selected.length - 1; index >= 0; index--) {
+      const container = selected[index]!;
+      const containerLines = container.symbol.range.end.line - container.symbol.range.start.line + 1;
+      const matches = container.sourceMatches ?? [];
+      if (container.explicitFile || container.symbol.kind !== "variable" ||
+          containerLines < EXPLORE_NUMERIC_CONTAINER_FILTER.minimumContainerLines ||
+          container.numericQualifier === undefined || matches.length < 2) continue;
+      const covering = numericFocuses.find(candidate => {
+        const childLines = candidate.symbol.range.end.line - candidate.symbol.range.start.line + 1;
+        if (candidate === container || candidate.symbol.filePath !== container.symbol.filePath ||
+            childLines > EXPLORE_NUMERIC_CONTAINER_FILTER.maximumChildLines ||
+            !candidate.symbol.qualifiedName.startsWith(`${container.symbol.qualifiedName}.`) ||
+            candidate.symbol.range.start.line < container.symbol.range.start.line ||
+            candidate.symbol.range.end.line > container.symbol.range.end.line ||
+            !container.matchedTerms.every(term => candidate.matchedTerms.includes(term)) ||
+            !container.numericQualifier!.terms.every(term => candidate.numericQualifier!.terms.includes(term))) return false;
+        const childMatches = candidate.sourceMatches ?? [];
+        return graph.edges.some(edge => edge.kind === "contains" && edge.resolution === "exact" &&
+          edge.evidence?.ruleId !== undefined &&
+          edge.sourceId === container.symbol.id && edge.targetId === candidate.symbol.id &&
+          edge.filePath === candidate.symbol.filePath &&
+          edge.range.start.line === candidate.symbol.range.start.line &&
+          edge.range.start.column === candidate.symbol.range.start.column &&
+          edge.range.end.line === candidate.symbol.range.end.line &&
+          edge.range.end.column === candidate.symbol.range.end.column) &&
+          matches.every(match => childMatches.some(childMatch => childMatch.term === match.term &&
+          childMatch.token === match.token && childMatch.range.start.line === match.range.start.line &&
+          childMatch.range.start.column === match.range.start.column &&
+          childMatch.range.end.line === match.range.end.line &&
+          childMatch.range.end.column === match.range.end.column));
+      });
+      if (covering === undefined) continue;
+      const containmentEdge = graph.edges.find(edge => edge.kind === "contains" && edge.resolution === "exact" &&
+        edge.evidence?.ruleId !== undefined &&
+        edge.sourceId === container.symbol.id && edge.targetId === covering.symbol.id &&
+        edge.filePath === covering.symbol.filePath &&
+        edge.range.start.line === covering.symbol.range.start.line &&
+        edge.range.start.column === covering.symbol.range.start.column &&
+        edge.range.end.line === covering.symbol.range.end.line &&
+        edge.range.end.column === covering.symbol.range.end.column)!;
+      selected.splice(index, 1);
+      omittedNumericContainers.unshift({ container: container.symbol,
+        coveredBySymbolId: covering.symbol.id, sourceMatches: matches, containmentEdge });
+    }
+    const anchorSymbolId = numericImplementationAnchor.symbol.id;
+    const omittedAnchor = omittedNumericContainers.find(item => item.container.id === anchorSymbolId);
+    if (omittedAnchor !== undefined) {
+      numericImplementationAnchor = selected.find(candidate => candidate.symbol.id === omittedAnchor.coveredBySymbolId);
+    }
+  }
   const numericPriorityPreviousIndex = numericImplementationAnchor === undefined
     ? -1 : selected.indexOf(numericImplementationAnchor);
   if (numericPriorityPreviousIndex > 0) {
     selected.splice(numericPriorityPreviousIndex, 1);
     selected.unshift(numericImplementationAnchor!);
   }
+  const numericCoverageAnchor = numericAnchor === undefined ? undefined : selected.includes(numericAnchor)
+    ? numericAnchor : selected.find(candidate => omittedNumericContainers.some(omitted =>
+      omitted.container.id === numericAnchor.symbol.id && omitted.coveredBySymbolId === candidate.symbol.id));
   const selection: ExploreQuerySelection[] = selected.map((candidate, index) => {
     const score = rawScore(candidate);
     return {
@@ -2800,13 +2867,18 @@ export function planExploreQuery(
     fileHints: parsed.fileHints,
     identifierTerms: parsed.identifierTerms,
     ...(parsed.maximumIdentifierTerms === EXPLORE_NUMERIC_QUERY.maximumIdentifierTerms ? { numericQuery: EXPLORE_NUMERIC_QUERY } : {}),
-    ...(numericAnchor === undefined ? {} : { numericCoverage: { policy: "numeric-query-coverage-v1" as const,
-      symbolId: numericAnchor.symbol.id, terms: numericAnchor.numericQualifier!.terms } }),
+    ...(numericCoverageAnchor === undefined ? {} : { numericCoverage: { policy: "numeric-query-coverage-v1" as const,
+      symbolId: numericCoverageAnchor.symbol.id, terms: numericCoverageAnchor.numericQualifier!.terms } }),
     ...(numericImplementationAnchor === undefined || numericPriorityPreviousIndex <= 0 ? {} : { numericFocusPriority: {
       policy: EXPLORE_NUMERIC_FOCUS_PRIORITY_POLICY,
       symbolId: numericImplementationAnchor.symbol.id,
       previousRank: numericPriorityPreviousIndex + 1,
       terms: numericImplementationAnchor.numericQualifier!.terms
+    } }),
+    ...(omittedNumericContainers.length === 0 ? {} : { numericContainerFiltering: {
+      policy: EXPLORE_NUMERIC_CONTAINER_FILTER.policy,
+      limits: EXPLORE_NUMERIC_CONTAINER_FILTER,
+      omitted: omittedNumericContainers
     } }),
     ...(numericImplementationAnchor === undefined || excludedFiles.length === 0 ? {} : { numericExecutionFiltering: {
       policy: EXPLORE_NUMERIC_EXECUTION_FILTER_POLICY,

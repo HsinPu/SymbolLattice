@@ -139,6 +139,52 @@ export function verifyNumericQualifiers(result) {
   return { verifiedQualifiers };
 }
 
+/** Verify that an omitted broad focus has the same source hits as its selected, exact child. */
+export function verifyNumericContainerFiltering(result, readSource) {
+  const filtering = result.queryPlan?.numericContainerFiltering;
+  if (!filtering) return { verifiedOmissions: 0, verifiedMatches: 0 };
+  assert.equal(filtering.policy, 'numeric-contained-source-focus-v1');
+  assert.deepEqual(filtering.limits, { policy: filtering.policy, minimumContainerLines: 64, maximumChildLines: 32 });
+  assert.ok(filtering.omitted.length > 0);
+  const focuses = result.focuses ?? [];
+  const compare = (left, right) => left.line - right.line || left.column - right.column;
+  let verifiedMatches = 0;
+  for (const item of filtering.omitted) {
+    const child = focuses.find(focus => focus.symbol.id === item.coveredBySymbolId);
+    assert.ok(child, 'Omitted container requires a selected exact child');
+    assert.ok(!focuses.some(focus => focus.symbol.id === item.container.id));
+    assert.equal(item.container.kind, 'variable');
+    assert.equal(item.container.filePath, child.symbol.filePath);
+    assert.ok(child.symbol.qualifiedName.startsWith(`${item.container.qualifiedName}.`));
+    assert.ok(item.container.range.end.line - item.container.range.start.line + 1 >= filtering.limits.minimumContainerLines);
+    assert.ok(child.symbol.range.end.line - child.symbol.range.start.line + 1 <= filtering.limits.maximumChildLines);
+    assert.ok(compare(item.container.range.start, child.symbol.range.start) <= 0 &&
+      compare(child.symbol.range.end, item.container.range.end) <= 0);
+    const edge = item.containmentEdge;
+    assert.equal(edge.kind, 'contains');
+    assert.equal(edge.resolution, 'exact');
+    assert.equal(edge.sourceId, item.container.id);
+    assert.equal(edge.targetId, child.symbol.id);
+    assert.equal(edge.filePath, child.symbol.filePath);
+    assert.deepEqual(edge.range, child.symbol.range);
+    assert.ok(edge.evidence?.ruleId);
+    assert.ok(item.sourceMatches.length >= 2);
+    const lines = readSource(item.container.filePath).split(/\r\n|\r|\n|\u2028|\u2029/u);
+    for (const match of item.sourceMatches) {
+      assert.equal(match.filePath, child.symbol.filePath);
+      assert.ok((child.sourceMatches ?? []).some(original => JSON.stringify(original) === JSON.stringify(match)));
+      assert.ok(compare(child.symbol.range.start, match.range.start) <= 0 &&
+        compare(match.range.end, child.symbol.range.end) <= 0);
+      assert.equal(match.range.start.line, match.range.end.line);
+      const line = lines[match.range.start.line - 1];
+      assert.ok(line !== undefined && match.range.start.column >= 1 && match.range.end.column <= line.length + 1);
+      assert.equal(line.slice(match.range.start.column - 1, match.range.end.column - 1), match.token);
+      verifiedMatches++;
+    }
+  }
+  return { verifiedOmissions: filtering.omitted.length, verifiedMatches };
+}
+
 export function verifyUnresolvedCalls(result, readSource) {
   let verifiedCalls = 0, verifiedPythonCallees = 0;
   const contexts = result.focuses?.length ? result.focuses : [{ symbol: result.match?.symbol, unresolvedCalls: result.unresolvedCalls }];
@@ -378,6 +424,8 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
       nameFollowupVerification: verifyNameFollowups(response),
       propertyUseFollowupVerification: verifyPropertyUseFollowups(response),
       numericQualifierVerification: verifyNumericQualifiers(response),
+      numericContainerVerification: verifyNumericContainerFiltering(response,
+        (file) => readFileSync(resolve(project, file), "utf8")),
       reuseVerification: verifySourceReuse(response, (file) => readFileSync(resolve(project, file), "utf8")), result: response };
   });
   const report = {
