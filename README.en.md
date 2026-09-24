@@ -6,7 +6,7 @@ SymbolLattice is a local code search tool for developers and AI agents. Query a 
 
 [繁體中文](README.md) · [Get started](docs/getting-started.en.md) · [Validation and limitations](benchmarks/README.md) · [Report an issue](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.528.16` · Node.js `>=22.13 <25` · MIT
+`v0.528.17` · Node.js `>=22.13 <25` · MIT
 
 ## Start with “Where is this implemented?”
 
@@ -76,7 +76,7 @@ Other MCP clients can start the server with `SymbolLattice serve --mcp --project
 
 Covers TypeScript/JavaScript, Python, Java, Go, Rust, C/C++, C#, and various template and configuration formats. **Analysis depth varies by language.** Discovering files does not imply complete type, framework, or cross-file semantic support.
 
-SymbolLattice uses static analysis. Dynamic calls, reflection, and external dependencies may remain unresolved; same-name declarations are not confirmed call targets. Results have count and source-excerpt limits. Missing relationships cannot guarantee that a change or deletion is safe. Sync stale indexes before querying; live queries may refuse to return results when freshness cannot be verified.
+SymbolLattice uses static analysis. Text matches may come from comments or strings, so check their source before drawing a semantic conclusion. Dynamic calls, reflection, and external dependencies may remain unresolved; same-name declarations are not confirmed call targets. Results have count and source-excerpt limits. Missing relationships cannot guarantee that a change or deletion is safe. Sync stale indexes before querying; live queries may refuse to return results when freshness cannot be verified.
 
 For Python, direct same-class `self.method()` calls can include `async def` methods when the target is unambiguous. Dynamic overrides and unconfirmed targets remain unresolved.
 

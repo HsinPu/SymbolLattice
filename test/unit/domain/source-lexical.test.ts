@@ -9,6 +9,29 @@ const callable = (start: number, end: number, kind: SymbolNode["kind"] = "functi
 });
 
 describe("callable source lexical evidence", () => {
+  it("keeps comment receipts visible but tracks nearby non-comment occurrences for promotion", () => {
+    const python = { ...callable(1, 4), filePath: "src/work.py" };
+    const source = [
+      "def run(request):",
+      "    # exceptions are thrown by the parser",
+      "    return thrown(request)",
+      ""
+    ].join("\n");
+    const result = matchCallableSource(source, [python], [["request"], ["exceptions"], ["thrown"]]);
+    expect(result.candidates[0]!.matches.map(match => match.term)).toEqual(["request", "exceptions", "thrown"]);
+    expect(result.candidates[0]!.nonCommentMatches?.map(match => [match.term, match.range.start.line])).toEqual([
+      ["request", 1], ["thrown", 3]
+    ]);
+    expect(scoreCallableSource(result.documents)[0]!.nonCommentMatches).toEqual(result.candidates[0]!.nonCommentMatches);
+
+    const javascript = matchCallableSource(
+      "function run() {\n  // keep values instead of replacing them\n  return retain(values);\n}",
+      [callable(1, 4)], [["instead"], ["values"]]
+    );
+    expect(javascript.candidates[0]!.matches.map(match => match.term)).toEqual(["instead", "values"]);
+    expect(javascript.candidates[0]!.nonCommentMatches?.map(match => match.term)).toEqual(["values"]);
+  });
+
   it("keeps literal receipts inside an exported error property without borrowing neighboring definitions", () => {
     const source = "INVALID_MEDIA_TYPE: createError(\n  'Unsupported Media Type',\n  415\n),\nOTHER_TYPE: createError('Unsupported Other Type')";
     const property = { ...callable(1, 4, "variable"), name: "INVALID_MEDIA_TYPE", isExported: true,
@@ -24,6 +47,7 @@ describe("callable source lexical evidence", () => {
     ]);
     expect(matchCallableSource(source, [{ ...property, isExported: false }], groups).documents).toEqual([]);
     expect(result.candidates[0]!.matches.every((match) => match.range.start.line <= 4)).toBe(true);
+    expect(result.candidates[0]!.nonCommentMatches).toEqual(result.candidates[0]!.matches);
   });
   it("admits a variable with a whole numeric literal, excluding unrelated and nested populations", () => {
     const binding = { ...callable(1, 2, "variable"), name: "codes" };

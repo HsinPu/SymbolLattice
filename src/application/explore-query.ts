@@ -14,13 +14,14 @@ import {
 } from "../domain/index.js";
 
 import { identifierNumbers, numericIdentifierTerms, identifierTermGroups, identifierTermVariants, identifierWords } from "../domain/identifier-search.js";
-import { SOURCE_LEXICAL_SCORING, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
+import { SOURCE_LEXICAL_SCORING, type SourceLexicalCandidate, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
 import { downstreamFocusPaths, type ExploreFlowFocus } from "./explore-flow-focus.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v26" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v27" as const;
 export const EXPLORE_QUERY_SOURCE_GAP_COVERAGE = {
   policy: "uncovered-source-concept-v1", maximumFiles: 1,
-  minimumSourceConcepts: 2, minimumRelativeScore: 0.25, maximumLineGap: 5
+  minimumSourceConcepts: 2, minimumRelativeScore: 0.25, maximumLineGap: 5,
+  minimumWeightedMissingCoverage: 0.2
 } as const;
 export const EXPLORE_NUMERIC_QUERY = {
   policy: "numeric-query-qualifiers-v1", maximumIdentifierTerms: 12, qualifierScore: 500
@@ -2339,7 +2340,8 @@ function diversifyFileFocuses(
 
 /** Keep one source-backed production file for a query concept absent from the selected source. */
 function selectUncoveredSourceConcept(
-  selected: Candidate[], ranked: readonly Candidate[], queryTerms: readonly string[], enabled: boolean
+  selected: Candidate[], ranked: readonly Candidate[], queryTerms: readonly string[],
+  sourceById: ReadonlyMap<string, SourceLexicalCandidate>, enabled: boolean
 ): ReadonlyMap<string, ExploreQuerySourceGapCoverage> {
   const receipts = new Map<string, ExploreQuerySourceGapCoverage>();
   if (!enabled || selected.length === 0) return receipts;
@@ -2355,11 +2357,15 @@ function selectUncoveredSourceConcept(
         candidate.generated.generated || candidate.sourceRole.role !== "production" ||
         rankingScore(candidate) < minimumScore) return [];
     const terms = sourceTerms(candidate);
-    const missing = terms.filter((term) => !selectedSourceTerms.has(term));
+    // Literal comments remain visible as search receipts, but an obvious
+    // whole-line comment cannot by itself justify replacing a selected file.
+    const nonCommentMatches = sourceById.get(candidate.symbol.id)?.nonCommentMatches ?? candidate.sourceMatches ?? [];
+    const nonCommentTerms = new Set(nonCommentMatches.map((match) => match.term));
+    const missing = terms.filter((term) => !selectedSourceTerms.has(term) && nonCommentTerms.has(term));
     if (terms.length < EXPLORE_QUERY_SOURCE_GAP_COVERAGE.minimumSourceConcepts || missing.length === 0) return [];
     const localMissing = missing.filter((term) => {
-      const match = candidate.sourceMatches?.find((item) => item.term === term);
-      return match !== undefined && candidate.sourceMatches?.some((other) =>
+      const match = nonCommentMatches.find((item) => item.term === term);
+      return match !== undefined && nonCommentMatches.some((other) =>
         other.term !== term && Math.abs(other.range.start.line - match.range.start.line) <=
           EXPLORE_QUERY_SOURCE_GAP_COVERAGE.maximumLineGap);
     });
@@ -2381,7 +2387,8 @@ function selectUncoveredSourceConcept(
     right.missing.length - left.missing.length ||
     right.terms.length - left.terms.length || compareCandidates(left.candidate, right.candidate));
   const chosen = eligible[0];
-  if (chosen === undefined) return receipts;
+  if (chosen === undefined || weightedCoverage(chosen) <
+    EXPLORE_QUERY_SOURCE_GAP_COVERAGE.minimumWeightedMissingCoverage) return receipts;
   const needsVictim = selectedFiles.size >= EXPLORE_QUERY_LIMITS.maximumFiles ||
     selected.length >= EXPLORE_QUERY_LIMITS.maximumSymbols;
   const victims = [...selectedFiles].filter((path) => selected.every((candidate) =>
@@ -2687,7 +2694,7 @@ export function planExploreQuery(
   const coverageReceipts = naturalLanguage && parsed.fileHints.length === 0
     ? diversifyFileFocuses(selected, ranked, parsed.identifierTerms, graph, executionIntent)
     : new Map<string, ExploreQueryFocusCoverage>();
-  const sourceGapReceipts = selectUncoveredSourceConcept(selected, ranked, parsed.identifierTerms,
+  const sourceGapReceipts = selectUncoveredSourceConcept(selected, ranked, parsed.identifierTerms, sourceById,
     naturalLanguage && parsed.fileHints.length === 0);
   const propertyUseReceipts = selectPropertyUseFollowup(selected, ranked, graph, filesByPath,
     roleIntent, naturalLanguage && parsed.fileHints.length === 0);

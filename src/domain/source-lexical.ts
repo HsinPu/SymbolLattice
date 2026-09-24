@@ -23,6 +23,8 @@ export interface SourceLexicalMatch {
 export interface SourceLexicalCandidate {
   readonly symbolId: string;
   readonly matches: readonly SourceLexicalMatch[];
+  /** Internal promotion evidence: excludes obvious whole-line comments without hiding lexical receipts. */
+  readonly nonCommentMatches?: readonly SourceLexicalMatch[];
   readonly score?: number;
 }
 
@@ -49,6 +51,7 @@ export function scoreCallableSource(documents: readonly SourceLexicalDocument[])
     const score = document.frequencies.reduce((sum, frequency, index) => sum +
       idf[index]! * frequency * (k1 + 1) / (frequency + k1 * (1 - b + b * document.tokens / average)), 0);
     return { symbolId: document.symbolId, matches: document.matches,
+      ...(document.nonCommentMatches === undefined ? {} : { nonCommentMatches: document.nonCommentMatches }),
       score: ceiling === 0 ? 0 : Math.round(maximumScore * score / ceiling) };
   });
 }
@@ -121,13 +124,17 @@ export function matchCallableSource(
       if (numericLines.size === 0) continue;
     }
     const found = new Map<number, SourceLexicalMatch>();
+    const nonCommentFound = new Map<number, SourceLexicalMatch>();
     const frequencies = groups.map(() => 0);
     let tokens = 0;
     let remaining: number = SOURCE_LEXICAL_LIMITS.maximumDeclarationCharacters;
     const endLine = Math.min(symbol.range.end.line, lines.length);
+    const pythonLineComments = /\.pyi?$/iu.test(symbol.filePath);
     if (symbol.range.end.line > lines.length) truncated = true;
     for (let line = symbol.range.start.line; line <= endLine; line += 1) {
       const original = lines[line - 1] ?? "";
+      const wholeLineComment = /^\s*\/\//u.test(original) ||
+        pythonLineComments && /^\s*#/u.test(original);
       const start = line === symbol.range.start.line ? symbol.range.start.column - 1 : 0;
       const end = line === symbol.range.end.line ? symbol.range.end.column - 1 : original.length;
       const scoped = original.slice(start, end);
@@ -153,10 +160,12 @@ export function matchCallableSource(
         }
         for (const index of matchingGroups) {
           frequencies[index]! += 1;
-          if (found.has(index)) continue;
+          if (found.has(index) && (wholeLineComment || nonCommentFound.has(index))) continue;
           const column = start + match.index + 1;
-          found.set(index, { term: groups[index]![0]!, token, filePath: symbol.filePath,
-            range: { start: { line, column }, end: { line, column: column + token.length } } });
+          const receipt: SourceLexicalMatch = { term: groups[index]![0]!, token, filePath: symbol.filePath,
+            range: { start: { line, column }, end: { line, column: column + token.length } } };
+          if (!found.has(index)) found.set(index, receipt);
+          if (!wholeLineComment && !nonCommentFound.has(index)) nonCommentFound.set(index, receipt);
         }
       }
       remaining -= bounded.length + 1;
@@ -167,11 +176,12 @@ export function matchCallableSource(
     }
     // A lone incidental word is insufficient to introduce a body-only candidate.
     const matches = [...found.entries()].sort(([left], [right]) => left - right).map(([, match]) => match);
+    const nonCommentMatches = [...nonCommentFound.entries()].sort(([left], [right]) => left - right).map(([, match]) => match);
     if (symbol.kind === "variable" && numericTerms.length > 0 &&
         !numericTerms.some(term => identifierNumbers(symbol.name).includes(term) ||
         matches.some(match => match.token.normalize("NFKC") === term))) continue;
-    if (found.size >= 2) candidates.push({ symbolId: symbol.id, matches });
-    documents.push({ symbolId: symbol.id, matches, tokens, frequencies });
+    if (found.size >= 2) candidates.push({ symbolId: symbol.id, matches, nonCommentMatches });
+    documents.push({ symbolId: symbol.id, matches, nonCommentMatches, tokens, frequencies });
   }
   return { candidates, documents, truncated };
 }
