@@ -2192,9 +2192,12 @@ function readBoundedSourceLexical(
     const readSource = database.prepare(`SELECT substr(source_text, 1, ?) AS source_text,
       length(source_text) AS characters FROM source_documents WHERE generation_id = ? AND file_path = ?`);
     const readSymbols = database.prepare(`${symbolProjectionSelect()}
-      WHERE file_path = ? AND kind IN (${numericBindingTerms.length > 0
-        ? "'function', 'method', 'entrypoint', 'variable'" : "'function', 'method', 'entrypoint'"})
-      ORDER BY start_line, start_column, id LIMIT ?`);
+      WHERE file_path = ? AND (${numericBindingTerms.length > 0
+        ? "kind IN ('function', 'method', 'entrypoint', 'variable')"
+        : "kind IN ('function', 'method', 'entrypoint') OR (kind = 'variable' AND is_exported = 1 AND end_line - start_line <= 12 AND file_path NOT GLOB '*.d.*ts')"})
+      ORDER BY ${numericBindingTerms.length > 0 ? "" :
+        "CASE WHEN kind IN ('function', 'method', 'entrypoint') THEN 0 ELSE 1 END,"}
+        start_line, start_column, id LIMIT ?`);
     for (const filePath of filePaths.slice(0, limits.maximumFiles)) {
       const remaining = limits.maximumCharacters - scannedCharacters;
       const remainingSymbols = limits.maximumSymbols - scannedSymbols;

@@ -9,6 +9,22 @@ const callable = (start: number, end: number, kind: SymbolNode["kind"] = "functi
 });
 
 describe("callable source lexical evidence", () => {
+  it("keeps literal receipts inside an exported error property without borrowing neighboring definitions", () => {
+    const source = "INVALID_MEDIA_TYPE: createError(\n  'Unsupported Media Type',\n  415\n),\nOTHER_TYPE: createError('Unsupported Other Type')";
+    const property = { ...callable(1, 4, "variable"), name: "INVALID_MEDIA_TYPE", isExported: true,
+      range: { start: { line: 1, column: 1 }, end: { line: 4, column: 3 } } };
+    const groups = identifierTermGroups(["unsupported", "type"]);
+    const result = matchCallableSource(source, [property], groups);
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]!.matches).toEqual([
+      expect.objectContaining({ term: "unsupported", token: "Unsupported", range: {
+        start: { line: 2, column: 4 }, end: { line: 2, column: 15 } } }),
+      expect.objectContaining({ term: "type", token: "INVALID_MEDIA_TYPE", range: {
+        start: { line: 1, column: 1 }, end: { line: 1, column: 19 } } })
+    ]);
+    expect(matchCallableSource(source, [{ ...property, isExported: false }], groups).documents).toEqual([]);
+    expect(result.candidates[0]!.matches.every((match) => match.range.start.line <= 4)).toBe(true);
+  });
   it("admits a variable with a whole numeric literal, excluding unrelated and nested populations", () => {
     const binding = { ...callable(1, 2, "variable"), name: "codes" };
     expect(matchCallableSource("body_limit: 413\n}", [binding], [["413"], ["body"]]).candidates).toHaveLength(1);

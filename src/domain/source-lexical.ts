@@ -81,13 +81,13 @@ export function matchCallableSource(
   const matchingGroupsByToken = new Map<string, readonly number[]>();
   const numericTerms = numericIdentifierTerms(groups.flat());
   const callableKinds = ["function", "method", "entrypoint"];
-  const callables = numericTerms.length === 0 ? [] : symbols.filter(symbol => callableKinds.includes(symbol.kind));
+  const callables = symbols.filter(symbol => callableKinds.includes(symbol.kind));
   const tokenExpression = numericTerms.length > 0
     ? /[\p{L}\p{N}_$][\p{L}\p{N}_$]*/gu : /[\p{L}_$][\p{L}\p{N}_$]*/gu;
   let truncated = false;
   for (const symbol of symbols) {
     if (!callableKinds.includes(symbol.kind)) {
-      if (symbol.kind !== "variable" || numericTerms.length === 0) continue;
+      if (symbol.kind !== "variable" || numericTerms.length === 0 && !symbol.isExported) continue;
       // Avoid borrowing a nested callable's body for its enclosing binding.
       // This only inspects the supplied bounded declaration population.
       if (callables.some(child => child.filePath === symbol.filePath && child.id !== symbol.id &&
@@ -97,7 +97,8 @@ export function matchCallableSource(
     // An unnamed numeric container must not combine unrelated properties into
     // one relevance claim. Only tokenize neighborhoods of actual numeric hits.
     let numericLines: Set<number> | undefined;
-    if (symbol.kind === "variable" && !numericTerms.some(term => identifierNumbers(symbol.name).includes(term))) {
+    if (symbol.kind === "variable" && numericTerms.length > 0 &&
+        !numericTerms.some(term => identifierNumbers(symbol.name).includes(term))) {
       numericLines = new Set();
       let budget: number = SOURCE_LEXICAL_LIMITS.maximumDeclarationCharacters;
       let anchors = 0;
@@ -166,7 +167,8 @@ export function matchCallableSource(
     }
     // A lone incidental word is insufficient to introduce a body-only candidate.
     const matches = [...found.entries()].sort(([left], [right]) => left - right).map(([, match]) => match);
-    if (symbol.kind === "variable" && !numericTerms.some(term => identifierNumbers(symbol.name).includes(term) ||
+    if (symbol.kind === "variable" && numericTerms.length > 0 &&
+        !numericTerms.some(term => identifierNumbers(symbol.name).includes(term) ||
         matches.some(match => match.token.normalize("NFKC") === term))) continue;
     if (found.size >= 2) candidates.push({ symbolId: symbol.id, matches });
     documents.push({ symbolId: symbol.id, matches, tokens, frequencies });

@@ -29,6 +29,8 @@ describe("source-backed same-file focus coverage", () => {
     const graph = { symbols: [...generic, code], edges: [] };
     const result = planExploreQuery(graph, query, lexical);
     expect(result.numericCoverage).toMatchObject({ symbolId: "codes", terms: ["413"] });
+    expect(result.selection.find((item) => item.symbol.id === "codes")?.reasons).toContain("callable-source-term");
+    expect(result.selection.find((item) => item.symbol.id === "codes")?.reasons).not.toContain("exported-binding-source-term");
     expect(result.selection.some(c => c.symbol.id === "codes")).toBe(true);
     expect(result.selection.some(c => c.symbol.id.startsWith("generic"))).toBe(true);
     expect(result.summary.selectedFileCount).toBeLessThanOrEqual(4);
@@ -352,6 +354,38 @@ describe("source-proven property use followup", () => {
       edges: [...graph.edges].reverse() }, query).selection).toEqual(plan.selection);
   });
 
+  it("retains a rare literal source concept and follows only its exact production property use", () => {
+    const namedProperty = { ...property, name: "BODY", qualifiedName: "src/errors.js#BODY" };
+    const sourceGraph = { ...graph, symbols: graph.symbols.map((item) => item.id === property.id ? namedProperty : item) };
+    const range = { start: { line: 2, column: 1 }, end: { line: 2, column: 12 } };
+    const lexical = { policy: SOURCE_LEXICAL_POLICY, limits: SOURCE_LEXICAL_LIMITS, state: "searched" as const,
+      scannedFiles: 1, scannedSymbols: 1, scannedCharacters: 32, truncated: false,
+      candidates: [{ symbolId: property.id, score: 500, matches: [
+        { term: "unsupported", token: "Unsupported", filePath: property.filePath, range },
+        { term: "body", token: "BODY_413", filePath: property.filePath, range }
+      ] }] };
+    const plan = planExploreQuery(sourceGraph, "server request body unsupported", lexical);
+    expect(plan.selection.find((item) => item.symbol.id === property.id)).toMatchObject({
+      reasons: expect.arrayContaining(["exported-binding-source-term", "uncovered-source-concept"]),
+      sourceGapCoverage: { policy: "uncovered-source-concept-v1",
+        missingSourceTerms: expect.arrayContaining(["unsupported"]),
+        missingTermCandidateCounts: expect.arrayContaining([{ term: "unsupported", candidateCount: 1 }]) }
+    });
+    expect(plan.selection.find((item) => item.symbol.id === parser.id)).toMatchObject({
+      propertyUseFollowup: { anchorSymbolId: property.id, edgeIds: ["parser-use"] }
+    });
+    expect(plan.selection.some((item) => item.symbol.id === testReader.id)).toBe(false);
+    expect(plan.summary.selectedFileCount).toBeLessThanOrEqual(4);
+    expect(planExploreQuery(sourceGraph, "server request body unsupported", { ...lexical,
+      candidates: [{ ...lexical.candidates[0]!, matches: lexical.candidates[0]!.matches.slice(0, 1) }] })
+      .selection.some((item) => item.sourceGapCoverage)).toBe(false);
+    expect(planExploreQuery(sourceGraph, "server request body unsupported", { ...lexical,
+      candidates: [{ ...lexical.candidates[0]!, matches: lexical.candidates[0]!.matches.map((match) =>
+        match.term === "unsupported" ? { ...match, range: { start: { line: 30, column: 1 },
+          end: { line: 30, column: 12 } } } : match) }] })
+      .selection.some((item) => item.sourceGapCoverage)).toBe(false);
+  });
+
   it("does not promote an unverified, test-only, or explicitly scoped use", () => {
     const unverified = { ...graph, edges: graph.edges.map((item) => item.id === "parser-use"
       ? { ...item, resolution: "heuristic" as const } : item) };
@@ -486,7 +520,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v21",
+      policy: "explore-query-plan-v22",
       queryIntent: {
         tests: false,
         icons: false,
@@ -604,7 +638,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v21",
+      policy: "explore-query-plan-v22",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -836,7 +870,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v21",
+      policy: "explore-query-plan-v22",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1260,7 +1294,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v21",
+      policy: "explore-query-plan-v22",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v2",
@@ -1959,7 +1993,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v21",
+      policy: "explore-query-plan-v22",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,

@@ -915,9 +915,13 @@ function contextSourceDraftFromPersistedText(input: {
 }
 
 function exploreSourceEndLine(symbol: SymbolNode): number {
-  return symbol.kind === "function" || symbol.kind === "method" || symbol.kind === "entrypoint"
-    ? symbol.range.end.line
-    : symbol.range.start.line + 2;
+  if (symbol.kind === "function" || symbol.kind === "method" || symbol.kind === "entrypoint") {
+    return symbol.range.end.line;
+  }
+  // A short exported binding can carry the defining literal after its name.
+  if (symbol.kind === "variable" && symbol.isExported &&
+      symbol.range.end.line - symbol.range.start.line <= 12) return symbol.range.end.line;
+  return symbol.range.start.line + 2;
 }
 
 function sourceWindowDraftFromPersistedText(input: {
