@@ -88,6 +88,8 @@ const MAX_BOUNDED_HOPS = 4;
 const BOUNDED_QUERY_PARAMETER_BATCH_SIZE = 500;
 const READ_BUSY_TIMEOUT_MS = 1_000;
 const PERSISTENT_READ_CACHE_KIB = 16 * 1024;
+const MEMORY_TEMP_STORE_MIN_SYMBOLS = 8_192;
+const MEMORY_TEMP_STORE_MAX_SYMBOLS = 65_536;
 
 /**
  * The v0.1 snapshot tables remain deliberately unpartitioned. They are a fast
@@ -2074,7 +2076,8 @@ function readBoundedSymbolRows(
   lexicalGroups: readonly (readonly string[])[],
   filePaths: readonly string[],
   limit: number,
-  restrictToFilePaths = false
+  restrictToFilePaths = false,
+  totalSymbolCount = 0
 ): readonly SymbolRow[] {
   const lexicalTerms = lexicalGroups.flat();
   if (limit === 0 || (restrictToFilePaths && filePaths.length === 0) ||
@@ -2164,14 +2167,27 @@ function readBoundedSymbolRows(
       ) ${symbolProjectionSelect("symbol_casefolds")}`
     : symbolProjectionSelect();
 
-  return database
-    .prepare(
-      `${projection}
-       WHERE ${where.join(" OR ")}
-       ORDER BY (${coverageOrder}) DESC, ${exactOrder}, file_path, start_line, start_column, name, id
-       LIMIT ?`
-    )
-    .all(...parameters, ...coverageParameters, ...exactOrderParameters, limit) as unknown as SymbolRow[];
+  const statement = database.prepare(
+    `${projection}
+     WHERE ${where.join(" OR ")}
+     ORDER BY (${coverageOrder}) DESC, ${exactOrder}, file_path, start_line, start_column, name, id
+     LIMIT ?`
+  );
+  const readRows = (): readonly SymbolRow[] => statement.all(
+    ...parameters, ...coverageParameters, ...exactOrderParameters, limit
+  ) as unknown as SymbolRow[];
+
+  // For medium indexes, keep this materialized ranking table in memory. Restore
+  // the connection default immediately afterward so other reads and larger
+  // indexes do not inherit its temporary-storage cost.
+  if (!reuseCasefolds || totalSymbolCount < MEMORY_TEMP_STORE_MIN_SYMBOLS ||
+    totalSymbolCount > MEMORY_TEMP_STORE_MAX_SYMBOLS) return readRows();
+  database.exec("PRAGMA temp_store = MEMORY");
+  try {
+    return readRows();
+  } finally {
+    database.exec("PRAGMA temp_store = DEFAULT");
+  }
 }
 
 function readBoundedSourceLexical(
@@ -2421,7 +2437,9 @@ function readActiveBoundedGraphBundle(
     identifierTerms,
     lexicalGroups,
     [],
-    bounds.maxSeedSymbols
+    bounds.maxSeedSymbols,
+    false,
+    active.status.counts.symbols
   );
   const directPaths = [...new Set(directSymbolRows.map((row) => row.file_path))];
   // Interleave both retrieval channels so neither exhausts the source-reading cap alone.
