@@ -1061,7 +1061,10 @@ describe("SqliteGraphStore", () => {
     });
     expect(persistentReader.persistentReadConnectionOpen).toBe(true);
 
-    const secondSnapshot = snapshot([symbol("second", "second")]);
+    const secondSnapshot = snapshot([
+      symbol("second", "second"),
+      symbol("second-helper", "secondHelper")
+    ]);
     writer.replaceProjectFacts({
       projectPath,
       snapshot: secondSnapshot,
@@ -1078,7 +1081,10 @@ describe("SqliteGraphStore", () => {
       sourceSearchRequest("secondNeedle")
     );
     expect(secondBundle).toMatchObject({
-      status: { indexedAt: "2026-08-02T00:01:00.000Z" },
+      status: {
+        indexedAt: "2026-08-02T00:01:00.000Z",
+        counts: { files: 1, symbols: 2, edges: 1, pendingReferences: 0 }
+      },
       hits: [{ sourceText: "export const secondNeedle = 'secondNeedle';" }]
     });
     expect(secondBundle.status.generationId).not.toBe(firstGenerationId);
@@ -2132,7 +2138,8 @@ describe("SqliteGraphStore", () => {
     expect(store.getStatus(projectPath)).toMatchObject({
       initialized: true,
       generationId: expect.any(String),
-      staleReasons: []
+      staleReasons: [],
+      counts: { files: 1, symbols: 2, edges: 1, pendingReferences: 0 }
     });
     expect(store.getSnapshot(projectPath)).toEqual(beforeMigrationSnapshot);
     expect(store.getArtifactFacts(projectPath)).toEqual(v2Facts);

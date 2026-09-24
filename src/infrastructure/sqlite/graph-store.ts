@@ -532,6 +532,30 @@ function readCounts(database: DatabaseSync): IndexCounts {
   };
 }
 
+function isIndexCounts(value: unknown): value is IndexCounts {
+  if (value === null || typeof value !== "object") return false;
+  const counts = value as Record<string, unknown>;
+  return [counts.files, counts.symbols, counts.edges, counts.pendingReferences].every(
+    (count) => typeof count === "number" && Number.isSafeInteger(count) && count >= 0
+  );
+}
+
+function readActiveCounts(database: DatabaseSync, generationId: string | null): IndexCounts {
+  if (generationId !== null) {
+    const row = readGenerationSnapshotRow(database, generationId);
+    if (row?.snapshot_version === GENERATION_SNAPSHOT_VERSION) {
+      try {
+        const metadata = JSON.parse(row.snapshot_json) as { readonly counts?: unknown };
+        if (isIndexCounts(metadata?.counts)) return metadata.counts;
+      } catch {
+        // A damaged receipt cannot replace exact projection counts.
+      }
+    }
+  }
+  // Legacy indexes and incomplete receipts still report the live projection.
+  return readCounts(database);
+}
+
 /**
  * A projection replacement deletes the previous generation in the same write
  * transaction that installs the next one. Keep every multi-query read in one
@@ -2622,7 +2646,7 @@ function readActiveStatusState(
     projectPath,
     indexedAt: generation?.indexed_at ?? getMeta(database, INDEXED_AT_META_KEY),
     generationId,
-    counts: readCounts(database)
+    counts: readActiveCounts(database, generation === null ? null : generationId)
   };
   return {
     schemaVersion,
