@@ -17,7 +17,11 @@ import { identifierNumbers, numericIdentifierTerms, identifierTermGroups, identi
 import { SOURCE_LEXICAL_SCORING, type SourceLexicalCandidate, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
 import { downstreamFocusPaths, type ExploreFlowFocus } from "./explore-flow-focus.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v27" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v28" as const;
+export const EXPLORE_NAMED_METHOD_FOCUS = {
+  minimumRelativeScore: 0.55,
+  minimumCompoundNameConcepts: 2
+} as const;
 export const EXPLORE_QUERY_SOURCE_GAP_COVERAGE = {
   policy: "uncovered-source-concept-v1", maximumFiles: 1,
   minimumSourceConcepts: 2, minimumRelativeScore: 0.25, maximumLineGap: 5,
@@ -714,6 +718,7 @@ const STOP_WORDS = new Set([
   "in",
   "into",
   "is",
+  "its",
   "of",
   "on",
   "or",
@@ -822,7 +827,7 @@ function parseQuery(query: string): {
     }
     return " ";
   });
-  const identifierTerms: string[] = [];
+  const availableIdentifierTerms: string[] = [];
   const testIntentTerms: string[] = [];
   const iconIntentTerms: string[] = [];
   const localizationIntentTerms: string[] = [];
@@ -837,10 +842,12 @@ function parseQuery(query: string): {
     }
   };
   const seenTerms = new Set<string>();
-  let identifierTermsTruncated = false;
-  const maximumTerms = numericIdentifierTerms([...withoutFiles.matchAll(IDENTIFIER_EXPRESSION)].map(match => normalizedQueryIdentifier(match[0]))).length > 0
+  // Natural-language "roll back" refers to the same identifier concept as
+  // `rollback`; joining it also preserves a slot for later task concepts.
+  const searchableQuery = withoutFiles.replace(/\broll\s+back\b/giu, "rollback");
+  const maximumTerms = numericIdentifierTerms([...searchableQuery.matchAll(IDENTIFIER_EXPRESSION)].map(match => normalizedQueryIdentifier(match[0]))).length > 0
     ? EXPLORE_NUMERIC_QUERY.maximumIdentifierTerms : EXPLORE_QUERY_LIMITS.maximumIdentifierTerms;
-  for (const match of withoutFiles.matchAll(IDENTIFIER_EXPRESSION)) {
+  for (const match of searchableQuery.matchAll(IDENTIFIER_EXPRESSION)) {
     const term = normalizedQueryIdentifier(match[0]);
     if (TEST_INTENT_TERMS.has(term)) {
       recordIntentTerm(testIntentTerms, term);
@@ -861,13 +868,15 @@ function parseQuery(query: string): {
     ) {
       continue;
     }
-    if (identifierTerms.length >= maximumTerms) {
-      identifierTermsTruncated = true;
-      continue;
-    }
     seenTerms.add(term);
-    identifierTerms.push(term);
+    availableIdentifierTerms.push(term);
   }
+  const compactTerms = availableIdentifierTerms.length <= maximumTerms ? availableIdentifierTerms :
+    availableIdentifierTerms.filter(term =>
+      !(term === "handle" && /\bhandle\s+(?:a|an|the)\b/iu.test(searchableQuery)) &&
+      !(term === "raised" && /\bexceptions?\b/iu.test(searchableQuery)));
+  const identifierTerms = compactTerms.slice(0, maximumTerms);
+  const identifierTermsTruncated = identifierTerms.length < availableIdentifierTerms.length;
   return {
     boundedQuery: bounded,
     normalizedQuery: bounded
@@ -2338,6 +2347,76 @@ function diversifyFileFocuses(
   return receipts;
 }
 
+/** Keep a selected class's explicit methods ahead of broad incidental body matches. */
+function promoteNamedMethodFocuses(
+  selected: Candidate[], ranked: readonly Candidate[], queryTerms: readonly string[],
+  protectedIds: ReadonlySet<string>
+): void {
+  const groups = identifierTermGroups(queryTerms);
+  if (groups.length < 2) return;
+  const owner = (candidate: Candidate): string | null => {
+    if (candidate.symbol.kind !== "method") return null;
+    const end = candidate.symbol.qualifiedName.lastIndexOf(".");
+    return end < 0 ? null : candidate.symbol.qualifiedName.slice(0, end);
+  };
+  const conceptCache = new Map<string, readonly string[]>();
+  const nameConcepts = (candidate: Candidate): readonly string[] => {
+    const cached = conceptCache.get(candidate.symbol.id);
+    if (cached !== undefined) return cached;
+    const words = new Set(identifierWords(candidate.symbol.name).flatMap(identifierTermVariants));
+    const concepts = groups.filter(group => group.some(term => words.has(term))).map(group => group[0]!);
+    conceptCache.set(candidate.symbol.id, concepts);
+    return concepts;
+  };
+  const retainsConcepts = (victims: readonly Candidate[], replacements: readonly Candidate[]): boolean => {
+    const removed = new Set(victims.map(candidate => candidate.symbol.id));
+    const retainedTerms = new Set([...selected.filter(candidate => !removed.has(candidate.symbol.id)), ...replacements]
+      .flatMap(candidate => candidate.matchedTerms));
+    return victims.every(candidate => candidate.matchedTerms.every(term => retainedTerms.has(term)));
+  };
+  for (const filePath of new Set(selected.map(candidate => candidate.symbol.filePath))) {
+    const indexes = selected.flatMap((candidate, index) => candidate.symbol.filePath === filePath ? [index] : []);
+    if (indexes.length !== 2) continue;
+    const current = indexes.map(index => selected[index]!) as [Candidate, Candidate];
+    const classOwner = owner(current[0]);
+    if (classOwner === null || current.some(candidate => owner(candidate) !== classOwner ||
+      candidate.explicitFile || candidate.numericQualifier !== undefined || protectedIds.has(candidate.symbol.id))) continue;
+    const minimumScore = rankingScore(current[1]) * EXPLORE_NAMED_METHOD_FOCUS.minimumRelativeScore;
+    const alternatives = ranked.filter(candidate => candidate.symbol.filePath === filePath &&
+      owner(candidate) === classOwner && !candidate.symbol.name.startsWith("_") &&
+      candidate.sourceRole.role === "production" && !candidate.generated.generated &&
+      (candidate.sourceMatches?.length ?? 0) >= 2 && rankingScore(candidate) >= minimumScore);
+    const namedCurrent = current.filter(candidate => nameConcepts(candidate).length > 0);
+    if (namedCurrent.length === 1 && namedCurrent[0]!.baseReasons.includes("exact-symbol-term")) {
+      const exact = namedCurrent[0]!;
+      const generic = current.find(candidate => candidate !== exact)!;
+      const exactTerms = nameConcepts(exact);
+      const compound = alternatives.filter(candidate => candidate.symbol.id !== exact.symbol.id &&
+        nameConcepts(candidate).length >= EXPLORE_NAMED_METHOD_FOCUS.minimumCompoundNameConcepts &&
+        exactTerms.some(term => nameConcepts(candidate).includes(term)))
+        .sort((left, right) => nameConcepts(right).length - nameConcepts(left).length || compareCandidates(left, right))[0];
+      if (compound === undefined || nameConcepts(generic).length > 0) continue;
+      if (!retainsConcepts([generic], [compound])) continue;
+      selected[indexes[current.indexOf(generic)]!] = compound;
+      continue;
+    }
+    if (namedCurrent.length > 0) continue;
+    const pairs = alternatives.filter(candidate => candidate.baseReasons.includes("exact-symbol-term"))
+      .sort(compareCandidates).flatMap(companion => {
+        const terms = nameConcepts(companion);
+        const compound = alternatives.filter(candidate => candidate.symbol.id !== companion.symbol.id &&
+          nameConcepts(candidate).length >= EXPLORE_NAMED_METHOD_FOCUS.minimumCompoundNameConcepts &&
+          terms.some(term => nameConcepts(candidate).includes(term)))
+          .sort((left, right) => nameConcepts(right).length - nameConcepts(left).length || compareCandidates(left, right))[0];
+        return compound === undefined ? [] : [{ compound, companion }];
+      });
+    const pair = pairs.find(pair => retainsConcepts(current, [pair.compound, pair.companion]));
+    if (pair === undefined) continue;
+    selected[indexes[0]!] = pair.compound;
+    selected[indexes[1]!] = pair.companion;
+  }
+}
+
 /** Keep one source-backed production file for a query concept absent from the selected source. */
 function selectUncoveredSourceConcept(
   selected: Candidate[], ranked: readonly Candidate[], queryTerms: readonly string[],
@@ -2790,6 +2869,12 @@ export function planExploreQuery(
   const numericCoverageAnchor = numericAnchor === undefined ? undefined : selected.includes(numericAnchor)
     ? numericAnchor : selected.find(candidate => omittedNumericContainers.some(omitted =>
       omitted.container.id === numericAnchor.symbol.id && omitted.coveredBySymbolId === candidate.symbol.id));
+  if (naturalLanguage && parsed.fileHints.length === 0 && numericQueryTerms.size === 0) {
+    promoteNamedMethodFocuses(selected, ranked, parsed.identifierTerms, new Set([
+      ...[...coverageReceipts].filter(([, receipt]) => receipt.flow !== undefined).map(([id]) => id),
+      ...sourceGapReceipts.keys(), ...propertyUseReceipts.keys()
+    ]));
+  }
   const selection: ExploreQuerySelection[] = selected.map((candidate, index) => {
     const score = rawScore(candidate);
     return {

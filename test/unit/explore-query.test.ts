@@ -17,6 +17,33 @@ import { matchCallableSource, scoreCallableSource, SOURCE_LEXICAL_POLICY, SOURCE
 import { identifierTermGroups } from "../../src/domain/identifier-search.js";
 
 describe("source-backed same-file focus coverage", () => {
+  it("keeps concrete rollback methods when broad same-class bodies consume both focus slots", () => {
+    const filePath = "src/database.py";
+    const query = "atomic block exception savepoint rollback";
+    const names = ["__init__", "on_commit", "rollback", "savepoint_rollback"];
+    const lines = [
+      "def __init__(self): atomic block exception savepoint rollback",
+      "def on_commit(self): atomic block exception savepoint rollback",
+      "def rollback(self): atomic block exception rollback",
+      "def savepoint_rollback(self): savepoint rollback"
+    ];
+    const nodes = names.map((name, index) => ({ ...symbol({ id: name, name, filePath, line: index + 1, kind: "method" }),
+      qualifiedName: `${filePath}#Connection.${name}`,
+      range: { start: { line: index + 1, column: 1 }, end: { line: index + 1, column: lines[index]!.length + 1 } }
+    }));
+    const matched = matchCallableSource(lines.join("\n"), nodes, identifierTermGroups(query.split(" ")));
+    const lexical = { policy: SOURCE_LEXICAL_POLICY, limits: SOURCE_LEXICAL_LIMITS, state: "searched" as const,
+      scannedFiles: 1, scannedSymbols: nodes.length, scannedCharacters: lines.join("\n").length,
+      truncated: false, candidates: scoreCallableSource(matched.documents) };
+    const graph = { symbols: nodes, edges: [], files: [indexedFile(filePath, false)] };
+    const plan = planExploreQuery(graph, query, lexical);
+    expect(new Set(plan.selection.map(item => item.symbol.name))).toEqual(new Set(["savepoint_rollback", "rollback"]));
+    expect(plan.selection.find(item => item.symbol.name === "savepoint_rollback")?.sourceMatches)
+      .toContainEqual(expect.objectContaining({ term: "savepoint", filePath }));
+    expect(plan.selection.find(item => item.symbol.name === "rollback")?.sourceMatches)
+      .toContainEqual(expect.objectContaining({ term: "rollback", filePath }));
+    expect(planExploreQuery({ ...graph, symbols: [...nodes].reverse() }, query, lexical).selection).toEqual(plan.selection);
+  });
   it("retains one supported numeric candidate when generic matches would consume all file slots", () => {
     const generic = Array.from({ length: 5 }, (_, i) => symbol({ id: `generic${i}`,
       name: "serverRequestBodyHttpAllowedSize", filePath: `src/generic${i}.ts` }));
@@ -56,6 +83,21 @@ describe("source-backed same-file focus coverage", () => {
     expect(lateNumber.identifierTerms).toHaveLength(12);
     expect(lateNumber.limits.maximumIdentifierTerms).toBe(12);
     expect(lateNumber.input.identifierTermsTruncated).toBe(true);
+  });
+  it("keeps a late rollback concept in a long exception question", () => {
+    const graph = { symbols: [], edges: [] };
+    const atomic = planExploreQuery(graph,
+      "How does an atomic transaction block handle a raised exception, and how does the database connection roll back its savepoint?");
+    expect(atomic.identifierTerms).toEqual([
+      "atomic", "transaction", "block", "exception", "database", "connection", "rollback", "savepoint"
+    ]);
+    expect(atomic.input.identifierTermsTruncated).toBe(true);
+    const outgoing = planExploreQuery(graph,
+      "How are outgoing response hooks run, and how do their failures enter error handling?");
+    expect(outgoing.identifierTerms).toEqual([
+      "outgoing", "response", "hooks", "run", "their", "failures", "enter", "error"
+    ]);
+    expect(planExploreQuery(graph, "handle").identifierTerms).toEqual(["handle"]);
   });
   function flowFixture(laterBody = "finish(request, run, route, handler)") {
     const names = ["handler", "handleRequest", "checkInput", "sendOutput", "finish"];
@@ -630,7 +672,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v27",
+      policy: "explore-query-plan-v28",
       queryIntent: {
         tests: false,
         icons: false,
@@ -748,7 +790,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v27",
+      policy: "explore-query-plan-v28",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -980,7 +1022,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v27",
+      policy: "explore-query-plan-v28",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1404,7 +1446,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v27",
+      policy: "explore-query-plan-v28",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v2",
@@ -2103,7 +2145,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v27",
+      policy: "explore-query-plan-v28",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
