@@ -2364,6 +2364,61 @@ describe("SqliteGraphStore", () => {
     expect(file?.snapshot.symbols.map((node) => node.id)).toContain("c-tail");
   });
 
+  it("uses only the active generation's folded symbol copy and repairs an outdated copy", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const first = snapshot([symbol("before", "beforeOnly")]);
+    store.replaceProjectFacts({ projectPath, snapshot: first,
+      indexedAt: "2026-09-25T00:00:00.000Z", artifactFacts: persistedFacts(first),
+      indexInputs: indexInputs("casefold-before"), resolverVersion: "bounded-resolver-v1" });
+    const firstGenerationId = store.getStatus(projectPath).generationId!;
+
+    const second = snapshot([symbol("after", "afterOnly")]);
+    store.replaceProjectFacts({ projectPath, snapshot: second,
+      indexedAt: "2026-09-25T00:01:00.000Z", artifactFacts: persistedFacts(second),
+      indexInputs: indexInputs("casefold-after"), resolverVersion: "bounded-resolver-v1" });
+    const secondGenerationId = store.getStatus(projectPath).generationId!;
+    const request = { ...boundedRequest("afterOnly evidence"),
+      ...exploreQuerySeedTerms("afterOnly evidence") };
+    const selected = () => store.getActiveBoundedGraphBundle(projectPath, request)
+      .snapshot.symbols.map((node) => node.id);
+    expect(selected()).toContain("after");
+    expect(readTableCount(projectPath, "symbol_casefolds")).toBe(1);
+
+    const database = new DatabaseSync(databasePathFor(projectPath));
+    try {
+      database.prepare("UPDATE meta SET value = ? WHERE key = 'symbol_casefolds_generation_id'")
+        .run(firstGenerationId);
+      database.prepare("UPDATE symbol_casefolds SET name = 'beforeOnly', qualified_name = 'beforeOnly', folded_name = 'beforeonly', folded_qualified_name = 'beforeonly'")
+        .run();
+    } finally {
+      database.close();
+    }
+    expect(selected()).toContain("after");
+    store.initialize(projectPath);
+    expect(selected()).toContain("after");
+    const repaired = new DatabaseSync(databasePathFor(projectPath), { readOnly: true });
+    try {
+      expect(repaired.prepare("SELECT value FROM meta WHERE key = 'symbol_casefolds_generation_id'")
+        .get()).toMatchObject({ value: secondGenerationId });
+      expect(repaired.prepare("SELECT name FROM symbol_casefolds").get())
+        .toMatchObject({ name: "afterOnly" });
+    } finally {
+      repaired.close();
+    }
+
+    const missing = new DatabaseSync(databasePathFor(projectPath));
+    try {
+      missing.exec("DROP TABLE symbol_casefolds");
+    } finally {
+      missing.close();
+    }
+    expect(selected()).toContain("after");
+    store.initialize(projectPath);
+    expect(readTableCount(projectPath, "symbol_casefolds")).toBe(1);
+    expect(selected()).toContain("after");
+  });
+
   it("skips exact edges whose source or target symbol is absent during bounded traversal", async () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();

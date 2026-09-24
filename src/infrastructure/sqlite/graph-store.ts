@@ -63,6 +63,7 @@ const INDEX_DIRECTORY_NAME = ".SymbolLattice";
 const DATABASE_FILE_NAME = "index.sqlite";
 const INDEXED_AT_META_KEY = "indexed_at";
 const ACTIVE_GENERATION_ID_META_KEY = "active_generation_id";
+const SYMBOL_CASEFOLDS_GENERATION_ID_META_KEY = "symbol_casefolds_generation_id";
 const SCHEMA_VERSION_META_KEY = "schema_version";
 const INDEX_INPUTS_SCHEMA_VERSION = "3";
 const INDEX_WORK_SCHEMA_VERSION = "4";
@@ -303,6 +304,25 @@ const SOURCE_SEARCH_SCHEMA = `
     language UNINDEXED,
     corpus
   );
+`;
+
+/** A rebuildable, generation-bound copy avoids case-folding every symbol on each multi-term search. */
+const SYMBOL_CASEFOLDS_SCHEMA = `
+  CREATE TABLE IF NOT EXISTS symbol_casefolds (
+    id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    qualified_name TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    start_line INTEGER NOT NULL,
+    start_column INTEGER NOT NULL,
+    end_line INTEGER NOT NULL,
+    end_column INTEGER NOT NULL,
+    is_exported INTEGER NOT NULL,
+    declaration_ordinal INTEGER NOT NULL,
+    folded_name TEXT NOT NULL,
+    folded_qualified_name TEXT NOT NULL
+  ) STRICT;
 `;
 
 /** Additive lookup indexes used by the bounded explore read projection. */
@@ -635,6 +655,28 @@ function installCurrentAdditiveSchema(database: DatabaseSync): void {
   database.exec(GENERATION_SOURCE_SEARCH_SCHEMA);
   database.exec(SOURCE_DOCUMENTS_SCHEMA);
   database.exec(SOURCE_SEARCH_SCHEMA);
+  database.exec(SYMBOL_CASEFOLDS_SCHEMA);
+}
+
+function refreshSymbolCasefolds(database: DatabaseSync, generationId: string): void {
+  database.exec("DELETE FROM symbol_casefolds");
+  database.exec(`INSERT INTO symbol_casefolds (
+    id, name, qualified_name, kind, file_path,
+    start_line, start_column, end_line, end_column,
+    is_exported, declaration_ordinal, folded_name, folded_qualified_name
+  ) SELECT id, name, qualified_name, kind, file_path,
+    start_line, start_column, end_line, end_column,
+    is_exported, declaration_ordinal, lower(name), lower(qualified_name)
+    FROM symbols`);
+  setMeta(database, SYMBOL_CASEFOLDS_GENERATION_ID_META_KEY, generationId);
+}
+
+function backfillActiveSymbolCasefolds(database: DatabaseSync): void {
+  const generationId = getActiveGenerationId(database);
+  if (generationId === null || readGeneration(database, generationId) === null) return;
+  if (getMeta(database, SYMBOL_CASEFOLDS_GENERATION_ID_META_KEY) === generationId &&
+    readCount(database, "symbol_casefolds") === readCount(database, "symbols")) return;
+  refreshSymbolCasefolds(database, generationId);
 }
 
 function cleanOrphanedSourceSearchRows(database: DatabaseSync): void {
@@ -668,6 +710,7 @@ function migrateDatabaseToCurrent(database: DatabaseSync): void {
     ensureGeneratedFileColumns(database);
     cleanOrphanedSourceSearchRows(database);
     backfillActiveGenerationSnapshot(database);
+    backfillActiveSymbolCasefolds(database);
     pruneRetainedGenerations(database, getActiveGenerationId(database));
     setMeta(database, SCHEMA_VERSION_META_KEY, SCHEMA_VERSION);
     database.exec("COMMIT");
@@ -686,6 +729,7 @@ function initializeNewDatabase(database: DatabaseSync): void {
     ensurePendingReferenceExtensionColumn(database);
     ensureGeneratedFileColumns(database);
     backfillActiveGenerationSnapshot(database);
+    backfillActiveSymbolCasefolds(database);
     pruneRetainedGenerations(database, getActiveGenerationId(database));
     setMeta(database, SCHEMA_VERSION_META_KEY, SCHEMA_VERSION);
     database.exec("COMMIT");
@@ -718,6 +762,7 @@ function ensureSchema(database: DatabaseSync, databaseExisted: boolean): void {
     ensureGeneratedFileColumns(database);
     cleanOrphanedSourceSearchRows(database);
     backfillActiveGenerationSnapshot(database);
+    backfillActiveSymbolCasefolds(database);
     pruneRetainedGenerations(database, getActiveGenerationId(database));
     database.exec("COMMIT");
   } catch (error) {
@@ -2101,7 +2146,8 @@ function readBoundedSymbolRows(
   filePaths: readonly string[],
   limit: number,
   restrictToFilePaths = false,
-  totalSymbolCount = 0
+  totalSymbolCount = 0,
+  activeGenerationId: string | null = null
 ): readonly SymbolRow[] {
   const lexicalTerms = lexicalGroups.flat();
   if (limit === 0 || (restrictToFilePaths && filePaths.length === 0) ||
@@ -2112,6 +2158,9 @@ function readBoundedSymbolRows(
   // The second read only needs symbols in selected files. Avoid materializing
   // the whole symbol table when the file-path index can bound that population.
   const reuseCasefolds = lexicalGroups.length >= 2 && !restrictToFilePaths;
+  const persistedCasefolds = reuseCasefolds && activeGenerationId !== null &&
+    getMeta(database, SYMBOL_CASEFOLDS_GENERATION_ID_META_KEY) === activeGenerationId &&
+    tableExists(database, "symbol_casefolds");
   const lowerName = reuseCasefolds ? "folded_name" : "lower(name)";
   const lowerQualifiedName = reuseCasefolds ? "folded_qualified_name" : "lower(qualified_name)";
 
@@ -2185,11 +2234,13 @@ function readBoundedSymbolRows(
     return `(CASE WHEN ${group.map(() => `instr(${lowerName}, ?) > 0`).join(" OR ")} THEN 1 ELSE 0 END)`;
   }).join(" + ");
 
-  const projection = reuseCasefolds
-    ? `WITH symbol_casefolds AS MATERIALIZED (
+  const projection = !reuseCasefolds
+    ? symbolProjectionSelect()
+    : persistedCasefolds
+      ? symbolProjectionSelect("symbol_casefolds")
+      : `WITH symbol_casefolds AS MATERIALIZED (
         SELECT *, lower(name) AS folded_name, lower(qualified_name) AS folded_qualified_name FROM symbols
-      ) ${symbolProjectionSelect("symbol_casefolds")}`
-    : symbolProjectionSelect();
+      ) ${symbolProjectionSelect("symbol_casefolds")}`;
 
   const statement = database.prepare(
     `${projection}
@@ -2201,9 +2252,8 @@ function readBoundedSymbolRows(
     ...parameters, ...coverageParameters, ...exactOrderParameters, limit
   ) as unknown as SymbolRow[];
 
-  // For medium indexes, keep this materialized ranking table in memory. Restore
-  // the connection default immediately afterward so other reads and larger
-  // indexes do not inherit its temporary-storage cost.
+  // For medium indexes, keep the ranking sort (and any fallback materialization)
+  // in memory. Restore the connection default immediately afterward.
   if (!reuseCasefolds || totalSymbolCount < MEMORY_TEMP_STORE_MIN_SYMBOLS ||
     totalSymbolCount > MEMORY_TEMP_STORE_MAX_SYMBOLS) return readRows();
   database.exec("PRAGMA temp_store = MEMORY");
@@ -2463,7 +2513,8 @@ function readActiveBoundedGraphBundle(
     [],
     bounds.maxSeedSymbols,
     false,
-    active.status.counts.symbols
+    active.status.counts.symbols,
+    active.generationId
   );
   const directPaths = [...new Set(directSymbolRows.map((row) => row.file_path))];
   // Interleave both retrieval channels so neither exhausts the source-reading cap alone.
@@ -3116,6 +3167,7 @@ export class SqliteGraphStore implements GraphStore {
         for (const symbol of input.snapshot.symbols) {
           insertSymbol(symbolInsert, symbol);
         }
+        refreshSymbolCasefolds(database, generationId);
         const edgeInsert = database.prepare(INSERT_EDGE_SQL);
         for (const edge of input.snapshot.edges) {
           insertEdge(edgeInsert, edge);
