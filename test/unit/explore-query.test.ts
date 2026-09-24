@@ -365,6 +365,21 @@ describe("bounded lexical and relationship ranking", () => {
       edges: Array.from({ length: 100 }, (_, index) => edge(`repeat-${index}`, hub.id, peers[0]!.id)) }, "request");
     expect(repeated.selection.every((selection) => selection.connectionScore === 60)).toBe(true);
   });
+
+  it("does not treat a document heading hierarchy as corroborating graph evidence", () => {
+    const document = symbol({ id: "document", name: "Plugin", filePath: "docs/plugin.md", kind: "resource" });
+    const heading = symbol({ id: "heading", name: "Plugins", filePath: "docs/plugin.md", kind: "resource" });
+    const owner = symbol({ id: "owner", name: "registerPlugin", filePath: "src/plugin.ts" });
+    const check = symbol({ id: "check", name: "checkDependencies", filePath: "src/plugin.ts" });
+    const plan = planExploreQuery({ symbols: [document, heading, owner, check], edges: [
+      { ...edge("heading", document.id, heading.id), kind: "contains", filePath: document.filePath },
+      { ...edge("owner", owner.id, check.id), kind: "contains", filePath: owner.filePath }
+    ] }, "plugin registration rejects missing dependencies");
+    expect(plan.selection.find((item) => item.symbol.id === document.id)?.connectionScore).toBe(0);
+    expect(plan.selection.find((item) => item.symbol.id === heading.id)?.connectionScore).toBe(0);
+    expect(plan.selection.find((item) => item.symbol.id === owner.id)?.connectionScore).toBe(60);
+    expect(plan.selection.find((item) => item.symbol.id === check.id)?.connectionScore).toBe(60);
+  });
 });
 
 function symbol(input: {
@@ -615,7 +630,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v25",
+      policy: "explore-query-plan-v26",
       queryIntent: {
         tests: false,
         icons: false,
@@ -733,7 +748,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v25",
+      policy: "explore-query-plan-v26",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -965,7 +980,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v25",
+      policy: "explore-query-plan-v26",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1389,7 +1404,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v25",
+      policy: "explore-query-plan-v26",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v2",
@@ -2088,7 +2103,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v25",
+      policy: "explore-query-plan-v26",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,

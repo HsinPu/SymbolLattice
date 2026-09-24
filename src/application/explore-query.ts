@@ -17,7 +17,7 @@ import { identifierNumbers, numericIdentifierTerms, identifierTermGroups, identi
 import { SOURCE_LEXICAL_SCORING, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
 import { downstreamFocusPaths, type ExploreFlowFocus } from "./explore-flow-focus.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v25" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v26" as const;
 export const EXPLORE_QUERY_SOURCE_GAP_COVERAGE = {
   policy: "uncovered-source-concept-v1", maximumFiles: 1,
   minimumSourceConcepts: 2, minimumRelativeScore: 0.25, maximumLineGap: 5
@@ -2589,6 +2589,11 @@ export function planExploreQuery(
   >();
   const connectedNeighbors = new Map<string, Set<string>>();
   const addConnection = (candidate: Candidate, edge: GraphEdge, neighborId: string): void => {
+    // A document heading's containment hierarchy does not corroborate query
+    // relevance. Keep containment between code symbols: it can locate the owner of
+    // a selected declaration or binding.
+    if (edge.kind === "contains" &&
+        (candidate.symbol.kind === "resource" || symbolsById.get(neighborId)?.kind === "resource")) return;
     const neighbors = connectedNeighbors.get(candidate.symbol.id) ?? new Set<string>();
     neighbors.add(`${edge.kind}:${neighborId}`);
     connectedNeighbors.set(candidate.symbol.id, neighbors);
