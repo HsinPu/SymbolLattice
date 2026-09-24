@@ -58,7 +58,7 @@ interface ProjectFreshnessVerificationBase {
     | "single-project-walk-v1"
     | "single-project-walk-v2"
     | "single-project-walk-v3";
-  readonly maximumConcurrentReads: 8;
+  readonly maximumConcurrentReads: 8 | 32;
   readonly performance: {
     readonly policy: "freshness-performance-v1";
     /** Non-overlapping steps included in the caller's freshness parent phase. */

@@ -244,7 +244,7 @@ describe("filesystem source catalog freshness", () => {
       sourceReadPolicy: "streaming-raw-bytes-for-shell-and-lua-with-objective-c-header-classification-v4",
       configurationReadPolicy: "streaming-utf8-v1",
       discoveryPolicy: "single-project-walk-v3",
-      maximumConcurrentReads: 8,
+      maximumConcurrentReads: 32,
       performance: {
         policy: "freshness-performance-v1",
         phases: [

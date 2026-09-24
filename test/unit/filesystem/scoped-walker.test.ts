@@ -48,7 +48,7 @@ afterEach(async () => {
 describe("shared scoped project walker", () => {
   it("bounds concurrent reads across sibling and nested directories while preserving sorted output", async () => {
     const projectPath = await createProject();
-    const files = Array.from({ length: 24 }, (_, index) => `dir-${String(index).padStart(2, "0")}/nested/deep/source.ts`);
+    const files = Array.from({ length: 48 }, (_, index) => `dir-${String(index).padStart(2, "0")}/nested/deep/source.ts`);
     await Promise.all(files.map((file) => writeProjectFile(projectPath, file)));
     let active = 0;
     let peak = 0;
@@ -67,6 +67,7 @@ describe("shared scoped project walker", () => {
     };
     const result = await walkScopedProject(projectPath, { reader, isSourceCandidate: typescriptSource });
     expect(relativeSourcePaths(projectPath, result.sourcePaths)).toEqual(files);
+    expect(files.length).toBeGreaterThan(MAXIMUM_SCOPED_WALK_CONCURRENCY);
     expect(peak).toBeGreaterThan(1);
     expect(peak).toBeLessThanOrEqual(MAXIMUM_SCOPED_WALK_CONCURRENCY);
     expect(active).toBe(0);

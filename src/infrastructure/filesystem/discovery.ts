@@ -184,7 +184,7 @@ export const FRESHNESS_PATH_DISCOVERY_POLICY = "single-project-walk-v3" as const
 export const STREAMING_UTF8_HASH_POLICY = "streaming-utf8-v1" as const;
 export const SOURCE_FINGERPRINT_READ_POLICY =
   "streaming-raw-bytes-for-shell-and-lua-with-objective-c-header-classification-v4" as const;
-export const MAXIMUM_FRESHNESS_CONCURRENT_READS = 8 as const;
+export const MAXIMUM_FRESHNESS_CONCURRENT_READS = 32 as const;
 /** Full source reads retain text, so keep descriptor pressure bounded on large repositories. */
 export const MAXIMUM_SOURCE_CONCURRENT_READS = 8 as const;
 

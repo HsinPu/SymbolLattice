@@ -9,11 +9,13 @@ import {
   discoverSourceFileFingerprints,
   discoverSourceFiles,
   discoverFreshnessProjectPaths,
+  fingerprintSourcePaths,
   getSourceLanguage,
   hashSource,
   hashUtf8File,
   isUnsafeProjectPath,
   loadSourcePaths,
+  MAXIMUM_FRESHNESS_CONCURRENT_READS,
   MAXIMUM_SOURCE_CONCURRENT_READS,
   SUPPORTED_EXTENSIONS,
   toProjectRelativePath
@@ -118,6 +120,34 @@ describe("source discovery", () => {
 
     expect(files).toHaveLength(sourcePaths.length);
     expect(observedPeakReads).toBeLessThanOrEqual(MAXIMUM_SOURCE_CONCURRENT_READS);
+  });
+
+  it("bounds full-content freshness hashes while checking more paths than one batch", async () => {
+    const projectPath = resolve("bounded-fingerprint-project");
+    const paths = Array.from({ length: MAXIMUM_FRESHNESS_CONCURRENT_READS + 8 },
+      (_, index) => join(projectPath, `source-${index}.lua`));
+    const bytes = new TextEncoder().encode("return 1\n");
+    let activeReads = 0;
+    let peakReads = 0;
+    const reader: ProjectFilesystemReader = {
+      ...nativeProjectFilesystemReader,
+      async readFile() {
+        activeReads += 1;
+        peakReads = Math.max(peakReads, activeReads);
+        try {
+          await new Promise<void>((done) => setImmediate(done));
+          return bytes;
+        } finally {
+          activeReads -= 1;
+        }
+      }
+    };
+    const fingerprints = await fingerprintSourcePaths(projectPath, paths, reader);
+    expect(fingerprints).toHaveLength(paths.length);
+    expect(fingerprints.every((item) => item.contentHash === hashSource("return 1\n"))).toBe(true);
+    expect(peakReads).toBeGreaterThan(1);
+    expect(peakReads).toBeLessThanOrEqual(MAXIMUM_FRESHNESS_CONCURRENT_READS);
+    expect(activeReads).toBe(0);
   });
 
   it("aggregates unreadable source files before failing the scan", async () => {
