@@ -2297,9 +2297,11 @@ function compareEdgeRows(left: EdgeRow, right: EdgeRow): number {
 
 function readBoundedEdgesByIds(
   database: DatabaseSync,
-  ids: readonly string[]
-): readonly EdgeRow[] {
+  ids: readonly string[],
+  retainedEdges: ReadonlyMap<string, EdgeRow>
+): { readonly rows: readonly EdgeRow[]; readonly hadEdges: boolean } {
   const rowsById = new Map<string, EdgeRow>();
+  let hadEdges = false;
   for (
     let start = 0;
     start < ids.length;
@@ -2320,9 +2322,15 @@ function readBoundedEdgesByIds(
     const incoming = database
       .prepare(`${base} WHERE e.resolution = 'exact' AND e.target_id IN (${placeholders})`)
       .all(...batch) as unknown as EdgeRow[];
-    for (const row of [...outgoing, ...incoming]) rowsById.set(row.id, row);
+    hadEdges ||= outgoing.length > 0 || incoming.length > 0;
+    for (const row of outgoing) {
+      if (!retainedEdges.has(row.id)) rowsById.set(row.id, row);
+    }
+    for (const row of incoming) {
+      if (!retainedEdges.has(row.id)) rowsById.set(row.id, row);
+    }
   }
-  return [...rowsById.values()].sort(compareEdgeRows);
+  return { rows: [...rowsById.values()].sort(compareEdgeRows), hadEdges };
 }
 
 function readBoundedEdgeEvidence(
@@ -2477,11 +2485,11 @@ function readActiveBoundedGraphBundle(
   let traversedHops = 0;
 
   for (let hop = 1; hop <= bounds.maxHops && frontier.length > 0; hop += 1) {
-    const edgeRows = readBoundedEdgesByIds(database, frontier);
-    if (edgeRows.length === 0) break;
+    const edgeRead = readBoundedEdgesByIds(database, frontier, returnedEdgeRows);
+    if (!edgeRead.hadEdges) break;
     const nextFrontier: string[] = [];
     const nextFrontierSet = new Set<string>();
-    for (const row of edgeRows) {
+    for (const row of edgeRead.rows) {
       if (returnedEdgeRows.has(row.id) || row.target_id === null) continue;
       if (returnedEdgeRows.size >= bounds.maxRelationships) {
         truncated = true;

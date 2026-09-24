@@ -2371,6 +2371,7 @@ describe("SqliteGraphStore", () => {
       indexInputs: indexInputs("bounded-existing-endpoints"), resolverVersion: "bounded-resolver-v1" });
     const result = store.getActiveBoundedGraphBundle(projectPath, boundedRequest("Root"));
     expect(result.snapshot.edges.map(edge => edge.id)).toEqual(["edge-a-b", "edge-b-c"]);
+    expect(result.diagnostics.traversedHops).toBe(3);
     expect(result.snapshot.symbols.map(node => node.id)).not.toContain("missing-target");
     expect(result.snapshot.symbols.map(node => node.id)).not.toContain("missing-source");
   });
