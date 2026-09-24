@@ -159,3 +159,93 @@ describe("source-proven CommonJS object calls", () => {
     expect(result.edges.filter((edge) => edge.kind === "calls" && edge.resolution === "exact")).toEqual([]);
   });
 });
+
+describe("source-proven CommonJS object property references", () => {
+  const provider = [
+    "'use strict'",
+    "const createError = require('@external/error')",
+    "const codes = { SIZE: createError('SIZE', 'too large', 413), OTHER: createError('OTHER', 'other', 400) }",
+    "module.exports = codes",
+    "module.exports.helper = () => {}"
+  ].join("\n");
+  const consumer = [
+    "'use strict'",
+    "const { SIZE: TooLarge } = require('./provider')",
+    "function reject() { new TooLarge() }"
+  ].join("\n");
+  const propertyEdges = (result: ReturnType<typeof graph>) => result.edges.filter((edge) =>
+    edge.evidence?.ruleId === "module.commonjs-object-property-reference");
+
+  it("links a constructor-site identifier to its exported property without claiming the runtime constructor", () => {
+    const result = graph({ "provider.js": provider, "consumer.js": consumer });
+    const target = result.symbols.find((symbol) => symbol.qualifiedName === "provider.js#codes.SIZE");
+    expect(target).toMatchObject({ name: "SIZE", kind: "variable", filePath: "provider.js",
+      range: { start: { line: 3, column: 17 } } });
+    expect(propertyEdges(result)).toEqual([expect.objectContaining({
+      kind: "references", resolution: "exact", filePath: "consumer.js", targetId: target?.id,
+      range: { start: { line: 3, column: 25 }, end: { line: 3, column: 33 } },
+      evidence: expect.objectContaining({ resolutionPath: ["consumer.js", "provider.js"],
+        commonJsBinding: expect.objectContaining({
+          policy: "javascript-commonjs-object-property-reference-v1", moduleSpecifier: "./provider",
+          importedName: "SIZE", localName: "TooLarge",
+          importSite: { filePath: "consumer.js", range: { start: { line: 2, column: 7 }, end: { line: 2, column: 49 } } },
+          exportSite: { filePath: "provider.js", range: { start: { line: 3, column: 17 }, end: { line: 3, column: 60 } } }
+        }) })
+    })]);
+    expect(result.edges).toContainEqual(expect.objectContaining({
+      kind: "instantiates", resolution: "unresolved", targetId: null,
+      referenceName: "TooLarge", filePath: "consumer.js"
+    }));
+  });
+
+  it.each([
+    ["duplicate key", "const codes = { SIZE: 1, SIZE: 2 }"],
+    ["computed key", "const codes = { [key]: 1, SIZE: 2 }"],
+    ["spread", "const codes = { SIZE: 1, ...other }"],
+    ["getter", "const codes = { get SIZE() { return 1 } }"],
+    ["reassigned object", "let codes = { SIZE: 1 }"],
+    ["escaped object", "const codes = { SIZE: 1 }; pass(codes)"],
+    ["direct property write", "const codes = { SIZE: 1 }; codes.SIZE = other"],
+    ["destructuring property write", "const codes = { SIZE: 1 }; ({ value: codes.SIZE } = other)"],
+    ["export property write", "const codes = { SIZE: 1 }; module.exports.SIZE = other"],
+    ["dynamic export write", "const codes = { SIZE: 1 }; module.exports[name] = other"],
+    ["object escape", "const codes = { SIZE: 1 }; Object.assign(codes, other)"],
+    ["second export", "const codes = { SIZE: 1 }; module.exports = other"]
+  ])("does not claim %s as a stable exported property", (_label, definition) => {
+    const source = `'use strict'; ${definition}; module.exports = codes`;
+    expect(propertyEdges(graph({ "provider.js": source, "consumer.js": consumer }))).toEqual([]);
+  });
+
+  it.each([
+    ["mutable binding", "let { SIZE: TooLarge } = require('./provider'); new TooLarge()"],
+    ["reassigned alias", "const { SIZE: TooLarge } = require('./provider'); TooLarge = other; new TooLarge()"],
+    ["shadowed use", "const { SIZE: TooLarge } = require('./provider'); function f(TooLarge) { new TooLarge() }"],
+    ["dynamic require", "const { SIZE: TooLarge } = require(path); new TooLarge()"]
+  ])("does not resolve %s", (_label, body) => {
+    expect(propertyEdges(graph({ "provider.js": provider, "consumer.js": `'use strict'; ${body}` }))).toEqual([]);
+  });
+
+  it("suppresses property references when another importer mutates the exported object", () => {
+    const result = graph({ "provider.js": provider, "consumer.js": consumer,
+      "mutator.js": "'use strict'; require('./provider').SIZE = other" });
+    expect(propertyEdges(result)).toEqual([]);
+  });
+
+  it.each([
+    "'use strict'; const { ...allCodes } = require('./provider'); Object.keys(allCodes)",
+    "'use strict'; const codes = require('./provider'); Object.keys(codes); codes.SIZE"
+  ])("retains property references through read-only observations: %s", (reader) => {
+    expect(propertyEdges(graph({ "provider.js": provider, "consumer.js": consumer,
+      "reader.js": reader }))).toHaveLength(1);
+  });
+
+  it.each([
+    "const codes = require('./provider'); codes.SIZE = other",
+    "const codes = require('./provider'); codes.SIZE()",
+    "const codes = require('./provider'); pass(codes)",
+    "function Object() {}; const codes = require('./provider'); Object.keys(codes)"
+  ])("suppresses property references for unsafe module observations: %s", (reader) => {
+    expect(propertyEdges(graph({ "provider.js": provider, "consumer.js": consumer,
+      "reader.js": `'use strict'; ${reader}` }))).toEqual([]);
+  });
+});

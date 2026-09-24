@@ -4298,8 +4298,8 @@ export class SymbolLatticeService {
       matchCandidatesTruncated: boundedMatch.truncated,
       sourceAvailability: source === null ? "unavailable" : "active-generation",
       source,
-      callers: this.boundedItems(callers, bounds.relationLimit),
-      callees: this.boundedItems(callees, bounds.relationLimit),
+      callers: this.boundedCallRelations(callers, bounds.relationLimit),
+      callees: this.boundedCallRelations(callees, bounds.relationLimit),
       impact: this.boundedImpact(impact, bounds.impactLimit)
     };
   }
@@ -5836,6 +5836,19 @@ export class SymbolLatticeService {
     const supplemented = supplementExploreNameFollowups(bundle.snapshot, plan, calls, bundle.sourceLexical);
     this.exploreCallEvidence.set(supplemented, calls);
     return supplemented;
+  }
+
+  private boundedCallRelations(
+    items: ReturnType<typeof getCallees>, limit: number
+  ): { readonly items: ReturnType<typeof getCallees>; readonly truncated: boolean } {
+    // These references identify an exported property, not an executable
+    // target. Keep them available without letting a large error-code object
+    // displace call evidence from the bounded caller/callee context.
+    const ordered = [
+      ...items.filter((item) => item.edge.evidence?.ruleId !== "module.commonjs-object-property-reference"),
+      ...items.filter((item) => item.edge.evidence?.ruleId === "module.commonjs-object-property-reference")
+    ];
+    return this.boundedItems(ordered, limit);
   }
 
   private exploreUnresolvedCalls(

@@ -16,6 +16,7 @@ These tools generate or validate large-project evidence outside the published np
 | `javascript/` | `named-function-expressions.mjs` | automatic declaration/scorer contract; manual pinned-corpus execution |
 | `javascript/` | `assigned-callables.mjs` | automatic anonymous-assignment/ownership scorer contract; manual pinned-corpus execution |
 | `javascript/` | `commonjs-call-evidence.mjs`, `fastify-commonjs-truth.json` | automatic source-receipt verifier contract; manual pinned-corpus execution |
+| `javascript/` | `commonjs-property-evidence.mjs`, `fastify-commonjs-property-truth.json` | manual pinned-corpus Espree source-receipt audit |
 | `python/` | `correctness-oracle.mjs`, `PythonOracle.py` | manual CPython stdlib AST oracle |
 | `python/` | `module-bindings.mjs`, `ModuleBindingOracle.py` | manual CPython AST declaration/source-range audit; optional baseline fact comparison |
 | `python/` | `member-calls.mjs`, `MemberCallOracle.py` | manual CPython AST unresolved member-call name, ownership and source-range audit; required baseline fact preservation check |
@@ -40,6 +41,16 @@ These tools generate or validate large-project evidence outside the published np
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## v0.528.0 CommonJS object-property references
+
+For strict CommonJS JavaScript, a named `const` object assigned once to `module.exports` now contributes source-located property declarations. A `const` destructured relative `require` used as a `new` callee can gain an exact cross-file `references` edge to the property declaration when the export and observed module-object uses pass the conservative static checks. The original `instantiates` edge remains unresolved because the exported property's runtime constructor value is not established. Dynamic or mutated exports and cyclic imports remain outside this rule. These source-only references do not gain execution-path ranking weight and come after executable relations in bounded caller/callee contexts. This adds index symbols and edges; it does not change the CLI or MCP response contract.
+
+On the pinned Fastify commit `70b14e92c0b55e8201f5530ba2e6bab4e928c784`, `javascript/commonjs-property-evidence.mjs` uses independent Espree AST/source ranges to audit every emitted property-reference receipt, and `javascript/fastify-commonjs-property-truth.json` fixes three known parser uses before scoring. The audit found all three required references and verified 88 emitted source receipts across 19 files. It does not independently establish runtime constructor identity, whole-program mutation safety, or corpus-wide precision. Run the audit with `node benchmarks/javascript/commonjs-property-evidence.mjs --project <pinned-fastify-checkout> --manifest benchmarks/javascript/fastify-commonjs-property-truth.json --output <external-report.json>` after building and indexing that checkout.
+
+The 13 fixed Fastify retrieval tasks were compared with the v0.527.4 reports under Windows and Node v24.19.0. Each task used three fresh CLI processes; median process time includes startup, freshness check, query and serialization. Required-file hits remained 27/29, and required source facts remained 49/57. The HTTP 413/415 tasks still omit `lib/contentTypeParser.js` despite the new indexed edges, so task-level recall has not improved. The median of per-task latency differences was −10 ms; ten tasks were faster and the range was −120 to +33 ms. These small, non-paired samples do not establish a general speedup. Unjudged results were not counted as false positives, and overall precision was not measured.
+
+A fresh disposable Fastify copy took 12.65 s to index 338 files into 8,672 symbols and 19,167 edges. An unchanged sync took 1.56 s; a sync after appending a comment to one parser file took 6.23 s and re-extracted one file. These are single local wall-clock samples without a comparable baseline or memory measurement, not acceptance thresholds. The source was restored and synced afterward. Raw reports are under `%TEMP%/SymbolLattice-evidence-052800`; the benchmark inputs and tools remain in this directory, while indexed copies and generated results remain outside the repository.
 
 ## v0.527.4 bounded edge-evidence read
 

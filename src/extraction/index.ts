@@ -9683,7 +9683,21 @@ export function extractFileFacts(
     sourceFile, enabled: commonJsSyntaxEnabled && !/\.mjs$/iu.test(input.filePath),
     moduleGlobalSafe: !hasDirectSourceBinding(sourceFile, "module") && hasOnlyDirectCommonJsModuleUses(sourceFile),
     requires: commonJsRequires, symbols: symbolsByDeclaration,
-    bindingOf: (identifier) => visibleRouteBinding(sourceFile, identifier, routeReceiverBindings)?.declaration
+    bindingOf: (identifier) => visibleRouteBinding(sourceFile, identifier, routeReceiverBindings)?.declaration,
+    recordProperty: (owner, name, property) => {
+      const qualifiedName = `${owner.qualifiedName}.${name}`;
+      const identity = `${qualifiedName}\u0000variable`;
+      const declarationOrdinal = declarationOrdinals.get(identity) ?? 0;
+      declarationOrdinals.set(identity, declarationOrdinal + 1);
+      const symbol: SymbolNode = {
+        id: createSymbolId({ filePath: input.filePath, qualifiedName, kind: "variable", declarationOrdinal }),
+        name, qualifiedName, kind: "variable", filePath: input.filePath,
+        range: sourceRange(sourceFile, property), isExported: true, declarationOrdinal
+      };
+      symbols.push(symbol);
+      addResolvedEdge(owner.id, symbol.id, "contains", property, name);
+      return symbol;
+    }
   }) : undefined;
   const commonJsExportIds = new Set(commonJsFacts?.exports.map((entry) => entry.symbolId) ?? []);
   return {

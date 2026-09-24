@@ -11,6 +11,7 @@ export function extractCommonJsFacts(input: {
   requires: ReadonlyMap<ts.VariableDeclaration, ts.StringLiteral>;
   symbols: ReadonlyMap<ts.Node, SymbolNode>;
   bindingOf: (identifier: ts.Identifier) => ts.Node | undefined;
+  recordProperty: (owner: SymbolNode, name: string, property: ts.PropertyAssignment) => SymbolNode;
 }): Facts {
   const { sourceFile, bindingOf } = input;
   const range = (node: ts.Node): SourceRange => {
@@ -24,9 +25,12 @@ export function extractCommonJsFacts(input: {
   const relative = (specifier: string): boolean => specifier.startsWith("./") || specifier.startsWith("../");
   const requires = [...new Set([...input.requires.values()].map((node) => node.text).filter(relative))];
   const unsafeModules = new Set<string>();
+  const propertyUnsafeModules = new Set<string>();
   const receiverCalls: Facts["receiverCalls"][number][] = [];
   const exports: Facts["exports"][number][] = [];
   const calls: Facts["calls"][number][] = [];
+  const propertyExports: NonNullable<Facts["propertyExports"]>[number][] = [];
+  const propertyUses: NonNullable<Facts["propertyUses"]>[number][] = [];
   const hasDynamicScope = nodes.some((node) => ts.isWithStatement(node) ||
     (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "eval"));
 
@@ -80,6 +84,14 @@ export function extractCommonJsFacts(input: {
       if (item && node.getStart(sourceFile) > binding!.getEnd()) calls.push({ moduleSpecifier: item.specifier,
         importedName: item.name, localName: node.expression.text, importRange: item.range, range: range(node.expression) });
     }
+    if (ts.isNewExpression(node) && ts.isIdentifier(node.expression)) {
+      const binding = bindingOf(node.expression);
+      const item = binding && ts.isVariableDeclaration(binding) ? imported.get(binding)?.get(node.expression.text) : undefined;
+      if (item && node.getStart(sourceFile) > binding!.getEnd()) propertyUses.push({
+        moduleSpecifier: item.specifier, importedName: item.name, localName: node.expression.text,
+        importRange: item.range, range: range(node.expression)
+      });
+    }
     // A required module object that escapes or is written may change exports
     // observed by another importer. Retain a project-level suppression receipt.
     if (!ts.isCallExpression(node) || !ts.isIdentifier(node.expression) || node.expression.text !== "require" ||
@@ -124,6 +136,125 @@ export function extractCommonJsFacts(input: {
     unsafeModules.add(specifier);
   }
 
+  const readOnlyPropertyObservation = (object: ts.Node): boolean => {
+    const parent = object.parent;
+    if (ts.isCallExpression(parent) && parent.arguments.includes(object as ts.Expression) &&
+        ts.isPropertyAccessExpression(parent.expression) &&
+        ts.isIdentifier(parent.expression.expression) && parent.expression.expression.text === "Object" &&
+        bindingOf(parent.expression.expression) === undefined &&
+        ["keys", "values", "entries"].includes(parent.expression.name.text)) return true;
+    if ((!ts.isPropertyAccessExpression(parent) && !ts.isElementAccessExpression(parent)) ||
+        parent.expression !== object) return false;
+    if ((ts.isCallExpression(parent.parent) || ts.isTaggedTemplateExpression(parent.parent)) &&
+        (ts.isCallExpression(parent.parent) ? parent.parent.expression : parent.parent.tag) === parent) return false;
+    let target: ts.Node = parent;
+    while (ts.isParenthesizedExpression(target.parent) || ts.isArrayLiteralExpression(target.parent) ||
+        ts.isObjectLiteralExpression(target.parent) || ts.isSpreadElement(target.parent) ||
+        ts.isSpreadAssignment(target.parent) ||
+        (ts.isPropertyAssignment(target.parent) && target.parent.initializer === target)) target = target.parent;
+    return assignment(target.parent) !== target;
+  };
+  for (const node of nodes) {
+    if (!ts.isCallExpression(node) || !ts.isIdentifier(node.expression) || node.expression.text !== "require" ||
+        node.arguments.length !== 1 || !ts.isStringLiteral(node.arguments[0]!)) continue;
+    const specifier = (node.arguments[0] as ts.StringLiteral).text;
+    if (!relative(specifier)) continue;
+    if (hasDynamicScope) { propertyUnsafeModules.add(specifier); continue; }
+    const parent = node.parent;
+    // Destructuring copies values (including a rest object); it cannot write
+    // the required module object. Its own local binding safety is checked at use.
+    if (ts.isVariableDeclaration(parent) && ts.isObjectBindingPattern(parent.name) && parent.initializer === node) continue;
+    if (readOnlyPropertyObservation(node) || ts.isExpressionStatement(parent)) continue;
+    if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name) && parent.initializer === node &&
+        !assigned.has(parent) && nodes.every((use) => !ts.isIdentifier(use) || use === parent.name ||
+          bindingOf(use) !== parent || readOnlyPropertyObservation(use))) continue;
+    propertyUnsafeModules.add(specifier);
+  }
+
+  // An object property is a source declaration even when its factory's return
+  // type is unknown. Keep its exact binding separate from runtime construction.
+  const objectAssignments = sourceFile.statements.flatMap((statement) => {
+    if (!ts.isExpressionStatement(statement) || !ts.isBinaryExpression(statement.expression)) return [];
+    const expression = statement.expression;
+    return expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isPropertyAccessExpression(expression.left) &&
+      ts.isIdentifier(expression.left.expression) && expression.left.expression.text === "module" &&
+      expression.left.name.text === "exports" ? [expression] : [];
+  });
+  const objectAssignment = objectAssignments.length === 1 ? objectAssignments[0] : undefined;
+  const objectBinding = objectAssignment !== undefined && ts.isIdentifier(objectAssignment.right)
+    ? bindingOf(objectAssignment.right) : undefined;
+  if (input.enabled && !hasDynamicScope && input.moduleGlobalSafe && objectAssignment &&
+      objectBinding && ts.isVariableDeclaration(objectBinding) &&
+      ts.isVariableStatement(objectBinding.parent.parent) && objectBinding.parent.parent.parent === sourceFile &&
+      constDeclaration(objectBinding) && ts.isIdentifier(objectBinding.name) &&
+      objectBinding.initializer !== undefined && ts.isObjectLiteralExpression(objectBinding.initializer) &&
+      !assigned.has(objectBinding) && input.symbols.has(objectBinding)) {
+    const object = objectBinding.initializer;
+    const names = new Set<string>();
+    const properties: { name: string; node: ts.PropertyAssignment }[] = [];
+    let safe = true;
+    for (const property of object.properties) {
+      if (!ts.isPropertyAssignment(property) || !property.name ||
+          (!ts.isIdentifier(property.name) && !ts.isStringLiteral(property.name))) { safe = false; break; }
+      const name = property.name.text;
+      if (name === "__proto__" || names.has(name)) { safe = false; break; }
+      names.add(name);
+      properties.push({ name, node: property });
+    }
+    const changedNames = new Set<string>();
+    const staticMemberName = (node: ts.Node): string | undefined =>
+      ts.isPropertyAccessExpression(node) ? node.name.text :
+      ts.isElementAccessExpression(node) && ts.isStringLiteral(node.argumentExpression)
+        ? node.argumentExpression.text : undefined;
+    const isExportObject = (node: ts.Node): boolean =>
+      ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression) &&
+      node.expression.text === "module" && node.name.text === "exports";
+    const mayWriteMember = (access: ts.Node): boolean => {
+      let target = access;
+      while (ts.isParenthesizedExpression(target.parent) || ts.isArrayLiteralExpression(target.parent) ||
+          ts.isObjectLiteralExpression(target.parent) || ts.isSpreadElement(target.parent) ||
+          ts.isSpreadAssignment(target.parent) ||
+          (ts.isPropertyAssignment(target.parent) && target.parent.initializer === target)) {
+        target = target.parent;
+      }
+      return assignment(target.parent) === target;
+    };
+    for (const node of nodes) {
+      if (!ts.isIdentifier(node) || bindingOf(node) !== objectBinding || node === objectBinding.name ||
+          node === objectAssignment.right) continue;
+      const access = node.parent;
+      if ((!ts.isPropertyAccessExpression(access) && !ts.isElementAccessExpression(access)) ||
+          access.expression !== node || staticMemberName(access) === undefined) { safe = false; break; }
+      if (mayWriteMember(access)) changedNames.add(staticMemberName(access)!);
+      if ((ts.isCallExpression(access.parent) || ts.isTaggedTemplateExpression(access.parent)) &&
+          (ts.isCallExpression(access.parent) ? access.parent.expression : access.parent.tag) === access) {
+        safe = false; break;
+      }
+    }
+    for (const node of nodes) {
+      if (!ts.isIdentifier(node) || node.text !== "exports" ||
+          (ts.isPropertyAccessExpression(node.parent) && node.parent.name === node &&
+           ts.isIdentifier(node.parent.expression) && node.parent.expression.text === "module")) continue;
+      safe = false; break;
+    }
+    for (const node of nodes) {
+      if ((!ts.isPropertyAccessExpression(node) && !ts.isElementAccessExpression(node)) ||
+          !isExportObject(node.expression) || !mayWriteMember(node)) continue;
+      const name = staticMemberName(node);
+      if (name === undefined) { safe = false; break; }
+      changedNames.add(name);
+    }
+    if (safe) {
+      const owner = input.symbols.get(objectBinding)!;
+      for (const property of properties) {
+        if (changedNames.has(property.name)) continue;
+        const symbol = input.recordProperty(owner, property.name, property.node);
+        propertyExports.push({ exportedName: property.name, symbolId: symbol.id, range: range(property.node) });
+      }
+    }
+  }
+
   const exportAssignments = sourceFile.statements.flatMap((statement) => {
     if (!ts.isExpressionStatement(statement) || !ts.isBinaryExpression(statement.expression)) return [];
     const expression = statement.expression;
@@ -132,16 +263,16 @@ export function extractCommonJsFacts(input: {
       expression.left.name.text === "exports" && ts.isObjectLiteralExpression(expression.right) ? [expression] : [];
   });
   const exported = exportAssignments.length === 1 ? exportAssignments[0]! : undefined;
-  if (!input.enabled || hasDynamicScope || !input.moduleGlobalSafe || !exported || !ts.isPropertyAccessExpression(exported.left) || !ts.isObjectLiteralExpression(exported.right)) return { requires, unsafeModules: [...unsafeModules], receiverCalls, exports, calls };
+  if (!input.enabled || hasDynamicScope || !input.moduleGlobalSafe || !exported || !ts.isPropertyAccessExpression(exported.left) || !ts.isObjectLiteralExpression(exported.right)) return { requires, unsafeModules: [...unsafeModules], propertyUnsafeModules: [...propertyUnsafeModules], receiverCalls, exports, calls, propertyExports, propertyUses };
   const left = exported.left;
   if (nodes.some((node) => ts.isIdentifier(node) &&
-      ((node.text === "module" && node !== left.expression) || (node.text === "exports" && node !== left.name)))) return { requires, unsafeModules: [...unsafeModules], receiverCalls, exports, calls };
+      ((node.text === "module" && node !== left.expression) || (node.text === "exports" && node !== left.name)))) return { requires, unsafeModules: [...unsafeModules], propertyUnsafeModules: [...propertyUnsafeModules], receiverCalls, exports, calls, propertyExports, propertyUses };
   const names = new Set<string>();
   for (const property of exported.right.properties) {
     if (ts.isSpreadAssignment(property) || ts.isGetAccessor(property) || ts.isSetAccessor(property) || !property.name || ts.isComputedPropertyName(property.name) ||
-        (!ts.isIdentifier(property.name) && !ts.isStringLiteral(property.name))) return { requires, unsafeModules: [...unsafeModules], receiverCalls, exports: [], calls };
+        (!ts.isIdentifier(property.name) && !ts.isStringLiteral(property.name))) return { requires, unsafeModules: [...unsafeModules], propertyUnsafeModules: [...propertyUnsafeModules], receiverCalls, exports: [], calls, propertyExports, propertyUses };
     const name = property.name.text;
-    if (name === "__proto__" || names.has(name)) return { requires, unsafeModules: [...unsafeModules], receiverCalls, exports: [], calls };
+    if (name === "__proto__" || names.has(name)) return { requires, unsafeModules: [...unsafeModules], propertyUnsafeModules: [...propertyUnsafeModules], receiverCalls, exports: [], calls, propertyExports, propertyUses };
     names.add(name);
     const local = ts.isShorthandPropertyAssignment(property) ? property.name :
       ts.isPropertyAssignment(property) && ts.isIdentifier(property.initializer) ? property.initializer : undefined;
@@ -156,5 +287,5 @@ export function extractCommonJsFacts(input: {
       receiverIndependent: !nodes.some((node) => node.kind === ts.SyntaxKind.ThisKeyword &&
         node.pos >= declaration.pos && node.end <= declaration.end) });
   }
-  return { requires, unsafeModules: [...unsafeModules], receiverCalls, exports, calls };
+  return { requires, unsafeModules: [...unsafeModules], propertyUnsafeModules: [...propertyUnsafeModules], receiverCalls, exports, calls, propertyExports, propertyUses };
 }

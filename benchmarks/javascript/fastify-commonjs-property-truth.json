@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/fastify/fastify",
+  "commit": "70b14e92c0b55e8201f5530ba2e6bab4e928c784",
+  "observations": [
+    { "file": "lib/contentTypeParser.js", "line": 184, "localName": "FST_ERR_CTP_INVALID_MEDIA_TYPE", "targetFile": "lib/errors.js", "exportedName": "FST_ERR_CTP_INVALID_MEDIA_TYPE", "importLine": 17, "exportLine": 111 },
+    { "file": "lib/contentTypeParser.js", "line": 228, "localName": "FST_ERR_CTP_BODY_TOO_LARGE", "targetFile": "lib/errors.js", "exportedName": "FST_ERR_CTP_BODY_TOO_LARGE", "importLine": 17, "exportLine": 105 },
+    { "file": "lib/contentTypeParser.js", "line": 255, "localName": "FST_ERR_CTP_BODY_TOO_LARGE", "targetFile": "lib/errors.js", "exportedName": "FST_ERR_CTP_BODY_TOO_LARGE", "importLine": 17, "exportLine": 105 }
+  ]
+}

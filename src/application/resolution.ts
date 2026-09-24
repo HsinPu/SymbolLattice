@@ -69,7 +69,7 @@ import {
   type SymbolNode
 } from "../domain/index.js";
 import type { ExtractedFileFacts } from "../extraction/index.js";
-import { commonJsCallResolver } from "./resolvers/javascript-commonjs-resolver.js";
+import { commonJsBindingResolver } from "./resolvers/javascript-commonjs-resolver.js";
 import {
   projectFrameworkPluginOutputs,
   type FrameworkProjectPluginRegistry
@@ -2170,7 +2170,7 @@ export function resolveProjectFacts(input: {
   // Framework projections may append references after module resolution. Re-sort
   // the same owned list rather than allocating another full-size copy.
   references.sort((left, right) => compareStableText(left.id, right.id));
-  const resolveCommonJsCall = commonJsCallResolver({ factsByFile, symbolsById,
+  const commonJsBindings = commonJsBindingResolver({ factsByFile, symbolsById,
     resolveModule: (filePath, specifier) => moduleTargetPathByKey.get(moduleKey(filePath, specifier)) });
   let referenceIndex = 0;
   for (const reference of references) {
@@ -2181,6 +2181,15 @@ export function resolveProjectFacts(input: {
     const isHeritage = isHeritageReference(reference);
     const isSignature = isSignatureReference(reference);
     const isInstantiation = reference.relationKind === "instantiates";
+    if (isInstantiation) {
+      const property = commonJsBindings.resolvePropertyReference(reference);
+      if (property !== null) {
+        // The imported identifier refers to this property. Its runtime value
+        // may still be an unknown factory result, so keep instantiates unresolved.
+        resolvedEdges.push(referenceEdge({ ...reference, relationKind: "references" },
+          property.target.id, "exact", 1, property.evidence));
+      }
+    }
     if (
       reference.relationKind !== "calls" &&
       reference.relationKind !== "references" &&
@@ -2349,7 +2358,7 @@ export function resolveProjectFacts(input: {
       continue;
     }
 
-    const commonJsCall = resolveCommonJsCall(reference);
+    const commonJsCall = commonJsBindings.resolveCall(reference);
     if (commonJsCall !== null) {
       if (commonJsCall.target === null) unresolvedReferences.push(reference);
       resolvedEdges.push(referenceEdge(reference, commonJsCall.target?.id ?? null,

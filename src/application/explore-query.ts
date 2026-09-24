@@ -82,6 +82,10 @@ export const EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS = {
   extends: 8,
   implements: 8
 } as const satisfies Readonly<Record<EdgeKind, number>>;
+/** A property binding is source evidence, but does not prove an execution path. */
+function scoresAsExecutionRelationship(edge: GraphEdge): boolean {
+  return edge.evidence?.ruleId !== "module.commonjs-object-property-reference";
+}
 export const EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS = {
   maximumHops: 2,
   maximumSeedFiles: 16,
@@ -1272,6 +1276,7 @@ function graphExpansionFor(
   for (const edge of graph.edges) {
     if (
       edge.resolution !== "exact" ||
+      !scoresAsExecutionRelationship(edge) ||
       edge.targetId === null ||
       edge.sourceId === edge.targetId ||
       !symbolsById.has(edge.sourceId) ||
@@ -1695,6 +1700,7 @@ function graphDiffusionFor(
   for (const edge of graph.edges) {
     if (
       edge.resolution !== "exact" ||
+      !scoresAsExecutionRelationship(edge) ||
       edge.sourceId === null ||
       edge.targetId === null ||
       edge.sourceId === edge.targetId ||
@@ -2348,6 +2354,7 @@ export function planExploreQuery(
   };
   for (const edge of graph.edges) {
     if (edge.resolution !== "exact" || edge.sourceId === null || edge.targetId === null) continue;
+    if (!scoresAsExecutionRelationship(edge)) continue;
     const source = candidatesById.get(edge.sourceId);
     const target = candidatesById.get(edge.targetId);
     if (source !== undefined) addGraphMassRelationship(source, edge, edge.targetId);
