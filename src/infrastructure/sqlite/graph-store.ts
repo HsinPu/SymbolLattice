@@ -2284,26 +2284,6 @@ function compareSymbolRows(left: SymbolRow, right: SymbolRow): number {
   );
 }
 
-function readExistingSymbolIds(
-  database: DatabaseSync,
-  ids: readonly string[]
-): ReadonlySet<string> {
-  const existing = new Set<string>();
-  for (
-    let start = 0;
-    start < ids.length;
-    start += BOUNDED_QUERY_PARAMETER_BATCH_SIZE
-  ) {
-    const batch = ids.slice(start, start + BOUNDED_QUERY_PARAMETER_BATCH_SIZE);
-    if (batch.length === 0) continue;
-    const rows = database
-      .prepare(`SELECT id FROM symbols WHERE id IN (${batch.map(() => "?").join(", ")})`)
-      .all(...batch) as unknown as readonly { readonly id: string }[];
-    for (const row of rows) existing.add(row.id);
-  }
-  return existing;
-}
-
 function compareEdgeRows(left: EdgeRow, right: EdgeRow): number {
   return (
     left.file_path.localeCompare(right.file_path) ||
@@ -2330,7 +2310,9 @@ function readBoundedEdgesByIds(
     const base = `SELECT e.id, e.source_id, e.target_id, e.kind, e.file_path,
       e.start_line, e.start_column, e.end_line, e.end_column,
       e.resolution, e.confidence, e.reference_name
-      FROM edges AS e`;
+      FROM edges AS e
+      INNER JOIN symbols AS source ON source.id = e.source_id
+      INNER JOIN symbols AS target ON target.id = e.target_id`;
     const outgoing = database
       .prepare(`${base} WHERE e.resolution = 'exact' AND e.source_id IN (${placeholders})`)
       .all(...batch) as unknown as EdgeRow[];
@@ -2496,16 +2478,10 @@ function readActiveBoundedGraphBundle(
   for (let hop = 1; hop <= bounds.maxHops && frontier.length > 0; hop += 1) {
     const edgeRows = readBoundedEdgesByIds(database, frontier);
     if (edgeRows.length === 0) break;
-    // Repeated endpoints need one existence lookup per hop, not one per edge.
-    const candidateIds = [...new Set(edgeRows.flatMap((row) =>
-      row.target_id === null ? [row.source_id] : [row.source_id, row.target_id]
-    ))];
-    const existingIds = readExistingSymbolIds(database, candidateIds);
     const nextFrontier: string[] = [];
     const nextFrontierSet = new Set<string>();
     for (const row of edgeRows) {
       if (returnedEdgeRows.has(row.id) || row.target_id === null) continue;
-      if (!existingIds.has(row.source_id) || !existingIds.has(row.target_id)) continue;
       if (returnedEdgeRows.size >= bounds.maxRelationships) {
         truncated = true;
         break;

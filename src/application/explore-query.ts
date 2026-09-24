@@ -17,7 +17,7 @@ import { identifierNumbers, numericIdentifierTerms, identifierTermGroups, identi
 import { SOURCE_LEXICAL_SCORING, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
 import { downstreamFocusPaths, type ExploreFlowFocus } from "./explore-flow-focus.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v22" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v23" as const;
 export const EXPLORE_QUERY_SOURCE_GAP_COVERAGE = {
   policy: "uncovered-source-concept-v1", maximumFiles: 1,
   minimumSourceConcepts: 2, minimumRelativeScore: 0.25, maximumLineGap: 5
@@ -25,6 +25,7 @@ export const EXPLORE_QUERY_SOURCE_GAP_COVERAGE = {
 export const EXPLORE_NUMERIC_QUERY = {
   policy: "numeric-query-qualifiers-v1", maximumIdentifierTerms: 12, qualifierScore: 500
 } as const;
+export const EXPLORE_NUMERIC_EXECUTION_FILTER_POLICY = "numeric-execution-nonimplementation-filter-v1" as const;
 export const EXPLORE_QUERY_FOCUS_COVERAGE = {
   policy: "same-file-source-coverage-v1",
   minimumRelativeScore: 0.75,
@@ -472,6 +473,16 @@ export interface ExploreQueryPlan {
   readonly identifierTerms: readonly string[];
   readonly numericQuery?: typeof EXPLORE_NUMERIC_QUERY;
   readonly numericCoverage?: { readonly policy: "numeric-query-coverage-v1"; readonly symbolId: string; readonly terms: readonly string[] };
+  readonly numericExecutionFiltering?: {
+    readonly policy: typeof EXPLORE_NUMERIC_EXECUTION_FILTER_POLICY;
+    readonly anchorSymbolId: string;
+    readonly evidenceScope: "selected-focuses";
+    readonly excludedFiles: readonly {
+      readonly filePath: string;
+      readonly candidateCount: number;
+      readonly reason: "documentation-without-numeric-evidence" | "declaration-without-numeric-evidence";
+    }[];
+  };
   readonly nameFollowupSearch?: import("./explore-name-followups.js").ExploreNameFollowupSearch;
   readonly sourceLexical?: (Omit<SourceLexicalRetrieval, "candidates"> & { readonly matchedSymbols: number }) | null;
   readonly queryIntent: {
@@ -2513,6 +2524,11 @@ export function hasExploreExecutionIntent(query: string): boolean {
     !/\b(?:types?|typings?|interfaces?|signatures?|declarations?|overloads?|generics?|typecheck(?:ing)?)\b/iu.test(bounded);
 }
 
+function hasNumericImplementationIntent(query: string): boolean {
+  return /\b(?:handles?|handling|sends?|sending|rejects?|rejecting|responds?|responding)\b/iu.test(query) &&
+    !/\b(?:types?|typings?|interfaces?|signatures?|declarations?|overloads?|generics?|typecheck(?:ing)?|documentation|docs?|guides?|readme)\b/iu.test(query);
+}
+
 export function planExploreQuery(
   graph: ExploreQueryGraph,
   query: string,
@@ -2654,6 +2670,34 @@ export function planExploreQuery(
     naturalLanguage && parsed.fileHints.length === 0);
   const propertyUseReceipts = selectPropertyUseFollowup(selected, ranked, graph, filesByPath,
     roleIntent, naturalLanguage && parsed.fileHints.length === 0);
+  const numericImplementationAnchor = numericQueryTerms.size > 0 && parsed.fileHints.length === 0 &&
+    hasNumericImplementationIntent(parsed.boundedQuery)
+    ? selected.find(candidate => candidate.numericQualifier !== undefined &&
+      candidate.sourceRole.role === "production" && !candidate.generated.generated &&
+      !/\.d\.[cm]?ts$/iu.test(candidate.symbol.filePath) &&
+      !/(?:^|\/)(?:docs?|documentation)\/.*\.mdx?$/iu.test(candidate.symbol.filePath))
+    : undefined;
+  const excludedNonImplementations = numericImplementationAnchor === undefined ? [] : selected.flatMap(candidate => {
+    if (candidate.explicitFile || candidate.numericQualifier !== undefined) return [];
+    const filePath = candidate.symbol.filePath;
+    if (selected.some(other => other.symbol.filePath === filePath && other.numericQualifier !== undefined)) return [];
+    const reason = /\.d\.[cm]?ts$/iu.test(filePath)
+      ? "declaration-without-numeric-evidence" as const
+      : /(?:^|\/)(?:docs?|documentation)\/.*\.mdx?$/iu.test(filePath)
+        ? "documentation-without-numeric-evidence" as const : undefined;
+    return reason === undefined ? [] : [{ symbolId: candidate.symbol.id, filePath, reason }];
+  });
+  const excludedFiles = [...new Set(excludedNonImplementations.map(item => item.filePath))].map(filePath => ({
+    filePath,
+    candidateCount: excludedNonImplementations.filter(item => item.filePath === filePath).length,
+    reason: excludedNonImplementations.find(item => item.filePath === filePath)!.reason
+  }));
+  if (excludedNonImplementations.length > 0) {
+    const excludedIds = new Set(excludedNonImplementations.map(item => item.symbolId));
+    for (let index = selected.length - 1; index >= 0; index -= 1) {
+      if (excludedIds.has(selected[index]!.symbol.id)) selected.splice(index, 1);
+    }
+  }
   const selection: ExploreQuerySelection[] = selected.map((candidate, index) => {
     const score = rawScore(candidate);
     return {
@@ -2745,6 +2789,12 @@ export function planExploreQuery(
     ...(parsed.maximumIdentifierTerms === EXPLORE_NUMERIC_QUERY.maximumIdentifierTerms ? { numericQuery: EXPLORE_NUMERIC_QUERY } : {}),
     ...(numericAnchor === undefined ? {} : { numericCoverage: { policy: "numeric-query-coverage-v1" as const,
       symbolId: numericAnchor.symbol.id, terms: numericAnchor.numericQualifier!.terms } }),
+    ...(numericImplementationAnchor === undefined || excludedFiles.length === 0 ? {} : { numericExecutionFiltering: {
+      policy: EXPLORE_NUMERIC_EXECUTION_FILTER_POLICY,
+      anchorSymbolId: numericImplementationAnchor.symbol.id,
+      evidenceScope: "selected-focuses" as const,
+      excludedFiles
+    } }),
     sourceLexical: sourceLexical === undefined ? null : {
       policy: sourceLexical.policy, limits: sourceLexical.limits, state: sourceLexical.state,
       scannedFiles: sourceLexical.scannedFiles, scannedSymbols: sourceLexical.scannedSymbols,

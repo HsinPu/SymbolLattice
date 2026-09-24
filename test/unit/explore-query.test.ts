@@ -169,6 +169,49 @@ function indexedFile(path: string, generated: boolean, role: SourceRole = "produ
 }
 
 describe("bounded lexical and relationship ranking", () => {
+  it("omits numeric-unrelated documentation and declarations without filling their focus slots", () => {
+    const implementation = symbol({ id: "implementation", name: "clientErrorHandler", filePath: "src/server.ts" });
+    const documentation = symbol({ id: "documentation", name: "sendRequestHeaders", filePath: "docs/Reference/Hooks.md" });
+    const declaration = symbol({ id: "declaration", name: "sendRequestHeaders", filePath: "types/reply.d.ts" });
+    const matches = (node: SymbolNode, terms: readonly string[]) => terms.map((term, index) => ({
+      term, token: term, filePath: node.filePath,
+      range: { start: { line: 1, column: index * 12 + 1 }, end: { line: 1, column: index * 12 + term.length + 1 } }
+    }));
+    const lexical = { policy: SOURCE_LEXICAL_POLICY, limits: SOURCE_LEXICAL_LIMITS, state: "searched" as const,
+      scannedFiles: 3, scannedSymbols: 3, scannedCharacters: 200, truncated: false,
+      candidates: [
+        { symbolId: implementation.id, matches: matches(implementation, ["request", "headers", "431"]), score: 800 },
+        { symbolId: documentation.id, matches: matches(documentation, ["request", "headers", "send"]), score: 800 },
+        { symbolId: declaration.id, matches: matches(declaration, ["request", "headers", "send"]), score: 800 }
+      ] };
+    const graph = { symbols: [implementation, documentation, declaration], edges: [] };
+    const query = "How does the server handle oversized request headers and send HTTP 431 response?";
+    const plan = planExploreQuery(graph, query, lexical);
+    expect(plan.selection.map(focus => focus.symbol.id)).toEqual([implementation.id]);
+    expect(plan.numericExecutionFiltering).toMatchObject({ anchorSymbolId: implementation.id,
+      evidenceScope: "selected-focuses",
+      excludedFiles: [
+        { filePath: documentation.filePath, candidateCount: 1, reason: "documentation-without-numeric-evidence" },
+        { filePath: declaration.filePath, candidateCount: 1, reason: "declaration-without-numeric-evidence" }
+      ] });
+    expect(planExploreQuery({ symbols: [documentation], edges: [] }, query, lexical)
+      .selection.map(focus => focus.symbol.id)).toEqual([documentation.id]);
+    expect(planExploreQuery({ symbols: [implementation], edges: [] }, query, lexical)
+      .numericExecutionFiltering).toBeUndefined();
+    for (const file of [indexedFile(implementation.filePath, true),
+      indexedFile(implementation.filePath, false, "test")]) {
+      expect(planExploreQuery({ ...graph, files: [file] }, query, lexical)
+        .numericExecutionFiltering).toBeUndefined();
+    }
+    expect(planExploreQuery(graph, `${documentation.filePath} ${query}`, lexical)
+      .selection.some(focus => focus.symbol.id === documentation.id)).toBe(true);
+    expect(planExploreQuery(graph, `${query} documentation`, lexical)
+      .selection.some(focus => focus.symbol.id === documentation.id)).toBe(true);
+    const numbered = { ...lexical, candidates: lexical.candidates.map(candidate => candidate.symbolId === documentation.id
+      ? { ...candidate, matches: [...candidate.matches, ...matches(documentation, ["431"])] } : candidate) };
+    expect(planExploreQuery(graph, query, numbered).selection.some(focus => focus.symbol.id === documentation.id)).toBe(true);
+  });
+
   it.each(["d.ts", "d.cts", "d.mts"])("does not treat %s signatures as implementation bodies for execution questions", (extension) => {
     const declaration = { ...symbol({ id: "ambient", name: "request", filePath: `types/handler.${extension}` }),
       range: { start: { line: 1, column: 1 }, end: { line: 1, column: 64 } } };
@@ -520,7 +563,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v22",
+      policy: "explore-query-plan-v23",
       queryIntent: {
         tests: false,
         icons: false,
@@ -638,7 +681,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v22",
+      policy: "explore-query-plan-v23",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -870,7 +913,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v22",
+      policy: "explore-query-plan-v23",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1294,7 +1337,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v22",
+      policy: "explore-query-plan-v23",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v2",
@@ -1993,7 +2036,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v22",
+      policy: "explore-query-plan-v23",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,

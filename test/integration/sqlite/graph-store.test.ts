@@ -2357,6 +2357,24 @@ describe("SqliteGraphStore", () => {
     expect(file?.snapshot.symbols.map((node) => node.id)).toContain("c-tail");
   });
 
+  it("skips exact edges whose source or target symbol is absent during bounded traversal", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const template = boundedGraphSnapshot();
+    const graphSnapshot = { ...template, edges: [
+      ...template.edges,
+      boundedEdge("edge-missing-target", "a-root", "missing-target", "src/a.ts"),
+      boundedEdge("edge-missing-source", "missing-source", "b-target", "src/b.ts")
+    ] };
+    store.replaceProjectFacts({ projectPath, snapshot: graphSnapshot,
+      indexedAt: "2026-09-24T00:00:00.000Z", artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("bounded-existing-endpoints"), resolverVersion: "bounded-resolver-v1" });
+    const result = store.getActiveBoundedGraphBundle(projectPath, boundedRequest("Root"));
+    expect(result.snapshot.edges.map(edge => edge.id)).toEqual(["edge-a-b", "edge-b-c"]);
+    expect(result.snapshot.symbols.map(node => node.id)).not.toContain("missing-target");
+    expect(result.snapshot.symbols.map(node => node.id)).not.toContain("missing-source");
+  });
+
   it.each(["resolveConstructorParams", "RESOLVECONSTRUCTORPARAMS"])("keeps multi-concept candidate %s before SQL and file caps despite hundreds of generic matches", async (name) => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();
