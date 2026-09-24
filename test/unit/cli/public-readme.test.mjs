@@ -8,9 +8,11 @@ async function readRepositoryFile(name) {
 
 describe("public SymbolLattice installation documentation", () => {
   it("keeps the primary bilingual installation flow on the new breaking names", async () => {
-    const [traditional, english, packageText] = await Promise.all([
+    const [traditional, english, traditionalGuide, englishGuide, packageText] = await Promise.all([
       readRepositoryFile("README.md"),
       readRepositoryFile("README.en.md"),
+      readRepositoryFile("docs/getting-started.md"),
+      readRepositoryFile("docs/getting-started.en.md"),
       readRepositoryFile("package.json")
     ]);
     const packageJson = JSON.parse(packageText);
@@ -18,19 +20,21 @@ describe("public SymbolLattice installation documentation", () => {
     expect(packageJson.name).toBe("@hsinpu/symbollattice");
     expect(packageJson.bin).toEqual({ SymbolLattice: "./dist/cli/main.js" });
 
-    for (const [readme, upgradeHeading] of [
-      [traditional, "## 從 v0.420.0 或更早版本升級"],
-      [english, "## Upgrading from v0.420.0 or earlier"]
+    for (const [readme, guide, guideLink, upgradeHeading] of [
+      [traditional, traditionalGuide, "docs/getting-started.md", "### 從 v0.420.0 或更早版本升級"],
+      [english, englishGuide, "docs/getting-started.en.md", "### From v0.420.0 or earlier"]
     ]) {
-      const [primary, migration] = readme.split(upgradeHeading);
+      const [primary, migration] = guide.split(upgradeHeading);
       expect(migration).toBeDefined();
+      expect(readme).toContain(guideLink);
+      expect(readme).toContain("https://github.com/HsinPu/SymbolLattice.git");
+      expect(readme).toContain("install.ps1");
+      expect(readme).toContain("-Ref");
+      expect(readme).toContain("-Apply -Yes");
+      expect(readme).toContain("SymbolLattice install codex --apply --yes");
+      expect(readme).toContain("SymbolLattice init .");
       expect(primary).toContain("https://github.com/HsinPu/SymbolLattice.git");
-      expect(primary).toContain("install.ps1");
-      expect(primary).toContain("-Ref");
-      expect(primary).toContain("-Apply -Yes");
-      expect(primary).toContain("SymbolLattice install codex --apply --yes");
       expect(primary).toContain("SymbolLattice doctor codex");
-      expect(primary).toContain("dist/cli/main.js");
       expect(primary).toContain("SymbolLattice init .");
       expect(primary).toContain("monorepo");
       expect(primary).toContain("workspace");
@@ -38,6 +42,7 @@ describe("public SymbolLattice installation documentation", () => {
       expect(primary).toContain("SYMBOL_LATTICE_MCP_TOOLS");
       expect(primary).toContain("mcp_servers.SymbolLattice");
       expect(primary).toContain(".SymbolLattice");
+      expect(readme).not.toContain("npm install -g @hsinpu/symbollattice");
       expect(primary).not.toContain("npm install -g @hsinpu/symbollattice");
       expect(primary).not.toContain("@hsinpu/symbol-lattice");
       expect(primary).not.toContain("symbol-lattice uninstall");

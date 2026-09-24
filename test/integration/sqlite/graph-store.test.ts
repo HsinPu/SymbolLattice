@@ -2494,13 +2494,15 @@ describe("SqliteGraphStore", () => {
     expect(first?.snapshot.edges.map((edge) => edge.id)).toEqual(["edge-a-b", "edge-b-c"]);
   });
 
-  it("preserves distinct call receipts when hundreds of edges share endpoints", async () => {
+  it("preserves distinct generation-bound call receipts across evidence lookup batches", async () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();
     const template = boundedGraphSnapshot();
     const calls = Array.from({ length: 600 }, (_, index) => ({
       ...boundedEdge(`repeated-${index}`, "a-root", "b-target", "src/a.ts"),
-      range: { start: { line: index + 1, column: 1 }, end: { line: index + 1, column: 8 } }
+      range: { start: { line: index + 1, column: 1 }, end: { line: index + 1, column: 8 } },
+      evidence: { ruleId: `test.call-${index}`, stage: "module" as const,
+        candidateSymbolIds: ["b-target"] }
     }));
     const graphSnapshot = { ...template, edges: [...calls, template.edges[1]!] };
     store.replaceProjectFacts({ projectPath, snapshot: graphSnapshot,

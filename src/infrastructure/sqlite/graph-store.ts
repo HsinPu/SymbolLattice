@@ -2311,7 +2311,6 @@ function compareEdgeRows(left: EdgeRow, right: EdgeRow): number {
 
 function readBoundedEdgesByIds(
   database: DatabaseSync,
-  activeGenerationId: string | null,
   ids: readonly string[]
 ): readonly EdgeRow[] {
   const rowsById = new Map<string, EdgeRow>();
@@ -2323,25 +2322,40 @@ function readBoundedEdgesByIds(
     const batch = ids.slice(start, start + BOUNDED_QUERY_PARAMETER_BATCH_SIZE);
     if (batch.length === 0) continue;
     const placeholders = batch.map(() => "?").join(", ");
-    const evidenceSelect = activeGenerationId === null ? "" : ", ee.evidence_json";
-    const evidenceJoin =
-      activeGenerationId === null
-        ? ""
-        : "LEFT JOIN edge_evidence AS ee ON ee.generation_id = ? AND ee.edge_id = e.id";
     const base = `SELECT e.id, e.source_id, e.target_id, e.kind, e.file_path,
       e.start_line, e.start_column, e.end_line, e.end_column,
-      e.resolution, e.confidence, e.reference_name${evidenceSelect}
-      FROM edges AS e ${evidenceJoin}`;
-    const parameters = activeGenerationId === null ? [...batch] : [activeGenerationId, ...batch];
+      e.resolution, e.confidence, e.reference_name
+      FROM edges AS e`;
     const outgoing = database
       .prepare(`${base} WHERE e.resolution = 'exact' AND e.source_id IN (${placeholders})`)
-      .all(...parameters) as unknown as EdgeRow[];
+      .all(...batch) as unknown as EdgeRow[];
     const incoming = database
       .prepare(`${base} WHERE e.resolution = 'exact' AND e.target_id IN (${placeholders})`)
-      .all(...parameters) as unknown as EdgeRow[];
+      .all(...batch) as unknown as EdgeRow[];
     for (const row of [...outgoing, ...incoming]) rowsById.set(row.id, row);
   }
   return [...rowsById.values()].sort(compareEdgeRows);
+}
+
+function readBoundedEdgeEvidence(
+  database: DatabaseSync,
+  activeGenerationId: string | null,
+  rows: readonly EdgeRow[]
+): readonly GraphEdge[] {
+  if (activeGenerationId === null) return rows.map(toGraphEdge);
+  const evidenceByEdgeId = new Map<string, string>();
+  for (let start = 0; start < rows.length; start += BOUNDED_QUERY_PARAMETER_BATCH_SIZE) {
+    const batch = rows.slice(start, start + BOUNDED_QUERY_PARAMETER_BATCH_SIZE);
+    const evidenceRows = database.prepare(
+      `SELECT edge_id, evidence_json FROM edge_evidence
+       WHERE generation_id = ? AND edge_id IN (${batch.map(() => "?").join(", ")})`
+    ).all(activeGenerationId, ...batch.map((row) => row.id)) as unknown as readonly {
+      readonly edge_id: string;
+      readonly evidence_json: string;
+    }[];
+    for (const evidence of evidenceRows) evidenceByEdgeId.set(evidence.edge_id, evidence.evidence_json);
+  }
+  return rows.map((row) => toGraphEdge({ ...row, evidence_json: evidenceByEdgeId.get(row.id) ?? null }));
 }
 
 function readActiveBoundedGraphBundle(
@@ -2474,7 +2488,7 @@ function readActiveBoundedGraphBundle(
   let traversedHops = 0;
 
   for (let hop = 1; hop <= bounds.maxHops && frontier.length > 0; hop += 1) {
-    const edgeRows = readBoundedEdgesByIds(database, active.generationId, frontier);
+    const edgeRows = readBoundedEdgesByIds(database, frontier);
     if (edgeRows.length === 0) break;
     // Repeated endpoints need one existence lookup per hop, not one per edge.
     const candidateIds = [...new Set(edgeRows.flatMap((row) =>
@@ -2513,10 +2527,12 @@ function readActiveBoundedGraphBundle(
 
   const symbolRows = readSymbolRowsByIds(database, [...knownNodeIds]);
   const symbolIds = new Set(symbolRows.map((row) => row.id));
-  const edges = [...returnedEdgeRows.values()]
+  const retainedEdgeRows = [...returnedEdgeRows.values()]
     .filter((row) => row.target_id !== null && symbolIds.has(row.source_id) && symbolIds.has(row.target_id))
-    .sort(compareEdgeRows)
-    .map(toGraphEdge);
+    .sort(compareEdgeRows);
+  // Hydrate evidence only for edges that survive traversal and node bounds.
+  // This read remains inside the same generation-fenced SQLite transaction.
+  const edges = readBoundedEdgeEvidence(database, active.generationId, retainedEdgeRows);
   const diagnostics: BoundedGraphQueryDiagnostics = {
     generationMatched,
     seedFiles: selectedFilePaths.length,
