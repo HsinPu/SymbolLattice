@@ -40,11 +40,19 @@ These tools generate or validate large-project evidence outside the published np
 | `mcp/` | `strict-fresh-read-lifecycle.mjs` | manual |
 | `mcp/` | `edge-lookup.mjs` | manual pinned-corpus paired SQLite edge-read measurement |
 | `mcp/` | `bounded-graph-read.mjs` | manual pinned-corpus bounded graph read, response hash, latency, and post-GC memory measurement |
-| `mcp/` | `task-retrieval.mjs`, `nest-retrieval-tasks.json`, `nest-source-tasks.json`, `nest-shutdown-tasks.json`, `fastify-retrieval-tasks.json`, `fastify-plugin-tasks.json`, `fastify-error-tasks.json`, `fastify-serializer-tasks.json`, `fastify-cookie-tasks.json`, `fastify-stream-error-tasks.json`, `fastify-serialization-hook-error-tasks.json`, `fastify-header-write-error-tasks.json`, `fastify-outgoing-hook-error-tasks.json`, `fastify-unhinted-content-type-tasks.json` | automatic scorer/source and directed graph receipt verifier contracts; manual pinned-corpus execution |
+| `mcp/` | `task-retrieval.mjs`, `django-atomic-rollback-tasks.json`, `nest-retrieval-tasks.json`, `nest-source-tasks.json`, `nest-shutdown-tasks.json`, `fastify-retrieval-tasks.json`, `fastify-plugin-tasks.json`, `fastify-error-tasks.json`, `fastify-serializer-tasks.json`, `fastify-cookie-tasks.json`, `fastify-stream-error-tasks.json`, `fastify-serialization-hook-error-tasks.json`, `fastify-header-write-error-tasks.json`, `fastify-outgoing-hook-error-tasks.json`, `fastify-unhinted-content-type-tasks.json` | automatic scorer/source and directed graph receipt verifier contracts; manual pinned-corpus execution |
 | `filesystem/` | `freshness-verify.mjs` | manual paired full-content freshness measurement on an indexed external project |
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## v0.528.19 Django atomic rollback evidence gap
+
+A source-reviewed task on pinned [Django](https://github.com/django/django) `bc833e8883db4a333a6485d91637b78c85e2b13b` now records two necessary files and five exact source facts for exception handling in an atomic block and its database connection's savepoint rollback. The truth in `mcp/django-atomic-rollback-tasks.json` was fixed before querying SymbolLattice. File judgments outside the required pair are incomplete. The task is now a development regression case because its output was inspected while investigating a repair; it is not an untouched holdout.
+
+On v0.528.18 and the unchanged v0.528.19 retrieval policy, one of two required files and none of five source facts were returned. The v0.528.19 run independently verified 16 emitted excerpts, 34 lexical matches and 55 graph edges against the pinned source; those checks do not fill the missing facts. A trial that sampled query terms across the sentence instead of keeping the first eight returned both files but still no specified source fact. It also lost one required file and seven previously returned source facts across the existing 26 Django/Fastify/NestJS tasks, so that trial was rejected and no retrieval-policy change is shipped here. The unresolved gap is that relevant files can be selected while their chosen symbols omit the actual rollback branches. Do not treat the new manifest as a passing quality claim. The baseline, rejected candidate and final v0.528.19 reports are `%TEMP%/SymbolLattice-evidence-060200-atomic-{baseline,spread,v19}.json`; the 26-task candidate reports are under `%TEMP%/SymbolLattice-evidence-0602-regression/`.
+
+Reproduce the current miss with `node benchmarks/mcp/task-retrieval.mjs --project <pinned-indexed-Django-checkout> --manifest benchmarks/mcp/django-atomic-rollback-tasks.json --output <external-report.json> --repetitions 1`. This patch adds fixed regression truth and documentation only; it does not change the query or index contract. Existing indexes need no rebuild.
 
 ## v0.528.18 bounded source-candidate discovery
 

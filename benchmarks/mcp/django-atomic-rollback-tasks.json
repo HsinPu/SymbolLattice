@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/django/django",
+  "commit": "bc833e8883db4a333a6485d91637b78c85e2b13b",
+  "truthMethod": "Manually fixed from pinned Django transaction.py and BaseDatabaseWrapper source before running SymbolLattice. The task asks for the atomic block's exception branch and the connection's savepoint rollback implementation. A backend may override lower-level SQL behavior; this truth does not claim a specific database engine command. File judgments are incomplete and only the listed source facts are scored.",
+  "tasks": [
+    {
+      "id": "atomic-exception-rollback-connection",
+      "split": "development",
+      "query": "How does an atomic transaction block handle a raised exception, and how does the database connection roll back its savepoint?",
+      "requiredFiles": ["django/db/transaction.py", "django/db/backends/base/base.py"],
+      "supportingFiles": [],
+      "irrelevantFiles": [],
+      "evidence": [
+        { "file": "django/db/transaction.py", "line": 283, "text": "connection.savepoint_rollback(sid)" },
+        { "file": "django/db/transaction.py", "line": 295, "text": "connection.rollback()" },
+        { "file": "django/db/backends/base/base.py", "line": 333, "text": "def rollback(self):" },
+        { "file": "django/db/backends/base/base.py", "line": 405, "text": "def savepoint_rollback(self, sid):" },
+        { "file": "django/db/backends/base/base.py", "line": 413, "text": "self._savepoint_rollback(sid)" }
+      ]
+    }
+  ]
+}
