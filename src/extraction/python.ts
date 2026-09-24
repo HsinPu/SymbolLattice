@@ -5110,8 +5110,10 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       if (className === null || classSymbol?.kind !== "class" || body === undefined) {
         return [];
       }
+      // An async method is still a direct class member. Its call expression
+      // yields a coroutine, but the callee binding has the same static owner.
       const methods = directChildren(body).filter(
-        (child) => child.name === "FunctionDefinition" && !isAsyncPythonFunction(child)
+        (child) => child.name === "FunctionDefinition"
       );
       const allMethodNames = new Set(
         directChildren(body).flatMap((child) => {
@@ -5648,6 +5650,12 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
             });
           }
         }
+      }
+      // Only the direct self-member rule gains async callers. Keep the
+      // existing conservative boundary for bare-name calls and construction
+      // inside async methods until those rules have separate evidence.
+      if (isAsyncPythonFunction(caller.definition)) {
+        continue;
       }
       for (const [targetName, calls] of analysis.callsByName) {
         const candidates = declarationsByName.get(targetName) ?? [];

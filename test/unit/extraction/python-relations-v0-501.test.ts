@@ -7,6 +7,42 @@ function facts(sourceText: string) {
 }
 
 describe("Python relation facts v0.501", () => {
+  it("resolves direct self calls involving async methods without losing the call-site evidence", () => {
+    const result = facts([
+      "class Service:",
+      "    async def fetch(self):",
+      "        return 1",
+      "",
+      "    async def run(self):",
+      "        return await self.fetch()",
+      "",
+      "    def bridge(self):",
+      "        return self.fetch()"
+    ].join("\n"));
+    const fetch = result.symbols.find((symbol) => symbol.qualifiedName.endsWith("Service.fetch"));
+    const run = result.symbols.find((symbol) => symbol.qualifiedName.endsWith("Service.run"));
+    const bridge = result.symbols.find((symbol) => symbol.qualifiedName.endsWith("Service.bridge"));
+    const calls = result.edges.filter((edge) => edge.evidence?.ruleId ===
+      "syntax.python.same-class.unique-direct-self-member-call");
+    expect(calls).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceId: run?.id, targetId: fetch?.id, referenceName: "fetch",
+        range: { start: { line: 6, column: 27 }, end: { line: 6, column: 32 } } }),
+      expect.objectContaining({ sourceId: bridge?.id, targetId: fetch?.id, referenceName: "fetch",
+        range: { start: { line: 9, column: 21 }, end: { line: 9, column: 26 } } })
+    ]));
+  });
+
+  it("does not resolve a duplicated sync/async method name as one target", () => {
+    const result = facts([
+      "class Service:",
+      "    def fetch(self): pass",
+      "    async def fetch(self): pass",
+      "    async def run(self): return await self.fetch()"
+    ].join("\n"));
+    expect(result.edges.filter((edge) => edge.evidence?.ruleId ===
+      "syntax.python.same-class.unique-direct-self-member-call")).toEqual([]);
+  });
+
   it("resolves an undecorated direct self member call to one direct method", () => {
     const result = facts([
       "class Service:",

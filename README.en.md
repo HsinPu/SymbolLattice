@@ -6,7 +6,7 @@ SymbolLattice is a local code search tool for developers and AI agents. Query a 
 
 [繁體中文](README.md) · [Get started](docs/getting-started.en.md) · [Validation and limitations](benchmarks/README.md) · [Report an issue](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.528.14` · Node.js `>=22.13 <25` · MIT
+`v0.528.15` · Node.js `>=22.13 <25` · MIT
 
 ## Start with “Where is this implemented?”
 
@@ -77,6 +77,8 @@ Other MCP clients can start the server with `SymbolLattice serve --mcp --project
 Covers TypeScript/JavaScript, Python, Java, Go, Rust, C/C++, C#, and various template and configuration formats. **Analysis depth varies by language.** Discovering files does not imply complete type, framework, or cross-file semantic support.
 
 SymbolLattice uses static analysis. Dynamic calls, reflection, and external dependencies may remain unresolved; same-name declarations are not confirmed call targets. Results have count and source-excerpt limits. Missing relationships cannot guarantee that a change or deletion is safe. Sync stale indexes before querying; live queries may refuse to return results when freshness cannot be verified.
+
+For Python, direct same-class `self.method()` calls can include `async def` methods when the target is unambiguous. Dynamic overrides and unconfirmed targets remain unresolved.
 
 See [language capabilities and limitations](src/domain/language-depth.ts) and [real-project validation](benchmarks/README.md). Retrieval quality and speed depend on the project and query.
 

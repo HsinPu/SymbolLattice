@@ -20,6 +20,7 @@ These tools generate or validate large-project evidence outside the published np
 | `python/` | `correctness-oracle.mjs`, `PythonOracle.py` | manual CPython stdlib AST oracle |
 | `python/` | `module-bindings.mjs`, `ModuleBindingOracle.py` | manual CPython AST declaration/source-range audit; optional baseline fact comparison |
 | `python/` | `member-calls.mjs`, `MemberCallOracle.py` | manual CPython AST unresolved member-call name, ownership and source-range audit; required baseline fact preservation check |
+| `python/` | `direct-self-call-receipts.py`, `django-async-self-truth.json` | manual pinned-corpus CPython AST target/receipt audit and separately fixed async-call recall observations |
 | `sfc/` | `correctness-oracle.mjs` | manual Vue/Svelte/Astro component relation oracle |
 | `shell/` | `correctness-oracle.mjs` | manual mvdan ABI v2 direct-call oracle |
 | `solidity/` | `correctness-oracle.mjs` | automatic solc AST private fixed-arity call oracle |
@@ -42,6 +43,14 @@ These tools generate or validate large-project evidence outside the published np
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## v0.528.15 Python async direct self-call evidence
+
+Python `async def` methods now participate in the existing exact same-class `self.method()` rule as callers and targets. The rule still requires an eligible class, a unique direct method, a `self` receiver, and the existing rebinding and dynamic-member guards. General bare-name calls and construction inside async methods retain their previous conservative behavior. The extraction version changes to `multi-language-ast-v430`, so existing indexes need `SymbolLattice sync <project>` after upgrading. This is a patch correction to the existing Python relation contract.
+
+On pinned [Django](https://github.com/django/django) `bc833e8883db4a333a6485d91637b78c85e2b13b`, the old index had 3,981 exact direct self-call edges. An independent CPython AST/source audit validated all 3,981 emitted call sites and declaration targets, but none of five manually fixed async observations had an edge. After a full index with the final build, the same audit validated all 4,097 emitted edges: all 3,981 prior edge IDs remained, 116 were added, and all five fixed observations were present. An `explain-edge` read also returned `BaseBackend.aget_all_permissions` at line 41 → `BaseBackend.aget_user_permissions` at line 26, citing the call at line 43, column 25 with the exact rule and one target candidate. This is source/target receipt validation, not proof of runtime dispatch under dynamic monkey-patching or corpus-wide recall.
+
+Four existing Django retrieval tasks selected the same files as v0.528.14 and retained all required files and source facts. Their single fresh-process timings were 4,834 → 4,881 ms, 5,123 → 5,306 ms, 4,616 → 4,760 ms, and 3,372 → 3,417 ms. These isolated samples do not establish a speed improvement or a sustained regression; Agent completion time and query count were not measured. Full reindexing took 137,285 ms for 3,366 files on this machine, with no comparable paired baseline indexing run. `npm run check`, `npm run build`, `npm run verify:language-depth`, and the full `npm test -- --maxWorkers 2` passed (3,220 tests passed, four existing skips). Raw before/final AST, `explain-edge`, and final task reports are under `%TEMP%/SymbolLattice-evidence-055300-*`. Reproduce the relation audit with `py -3 benchmarks/python/direct-self-call-receipts.py <pinned-indexed-checkout> benchmarks/python/django-async-self-truth.json <external-report.json>` and the retrieval checks with `node benchmarks/mcp/task-retrieval.mjs --project <pinned-indexed-checkout> --manifest benchmarks/mcp/<django-manifest>.json --output <external-report.json> --repetitions 1`.
 
 ## v0.528.14 bounded graph edge reads and graph-receipt verification
 

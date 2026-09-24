@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/django/django",
+  "commit": "bc833e8883db4a333a6485d91637b78c85e2b13b",
+  "truthMethod": "Manually selected from pinned Django source before rebuilding the index; CPython ast rechecks each call site and direct class target.",
+  "observations": [
+    { "file": "django/contrib/auth/backends.py", "class": "BaseBackend", "owner": "aget_all_permissions", "ownerLine": 41, "line": 43, "target": "aget_user_permissions", "targetLine": 26 },
+    { "file": "django/contrib/auth/backends.py", "class": "BaseBackend", "owner": "aget_all_permissions", "ownerLine": 41, "line": 44, "target": "aget_group_permissions", "targetLine": 32 },
+    { "file": "django/contrib/sessions/backends/base.py", "class": "SessionBase", "owner": "aset", "ownerLine": 61, "line": 62, "target": "_aget_session", "targetLine": 252 },
+    { "file": "django/contrib/sessions/backends/base.py", "class": "SessionBase", "owner": "asetdefault", "ownerLine": 96, "line": 101, "target": "aset", "targetLine": 61 },
+    { "file": "django/contrib/sessions/backends/base.py", "class": "SessionBase", "owner": "aget_expiry_age", "ownerLine": 295, "line": 306, "target": "get_session_cookie_age", "targetLine": 265 }
+  ]
+}
