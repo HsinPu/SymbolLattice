@@ -71,14 +71,14 @@ export interface SourceLexicalRetrieval {
 export function matchCallableSource(
   sourceText: string,
   symbols: readonly SymbolNode[],
-  groups: readonly (readonly string[])[]
+  groups: readonly (readonly string[])[],
+  matchingGroupsByToken = new Map<string, readonly number[]>()
 ): { candidates: readonly SourceLexicalCandidate[]; documents: readonly SourceLexicalDocument[]; truncated: boolean } {
   const lines = sourceText.split(/\r\n|\r|\n|\u2028|\u2029/u);
   const candidates: SourceLexicalCandidate[] = [];
   const documents: SourceLexicalDocument[] = [];
-  // Keep only token-to-concept membership, never source locations or frequencies.
-  // Scope the bounded cache to this file/query so receipts remain occurrence-specific.
-  const matchingGroupsByToken = new Map<string, readonly number[]>();
+  // Cache only token-to-concept membership across files in this query, never
+  // source locations or frequencies, so receipts remain occurrence-specific.
   const numericTerms = numericIdentifierTerms(groups.flat());
   const callableKinds = ["function", "method", "entrypoint"];
   const callables = symbols.filter(symbol => callableKinds.includes(symbol.kind));

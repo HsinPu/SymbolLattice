@@ -2189,6 +2189,7 @@ function readBoundedSourceLexical(
   let truncated = false;
   const documents: SourceLexicalDocument[] = [];
   const rows: SymbolRow[] = [];
+  const matchingGroupsByToken = new Map<string, readonly number[]>();
   if (state === "searched") {
     truncated = filePaths.length > limits.maximumFiles;
     const readSource = database.prepare(`SELECT substr(source_text, 1, ?) AS source_text,
@@ -2224,7 +2225,7 @@ function readBoundedSourceLexical(
       if (fileRows.length > symbolLimit) truncated = true;
       const scanned = fileRows.slice(0, symbolLimit);
       scannedSymbols += scanned.length;
-      const matched = matchCallableSource(sourceText, scanned.map(toSymbolNode), groups);
+      const matched = matchCallableSource(sourceText, scanned.map(toSymbolNode), groups, matchingGroupsByToken);
       truncated ||= matched.truncated;
       documents.push(...matched.documents);
       const matchedIds = new Set(matched.candidates.map((candidate) => candidate.symbolId));

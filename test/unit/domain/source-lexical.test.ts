@@ -73,6 +73,27 @@ describe("callable source lexical evidence", () => {
     expect(changedQuery.candidates).toEqual([]);
   });
 
+  it("reuses query token membership across files while keeping each source receipt local", () => {
+    const groups = [["payment"], ["refund"]];
+    const first = callable(1, 2);
+    const second = { ...first, id: "second", filePath: "src/second.ts" };
+    const firstSource = "payment refund\n}";
+    const secondSource = "refund payment payment\n}";
+    const cache = new Map<string, readonly number[]>();
+    expect(matchCallableSource(firstSource, [first], groups, cache)).toEqual(
+      matchCallableSource(firstSource, [first], groups));
+    expect(cache.size).toBeGreaterThan(0);
+    const reused = matchCallableSource(secondSource, [second], groups, cache);
+    expect(reused).toEqual(matchCallableSource(secondSource, [second], groups));
+    expect(reused.documents[0]!.frequencies).toEqual([2, 1]);
+    expect(reused.candidates[0]!.matches).toEqual([
+      { term: "payment", token: "payment", filePath: "src/second.ts",
+        range: { start: { line: 1, column: 8 }, end: { line: 1, column: 15 } } },
+      { term: "refund", token: "refund", filePath: "src/second.ts",
+        range: { start: { line: 1, column: 1 }, end: { line: 1, column: 7 } } }
+    ]);
+  });
+
   it("keeps matching after many distinct tokens and does not conflate identifier spellings", () => {
     const source = Array.from({ length: 4200 }, (_, index) => `unique${index}`).join("\n") +
       "\npayment refund\npaymentRefund payment_refund\n}";
