@@ -87,6 +87,7 @@ const MAX_BOUNDED_RELATIONSHIPS = 16384;
 const MAX_BOUNDED_HOPS = 4;
 const BOUNDED_QUERY_PARAMETER_BATCH_SIZE = 500;
 const READ_BUSY_TIMEOUT_MS = 1_000;
+const PERSISTENT_READ_CACHE_KIB = 16 * 1024;
 
 /**
  * The v0.1 snapshot tables remain deliberately unpartitioned. They are a fast
@@ -3118,11 +3119,20 @@ export class SqliteGraphStore implements GraphStore {
 
   private openPersistentReadDatabase(normalizedProjectPath: string): DatabaseSync {
     if (this.persistentReadDatabase === null) {
-      this.persistentReadDatabase = configureReadDatabase(
+      const database = configureReadDatabase(
         new DatabaseSync(databasePathFor(normalizedProjectPath), {
           readOnly: true
         })
       );
+      // Reuse hot graph/index pages with a 16 MiB worker-local cache target.
+      // One-shot readers retain SQLite's default cache allocation.
+      try {
+        database.exec(`PRAGMA cache_size = -${PERSISTENT_READ_CACHE_KIB}`);
+      } catch (error) {
+        database.close();
+        throw error;
+      }
+      this.persistentReadDatabase = database;
     }
     return this.persistentReadDatabase;
   }
