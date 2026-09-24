@@ -45,6 +45,7 @@ interface SourcePathEntry {
 }
 
 export const MAXIMUM_SCOPED_WALK_CONCURRENCY = 32;
+export const MAXIMUM_SCOPED_CANDIDATE_CONCURRENCY = 32;
 
 /** Stable byte-wise ordering for normalized project-relative paths. */
 export function compareScopedProjectPaths(left: string, right: string): number {
@@ -127,6 +128,7 @@ export async function walkScopedProject(
       : sourceScopeRoots.filter((scopeRoot) => scopeRoot !== ".");
   const access = new ProjectPathAccessCollector(normalizedProjectPath);
   const sources: SourcePathEntry[] = [];
+  const candidatePaths: SourcePathEntry[] = [];
   const configurationPaths = new Set<string>();
   const collectsConfiguration = options.isConfigurationCandidateFileName !== undefined;
   const pending: {
@@ -214,15 +216,7 @@ export async function walkScopedProject(
       ) {
         continue;
       }
-      try {
-        if (await options.isSourceCandidate(entryRelativePath, entryPath)) {
-          sources.push({ absolutePath: entryPath, relativePath: entryRelativePath });
-        }
-      } catch (error) {
-        if (projectFilesystemMissingCode(error) !== null) continue;
-        if (access.add(entryPath, error)) continue;
-        throw error;
-      }
+      candidatePaths.push({ absolutePath: entryPath, relativePath: entryRelativePath });
     }
   }
 
@@ -239,6 +233,29 @@ export async function walkScopedProject(
       // are collected separately and reported in stable path order below.
       const failed = results.find((result) => result.status === "rejected");
       if (failed?.status === "rejected") throw failed.reason;
+    }
+  }
+  if (options.isSourceCandidate !== undefined) {
+    // Content-based candidates (including extensionless shebang scripts) need
+    // filesystem reads. Classify them in bounded batches after ignore and scope
+    // filtering instead of serially awaiting every file in a directory.
+    for (let offset = 0; offset < candidatePaths.length; offset += MAXIMUM_SCOPED_CANDIDATE_CONCURRENCY) {
+      const batch = candidatePaths.slice(offset, offset + MAXIMUM_SCOPED_CANDIDATE_CONCURRENCY);
+      const results = await Promise.allSettled(batch.map((candidate) =>
+        Promise.resolve().then(() =>
+          options.isSourceCandidate!(candidate.relativePath, candidate.absolutePath)
+        )
+      ));
+      for (let index = 0; index < batch.length; index += 1) {
+        const candidate = batch[index]!;
+        const result = results[index]!;
+        if (result.status === "fulfilled") {
+          if (result.value) sources.push(candidate);
+        } else if (projectFilesystemMissingCode(result.reason) === null &&
+          !access.add(candidate.absolutePath, result.reason)) {
+          throw result.reason;
+        }
+      }
     }
   }
   access.throwIfAny();

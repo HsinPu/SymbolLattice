@@ -9,7 +9,11 @@ import {
   nativeProjectFilesystemReader,
   type ProjectFilesystemReader
 } from "../../../src/infrastructure/filesystem/project-filesystem.js";
-import { MAXIMUM_SCOPED_WALK_CONCURRENCY, walkScopedProject } from "../../../src/infrastructure/filesystem/scoped-walker.js";
+import {
+  MAXIMUM_SCOPED_CANDIDATE_CONCURRENCY,
+  MAXIMUM_SCOPED_WALK_CONCURRENCY,
+  walkScopedProject
+} from "../../../src/infrastructure/filesystem/scoped-walker.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -71,6 +75,60 @@ describe("shared scoped project walker", () => {
     expect(peak).toBeGreaterThan(1);
     expect(peak).toBeLessThanOrEqual(MAXIMUM_SCOPED_WALK_CONCURRENCY);
     expect(active).toBe(0);
+  });
+
+  it("bounds content-based candidate reads after ignore filtering and preserves sorted paths", async () => {
+    const projectPath = await createProject();
+    const files = Array.from({ length: 80 }, (_, index) => `src/tool-${String(index).padStart(2, "0")}.tool`);
+    await Promise.all(files.map((file) => writeProjectFile(projectPath, file)));
+    await writeProjectFile(projectPath, "src/.gitignore", "tool-03.tool\n");
+    let active = 0;
+    let peak = 0;
+    const visited: string[] = [];
+    const result = await walkScopedProject(projectPath, {
+      isSourceCandidate: async (relativePath) => {
+        visited.push(relativePath);
+        active += 1;
+        peak = Math.max(peak, active);
+        try {
+          await new Promise<void>((done) => setImmediate(done));
+          return true;
+        } finally {
+          active -= 1;
+        }
+      }
+    });
+    const expected = files.filter((file) => file !== "src/tool-03.tool");
+    expect(relativeSourcePaths(projectPath, result.sourcePaths)).toEqual(expected);
+    expect(visited).not.toContain("src/tool-03.tool");
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(MAXIMUM_SCOPED_CANDIDATE_CONCURRENCY);
+    expect(active).toBe(0);
+  });
+
+  it("drains candidate reads and aggregates access failures without returning partial paths", async () => {
+    const projectPath = await createProject();
+    await writeProjectFile(projectPath, "src/locked-a.tool");
+    await writeProjectFile(projectPath, "src/locked-b.tool");
+    await writeProjectFile(projectPath, "src/visible.tool");
+    let completed = 0;
+    const error = await walkScopedProject(projectPath, {
+      isSourceCandidate: async (relativePath, absolutePath) => {
+        await new Promise<void>((done) => setImmediate(done));
+        completed += 1;
+        if (relativePath.endsWith("locked-a.tool")) throw filesystemError("EACCES", absolutePath);
+        if (relativePath.endsWith("locked-b.tool")) throw filesystemError("EPERM", absolutePath);
+        return true;
+      }
+    }).catch((caught: unknown) => caught);
+    expect(completed).toBe(3);
+    expect(error).toMatchObject({
+      code: "PROJECT_PATH_UNREADABLE",
+      evidence: [
+        { path: "src/locked-a.tool", code: "EACCES" },
+        { path: "src/locked-b.tool", code: "EPERM" }
+      ]
+    } satisfies Partial<ProjectPathUnreadableError>);
   });
 
   it("drains sibling reads before returning an unexpected failure", async () => {
