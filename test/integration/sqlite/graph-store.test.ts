@@ -2381,6 +2381,30 @@ describe("SqliteGraphStore", () => {
     expect(result.diagnostics.seedFiles).toBe(1);
   });
 
+  it("keeps an explicit file seed when unrelated symbol matches fill the candidate limit", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const template = boundedGraphSnapshot();
+    const symbols: SymbolNode[] = [
+      { ...template.symbols[0]!, id: "generic", name: "constructor",
+        qualifiedName: "src/a.ts#constructor", filePath: "src/a.ts" },
+      { ...template.symbols[0]!, id: "requested", name: "target",
+        qualifiedName: "src/z.ts#target", filePath: "src/z.ts" }
+    ];
+    const graphSnapshot = { ...template, symbols, edges: [], pendingReferences: [],
+      files: symbols.map((node) => ({ ...template.files[0]!, path: node.filePath })) };
+    store.replaceProjectFacts({ projectPath, snapshot: graphSnapshot,
+      indexedAt: "2026-09-24T00:00:00.000Z", artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("file-scoped-candidates"), resolverVersion: "bounded-resolver-v1" });
+    const query = "src/z.ts constructor";
+    const result = store.getActiveBoundedGraphBundle(projectPath, {
+      ...boundedRequest(query, { maxSeedFiles: 1, maxSeedSymbols: 1, maxSymbolsPerFile: 1, maxHops: 0 }),
+      ...exploreQuerySeedTerms(query)
+    });
+    expect(result.snapshot.symbols.map((node) => node.id)).toEqual(["requested"]);
+    expect(result.diagnostics.seedFiles).toBe(1);
+  });
+
   it("uses alternative inflections within each FTS concept instead of requiring every variant", async () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();

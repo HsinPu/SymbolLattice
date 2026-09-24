@@ -2072,22 +2072,24 @@ function readBoundedSymbolRows(
   identifierTerms: readonly string[],
   lexicalGroups: readonly (readonly string[])[],
   filePaths: readonly string[],
-  limit: number
+  limit: number,
+  restrictToFilePaths = false
 ): readonly SymbolRow[] {
   const lexicalTerms = lexicalGroups.flat();
-  if (limit === 0 || (identifierTerms.length === 0 && lexicalTerms.length === 0 && filePaths.length === 0)) {
+  if (limit === 0 || (restrictToFilePaths && filePaths.length === 0) ||
+    (identifierTerms.length === 0 && lexicalTerms.length === 0 && filePaths.length === 0)) {
     return [];
   }
 
-  // Multi-concept scans reuse SQLite's own case folding across filtering and
-  // ranking. Exact/single-concept queries keep their existing index access.
-  const reuseCasefolds = lexicalGroups.length >= 2;
+  // The second read only needs symbols in selected files. Avoid materializing
+  // the whole symbol table when the file-path index can bound that population.
+  const reuseCasefolds = lexicalGroups.length >= 2 && !restrictToFilePaths;
   const lowerName = reuseCasefolds ? "folded_name" : "lower(name)";
   const lowerQualifiedName = reuseCasefolds ? "folded_qualified_name" : "lower(qualified_name)";
 
   const where: string[] = [];
   const parameters: (string | number)[] = [];
-  if (identifierTerms.length > 0) {
+  if (!restrictToFilePaths && identifierTerms.length > 0) {
     const placeholders = identifierTerms.map(() => "?").join(", ");
     const lowerTerms = identifierTerms.map((term) => term.toLowerCase());
     const lowerPlaceholders = lowerTerms.map(() => "?").join(", ");
@@ -2109,7 +2111,7 @@ function readBoundedSymbolRows(
     parameters.push(...filePaths);
   }
 
-  const partialTerms = lexicalTerms.filter((term) => term.length >= 2);
+  const partialTerms = restrictToFilePaths ? [] : lexicalTerms.filter((term) => term.length >= 2);
   if (partialTerms.length > 0) {
     const partialClauses: string[] = [];
     for (const term of partialTerms) {
@@ -2462,7 +2464,8 @@ function readActiveBoundedGraphBundle(
     identifierTerms,
     lexicalGroups,
     selectedFilePaths,
-    Math.min(bounds.maxSeedSymbols * Math.max(bounds.maxSymbolsPerFile, 1), MAX_BOUNDED_SEED_SYMBOLS)
+    Math.min(bounds.maxSeedSymbols * Math.max(bounds.maxSymbolsPerFile, 1), MAX_BOUNDED_SEED_SYMBOLS),
+    true
   );
   const seedRows: SymbolRow[] = [];
   const selectedPathSet = new Set(selectedFilePaths);
