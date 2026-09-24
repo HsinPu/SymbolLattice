@@ -17,7 +17,7 @@ import { identifierNumbers, numericIdentifierTerms, identifierTermGroups, identi
 import { SOURCE_LEXICAL_SCORING, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
 import { downstreamFocusPaths, type ExploreFlowFocus } from "./explore-flow-focus.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v23" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v24" as const;
 export const EXPLORE_QUERY_SOURCE_GAP_COVERAGE = {
   policy: "uncovered-source-concept-v1", maximumFiles: 1,
   minimumSourceConcepts: 2, minimumRelativeScore: 0.25, maximumLineGap: 5
@@ -26,6 +26,7 @@ export const EXPLORE_NUMERIC_QUERY = {
   policy: "numeric-query-qualifiers-v1", maximumIdentifierTerms: 12, qualifierScore: 500
 } as const;
 export const EXPLORE_NUMERIC_EXECUTION_FILTER_POLICY = "numeric-execution-nonimplementation-filter-v1" as const;
+export const EXPLORE_NUMERIC_FOCUS_PRIORITY_POLICY = "numeric-implementation-first-v1" as const;
 export const EXPLORE_QUERY_FOCUS_COVERAGE = {
   policy: "same-file-source-coverage-v1",
   minimumRelativeScore: 0.75,
@@ -473,6 +474,12 @@ export interface ExploreQueryPlan {
   readonly identifierTerms: readonly string[];
   readonly numericQuery?: typeof EXPLORE_NUMERIC_QUERY;
   readonly numericCoverage?: { readonly policy: "numeric-query-coverage-v1"; readonly symbolId: string; readonly terms: readonly string[] };
+  readonly numericFocusPriority?: {
+    readonly policy: typeof EXPLORE_NUMERIC_FOCUS_PRIORITY_POLICY;
+    readonly symbolId: string;
+    readonly previousRank: number;
+    readonly terms: readonly string[];
+  };
   readonly numericExecutionFiltering?: {
     readonly policy: typeof EXPLORE_NUMERIC_EXECUTION_FILTER_POLICY;
     readonly anchorSymbolId: string;
@@ -2698,6 +2705,12 @@ export function planExploreQuery(
       if (excludedIds.has(selected[index]!.symbol.id)) selected.splice(index, 1);
     }
   }
+  const numericPriorityPreviousIndex = numericImplementationAnchor === undefined
+    ? -1 : selected.indexOf(numericImplementationAnchor);
+  if (numericPriorityPreviousIndex > 0) {
+    selected.splice(numericPriorityPreviousIndex, 1);
+    selected.unshift(numericImplementationAnchor!);
+  }
   const selection: ExploreQuerySelection[] = selected.map((candidate, index) => {
     const score = rawScore(candidate);
     return {
@@ -2789,6 +2802,12 @@ export function planExploreQuery(
     ...(parsed.maximumIdentifierTerms === EXPLORE_NUMERIC_QUERY.maximumIdentifierTerms ? { numericQuery: EXPLORE_NUMERIC_QUERY } : {}),
     ...(numericAnchor === undefined ? {} : { numericCoverage: { policy: "numeric-query-coverage-v1" as const,
       symbolId: numericAnchor.symbol.id, terms: numericAnchor.numericQualifier!.terms } }),
+    ...(numericImplementationAnchor === undefined || numericPriorityPreviousIndex <= 0 ? {} : { numericFocusPriority: {
+      policy: EXPLORE_NUMERIC_FOCUS_PRIORITY_POLICY,
+      symbolId: numericImplementationAnchor.symbol.id,
+      previousRank: numericPriorityPreviousIndex + 1,
+      terms: numericImplementationAnchor.numericQualifier!.terms
+    } }),
     ...(numericImplementationAnchor === undefined || excludedFiles.length === 0 ? {} : { numericExecutionFiltering: {
       policy: EXPLORE_NUMERIC_EXECUTION_FILTER_POLICY,
       anchorSymbolId: numericImplementationAnchor.symbol.id,

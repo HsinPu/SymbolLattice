@@ -169,6 +169,24 @@ function indexedFile(path: string, generated: boolean, role: SourceRole = "produ
 }
 
 describe("bounded lexical and relationship ranking", () => {
+  it("places a numbered implementation before a stronger generic action match", () => {
+    const generic = symbol({ id: "generic", name: "handleRequestHeadersSendResponse", filePath: "src/handleRequest.ts" });
+    const implementation = symbol({ id: "implementation", name: "clientError", filePath: "src/server.ts" });
+    const query = "How does the server handle request headers and send HTTP 431 response?";
+    const lexical = { policy: SOURCE_LEXICAL_POLICY, limits: SOURCE_LEXICAL_LIMITS, state: "searched" as const,
+      scannedFiles: 1, scannedSymbols: 1, scannedCharacters: 32, truncated: false,
+      candidates: [{ symbolId: implementation.id, score: 800, matches: ["headers", "431"].map((term, index) => ({
+        term, token: term, filePath: implementation.filePath,
+        range: { start: { line: 1, column: index * 9 + 1 }, end: { line: 1, column: index * 9 + term.length + 1 } }
+      })) }] };
+    const graph = { symbols: [generic, implementation], edges: [] };
+    const plan = planExploreQuery(graph, query, lexical);
+    expect(plan.selection.map(focus => focus.symbol.id)).toEqual([implementation.id, generic.id]);
+    expect(plan.numericFocusPriority).toMatchObject({ symbolId: implementation.id,
+      previousRank: 2, terms: ["431"] });
+    expect(planExploreQuery(graph, `${generic.filePath} ${query}`, lexical).numericFocusPriority).toBeUndefined();
+  });
+
   it("omits numeric-unrelated documentation and declarations without filling their focus slots", () => {
     const implementation = symbol({ id: "implementation", name: "clientErrorHandler", filePath: "src/server.ts" });
     const documentation = symbol({ id: "documentation", name: "sendRequestHeaders", filePath: "docs/Reference/Hooks.md" });
@@ -563,7 +581,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v23",
+      policy: "explore-query-plan-v24",
       queryIntent: {
         tests: false,
         icons: false,
@@ -681,7 +699,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v23",
+      policy: "explore-query-plan-v24",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -913,7 +931,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v23",
+      policy: "explore-query-plan-v24",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1337,7 +1355,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v23",
+      policy: "explore-query-plan-v24",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v2",
@@ -2036,7 +2054,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v23",
+      policy: "explore-query-plan-v24",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
