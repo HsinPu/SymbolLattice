@@ -203,6 +203,31 @@ describe("source discovery", () => {
     );
   });
 
+  it("keeps native freshness identities equal to indexed text at buffered boundaries", async () => {
+    const projectPath = await createProject();
+    const cases = [
+      ["valid.ts", Buffer.from("export const label = '繁體中文🙂';\n")],
+      ["bom.ts", Buffer.from([0xef, 0xbb, 0xbf, ...Buffer.from("export const bom = true;\n")])],
+      ["invalid.ts", Buffer.from([0x61, 0xf0, 0x9f, 0x61, 0x0a])],
+      ["empty.ts", Buffer.alloc(0)],
+      ["boundary.ts", Buffer.alloc(1024 * 1024, 0x61)],
+      ["streamed.ts", Buffer.alloc(1024 * 1024 + 1, 0x62)]
+    ] as const;
+    for (const [name, bytes] of cases) {
+      await writeFile(join(projectPath, name), bytes);
+    }
+
+    const indexed = await discoverSourceFiles(projectPath);
+    const freshness = await discoverSourceFileFingerprints(projectPath);
+    expect(freshness).toEqual(indexed.map(({ relativePath, language, contentHash }) =>
+      ({ relativePath, language, contentHash })));
+    for (const [name, bytes] of cases) {
+      expect(freshness.find((file) => file.relativePath === name)?.contentHash).toBe(
+        hashSource(new TextDecoder("utf-8").decode(bytes))
+      );
+    }
+  });
+
   it("discovers scoped sources and project-wide configuration candidates in one walk", async () => {
     const projectPath = await createProject();
     await mkdir(join(projectPath, "src"), { recursive: true });

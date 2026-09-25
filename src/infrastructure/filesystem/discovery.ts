@@ -1,3 +1,4 @@
+import { isUtf8 } from "node:buffer";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { open } from "node:fs/promises";
@@ -185,6 +186,7 @@ export const STREAMING_UTF8_HASH_POLICY = "streaming-utf8-v1" as const;
 export const SOURCE_FINGERPRINT_READ_POLICY =
   "streaming-raw-bytes-for-shell-and-lua-with-objective-c-header-classification-v4" as const;
 export const MAXIMUM_FRESHNESS_CONCURRENT_READS = 32 as const;
+const MAXIMUM_BUFFERED_FRESHNESS_BYTES = 1024 * 1024;
 /** Full source reads retain text, so keep descriptor pressure bounded on large repositories. */
 export const MAXIMUM_SOURCE_CONCURRENT_READS = 8 as const;
 
@@ -447,12 +449,47 @@ export async function hashUtf8File(filePath: string): Promise<string> {
   return hash.digest("hex");
 }
 
+/**
+ * Small native source files can be hashed as bytes when UTF-8 decoding would
+ * reproduce those exact bytes. Bound the read even if the file grows after
+ * stat; BOM and invalid UTF-8 retain the decoded-text identity used by indexing.
+ */
+async function readBoundedFreshnessBytes(filePath: string): Promise<Uint8Array | null> {
+  const handle = await open(filePath, "r");
+  try {
+    const { size } = await handle.stat();
+    if (!Number.isSafeInteger(size) || size < 0 || size > MAXIMUM_BUFFERED_FRESHNESS_BYTES) {
+      return null;
+    }
+    const bytes = Buffer.allocUnsafe(size + 1);
+    let position = 0;
+    while (position < bytes.byteLength) {
+      const { bytesRead } = await handle.read(bytes, position, bytes.byteLength - position, position);
+      if (bytesRead === 0) break;
+      position += bytesRead;
+    }
+    return position === bytes.byteLength ? null : bytes.subarray(0, position);
+  } finally {
+    await handle.close();
+  }
+}
+
+async function hashFreshnessUtf8File(filePath: string): Promise<string> {
+  const bytes = await readBoundedFreshnessBytes(filePath);
+  if (bytes === null) return hashUtf8File(filePath);
+  const hasBom = bytes.byteLength >= 3 && bytes[0] === 0xef &&
+    bytes[1] === 0xbb && bytes[2] === 0xbf;
+  return isUtf8(bytes) && !hasBom
+    ? hashSourceBytes(bytes)
+    : hashSource(new TextDecoder("utf-8").decode(bytes));
+}
+
 async function hashUtf8FileWithReader(
   filePath: string,
   filesystemReader: ProjectFilesystemReader
 ): Promise<string> {
   return filesystemReader === nativeProjectFilesystemReader
-    ? hashUtf8File(filePath)
+    ? hashFreshnessUtf8File(filePath)
     : hashSource(new TextDecoder("utf-8").decode(await filesystemReader.readFile(filePath)));
 }
 
