@@ -17,7 +17,8 @@ import { identifierNumbers, numericIdentifierTerms, identifierTermGroups, identi
 import { SOURCE_LEXICAL_SCORING, type SourceLexicalCandidate, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
 import { downstreamFocusPaths, type ExploreFlowFocus } from "./explore-flow-focus.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v28" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v29" as const;
+export const EXPLORE_REJECTION_REFERENCE_PRIORITY_POLICY = "rejection-source-reference-first-v1" as const;
 export const EXPLORE_NAMED_METHOD_FOCUS = {
   minimumRelativeScore: 0.55,
   minimumCompoundNameConcepts: 2
@@ -487,6 +488,16 @@ export interface ExploreQueryPlan {
     readonly symbolId: string;
     readonly previousRank: number;
     readonly terms: readonly string[];
+  };
+  readonly rejectionReferencePriority?: {
+    readonly policy: typeof EXPLORE_REJECTION_REFERENCE_PRIORITY_POLICY;
+    readonly evidenceScope: "static-property-reference";
+    readonly sourceSymbolId: string;
+    readonly errorSymbolId: string;
+    readonly edgeIds: readonly string[];
+    readonly previousSourceRank: number;
+    readonly previousErrorRank: number;
+    readonly sharedTerms: readonly string[];
   };
   readonly numericContainerFiltering?: {
     readonly policy: typeof EXPLORE_NUMERIC_CONTAINER_FILTER.policy;
@@ -2618,6 +2629,49 @@ function selectPropertyUseFollowup(
   return receipts;
 }
 
+/** Put a cited rejection site before incidental matches without treating a property reference as a call. */
+function promoteRejectionReferenceFocuses(
+  selected: Candidate[], receipts: ReadonlyMap<string, ExploreQueryPropertyUseFollowup>,
+  graph: ExploreQueryGraph, query: string
+): ExploreQueryPlan["rejectionReferencePriority"] {
+  if (!/\breject(?:s|ed|ing|ion)?\b/iu.test(query)) return undefined;
+  const pairs = [...receipts].flatMap(([sourceId, receipt]) => {
+    const sourceIndex = selected.findIndex(candidate => candidate.symbol.id === sourceId);
+    const errorIndex = selected.findIndex(candidate => candidate.symbol.id === receipt.anchorSymbolId);
+    if (sourceIndex < 0 || errorIndex < 0) return [];
+    const source = selected[sourceIndex]!;
+    const error = selected[errorIndex]!;
+    const errorWords = new Set(identifierWords(error.symbol.name));
+    if (!errorWords.has("err") && !errorWords.has("error")) return [];
+    const errorTerms = new Set(error.matchedTerms);
+    const sharedTerms = [...new Set(source.matchedTerms.filter(term => errorTerms.has(term)))].sort(compareText);
+    if (sharedTerms.length === 0) return [];
+    const edgeIds = graph.edges.filter(edge => receipt.edgeIds.includes(edge.id) &&
+      edge.sourceId === sourceId && edge.targetId === error.symbol.id &&
+      edge.kind === "references" && edge.resolution === "exact" &&
+      edge.evidence?.ruleId === "module.commonjs-object-property-reference")
+      .map(edge => edge.id).sort(compareText);
+    if (edgeIds.length === 0) return [];
+    return [{ source, error, sourceIndex, errorIndex, sharedTerms, edgeIds }];
+  }).sort((left, right) => left.errorIndex - right.errorIndex ||
+    right.sharedTerms.length - left.sharedTerms.length || left.sourceIndex - right.sourceIndex ||
+    compareText(left.source.symbol.id, right.source.symbol.id));
+  const pair = pairs[0];
+  if (pair === undefined || pair.sourceIndex === 0 && pair.errorIndex === 1) return undefined;
+  selected.splice(0, selected.length, pair.source, pair.error,
+    ...selected.filter(candidate => candidate !== pair.source && candidate !== pair.error));
+  return {
+    policy: EXPLORE_REJECTION_REFERENCE_PRIORITY_POLICY,
+    evidenceScope: "static-property-reference",
+    sourceSymbolId: pair.source.symbol.id,
+    errorSymbolId: pair.error.symbol.id,
+    edgeIds: pair.edgeIds,
+    previousSourceRank: pair.sourceIndex + 1,
+    previousErrorRank: pair.errorIndex + 1,
+    sharedTerms: pair.sharedTerms
+  };
+}
+
 /** Builds a deterministic, bounded graph focus plan without reading live source. */
 /** Existing bounded English execution-intent heuristic, shared with source selection. */
 export function hasExploreExecutionIntent(query: string): boolean {
@@ -2875,6 +2929,10 @@ export function planExploreQuery(
       ...sourceGapReceipts.keys(), ...propertyUseReceipts.keys()
     ]));
   }
+  const rejectionReferencePriority = naturalLanguage && parsed.fileHints.length === 0 &&
+    numericQueryTerms.size === 0
+    ? promoteRejectionReferenceFocuses(selected, propertyUseReceipts, graph, parsed.boundedQuery)
+    : undefined;
   const selection: ExploreQuerySelection[] = selected.map((candidate, index) => {
     const score = rawScore(candidate);
     return {
@@ -2972,6 +3030,7 @@ export function planExploreQuery(
       previousRank: numericPriorityPreviousIndex + 1,
       terms: numericImplementationAnchor.numericQualifier!.terms
     } }),
+    ...(rejectionReferencePriority === undefined ? {} : { rejectionReferencePriority }),
     ...(omittedNumericContainers.length === 0 ? {} : { numericContainerFiltering: {
       policy: EXPLORE_NUMERIC_CONTAINER_FILTER.policy,
       limits: EXPLORE_NUMERIC_CONTAINER_FILTER,

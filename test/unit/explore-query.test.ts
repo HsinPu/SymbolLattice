@@ -506,6 +506,52 @@ describe("source-proven property use followup", () => {
       edges: [...graph.edges].reverse() }, query).selection).toEqual(plan.selection);
   });
 
+  it("shows an exact error-property use first for an unhinted rejection question", () => {
+    const error = symbol({ id: "media-error", name: "FST_ERR_CTP_INVALID_MEDIA_TYPE",
+      filePath: "lib/errors.js", kind: "variable" });
+    const run = symbol({ id: "parser-run", name: "run", filePath: "lib/contentTypeParser.js", line: 175 });
+    const validation = symbol({ id: "validation", name: "getEssenceMediaType", filePath: "lib/validation.js" });
+    const schemas = symbol({ id: "schemas", name: "selectUnknownMediaTypeSchema", filePath: "lib/schemas.js" });
+    const handler = symbol({ id: "handler", name: "handleUnknownMediaTypeRequest", filePath: "lib/handleRequest.js" });
+    const mediaUse: GraphEdge = { ...edge("media-use", run.id, error.id), kind: "references",
+      filePath: run.filePath, referenceName: error.name,
+      evidence: { ruleId: "module.commonjs-object-property-reference", stage: "module",
+        resolutionPath: [run.filePath, error.filePath],
+        commonJsBinding: { policy: "javascript-commonjs-object-property-reference-v1",
+          moduleSpecifier: "./errors", importedName: error.name, localName: error.name,
+          importSite: { filePath: run.filePath, range: run.range },
+          exportSite: { filePath: error.filePath, range: error.range } } } };
+    const sourceGraph = { files: [validation, schemas, handler, error, run]
+      .map(item => indexedFile(item.filePath, false)),
+    symbols: [validation, schemas, handler, error, run], edges: [mediaUse] };
+    const lexical = { policy: SOURCE_LEXICAL_POLICY, limits: SOURCE_LEXICAL_LIMITS, state: "searched" as const,
+      scannedFiles: 1, scannedSymbols: 1, scannedCharacters: 32, truncated: false,
+      candidates: [{ symbolId: run.id, score: 300, matches: [
+        { term: "type", token: "type", filePath: run.filePath, range: run.range }
+      ] }] };
+    const query = "How is an unknown media type rejected?";
+    const plan = planExploreQuery(sourceGraph, query, lexical);
+    expect(plan.selection.slice(0, 2).map(item => item.symbol.id)).toEqual([run.id, error.id]);
+    expect(plan.rejectionReferencePriority).toMatchObject({
+      policy: "rejection-source-reference-first-v1", evidenceScope: "static-property-reference",
+      sourceSymbolId: run.id, errorSymbolId: error.id, edgeIds: [mediaUse.id],
+      sharedTerms: expect.arrayContaining(["type"]),
+      previousSourceRank: expect.any(Number), previousErrorRank: expect.any(Number)
+    });
+    expect(plan.rejectionReferencePriority?.previousSourceRank).toBeGreaterThan(2);
+    expect(plan.rejectionReferencePriority?.previousErrorRank).toBeGreaterThan(1);
+    expect(plan.selection.find(item => item.symbol.id === run.id)?.propertyUseFollowup)
+      .toMatchObject({ anchorSymbolId: error.id, edgeIds: [mediaUse.id] });
+    expect(planExploreQuery({ ...sourceGraph, symbols: [...sourceGraph.symbols].reverse(),
+      edges: [...sourceGraph.edges].reverse() }, query, lexical).selection).toEqual(plan.selection);
+    expect(planExploreQuery(sourceGraph, `lib/errors.js ${query}`, lexical).rejectionReferencePriority).toBeUndefined();
+    expect(planExploreQuery({ ...sourceGraph, edges: [{ ...mediaUse, resolution: "heuristic" }] }, query,
+      lexical).rejectionReferencePriority).toBeUndefined();
+    expect(planExploreQuery(sourceGraph, "unknown media type", lexical).rejectionReferencePriority).toBeUndefined();
+    expect(planExploreQuery(sourceGraph, "How is an unknown media type 415 rejected?", lexical)
+      .rejectionReferencePriority).toBeUndefined();
+  });
+
   it("retains a rare literal source concept and follows only its exact production property use", () => {
     const namedProperty = { ...property, name: "BODY", qualifiedName: "src/errors.js#BODY" };
     const sourceGraph = { ...graph, symbols: graph.symbols.map((item) => item.id === property.id ? namedProperty : item) };
@@ -672,7 +718,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v28",
+      policy: "explore-query-plan-v29",
       queryIntent: {
         tests: false,
         icons: false,
@@ -790,7 +836,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v28",
+      policy: "explore-query-plan-v29",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1022,7 +1068,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v28",
+      policy: "explore-query-plan-v29",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1446,7 +1492,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v28",
+      policy: "explore-query-plan-v29",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v2",
@@ -2145,7 +2191,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v28",
+      policy: "explore-query-plan-v29",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,
