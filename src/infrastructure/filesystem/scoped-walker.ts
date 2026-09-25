@@ -45,7 +45,7 @@ interface SourcePathEntry {
 }
 
 export const MAXIMUM_SCOPED_WALK_CONCURRENCY = 32;
-export const MAXIMUM_SCOPED_CANDIDATE_CONCURRENCY = 32;
+export const MAXIMUM_SCOPED_CANDIDATE_CONCURRENCY = 64;
 
 /** Stable byte-wise ordering for normalized project-relative paths. */
 export function compareScopedProjectPaths(left: string, right: string): number {
