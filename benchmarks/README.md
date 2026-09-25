@@ -39,6 +39,7 @@ These tools generate or validate large-project evidence outside the published np
 | `mcp/` | `read-query-concurrency.mjs` | manual |
 | `mcp/` | `strict-fresh-read-lifecycle.mjs` | manual |
 | `mcp/` | `paired-explore.mjs` | manual alternating persistent-service latency and complete-response equality check |
+| `mcp/` | `paired-index-replace.mjs` | manual alternating full graph-generation replacement on separate disposable index copies |
 | `mcp/` | `edge-lookup.mjs` | manual pinned-corpus paired SQLite edge-read measurement |
 | `mcp/` | `bounded-graph-read.mjs` | manual pinned-corpus bounded graph read, response hash, latency, and post-GC memory measurement |
 | `mcp/` | `task-retrieval.mjs`, `django-atomic-rollback-tasks.json`, `nest-retrieval-tasks.json`, `nest-source-tasks.json`, `nest-shutdown-tasks.json`, `fastify-retrieval-tasks.json`, `fastify-plugin-tasks.json`, `fastify-error-tasks.json`, `fastify-serializer-tasks.json`, `fastify-cookie-tasks.json`, `fastify-stream-error-tasks.json`, `fastify-serialization-hook-error-tasks.json`, `fastify-header-write-error-tasks.json`, `fastify-outgoing-hook-error-tasks.json`, `fastify-unhinted-content-type-tasks.json` | automatic scorer/source and directed graph receipt verifier contracts; manual pinned-corpus execution |
@@ -46,6 +47,12 @@ These tools generate or validate large-project evidence outside the published np
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## v0.528.23 folded-symbol write-cost audit
+
+The v0.528.22 folded-symbol table also has a generation-write cost. On Windows / Node v24.19.0, two independent copies of the same pinned [Fastify](https://github.com/fastify/fastify) `70b14e92c0b55e8201f5530ba2e6bab4e928c784` index were replaced four times each by the v0.528.21 (`177d270`) and v0.528.22 (`df2b145`) built stores, in alternating order. Each replacement used the same active snapshot: 338 files, 8,672 symbols, 19,167 edges, 7,916 pending references, 338 artifact facts, and 338 source documents. Every new generation changed ID while retaining all four status counts. Upper-median full graph-generation replacement took 4,179 → 4,242 ms. Individual paired differences were −72, +9, +2, and +63 ms; the upward drift and changing SQLite file growth make a reliable total-write regression unclear. Instrumenting the new table's SQL calls measured 4.8–5.0 ms to delete old rows and 55.9–74.7 ms to insert the new folded projection per replacement. This measures the database replacement stage, not filesystem discovery, parsing, resolution, first indexing, or end-to-end incremental sync.
+
+Reproduce with separate disposable directories containing copies of that pinned checkout's `.SymbolLattice` index: `node benchmarks/mcp/paired-index-replace.mjs --source-project <pinned-indexed-checkout> --baseline-project <disposable-baseline-index-copy> --candidate-project <disposable-candidate-index-copy> --baseline-root <v0.528.21-built-root> --candidate-root <v0.528.22-built-root> --output <external-report.json> --pairs 4`. The tool writes new generations to both disposable copies. The raw four-pair report is `%TEMP%/SymbolLattice-evidence-060700-fastify-replace.json`; a one-pair replay with the tracked tool is `%TEMP%/SymbolLattice-evidence-060700-fastify-replace-replay.json`. A separate rollback-only SQLite experiment on 8,672 rows measured 32.29 ms for the existing bulk `INSERT SELECT` versus 55.97 ms for per-row insertion (eight alternating cycles; `%TEMP%/SymbolLattice-evidence-060700-casefold-writes.json`), so the per-row alternative was not adopted. This patch adds benchmark tooling and findings only; the shipped search and indexing paths are unchanged.
 
 ## v0.528.22 generation-bound folded symbol reads
 
