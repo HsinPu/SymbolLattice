@@ -94,7 +94,7 @@ SymbolLattice serve --mcp --project C:\path\to\project
 可掃描的語言與格式包含 TypeScript／JavaScript、Python、Java、Go、Rust、C／C++、C# 與 Web 模板。**各語言的宣告擷取、跨檔解析與框架支援深度不同。** 詳細範圍見[語言能力定義](../src/domain/language-depth.ts)。
 
 - 動態呼叫、反射、巨集與外部依賴可能無法解析；未找到關係不代表關係不存在。
-- `explore` 可限量提供索引已記錄的未解析呼叫位置與同名宣告線索；這些線索不等於已確認的呼叫目標。
+- `explore` 可限量提供索引已記錄的未解析呼叫位置與同名宣告線索；一般查詢也可能附上有來源行的 Python 同類別候選宣告，並標示省略數量。這些線索不等於已確認的呼叫目標。
 - 若焦點帶有 `graph-connected` 排序原因，JSON 的 `queryPlan.graphConnectionEvidence` 會列出一條確切的靜態候選關係、關係總數與省略數量；MCP 文字也會顯示來源位置。這是排序依據，不證明該關係與任務相關；需要完整關係時請依符號或檔案補查。
 - `explore --json` 的來源詞彙命中若位於以 `#`（Python）或 `//` 開頭的行，會附上 `lineContext: "comment-prefixed"`；MCP 文字也會標示。這只檢查行首，不解析字串或所有註解，不能據此判定程式會執行該內容。
 - 原始碼片段、關係展開與結果數量都有上限。請查看截斷資訊與後續查詢提示，不將局部結果視為完整結果。

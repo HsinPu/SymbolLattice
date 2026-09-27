@@ -233,6 +233,48 @@ export function verifyUnresolvedCalls(result, readSource) {
   return { verifiedCalls, verifiedPythonCallees };
 }
 
+/** Check each candidate lead against the written call and the pinned declaration line. */
+export function verifySameClassDeclarationLeads(result, readSource) {
+  let verifiedLeads = 0, omittedLeads = 0;
+  for (const focus of result.focuses ?? []) {
+    const evidence = focus.unresolvedCalls;
+    const receipt = evidence?.sameClassDeclarationLeads;
+    if (!receipt) continue;
+    assert.equal(evidence.state, 'available');
+    assert.equal(receipt.policy, 'bounded-python-same-class-declarations-v1');
+    assert.equal(receipt.scope, 'returned-bounded-graph');
+    assert.ok(receipt.items.length > 0 && receipt.items.length <= 2);
+    assert.ok(Number.isSafeInteger(receipt.omittedCount) && receipt.omittedCount >= 0);
+    assert.equal(new Set(receipt.items.map(item => item.edgeId)).size, receipt.items.length);
+    const owner = focus.symbol;
+    assert.equal(owner.kind, 'method');
+    const className = owner.qualifiedName.slice(0, owner.qualifiedName.lastIndexOf('.'));
+    for (const lead of receipt.items) {
+      const edge = evidence.items.find(item => item.id === lead.edgeId);
+      assert.ok(edge, `Missing unresolved call for declaration lead ${lead.edgeId}`);
+      assert.equal(edge.sourceId, owner.id);
+      assert.equal(edge.targetId, null);
+      assert.equal(edge.resolution, 'unresolved');
+      assert.equal(edge.evidence?.ruleId, 'syntax.python.member-call.unknown-receiver');
+      assert.equal(edge.referenceName, `self.${lead.declaration.name}`);
+      assert.equal(lead.declaration.kind, 'method');
+      assert.equal(lead.declaration.filePath, owner.filePath);
+      assert.equal(lead.declaration.qualifiedName,
+        `${className}.${lead.declaration.name}`);
+      assert.equal(lead.declarationLine.line, lead.declaration.range.start.line);
+      const actual = readSource(owner.filePath).split(/\r\n|\r|\n|\u2028|\u2029/u)[lead.declarationLine.line - 1];
+      assert.ok(actual !== undefined && actual.includes(lead.declaration.name));
+      if (lead.declarationLine.truncated) {
+        assert.ok(actual.length > lead.declarationLine.text.length &&
+          actual.startsWith(lead.declarationLine.text));
+      } else assert.equal(lead.declarationLine.text, actual);
+      verifiedLeads++;
+    }
+    omittedLeads += receipt.omittedCount;
+  }
+  return { verifiedLeads, omittedLeads };
+}
+
 export function verifyLexicalMatches(result, readSource) {
   let verifiedMatches = 0;
   const verify = (match, symbol) => {
@@ -560,6 +602,8 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
         (file) => readFileSync(resolve(project, file), "utf8")),
       lexicalVerification: verifyLexicalMatches(response, (file) => readFileSync(resolve(project, file), "utf8")),
       unresolvedCallVerification: verifyUnresolvedCalls(response, (file) => readFileSync(resolve(project, file), "utf8")),
+      sameClassDeclarationVerification: verifySameClassDeclarationLeads(response,
+        (file) => readFileSync(resolve(project, file), "utf8")),
       nameFollowupVerification: verifyNameFollowups(response),
       propertyUseFollowupVerification: verifyPropertyUseFollowups(response),
       numericQualifierVerification: verifyNumericQualifiers(response),

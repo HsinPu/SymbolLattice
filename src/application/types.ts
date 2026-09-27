@@ -673,6 +673,17 @@ export interface UnresolvedCallEvidence {
   /** Syntax receipts with unknown targets; never a confirmed link to a same-named declaration. */
   readonly items: readonly GraphEdge[];
   readonly truncated: boolean;
+  /** Source-cited, bounded declaration leads; these do not resolve the receiver or call target. */
+  readonly sameClassDeclarationLeads?: {
+    readonly policy: "bounded-python-same-class-declarations-v1";
+    readonly scope: "returned-bounded-graph";
+    readonly items: readonly {
+      readonly edgeId: string;
+      readonly declaration: SymbolNode;
+      readonly declarationLine: SourceExcerptLine & { readonly truncated: boolean };
+    }[];
+    readonly omittedCount: number;
+  };
 }
 
 export interface ExploreResult {

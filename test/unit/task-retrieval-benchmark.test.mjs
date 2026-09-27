@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { scoreTask, verifySourceExcerpts, verifyGraphEvidence, verifyLexicalMatches, verifySourceReuse, verifyUnresolvedCalls, verifyNameFollowups, verifyPropertyUseFollowups, verifyNumericQualifiers, verifyNumericContainerFiltering, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
+import { scoreTask, verifySourceExcerpts, verifyGraphEvidence, verifyLexicalMatches, verifySourceReuse, verifyUnresolvedCalls, verifySameClassDeclarationLeads, verifyNameFollowups, verifyPropertyUseFollowups, verifyNumericQualifiers, verifyNumericContainerFiltering, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
 
 describe("task retrieval benchmark judgments", () => {
   it("verifies lexical windows against their original owner and rejects invented relationship claims", () => {
@@ -125,6 +125,34 @@ describe("task retrieval benchmark judgments", () => {
       e => { e.sourceId = 'other'; }, e => { e.range.start.column = 1; }, e => { e.range.end.line = 3; }]) {
       const changed = structuredClone(result); mutate(changed.focuses[0].unresolvedCalls.items[0]);
       expect(() => verifyUnresolvedCalls(changed, read)).toThrow();
+    }
+  });
+  it("checks same-class declaration leads against pinned source without resolving the call", () => {
+    const owner = { id: "run", name: "run", kind: "method", filePath: "service.py",
+      qualifiedName: "service.py#Service.run" };
+    const edge = { id: "call", sourceId: owner.id, targetId: null, kind: "calls",
+      filePath: owner.filePath, referenceName: "self.helper", resolution: "unresolved",
+      evidence: { ruleId: "syntax.python.member-call.unknown-receiver" } };
+    const result = { focuses: [{ symbol: owner, unresolvedCalls: {
+      state: "available", items: [edge], truncated: false, sameClassDeclarationLeads: {
+        policy: "bounded-python-same-class-declarations-v1", scope: "returned-bounded-graph",
+        items: [{ edgeId: edge.id, declaration: { id: "helper", name: "helper", kind: "method",
+          filePath: owner.filePath, qualifiedName: "service.py#Service.helper",
+          range: { start: { line: 2, column: 5 } } },
+        declarationLine: { line: 2, text: "    def helper(self):", truncated: false } }],
+        omittedCount: 1
+      }
+    } }] };
+    const read = () => "class Service:\n    def helper(self):\n        pass\n    def run(self):\n        self.helper()";
+    expect(verifySameClassDeclarationLeads(result, read)).toEqual({ verifiedLeads: 1, omittedLeads: 1 });
+    for (const mutate of [
+      r => { r.focuses[0].unresolvedCalls.sameClassDeclarationLeads.items[0].edgeId = "missing"; },
+      r => { r.focuses[0].unresolvedCalls.sameClassDeclarationLeads.items[0].declaration.qualifiedName = "service.py#Other.helper"; },
+      r => { r.focuses[0].unresolvedCalls.sameClassDeclarationLeads.items[0].declarationLine.text = "    def fake(self):"; },
+      r => { r.focuses[0].unresolvedCalls.items[0].targetId = "helper"; }
+    ]) {
+      const changed = structuredClone(result); mutate(changed);
+      expect(() => verifySameClassDeclarationLeads(changed, read)).toThrow();
     }
   });
   it("rejects shared prefixes that cite missing, different or insufficient source owners", () => {

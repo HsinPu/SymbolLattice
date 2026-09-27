@@ -70,6 +70,28 @@ describe("MCP explore text rendering", () => {
     expect(output).toContain("generation-mismatch");
     expect(output).not.toContain("`handle` → `resolver.resolve_error_handler`");
   });
+  it("shows source-cited same-class declaration leads as candidates only", () => {
+    const output = renderExploreText({ focuses: [{
+      symbol: { id: "caller", name: "savepoint_rollback", filePath: "base.py" },
+      unresolvedCalls: { state: "available", truncated: false, items: [{
+        id: "call", sourceId: "caller", targetId: null, kind: "calls", resolution: "unresolved",
+        referenceName: "self._savepoint_rollback", filePath: "base.py",
+        range: { start: { line: 413, column: 9 } }
+      }], sameClassDeclarationLeads: {
+        policy: "bounded-python-same-class-declarations-v1", scope: "returned-bounded-graph",
+        items: [{ edgeId: "call", declaration: { name: "_savepoint_rollback",
+          qualifiedName: "base.py#BaseDatabaseWrapper._savepoint_rollback", filePath: "base.py",
+          range: { start: { line: 369, column: 5 } } },
+        declarationLine: { line: 369, text: "    def _savepoint_rollback(self, sid):", truncated: false } }],
+        omittedCount: 1
+      } }
+    }] });
+    expect(output).toContain("`base.py:413`; unresolved; target unknown");
+    expect(output).toContain("Same-class declaration `base.py#BaseDatabaseWrapper._savepoint_rollback` at `base.py:369`");
+    expect(output).toContain("`def _savepoint_rollback(self, sid):` (candidate only)");
+    expect(output).toContain("1 additional same-class declaration leads");
+    expect(output).toContain("not resolved call targets");
+  });
   it("puts query-relevant same-name call leads first while keeping the receiver unresolved", () => {
     const output = renderExploreText({ queryPlan: { identifierTerms: ["rollback", "transaction"] },
       focuses: [

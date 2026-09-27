@@ -470,6 +470,10 @@ function renderUnresolvedCalls(result: UnknownRecord): string[] {
   for (const context of contexts) {
     const evidence = record(context.unresolvedCalls);
     if (evidence === null) continue;
+    const sameClassLeads = record(evidence.sameClassDeclarationLeads);
+    const sameClassByEdgeId = new Map(records(sameClassLeads?.items)
+      .map((lead) => [text(lead.edgeId), lead] as const)
+      .filter((entry): entry is readonly [string, UnknownRecord] => entry[0] !== null));
     const owner = symbolReference(record(context.symbol) ?? record(record(context.match)?.symbol)) ?? "selected symbol";
     if (evidence.state !== "available") {
       otherLines.push(`- \`${owner}\`: unresolved-call evidence ${text(evidence.state) ?? "unavailable"}.`);
@@ -492,19 +496,32 @@ function renderUnresolvedCalls(result: UnknownRecord): string[] {
             symbolLocation(symbol).length > 0;
         }) : [];
       const line = `- \`${owner}\` invokes \`${referenceName ?? "unknown member"}\`${edgeDetails(edge)}; target unknown.`;
+      const sameClass = sameClassByEdgeId.get(text(edge.id) ?? "");
+      const declaration = record(sameClass?.declaration);
+      const declarationLine = record(sameClass?.declarationLine);
+      const sourceText = text(declarationLine?.text)?.trim().replaceAll("`", "\\`");
+      const leadNotes: string[] = [];
+      if (declaration !== null && sourceText !== undefined && sourceText !== null) {
+        leadNotes.push(`Same-class declaration \`${symbolReference(declaration) ?? "unknown"}\` at \`${symbolLocation(declaration)}\`: \`${sourceText}\`${declarationLine?.truncated === true ? " (line shortened)" : ""} (candidate only).`);
+      }
       if (leads.length > 0) {
-        leadLines.push(`${line} Same-name selected declaration${leads.length === 1 ? "" : "s"}: ${
+        leadNotes.push(`Same-name selected declaration${leads.length === 1 ? "" : "s"}: ${
           leads.map((lead) => `\`${symbolReference(lead) ?? memberName}\` at \`${symbolLocation(lead)}\``).join("; ")
         } (candidate only).`);
+      }
+      if (leadNotes.length > 0) {
+        leadLines.push(`${line} ${leadNotes.join(" ")}`);
       } else {
         otherLines.push(line);
       }
     }
     if (evidence.truncated === true) otherLines.push(`- Additional recorded calls for \`${owner}\` were truncated; inspect its cited source.`);
+    const omitted = finiteNumber(sameClassLeads?.omittedCount);
+    if (omitted !== null && omitted > 0) otherLines.push(`- ${omitted} additional same-class declaration leads for \`${owner}\` were omitted; inspect its unresolved calls and cited source.`);
   }
   const lines = [...leadLines, ...otherLines];
   const caveat = leadLines.length > 0
-    ? "Same-name selected declarations are bounded candidates, not resolved call targets. These source locations do not prove runtime dispatch. Missing records do not prove that other calls are absent."
+    ? "Declaration leads are bounded candidates, not resolved call targets. These source locations do not prove runtime dispatch. Missing records do not prove that other calls are absent."
     : "These source locations do not prove a target or runtime dispatch. Missing records do not prove that other calls are absent.";
   return lines.length === 0 ? [] : ["**Unresolved Call Sites**", "", ...lines,
     caveat];

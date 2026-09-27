@@ -141,7 +141,11 @@ import {
   type ExploreQueryPlan
 } from "./explore-query.js";
 import { EXPLORE_NAME_FOLLOWUP_LIMITS, supplementExploreNameFollowups } from "./explore-name-followups.js";
-import { EXPLORE_UNRESOLVED_CALL_CANDIDATE_LIMIT, selectQueryUnresolvedCalls } from "./explore-unresolved-calls.js";
+import {
+  EXPLORE_UNRESOLVED_CALL_CANDIDATE_LIMIT,
+  selectQueryUnresolvedCalls,
+  withSameClassDeclarationLeads
+} from "./explore-unresolved-calls.js";
 import {
   ReadQueryGenerationMismatchError,
   type ReadQueryFreshnessReceipt
@@ -5668,10 +5672,40 @@ export class SymbolLatticeService {
         followupCallIds.set(edge.sourceId, ids);
       }
     }
+    let boundedMethodDeclarations: Map<string, SymbolNode[]> | undefined;
+    const methodDeclarations = (): Map<string, SymbolNode[]> => {
+      if (boundedMethodDeclarations !== undefined) return boundedMethodDeclarations;
+      boundedMethodDeclarations = new Map();
+      for (const symbol of bundle.snapshot.symbols) {
+        if (symbol.kind !== "method") continue;
+        const declarations = boundedMethodDeclarations.get(symbol.qualifiedName) ?? [];
+        declarations.push(symbol);
+        boundedMethodDeclarations.set(symbol.qualifiedName, declarations);
+      }
+      return boundedMethodDeclarations;
+    };
+    const declarationSourceLines = new Map<string, readonly string[]>();
+    const declarationLineFor = (declaration: SymbolNode): string | null => {
+      const document = documentsByFilePath.get(declaration.filePath);
+      if (document === undefined) return null;
+      let lines = declarationSourceLines.get(declaration.filePath);
+      if (lines === undefined) {
+        lines = document.sourceText.split(/\r\n|\r|\n|\u2028|\u2029/u);
+        declarationSourceLines.set(declaration.filePath, lines);
+      }
+      return lines[declaration.range.start.line - 1] ?? null;
+    };
     const unresolvedCalls = new Map(plan.selection.map(({ symbol }) => {
       const evidence = candidateCalls.get(symbol.id)!;
-      return [symbol.id, selectQueryUnresolvedCalls(evidence, plan.identifierTerms,
-        bounds.relationLimit, followupCallIds.get(symbol.id))] as const;
+      const selected = selectQueryUnresolvedCalls(evidence, plan.identifierTerms,
+        bounds.relationLimit, followupCallIds.get(symbol.id));
+      return [symbol.id, symbol.kind === "method" && symbol.filePath.toLowerCase().endsWith(".py") &&
+        selected.state === "available" && selected.items.some((edge) =>
+          edge.referenceName?.startsWith("self.") &&
+          edge.evidence?.ruleId === "syntax.python.member-call.unknown-receiver")
+        ? withSameClassDeclarationLeads(selected, symbol, methodDeclarations(), declarationLineFor,
+          plan.identifierTerms)
+        : selected] as const;
     }));
     const focuses: readonly ExploreFocus[] = plan.selection.map((selection, index) => ({
       ...selection,
