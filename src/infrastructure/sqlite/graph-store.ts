@@ -2163,10 +2163,17 @@ function readBoundedSymbolRows(
     tableExists(database, "symbol_casefolds");
   const lowerName = reuseCasefolds ? "folded_name" : "lower(name)";
   const lowerQualifiedName = reuseCasefolds ? "folded_qualified_name" : "lower(qualified_name)";
+  const partialTerms = restrictToFilePaths ? [] : lexicalTerms.filter((term) => term.length >= 2);
+  const partialLowerTerms = new Set(partialTerms.map((term) => term.toLowerCase()));
+  // For ASCII identifiers, an exact name also satisfies the existing prefix
+  // or qualified-name substring clause. Avoid evaluating that redundant OR
+  // predicate on every row; retain it for paths, Unicode and short terms.
+  const exactCoveredByPartial = identifierTerms.length > 0 && identifierTerms.every((term) =>
+    /^[A-Za-z0-9_$]{2,}$/u.test(term) && partialLowerTerms.has(term.toLowerCase()));
 
   const where: string[] = [];
   const parameters: (string | number)[] = [];
-  if (!restrictToFilePaths && identifierTerms.length > 0) {
+  if (!restrictToFilePaths && identifierTerms.length > 0 && !exactCoveredByPartial) {
     const placeholders = identifierTerms.map(() => "?").join(", ");
     const lowerTerms = identifierTerms.map((term) => term.toLowerCase());
     const lowerPlaceholders = lowerTerms.map(() => "?").join(", ");
@@ -2188,7 +2195,6 @@ function readBoundedSymbolRows(
     parameters.push(...filePaths);
   }
 
-  const partialTerms = restrictToFilePaths ? [] : lexicalTerms.filter((term) => term.length >= 2);
   if (partialTerms.length > 0) {
     const partialClauses: string[] = [];
     for (const term of partialTerms) {
