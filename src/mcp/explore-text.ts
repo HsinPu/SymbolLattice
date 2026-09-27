@@ -425,23 +425,57 @@ function renderLimitations(result: UnknownRecord): string[] {
 }
 
 function renderUnresolvedCalls(result: UnknownRecord): string[] {
-  const lines: string[] = [];
-  const contexts = records(result.focuses).length > 0 ? records(result.focuses) : [result];
+  const leadLines: string[] = [];
+  const otherLines: string[] = [];
+  const focuses = records(result.focuses);
+  const contexts = focuses.length > 0 ? focuses : [result];
+  const queryPlan = record(result.queryPlan);
+  const queryTerms = Array.isArray(queryPlan?.identifierTerms)
+    ? (queryPlan.identifierTerms as unknown[])
+      .filter((term): term is string => typeof term === "string" && term.length >= 4)
+      .map((term) => term.toLowerCase())
+    : [];
   for (const context of contexts) {
     const evidence = record(context.unresolvedCalls);
     if (evidence === null) continue;
     const owner = symbolReference(record(context.symbol) ?? record(record(context.match)?.symbol)) ?? "selected symbol";
     if (evidence.state !== "available") {
-      lines.push(`- \`${owner}\`: unresolved-call evidence ${text(evidence.state) ?? "unavailable"}.`);
+      otherLines.push(`- \`${owner}\`: unresolved-call evidence ${text(evidence.state) ?? "unavailable"}.`);
       continue;
     }
     for (const edge of records(evidence.items)) {
-      lines.push(`- \`${owner}\` invokes \`${text(edge.referenceName) ?? "unknown member"}\`${edgeDetails(edge)}; target unknown.`);
+      const referenceName = text(edge.referenceName);
+      const memberName = referenceName?.split(".").at(-1);
+      const sourceFile = text(edge.filePath);
+      const ownerSymbol = record(context.symbol);
+      const leads = edge.kind === "calls" && edge.resolution === "unresolved" && edge.targetId === null &&
+        ownerSymbol !== null && ownerSymbol.id === edge.sourceId && ownerSymbol.filePath === sourceFile &&
+        memberName !== undefined && memberName.length >= 6 && sourceFile !== null &&
+        symbolLocation(edge).length > 0 &&
+        queryTerms.some((term) => memberName.toLowerCase().includes(term))
+        ? focuses.filter((focus) => {
+          const symbol = record(focus.symbol);
+          return symbol?.name === memberName && symbol.filePath !== sourceFile &&
+            ["function", "method", "entrypoint"].includes(symbol.kind as string) &&
+            symbolLocation(symbol).length > 0;
+        }) : [];
+      const line = `- \`${owner}\` invokes \`${referenceName ?? "unknown member"}\`${edgeDetails(edge)}; target unknown.`;
+      if (leads.length > 0) {
+        leadLines.push(`${line} Same-name selected declaration${leads.length === 1 ? "" : "s"}: ${
+          leads.map((lead) => `\`${symbolReference(lead) ?? memberName}\` at \`${symbolLocation(lead)}\``).join("; ")
+        } (candidate only).`);
+      } else {
+        otherLines.push(line);
+      }
     }
-    if (evidence.truncated === true) lines.push(`- Additional recorded calls for \`${owner}\` were truncated; inspect its cited source.`);
+    if (evidence.truncated === true) otherLines.push(`- Additional recorded calls for \`${owner}\` were truncated; inspect its cited source.`);
   }
+  const lines = [...leadLines, ...otherLines];
+  const caveat = leadLines.length > 0
+    ? "Same-name selected declarations are bounded candidates, not resolved call targets. These source locations do not prove runtime dispatch. Missing records do not prove that other calls are absent."
+    : "These source locations do not prove a target or runtime dispatch. Missing records do not prove that other calls are absent.";
   return lines.length === 0 ? [] : ["**Unresolved Call Sites**", "", ...lines,
-    "These source locations do not prove a target or runtime dispatch. Missing records do not prove that other calls are absent."];
+    caveat];
 }
 
 function renderSourceBackedLead(result: UnknownRecord): string[] {

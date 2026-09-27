@@ -41,6 +41,32 @@ describe("MCP explore text rendering", () => {
     expect(output).toContain("generation-mismatch");
     expect(output).not.toContain("`handle` → `resolver.resolve_error_handler`");
   });
+  it("puts query-relevant same-name call leads first while keeping the receiver unresolved", () => {
+    const output = renderExploreText({ queryPlan: { identifierTerms: ["rollback", "transaction"] },
+      focuses: [
+        { symbol: { id: "caller", name: "__exit__", filePath: "transaction.py" },
+          unresolvedCalls: { state: "available", truncated: false, items: [
+            { sourceId: "caller", targetId: null, kind: "calls", resolution: "unresolved",
+              referenceName: "connection.close", filePath: "transaction.py",
+              range: { start: { line: 20, column: 5 } } },
+            { sourceId: "caller", targetId: null, kind: "calls", resolution: "unresolved",
+              referenceName: "connection.finalize", filePath: "transaction.py",
+              range: { start: { line: 25, column: 5 } } },
+            { sourceId: "caller", targetId: null, kind: "calls", resolution: "unresolved",
+              referenceName: "connection.rollback", filePath: "transaction.py",
+              range: { start: { line: 30, column: 5 } } }
+          ] } },
+        { symbol: { id: "candidate", name: "rollback", kind: "method", filePath: "base.py",
+            range: { start: { line: 50, column: 1 } } } },
+        { symbol: { id: "unrelated", name: "finalize", kind: "method", filePath: "aux.py",
+            range: { start: { line: 60, column: 1 } } } }
+      ] });
+    expect(output).toContain("`transaction.py:30`; unresolved; target unknown. Same-name selected declaration: `rollback` at `base.py:50` (candidate only)");
+    expect(output.indexOf("connection.rollback")).toBeLessThan(output.indexOf("connection.close"));
+    expect(output).toContain("not resolved call targets");
+    expect(output).not.toContain("Same-name selected declaration: `finalize`");
+    expect(output).not.toContain("`base.py:50` (exact)");
+  });
   it("cites shared source and every selected flow step even without a path-spine slot", () => {
     const text = renderExploreText({ focuses: [{ symbol: { name: "later" }, sourceReuse: { segments: [{
       referenceIndex: 0, filePath: "a.ts", range: { start: { line: 8 } }
