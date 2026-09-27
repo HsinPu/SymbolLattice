@@ -11,6 +11,7 @@ export const SOURCE_LEXICAL_LIMITS = {
   maximumDeclarationCharacters: 8192
 } as const;
 export const NUMERIC_BINDING_CONTEXT_LIMITS = { paddingLines: 3, maximumAnchors: 4 } as const;
+const MAXIMUM_QUERY_TOKEN_CACHE_ENTRIES = 8192;
 
 /** Literal indexed-source evidence. Comments and strings can match; this is not a resolved relation. */
 export interface SourceLexicalMatch {
@@ -156,7 +157,9 @@ export function matchCallableSource(
             if (groups[index]!.some((term) => variants.has(term))) matchedIndexes.push(index);
           }
           matchingGroups = matchedIndexes;
-          if (matchingGroupsByToken.size < 4096) matchingGroupsByToken.set(token, matchingGroups);
+          if (matchingGroupsByToken.size < MAXIMUM_QUERY_TOKEN_CACHE_ENTRIES) {
+            matchingGroupsByToken.set(token, matchingGroups);
+          }
         }
         for (const index of matchingGroups) {
           frequencies[index]! += 1;
