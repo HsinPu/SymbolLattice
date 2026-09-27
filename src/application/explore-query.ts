@@ -2557,11 +2557,14 @@ function selectPropertyUseFollowup(
     const use = file.symbols.get(source.id) ?? {
       symbol: source, anchorId: edge.targetId, anchorRank: anchor.rank, edges: []
     };
-    use.edges.push(edge);
     if (anchor.rank < use.anchorRank) {
       use.anchorId = edge.targetId;
       use.anchorRank = anchor.rank;
+      use.edges.length = 0;
     }
+    // A callable may use several selected exported properties. Only the
+    // chosen anchor's edges belong in its followup receipt.
+    if (edge.targetId === use.anchorId) use.edges.push(edge);
     file.symbols.set(source.id, use);
     file.edgeCount += 1;
     file.bestAnchorRank = Math.min(file.bestAnchorRank, anchor.rank);

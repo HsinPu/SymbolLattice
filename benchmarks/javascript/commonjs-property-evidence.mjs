@@ -83,11 +83,12 @@ async function main() {
   assert.equal(git("remote", "get-url", "origin").replace(/\.git$/u, ""), manifest.repository);
   assert.equal(git("status", "--porcelain", "--untracked-files=no"), "");
   const { SqliteGraphStore } = await import("../../dist/infrastructure/sqlite/index.js");
+  const { planExploreQuery } = await import("../../dist/application/explore-query.js");
   const { SYMBOL_LATTICE_VERSION } = await import("../../dist/version.js");
   const { ARTIFACT_FACTS_EXTRACTOR_VERSION, PROJECT_RESOLVER_VERSION } = await import("../../dist/domain/index.js");
   const productRoot = fileURLToPath(new URL("../../", import.meta.url));
   const productBuild = productFingerprint(productRoot);
-  const store = new SqliteGraphStore();
+  const store = new SqliteGraphStore({ readOnly: true });
   try {
     const { snapshot, status } = store.getActiveGraphBundle(resolve(project));
     assert.ok(status.initialized && !status.stale, "An initialized, current index is required");
@@ -99,6 +100,7 @@ async function main() {
     };
     const edges = snapshot.edges.filter((edge) => edge.evidence?.ruleId === "module.commonjs-object-property-reference");
     for (const edge of edges) verifyCommonJsPropertyReceipt(edge, byId.get(edge.targetId), sourceFor);
+    const edgesById = new Map(edges.map((edge) => [edge.id, edge]));
     const observations = manifest.observations.map((item) => ({ ...item, found: edges.some((edge) =>
       edge.filePath === item.file && edge.range.start.line === item.line &&
       edge.referenceName === item.localName && byId.get(edge.targetId)?.name === item.exportedName &&
@@ -106,6 +108,35 @@ async function main() {
       edge.evidence.commonJsBinding.importSite.range.start.line === item.importLine &&
       edge.evidence.commonJsBinding.exportSite.range.start.line === item.exportLine) }));
     const tp = observations.filter((item) => item.found).length;
+    const followupCases = (manifest.followupCases ?? []).map((item) => {
+      // This isolates graph-backed followup selection when source lexical search is unavailable.
+      const plan = planExploreQuery(snapshot, item.query);
+      for (const name of item.requiredSelectedErrors) {
+        assert.ok(plan.selection.some((selection) => selection.symbol.name === name),
+          `Missing selected error ${name}`);
+      }
+      const source = plan.selection.find((selection) => selection.symbol.qualifiedName === item.sourceSymbol);
+      assert.ok(source?.propertyUseFollowup, `Missing property-use followup for ${item.sourceSymbol}`);
+      const receipt = source.propertyUseFollowup;
+      const anchor = byId.get(receipt.anchorSymbolId);
+      assert.equal(anchor?.name, item.expectedAnchor);
+      assert.ok(receipt.edgeIds.length > 0);
+      for (const id of receipt.edgeIds) {
+        const edge = edgesById.get(id);
+        assert.ok(edge, `Missing property-use edge ${id}`);
+        assert.equal(edge.sourceId, source.symbol.id);
+        assert.equal(edge.targetId, anchor.id, `Property-use edge ${id} targets another anchor`);
+      }
+      const requiredEdge = edges.find((edge) => edge.sourceId === source.symbol.id &&
+        edge.range.start.line === item.requiredReferenceLine && edge.targetId === anchor.id);
+      const otherEdge = edges.find((edge) => edge.sourceId === source.symbol.id &&
+        edge.range.start.line === item.otherReferenceLine && edge.targetId !== anchor.id);
+      assert.ok(requiredEdge && otherEdge, "Pinned source must contain both independently checked references");
+      assert.ok(receipt.edgeIds.includes(requiredEdge.id));
+      assert.ok(!receipt.edgeIds.includes(otherEdge.id));
+      return { query: item.query, sourceSymbolId: source.symbol.id, anchorSymbolId: anchor.id,
+        edgeIds: receipt.edgeIds, excludedOtherEdgeId: otherEdge.id };
+    });
     assert.deepEqual(productFingerprint(productRoot), productBuild, "Built product changed during verification");
     const report = { schemaVersion: 1, productVersion: SYMBOL_LATTICE_VERSION, productBuild,
       extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION, resolverVersion: PROJECT_RESOLVER_VERSION,
@@ -114,8 +145,9 @@ async function main() {
       oracle: "Espree AST/source receipts and separately fixed manual usage truth",
       tp, fn: observations.length - tp, recall: observations.length ? tp / observations.length : null,
       precision: "not-measured", verifiedReceipts: edges.length, receiptFiles: parsed.size,
-      scope: "All emitted property-reference receipts checked for literal import, use, export, and declaration source ranges. Runtime constructor identity, whole-program mutation safety, and corpus-wide precision are not independently verified.",
-      observations };
+      verifiedFollowupCases: followupCases.length,
+      scope: "All emitted property-reference receipts checked for literal import, use, export, and declaration source ranges. Followup cases check graph-only selection without source lexical results and bind each selected edge to one anchor. Runtime constructor identity, whole-program mutation safety, and corpus-wide precision are not independently verified.",
+      observations, followupCases };
     writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`);
     console.log(JSON.stringify({ ...report, observations: undefined }));
     if (report.fn) process.exitCode = 1;

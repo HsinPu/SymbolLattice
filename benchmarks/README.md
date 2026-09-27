@@ -16,7 +16,7 @@ These tools generate or validate large-project evidence outside the published np
 | `javascript/` | `named-function-expressions.mjs` | automatic declaration/scorer contract; manual pinned-corpus execution |
 | `javascript/` | `assigned-callables.mjs` | automatic anonymous-assignment/ownership scorer contract; manual pinned-corpus execution |
 | `javascript/` | `commonjs-call-evidence.mjs`, `fastify-commonjs-truth.json` | automatic source-receipt verifier contract; manual pinned-corpus execution |
-| `javascript/` | `commonjs-property-evidence.mjs`, `fastify-commonjs-property-truth.json` | manual pinned-corpus Espree source-receipt audit |
+| `javascript/` | `commonjs-property-evidence.mjs`, `fastify-commonjs-property-truth.json` | manual pinned-corpus Espree source-receipt and graph-only followup anchor audit |
 | `python/` | `correctness-oracle.mjs`, `PythonOracle.py` | manual CPython stdlib AST oracle |
 | `python/` | `module-bindings.mjs`, `ModuleBindingOracle.py` | manual CPython AST declaration/source-range audit; optional baseline fact comparison |
 | `python/` | `member-calls.mjs`, `MemberCallOracle.py` | manual CPython AST unresolved member-call name, ownership and source-range audit; required baseline fact preservation check |
@@ -47,6 +47,14 @@ These tools generate or validate large-project evidence outside the published np
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## v0.529.1 property-use followup anchor receipts
+
+When one callable references several selected exported properties, its property-use followup now includes only edges to the chosen anchor. Previously the receipt could name one error symbol while listing an edge to another error symbol. The file-level edge count still considers all references for ranking. This corrects an existing evidence contract without changing the query interface or index format, so it is a patch release.
+
+On pinned [Fastify](https://github.com/fastify/fastify) `70b14e92c0b55e8201f5530ba2e6bab4e928c784`, `ContentTypeParser.prototype.add` references `FST_ERR_CTP_INVALID_TYPE` at `lib/contentTypeParser.js:50` and `FST_ERR_CTP_ALREADY_PRESENT` at line 58; their declarations are at `lib/errors.js:81` and 77. The independent Espree oracle checked five separately fixed observations and all 88 emitted CommonJS property-reference receipts across 19 files. In its graph-only followup case, the chosen anchor is `FST_ERR_CTP_ALREADY_PRESENT`; the receipt contains the line 58 edge and excludes the line 50 edge. The same case failed against v0.529.0 because that receipt also included the other anchor's edge. The source check establishes literal import, use, export, and declaration sites, not runtime constructor identity or whole-program mutation safety.
+
+All 27 tasks in 20 fixed Django, NestJS, and Fastify retrieval manifests retained their required files and specified evidence with zero misses; selected files and specified evidence were identical to v0.529.0. These are development regression cases, not held-out evidence of a general quality gain. Read-only FTS query variants measured on these indexes showed no stable query-speed improvement and were not adopted. This release makes no speed claim; first indexing, incremental sync, peak memory, corpus-wide precision, and Agent completion time were not measured. `npm run check`, `npm run build`, and the full `npm test -- --maxWorkers 2` passed (3,229 tests passed, four existing skips). Raw reports are `%TEMP%/SymbolLattice-evidence-0927-property-candidate.json` and `%TEMP%/SymbolLattice-evidence-0927-retrieval/*.json`. Reproduce the source audit with `node benchmarks/javascript/commonjs-property-evidence.mjs --project <pinned-indexed-fastify-checkout> --manifest benchmarks/javascript/fastify-commonjs-property-truth.json --output <external-report.json>`; reproduce each task with `node benchmarks/mcp/task-retrieval.mjs --project <matching-pinned-indexed-checkout> --manifest benchmarks/mcp/<matching-task-manifest>.json --output <external-report.json> --repetitions 1`.
 
 ## v0.529.0 source-backed rejection focus order
 

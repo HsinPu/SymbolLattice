@@ -506,6 +506,29 @@ describe("source-proven property use followup", () => {
       edges: [...graph.edges].reverse() }, query).selection).toEqual(plan.selection);
   });
 
+  it("does not attribute one callable's different property references to a single anchor", () => {
+    const secondProperty = symbol({ id: "other-body-code", name: "REQUEST_BODY_413",
+      filePath: property.filePath, line: 5, kind: "variable" });
+    const secondUse: GraphEdge = { ...reference("other-body-use", parser),
+      targetId: secondProperty.id, referenceName: secondProperty.name,
+      evidence: { ruleId: "module.commonjs-object-property-reference", stage: "module",
+        resolutionPath: [parser.filePath, secondProperty.filePath],
+        commonJsBinding: { policy: "javascript-commonjs-object-property-reference-v1",
+          moduleSpecifier: "./errors", importedName: secondProperty.name, localName: secondProperty.name,
+          importSite: { filePath: parser.filePath, range: parser.range },
+          exportSite: { filePath: secondProperty.filePath, range: secondProperty.range } } } };
+    const sourceGraph = { ...graph, symbols: [...graph.symbols, secondProperty],
+      edges: [...graph.edges, secondUse] };
+    const plan = planExploreQuery(sourceGraph, query);
+    expect(plan.selection.map(item => item.symbol.id)).toEqual(expect.arrayContaining([property.id, secondProperty.id]));
+    const followup = plan.selection.find(item => item.symbol.id === parser.id)?.propertyUseFollowup;
+    expect(followup).toBeDefined();
+    expect(followup?.edgeIds).toEqual(followup?.anchorSymbolId === property.id
+      ? ["parser-use"] : [secondUse.id]);
+    expect(planExploreQuery({ ...sourceGraph, edges: [...sourceGraph.edges].reverse() }, query)
+      .selection.find(item => item.symbol.id === parser.id)?.propertyUseFollowup).toEqual(followup);
+  });
+
   it("shows an exact error-property use first for an unhinted rejection question", () => {
     const error = symbol({ id: "media-error", name: "FST_ERR_CTP_INVALID_MEDIA_TYPE",
       filePath: "lib/errors.js", kind: "variable" });
