@@ -19,6 +19,8 @@ export interface SourceLexicalMatch {
   readonly token: string;
   readonly filePath: string;
   readonly range: SourceRange;
+  /** The source line begins with an obvious comment marker; syntax inside strings is not parsed. */
+  readonly lineContext?: "comment-prefixed";
 }
 
 export interface SourceLexicalCandidate {
@@ -166,7 +168,8 @@ export function matchCallableSource(
           if (found.has(index) && (wholeLineComment || nonCommentFound.has(index))) continue;
           const column = start + match.index + 1;
           const receipt: SourceLexicalMatch = { term: groups[index]![0]!, token, filePath: symbol.filePath,
-            range: { start: { line, column }, end: { line, column: column + token.length } } };
+            range: { start: { line, column }, end: { line, column: column + token.length } },
+            ...(wholeLineComment ? { lineContext: "comment-prefixed" as const } : {}) };
           if (!found.has(index)) found.set(index, receipt);
           if (!wholeLineComment && !nonCommentFound.has(index)) nonCommentFound.set(index, receipt);
         }

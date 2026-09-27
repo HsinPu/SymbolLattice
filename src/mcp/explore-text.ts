@@ -204,8 +204,7 @@ function renderFocuses(result: UnknownRecord): string[] {
     const location = symbolLocation(focus);
     const rank = finiteNumber(focus.rank);
     output.push(`- ${rank === null ? "" : `#${rank} `}\`${reference}\`${kind === null ? "" : ` (${kind})`}${location.length === 0 ? "" : ` — ${location}`}`);
-    const sourceTerms = records(focus.sourceMatches).map((match) =>
-      `\`${text(match.term) ?? "?"}\` → \`${text(match.token) ?? "?"}\` at \`${symbolLocation(match)}\``);
+    const sourceTerms = records(focus.sourceMatches).map(renderSourceTerm);
     if (sourceTerms.length > 0) output.push(`  Source terms (lexical, not resolved relationships): ${sourceTerms.join("; ")}.`);
     const numeric = record(focus.numericQualifier);
     if (numeric !== null && Array.isArray(numeric.terms)) output.push(
@@ -221,10 +220,14 @@ function renderFocuses(result: UnknownRecord): string[] {
     if (reused.length > 0) output.push(`  Shared source: ${reused.map((segment) =>
       `focus #${(finiteNumber(segment.referenceIndex) ?? -1) + 1} at \`${symbolLocation(segment)}\``).join("; ")}.`);
   }
-  const calleeTerms = records(result.sourceWindows).flatMap((window) => records(window.sourceMatches)).map((match) =>
-    `\`${text(match.term) ?? "?"}\` → \`${text(match.token) ?? "?"}\` at \`${symbolLocation(match)}\``);
+  const calleeTerms = records(result.sourceWindows).flatMap((window) => records(window.sourceMatches)).map(renderSourceTerm);
   if (calleeTerms.length > 0) output.push("", `Related source terms (lexical, not resolved relationships): ${calleeTerms.join("; ")}.`);
   return output;
+}
+
+function renderSourceTerm(match: UnknownRecord): string {
+  const context = match.lineContext === "comment-prefixed" ? " (comment-prefixed line)" : "";
+  return `\`${text(match.term) ?? "?"}\` → \`${text(match.token) ?? "?"}\` at \`${symbolLocation(match)}\`${context}`;
 }
 
 function renderMatch(result: UnknownRecord): string[] {

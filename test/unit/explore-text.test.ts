@@ -144,6 +144,14 @@ describe("MCP explore text rendering", () => {
     expect(text).toContain("`refunds` → `refund` at `a.ts:5`");
     expect(text).toContain("Callable-source lexical search reached its scan bounds");
   });
+  it("labels a comment-prefixed lexical receipt in focus and related-source text", () => {
+    const receipt = { term: "rollback", token: "rollback", filePath: "a.py",
+      range: { start: { line: 8, column: 7 } }, lineContext: "comment-prefixed" };
+    const text = renderExploreText({ focuses: [{ symbol: { name: "run", filePath: "a.py" },
+      sourceMatches: [receipt] }], sourceWindows: [{ sourceMatches: [receipt] }] });
+    expect(text.split("(comment-prefixed line)")).toHaveLength(3);
+    expect(text).toContain("`rollback` → `rollback` at `a.py:8` (comment-prefixed line)");
+  });
   it("renders a concise Markdown result instead of exposing diagnostic JSON", () => {
     const text = renderExploreText({
       status: {

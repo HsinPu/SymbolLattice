@@ -95,6 +95,7 @@ Discoverable languages and formats include TypeScript/JavaScript, Python, Java, 
 
 - Dynamic calls, reflection, macros, and external dependencies may remain unresolved. A missing relationship does not prove that no relationship exists.
 - `explore` can include bounded unresolved call sites recorded in the index and same-name declaration leads. These leads are not confirmed call targets.
+- Source-term matches in `explore --json` on lines beginning with `#` (Python) or `//` carry `lineContext: "comment-prefixed"`; MCP text labels them too. This checks the line prefix only, not strings or every comment syntax, and does not establish that the text executes.
 - Source excerpts, relationship traversal, and result counts have limits. Check truncation information and follow-up query guidance; partial results are not complete coverage.
 - Retrieval quality and speed depend on the project and query. Results from fixed test projects do not establish the same performance everywhere.
 

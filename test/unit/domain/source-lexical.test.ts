@@ -22,6 +22,8 @@ describe("callable source lexical evidence", () => {
     expect(result.candidates[0]!.nonCommentMatches?.map(match => [match.term, match.range.start.line])).toEqual([
       ["request", 1], ["thrown", 3]
     ]);
+    expect(result.candidates[0]!.matches[1]?.lineContext).toBe("comment-prefixed");
+    expect(result.candidates[0]!.matches[2]?.lineContext).toBeUndefined();
     expect(scoreCallableSource(result.documents)[0]!.nonCommentMatches).toEqual(result.candidates[0]!.nonCommentMatches);
 
     const javascript = matchCallableSource(
@@ -48,6 +50,8 @@ describe("callable source lexical evidence", () => {
     expect(commentOnly.candidates[0]!.matches.map(match => [match.term, match.range.start.line])).toEqual([
       ["rollback", 2], ["connection", 3]
     ]);
+    expect(commentOnly.candidates[0]!.matches[0]?.lineContext).toBe("comment-prefixed");
+    expect(commentOnly.candidates[0]!.matches[1]?.lineContext).toBeUndefined();
   });
 
   it("keeps literal receipts inside an exported error property without borrowing neighboring definitions", () => {
