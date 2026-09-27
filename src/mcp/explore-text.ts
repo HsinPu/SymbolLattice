@@ -444,6 +444,36 @@ function renderUnresolvedCalls(result: UnknownRecord): string[] {
     "These source locations do not prove a target or runtime dispatch. Missing records do not prove that other calls are absent."];
 }
 
+function renderSourceBackedLead(result: UnknownRecord): string[] {
+  const priority = record(record(result.queryPlan)?.rejectionReferencePriority);
+  if (priority?.evidenceScope !== "static-property-reference") return [];
+  const sourceId = text(priority.sourceSymbolId);
+  const errorId = text(priority.errorSymbolId);
+  const edgeIds = Array.isArray(priority.edgeIds)
+    ? priority.edgeIds.filter((id): id is string => typeof id === "string") : [];
+  if (sourceId === null || errorId === null || edgeIds.length === 0) return [];
+  const focuses = records(result.focuses);
+  const source = focuses.find((focus) => text(record(focus.symbol)?.id) === sourceId);
+  const error = focuses.find((focus) => text(record(focus.symbol)?.id) === errorId);
+  if (source === undefined || error === undefined) return [];
+  const edge = records(result.connections).map((connection) => record(connection.edge))
+    .find((candidate) => candidate !== null && edgeIds.includes(text(candidate.id) ?? "") &&
+      candidate.sourceId === sourceId && candidate.targetId === errorId &&
+      candidate.kind === "references" && candidate.resolution === "exact" &&
+      record(candidate.evidence)?.ruleId === "module.commonjs-object-property-reference");
+  const from = symbolReference(source);
+  const to = symbolReference(error);
+  const site = symbolLocation(edge);
+  const declaration = symbolLocation(error);
+  if (edge === undefined || from === null || to === null || site.length === 0 || declaration.length === 0) return [];
+  return [
+    "**Source-backed lead**",
+    "",
+    `- \`${from}\` → \`${to}\` (exact static property reference at \`${site}\`; declaration at \`${declaration}\`).`,
+    "This cited source reference does not prove the rejection branch executes. Other ranked focuses are candidates; rank alone does not establish a path to this lead."
+  ];
+}
+
 /** Renders the primary MCP explore result for agents and humans without diagnostic JSON. */
 export function renderExploreText(value: Record<string, unknown>): string {
   const match = record(value.match);
@@ -451,6 +481,7 @@ export function renderExploreText(value: Record<string, unknown>): string {
   const title = text(queryPlan?.query) ?? text(match?.reference) ?? "code graph";
   const sections: string[][] = [
     [`**Exploration: ${title}**`, "", renderStatus(value)],
+    renderSourceBackedLead(value),
     renderFocuses(value),
     renderMatch(value),
     renderRelations(value),

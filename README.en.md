@@ -6,7 +6,7 @@ SymbolLattice is a local code search tool for developers and AI agents. Query a 
 
 [繁體中文](README.md) · [Get started](docs/getting-started.en.md) · [Validation and limitations](benchmarks/README.md) · [Report an issue](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.529.8` · Node.js `>=22.13 <25` · MIT
+`v0.529.9` · Node.js `>=22.13 <25` · MIT
 
 ## Start with “Where is this implemented?”
 
@@ -22,6 +22,8 @@ Results can include:
 - **Verifiable source** with file paths, line numbers, and code excerpts to check the findings.
 - **Relationships between code** through resolved calls, imports, source references, inheritance, and framework entry points.
 - **Open questions** including unresolved calls, source freshness, and result truncation.
+
+For some error investigations, MCP text leads with a source-cited implementation and error declaration; other ranked results still need review.
 
 Query from your terminal, or let an MCP-compatible agent use the evidence.
 

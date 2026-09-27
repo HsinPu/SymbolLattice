@@ -70,6 +70,34 @@ describe("MCP explore text rendering", () => {
     expect(output).toContain("CommonJS `run` ← `handle`");
     expect(output).toContain("import `consumer.js:2`; export `provider.js:20`");
   });
+  it("leads with a corroborated rejection reference while keeping other focuses tentative", () => {
+    const source = { id: "source", name: "run", qualifiedName: "lib/parser.js#run", filePath: "lib/parser.js" };
+    const error = { id: "error", name: "UNSUPPORTED_TYPE", qualifiedName: "lib/errors.js#UNSUPPORTED_TYPE",
+      filePath: "lib/errors.js", range: { start: { line: 10 } } };
+    const edge = { id: "receipt", sourceId: "source", targetId: "error", kind: "references",
+      resolution: "exact", filePath: "lib/parser.js", range: { start: { line: 42 } },
+      evidence: { ruleId: "module.commonjs-object-property-reference", stage: "module",
+        commonJsBinding: { localName: "UNSUPPORTED_TYPE", importedName: "UNSUPPORTED_TYPE",
+          importSite: { filePath: "lib/parser.js", range: { start: { line: 2 } } },
+          exportSite: { filePath: "lib/errors.js", range: { start: { line: 10 } } } } } };
+    const result = { queryPlan: { rejectionReferencePriority: { evidenceScope: "static-property-reference",
+      sourceSymbolId: "source", errorSymbolId: "error", edgeIds: ["receipt"] } },
+      focuses: [{ rank: 1, symbol: source }, { rank: 2, symbol: error },
+        { rank: 3, symbol: { id: "other", name: "unrelated", filePath: "lib/other.js" } }],
+      connections: [{ source, target: error, edge }] };
+    const output = renderExploreText(result);
+    expect(output.indexOf("**Source-backed lead**")).toBeLessThan(output.indexOf("**Focuses**"));
+    expect(output).toContain("`lib/parser.js#run` → `lib/errors.js#UNSUPPORTED_TYPE`");
+    expect(output).toContain("at `lib/parser.js:42`");
+    expect(output).toContain("declaration at `lib/errors.js:10`");
+    expect(output).toContain("import `lib/parser.js:2`; export `lib/errors.js:10`");
+    expect(output).toContain("does not prove the rejection branch executes");
+    expect(output).toContain("Other ranked focuses are candidates");
+    expect(renderExploreText({ ...result, connections: [{ source, target: error,
+      edge: { ...edge, resolution: "unresolved" } }] })).not.toContain("**Source-backed lead**");
+    expect(renderExploreText({ ...result, connections: [{ source, target: error,
+      edge: { ...edge, targetId: "other" } }] })).not.toContain("**Source-backed lead**");
+  });
   it("retains lexical ranking evidence and discloses its bounded scope without claiming resolved relations", () => {
     const text = renderExploreText({ focuses: [{ symbol: { name: "run", filePath: "a.ts" },
       sourceMatches: [{ term: "refunds", token: "refund", filePath: "a.ts", range: { start: { line: 5, column: 3 } } }] }],

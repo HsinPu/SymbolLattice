@@ -39,6 +39,7 @@ These tools generate or validate large-project evidence outside the published np
 | `mcp/` | `read-query-concurrency.mjs` | manual |
 | `mcp/` | `strict-fresh-read-lifecycle.mjs` | manual |
 | `mcp/` | `paired-explore.mjs` | manual alternating persistent-service latency and complete-response equality or explicitly scoped unresolved-call selection check |
+| `mcp/` | `paired-explore-text.mjs` | manual same-response MCP text comparison across two built products |
 | `mcp/` | `paired-query-planning.mjs` | manual alternating focus-planning latency and complete-plan equality on one fixed bounded graph bundle |
 | `mcp/` | `paired-index-replace.mjs` | manual alternating full graph-generation replacement on separate disposable index copies |
 | `mcp/` | `edge-lookup.mjs` | manual pinned-corpus paired SQLite edge-read measurement |
@@ -48,6 +49,16 @@ These tools generate or validate large-project evidence outside the published np
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## v0.529.9 source-backed rejection lead in MCP text
+
+When a rejection query selects a CommonJS error declaration through an exact source-property reference, the MCP text now puts that source-backed pair before the ranked focus list. The lead requires both selected symbols and their cited exact edge in the returned connections. It names the reference site and declaration site, and states that a static reference does not prove the rejection branch executes. Other ranked focuses remain candidates rather than being presented as part of that path. The structured result, ranking, index format and CLI query contract are unchanged, so this is a patch; no reindex is needed.
+
+On pinned [Fastify](https://github.com/fastify/fastify) `70b14e92c0b55e8201f5530ba2e6bab4e928c784`, the two unhinted content-type tasks now lead with `lib/contentTypeParser.js#ContentTypeParser.prototype.run` referencing `lib/errors.js#codes.FST_ERR_CTP_INVALID_MEDIA_TYPE` at `lib/contentTypeParser.js:184`, with the error declaration at `lib/errors.js:111`. The emitted CommonJS receipt also cites import lines 17–29 and export lines 111–115; these ranges and the reference token were checked against the pinned source. The edge proves the source binding, not executed rejection. Rendering the same 27 recorded task responses with both builds changed only these two MCP texts; the other 25 were byte-identical. Each affected text grew by 410 bytes. The two already-judged irrelevant Fastify files remain selected, so this improves the clarity and priority of evidence, not file precision.
+
+The final v0.529.9 build passed all 20 fixed task manifests across current v431 Django, Fastify and NestJS indexes. All 27 complete JSON responses matched v0.529.8, retaining 58/58 required-file occurrences, 113/113 specified source facts and 2/2 unresolved-call receipts; four judged irrelevant files and 37 unjudged selections remain. In 100 alternating warm text-rendering pairs, upper-median render time was 0.463 → 0.499 ms for unsupported content type and 0.405 → 0.419 ms for unknown media type; the unchanged Django control was 0.323 → 0.324 ms. This small rendering cost excludes retrieval, freshness, MCP transport and Agent follow-up time. No overall search-speed or corpus-wide precision improvement is claimed. `npm run check`, `npm run build`, 19 focused MCP text tests, and the full suite passed (3,235 tests passed, four existing skips).
+
+Raw reports are `%TEMP%/SymbolLattice-evidence-0927-v5299-retrieval/*.json`, `%TEMP%/SymbolLattice-evidence-0927-v5299-complete-task-equality.json`, `%TEMP%/SymbolLattice-evidence-0927-v5299-paired-text.json`, `%TEMP%/SymbolLattice-evidence-0927-v5299-rejection-text-comparison.json`, and `%TEMP%/SymbolLattice-evidence-0927-v5299-render-timing.json`. Reproduce task evidence with `node benchmarks/mcp/task-retrieval.mjs --project <matching-pinned-v431-indexed-checkout> --manifest benchmarks/mcp/<matching-manifest>.json --output <external-report.json> --repetitions 1`; compare MCP text from the recorded responses with `node benchmarks/mcp/paired-explore-text.mjs --reports <task-report-directory> --baseline-root <v0.529.8-built-root> --candidate-root <v0.529.9-built-root> --output <external-report.json>`. Check each cited site against the pinned checkout rather than treating the product response as its own truth.
 
 ## v0.529.8 query-term variant reuse
 
