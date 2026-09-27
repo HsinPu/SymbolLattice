@@ -89,6 +89,7 @@ const MAX_BOUNDED_RELATIONSHIPS = 16384;
 const MAX_BOUNDED_HOPS = 4;
 // Stay below SQLite's conservative 999-variable bound, including generation IDs.
 const BOUNDED_QUERY_PARAMETER_BATCH_SIZE = 900;
+const SOURCE_SYMBOL_READ_BATCH_SIZE = 16;
 const READ_BUSY_TIMEOUT_MS = 1_000;
 const PERSISTENT_READ_CACHE_KIB = 16 * 1024;
 const MEMORY_TEMP_STORE_MIN_SYMBOLS = 8_192;
@@ -2185,7 +2186,7 @@ function readBoundedSourceSeedPaths(
   return rows.map((row) => row.file_path);
 }
 
-function symbolProjectionSelect(table: "symbols" | "symbol_casefolds" = "symbols"): string {
+function symbolProjectionSelect(table: "symbols" | "symbol_casefolds" | "ranked" = "symbols"): string {
   return `SELECT id, name, qualified_name, kind, file_path,
     start_line, start_column, end_line, end_column,
     is_exported, declaration_ordinal
@@ -2342,16 +2343,19 @@ function readBoundedSourceLexical(
   const matchingGroupsByToken = new Map<string, readonly number[]>();
   if (state === "searched") {
     truncated = filePaths.length > limits.maximumFiles;
+    const paths = filePaths.slice(0, limits.maximumFiles);
     const readSource = database.prepare(`SELECT substr(source_text, 1, ?) AS source_text,
       length(source_text) AS characters FROM source_documents WHERE generation_id = ? AND file_path = ?`);
-    const readSymbols = database.prepare(`${symbolProjectionSelect()}
-      WHERE file_path = ? AND (${numericBindingTerms.length > 0
-        ? "kind IN ('function', 'method', 'entrypoint', 'variable')"
-        : "kind IN ('function', 'method', 'entrypoint') OR (kind = 'variable' AND is_exported = 1 AND end_line - start_line <= 12 AND file_path NOT GLOB '*.d.*ts')"})
-      ORDER BY ${numericBindingTerms.length > 0 ? "" :
-        "CASE WHEN kind IN ('function', 'method', 'entrypoint') THEN 0 ELSE 1 END,"}
-        start_line, start_column, id LIMIT ?`);
-    for (const filePath of filePaths.slice(0, limits.maximumFiles)) {
+    const symbolKindFilter = numericBindingTerms.length > 0
+      ? "kind IN ('function', 'method', 'entrypoint', 'variable')"
+      : "kind IN ('function', 'method', 'entrypoint') OR (kind = 'variable' AND is_exported = 1 AND end_line - start_line <= 12 AND file_path NOT GLOB '*.d.*ts')";
+    const symbolOrder = `${numericBindingTerms.length > 0 ? "" :
+      "CASE WHEN kind IN ('function', 'method', 'entrypoint') THEN 0 ELSE 1 END, "}
+      start_line, start_column, id`;
+    let symbolBatchStart = -1;
+    let symbolRowsByPath = new Map<string, SymbolRow[]>();
+    for (let index = 0; index < paths.length; index += 1) {
+      const filePath = paths[index]!;
       const remaining = limits.maximumCharacters - scannedCharacters;
       const remainingSymbols = limits.maximumSymbols - scannedSymbols;
       if (remaining <= 0 || remainingSymbols <= 0) { truncated = true; break; }
@@ -2371,7 +2375,25 @@ function readBoundedSourceLexical(
         sourceText = sourceText.slice(0, Math.max(0, lastBreak));
       }
       const symbolLimit = Math.min(remainingSymbols, limits.maximumSymbolsPerFile);
-      const fileRows = readSymbols.all(filePath, symbolLimit + 1) as unknown as SymbolRow[];
+      const batchStart = Math.floor(index / SOURCE_SYMBOL_READ_BATCH_SIZE) * SOURCE_SYMBOL_READ_BATCH_SIZE;
+      if (batchStart !== symbolBatchStart) {
+        const batchPaths = paths.slice(batchStart, batchStart + SOURCE_SYMBOL_READ_BATCH_SIZE);
+        const placeholders = batchPaths.map(() => "?").join(", ");
+        const batchRows = database.prepare(`WITH ranked AS (
+          SELECT *, row_number() OVER (PARTITION BY file_path ORDER BY ${symbolOrder}) AS source_rank
+          FROM symbols WHERE file_path IN (${placeholders}) AND (${symbolKindFilter})
+        ) ${symbolProjectionSelect("ranked")}
+          WHERE source_rank <= ? ORDER BY file_path, source_rank`)
+          .all(...batchPaths, limits.maximumSymbolsPerFile + 1) as unknown as SymbolRow[];
+        symbolRowsByPath = new Map();
+        for (const row of batchRows) {
+          const rowsForPath = symbolRowsByPath.get(row.file_path) ?? [];
+          rowsForPath.push(row);
+          symbolRowsByPath.set(row.file_path, rowsForPath);
+        }
+        symbolBatchStart = batchStart;
+      }
+      const fileRows = (symbolRowsByPath.get(filePath) ?? []).slice(0, symbolLimit + 1);
       if (fileRows.length > symbolLimit) truncated = true;
       const scanned = fileRows.slice(0, symbolLimit);
       scannedSymbols += scanned.length;

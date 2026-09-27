@@ -2530,6 +2530,34 @@ describe("SqliteGraphStore", () => {
     expect(mismatch.sourceLexical).toBeUndefined();
   });
 
+  it("keeps source receipts from files beyond the first bounded symbol-read batch", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const template = boundedGraphSnapshot();
+    const paths = Array.from({ length: 17 }, (_, index) => `src/f${index.toString().padStart(2, "0")}.ts`);
+    const symbols: SymbolNode[] = paths.map((filePath) => ({ ...template.symbols[0]!,
+      id: filePath, filePath, name: "run", qualifiedName: `${filePath}#run`, kind: "function",
+      range: { start: { line: 1, column: 1 }, end: { line: 3, column: 2 } } }));
+    const graphSnapshot: GraphSnapshot = { ...template, symbols, edges: [], pendingReferences: [],
+      files: paths.map((path) => ({ ...template.files[0]!, path })) };
+    store.replaceProjectFacts({ projectPath, snapshot: graphSnapshot,
+      indexedAt: "2026-09-27T00:00:00.000Z", artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("source-batch-boundary"), resolverVersion: "bounded-resolver-v1",
+      sourceDocuments: paths.map((filePath) => ({ filePath, language: "typescript",
+        sourceText: "function run() {\n  refund(payment);\n}" })),
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION });
+    const query = "payments refunds";
+    const result = store.getActiveBoundedGraphBundle(projectPath, {
+      ...boundedRequest(query), ...exploreQuerySeedTerms(query)
+    });
+    expect(result.sourceLexical?.scannedFiles).toBe(17);
+    expect(result.sourceLexical?.scannedSymbols).toBe(17);
+    expect(result.sourceLexical?.truncated).toBe(false);
+    expect(result.sourceLexical?.candidates.map((candidate) => candidate.symbolId).sort())
+      .toEqual([...paths].sort());
+    store.close();
+  });
+
   it("prioritizes requested source roles before the FTS file cap and reports omitted matches", async () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();
