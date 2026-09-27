@@ -3,6 +3,7 @@ import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 
 function argument(name) {
   const index = process.argv.indexOf(name);
@@ -15,9 +16,19 @@ const candidateRoot = argument("--candidate-root");
 const query = argument("--query");
 const output = argument("--output");
 const pairs = Number(argument("--pairs") ?? 8);
+const comparison = argument("--comparison") ?? "complete";
 if ([project, baselineRoot, candidateRoot, query, output].some((value) => value === null) ||
-  !Number.isSafeInteger(pairs) || pairs < 1) {
-  throw new Error("Usage: --project <indexed-checkout> --baseline-root <built-product> --candidate-root <built-product> --query <text> --output <json> [--pairs <positive-integer>]");
+  !Number.isSafeInteger(pairs) || pairs < 1 || !["complete", "query-unresolved-calls"].includes(comparison)) {
+  throw new Error("Usage: --project <indexed-checkout> --baseline-root <built-product> --candidate-root <built-product> --query <text> --output <json> [--pairs <positive-integer>] [--comparison complete|query-unresolved-calls]");
+}
+
+function withoutQueryUnresolvedCallItems(result) {
+  assert.equal(result.mode, "query", "Selective call comparison requires query mode");
+  const copy = structuredClone(result);
+  for (const focus of copy.focuses ?? []) {
+    if (focus.unresolvedCalls !== undefined) focus.unresolvedCalls.items = [];
+  }
+  return copy;
 }
 
 const roots = { baseline: resolve(baselineRoot), candidate: resolve(candidateRoot) };
@@ -52,7 +63,21 @@ try {
   }
   const baselineResult = await cases.baseline.service.explore(projectPath, query);
   const candidateResult = await cases.candidate.service.explore(projectPath, query);
-  assert.deepEqual(candidateResult, baselineResult, "Candidate changed the complete explore result.");
+  const completeExploreResultsEqual = isDeepStrictEqual(candidateResult, baselineResult);
+  if (comparison === "complete") {
+    assert.ok(completeExploreResultsEqual, "Candidate changed the complete explore result.");
+  } else {
+    assert.deepEqual(withoutQueryUnresolvedCallItems(candidateResult),
+      withoutQueryUnresolvedCallItems(baselineResult),
+      "Candidate changed output beyond query-focus unresolved-call items.");
+  }
+  const changedCallSelections = (candidateResult.focuses ?? []).flatMap((focus, index) => {
+    const previous = baselineResult.focuses?.[index];
+    const before = previous?.unresolvedCalls?.items.map((edge) => edge.id) ?? [];
+    const after = focus.unresolvedCalls?.items.map((edge) => edge.id) ?? [];
+    return isDeepStrictEqual(before, after) ? [] : [{ reference: focus.reference,
+      before, after }];
+  });
 
   const upperMedian = (values) => [...values].sort((left, right) => left - right)
     [Math.floor(values.length / 2)];
@@ -63,13 +88,14 @@ try {
   }]));
   const report = { schemaVersion: 1, project: projectPath, query,
     conditions: { roots, pairs, warmupQueriesPerProduct: 1, order: "alternating",
-      statistic: "upper median", completeExploreResultsEqual: true,
+      statistic: "upper median", comparison, completeExploreResultsEqual,
+      comparisonScopeEqual: true,
       firstIndexing: "not measured", incrementalSync: "not measured" },
-    medians, samples: Object.fromEntries(Object.entries(cases).map(([name, entry]) =>
+    medians, changedCallSelections, samples: Object.fromEntries(Object.entries(cases).map(([name, entry]) =>
       [name, entry.samples])) };
   writeFileSync(resolve(output), `${JSON.stringify(report, null, 2)}\n`, "utf8");
   console.log(JSON.stringify({ output: resolve(output), medians,
-    completeExploreResultsEqual: true }));
+    completeExploreResultsEqual, changedCallSelectionCount: changedCallSelections.length }));
 } finally {
   for (const entry of Object.values(cases)) entry.store.close();
 }

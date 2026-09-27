@@ -208,6 +208,23 @@ describe("task retrieval benchmark judgments", () => {
     expect(scoreTask({ ...task, requiredFiles: [], evidence: [] }, {}).requiredFileRecall).toBeNull();
   });
 
+  it("requires a cited unresolved call site in the general-query focus", () => {
+    const expected = { focus: "a.py#Atomic.__exit__", file: "a.py", line: 283,
+      referenceName: "connection.savepoint_rollback", text: "connection.savepoint_rollback(sid)" };
+    const call = { sourceId: "owner", filePath: "a.py", kind: "calls", resolution: "unresolved",
+      targetId: null, confidence: 0, referenceName: expected.referenceName,
+      range: { start: { line: 283, column: 5 }, end: { line: 283, column: 34 } } };
+    const result = { focuses: [{ reference: expected.focus, symbol: { id: "owner", filePath: "a.py" },
+      unresolvedCalls: { state: "available", items: [call] } }] };
+    const truth = { ...task, unresolvedCallEvidence: [expected] };
+    expect(scoreTask(truth, result).unresolvedCallEvidenceRecall).toBe(1);
+    for (const change of [{ targetId: "guessed" }, { range: { start: { line: 250, column: 5 } } },
+      { referenceName: "connection.savepoint_commit" }]) {
+      result.focuses[0].unresolvedCalls.items[0] = { ...call, ...change };
+      expect(scoreTask(truth, result).unresolvedCallEvidenceRecall).toBe(0);
+    }
+  });
+
   it("checks source bytes, CRLF offsets and line numbers against independent source text", () => {
     const source = { filePath: "a.ts", text: "run()\n", emittedCharacters: 6,
       range: { start: { line: 2, column: 1 }, end: { line: 3, column: 1 } },

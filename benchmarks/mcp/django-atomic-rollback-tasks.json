@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "repository": "https://github.com/django/django",
   "commit": "bc833e8883db4a333a6485d91637b78c85e2b13b",
-  "truthMethod": "Required files and facts were manually fixed from pinned Django transaction.py and BaseDatabaseWrapper source before running SymbolLattice. The task asks for the atomic block's exception branch and the connection's savepoint rollback implementation. A backend may override lower-level SQL behavior; this truth does not claim a specific database engine command. The two irrelevant-file judgments were added later after inspecting selected output and independently reading the pinned sources: base/creation.py creates and deserializes test databases, while postgres/operations.py forbids certain schema operations inside an atomic block. Neither implements this question's exception or savepoint rollback path. These are development-case judgments, not held-out precision evidence; other files remain unjudged.",
+  "truthMethod": "Required files and source facts were manually fixed from pinned Django transaction.py and BaseDatabaseWrapper source before running SymbolLattice. The task asks for the atomic block's exception branch and the connection's savepoint rollback implementation. A backend may override lower-level SQL behavior; this truth does not claim a specific database engine command. The two irrelevant-file judgments were added later after inspecting selected output and independently reading the pinned sources: base/creation.py creates and deserializes test databases, while postgres/operations.py forbids certain schema operations inside an atomic block. Neither implements this question's exception or savepoint rollback path. The two unresolved-call requirements were added after observing their omission from a later general query and independently checking the pinned CPython AST and source locations. These are development-case judgments, not held-out precision evidence; other files remain unjudged.",
   "tasks": [
     {
       "id": "atomic-exception-rollback-connection",
@@ -17,6 +17,10 @@
         { "file": "django/db/backends/base/base.py", "line": 333, "text": "def rollback(self):" },
         { "file": "django/db/backends/base/base.py", "line": 405, "text": "def savepoint_rollback(self, sid):" },
         { "file": "django/db/backends/base/base.py", "line": 413, "text": "self._savepoint_rollback(sid)" }
+      ],
+      "unresolvedCallEvidence": [
+        { "focus": "django/db/transaction.py#Atomic.__exit__", "file": "django/db/transaction.py", "line": 283, "referenceName": "connection.savepoint_rollback", "text": "connection.savepoint_rollback(sid)" },
+        { "focus": "django/db/transaction.py#Atomic.__exit__", "file": "django/db/transaction.py", "line": 295, "referenceName": "connection.rollback", "text": "connection.rollback()" }
       ]
     }
   ]

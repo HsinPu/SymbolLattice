@@ -141,6 +141,7 @@ import {
   type ExploreQueryPlan
 } from "./explore-query.js";
 import { EXPLORE_NAME_FOLLOWUP_LIMITS, supplementExploreNameFollowups } from "./explore-name-followups.js";
+import { EXPLORE_UNRESOLVED_CALL_CANDIDATE_LIMIT, selectQueryUnresolvedCalls } from "./explore-unresolved-calls.js";
 import {
   ReadQueryGenerationMismatchError,
   type ReadQueryFreshnessReceipt
@@ -5639,14 +5640,28 @@ export class SymbolLatticeService {
       () => this.symbolContextPack(read, bounds, graphView, true),
       { focusCount: matches.length }
     );
-    const cachedCalls = bounds.relationLimit === EXPLORE_NAME_FOLLOWUP_LIMITS.maximumCallsPerFocus
-      ? this.exploreCallEvidence.get(plan) : undefined;
+    const cachedCalls = this.exploreCallEvidence.get(plan);
     const missingCallIds = plan.selection.map(selection => selection.symbol.id).filter(id => !cachedCalls?.has(id));
-    const unresolvedCalls = new Map([
+    const candidateLimit = plan.identifierTerms.length === 0
+      ? bounds.relationLimit : EXPLORE_UNRESOLVED_CALL_CANDIDATE_LIMIT;
+    const candidateCalls = new Map([
       ...(cachedCalls ?? []),
       ...(missingCallIds.length === 0 ? [] : this.exploreUnresolvedCalls(normalizedProjectPath, bundle,
-        missingCallIds, bounds.relationLimit))
+        missingCallIds, candidateLimit))
     ]);
+    const followupCallIds = new Map<string, Set<string>>();
+    for (const selection of plan.selection) {
+      for (const edge of selection.nameFollowup?.calls ?? []) {
+        const ids = followupCallIds.get(edge.sourceId) ?? new Set<string>();
+        ids.add(edge.id);
+        followupCallIds.set(edge.sourceId, ids);
+      }
+    }
+    const unresolvedCalls = new Map(plan.selection.map(({ symbol }) => {
+      const evidence = candidateCalls.get(symbol.id)!;
+      return [symbol.id, selectQueryUnresolvedCalls(evidence, plan.identifierTerms,
+        bounds.relationLimit, followupCallIds.get(symbol.id))] as const;
+    }));
     const focuses: readonly ExploreFocus[] = plan.selection.map((selection, index) => ({
       ...selection,
       ...(contextPack.contexts[index] ?? this.toSymbolContext(
@@ -5835,10 +5850,15 @@ export class SymbolLatticeService {
     const plan = planExploreQuery(bundle.snapshot, query, bundle.sourceLexical);
     if (plan.selection.length === 0 || plan.selection.length >= EXPLORE_QUERY_LIMITS.maximumSymbols ||
         plan.fileHints.length > 0 || plan.identifierTerms.length < 2) return plan;
-    const calls = this.exploreUnresolvedCalls(projectPath, bundle, plan.selection.map(item => item.symbol.id),
-      EXPLORE_NAME_FOLLOWUP_LIMITS.maximumCallsPerFocus);
-    const supplemented = supplementExploreNameFollowups(bundle.snapshot, plan, calls, bundle.sourceLexical);
-    this.exploreCallEvidence.set(supplemented, calls);
+    const candidates = this.exploreUnresolvedCalls(projectPath, bundle,
+      plan.selection.map(item => item.symbol.id), EXPLORE_UNRESOLVED_CALL_CANDIDATE_LIMIT);
+    const followupCalls = new Map([...candidates].map(([sourceId, evidence]) => [sourceId, {
+      ...evidence,
+      items: evidence.items.slice(0, EXPLORE_NAME_FOLLOWUP_LIMITS.maximumCallsPerFocus),
+      truncated: evidence.truncated || evidence.items.length > EXPLORE_NAME_FOLLOWUP_LIMITS.maximumCallsPerFocus
+    }] as const));
+    const supplemented = supplementExploreNameFollowups(bundle.snapshot, plan, followupCalls, bundle.sourceLexical);
+    this.exploreCallEvidence.set(supplemented, candidates);
     return supplemented;
   }
 

@@ -38,7 +38,7 @@ These tools generate or validate large-project evidence outside the published np
 | `r/` | `lifecycle.mjs` | manual |
 | `mcp/` | `read-query-concurrency.mjs` | manual |
 | `mcp/` | `strict-fresh-read-lifecycle.mjs` | manual |
-| `mcp/` | `paired-explore.mjs` | manual alternating persistent-service latency and complete-response equality check |
+| `mcp/` | `paired-explore.mjs` | manual alternating persistent-service latency and complete-response equality or explicitly scoped unresolved-call selection check |
 | `mcp/` | `paired-index-replace.mjs` | manual alternating full graph-generation replacement on separate disposable index copies |
 | `mcp/` | `edge-lookup.mjs` | manual pinned-corpus paired SQLite edge-read measurement |
 | `mcp/` | `bounded-graph-read.mjs` | manual pinned-corpus bounded graph read, response hash, latency, and post-GC memory measurement |
@@ -47,6 +47,18 @@ These tools generate or validate large-project evidence outside the published np
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## v0.529.4 query-relevant unresolved call receipts
+
+General exploration previously returned only the earliest eight unresolved calls from each selected symbol. When a function had more, a relevant call later in the function could be absent even though the symbol and source file were selected. General queries now inspect at most 64 source-located candidate calls per focus, select up to the existing response limit by matches between query terms and the terminal call name, and present the selected calls in source order. Calls cited by a name-followup lead remain included. A truncated flag still means other calls exist; an exact-symbol follow-up retains its chronological list. The name-followup planner still uses its original eight-call prefix, and neither resolution nor target confidence changes. This is a patch to selection within the existing query contract; no index rebuild is needed.
+
+On the v431 index of pinned [Django](https://github.com/django/django) `bc833e8883db4a333a6485d91637b78c85e2b13b`, the fixed atomic-exception question previously selected `django/db/transaction.py#Atomic.__exit__` but its first-eight list omitted the `connection.savepoint_rollback` call at line 283 and `connection.rollback` at line 295. Both now appear in the general answer as unresolved, null-target receipts without increasing the eight-item limit. The result retains both necessary files and the same four selected files, including two already-judged irrelevant files; this improves evidence delivery for the fixed case, not file precision or inferred cross-file dispatch. The exact-symbol query still returns all 13 calls in source order.
+
+The pinned task manifest now explicitly requires those two general-query call receipts in addition to its five source lines; the final build found all seven. Across the three Django development manifests, five tasks returned all 11 required-file occurrences and all 25 specified source facts, while source verification checked 63 returned unresolved calls. The two already-judged irrelevant files in the atomic task remain. These are fixed development cases, not held-out or corpus-wide precision and recall estimates. Task reports are `%TEMP%/SymbolLattice-evidence-0929-v5294-{django-atomic-rollback-tasks,django-module-bindings-tasks,django-request-errors-tasks}.json`; reproduce each with `node benchmarks/mcp/task-retrieval.mjs --project <v431-pinned-indexed-django-checkout> --manifest benchmarks/mcp/<matching-manifest>.json --output <external-report.json> --repetitions 1`.
+
+Eight alternating paired warm queries compared the v0.529.3 build with the final v0.529.4 build on that same index. After removing only query-focus `unresolvedCalls.items` for comparison, complete results were equal; one focus changed its selected call IDs. Upper-median total time was 2,151.99 → 2,168.00 ms, with one of eight paired differences favoring v0.529.4 and differences ranging from −6.74 to +39.88 ms. A separate eight-pair comparison of two candidate read strategies returned identical complete results and no stable total-time difference. The final paired run suggests a small single-query cost on this case, not a general query-speed improvement; the fixed answer now exposes both lines without the additional exact-symbol query previously needed for those receipts. Total Agent task time was not measured.
+
+Raw paired reports are `%TEMP%/SymbolLattice-evidence-0929-django-single-read-vs-v5293.json` and `%TEMP%/SymbolLattice-evidence-0929-django-single-vs-double-read.json`. Reproduce the first with `node benchmarks/mcp/paired-explore.mjs --project <v431-pinned-indexed-django-checkout> --baseline-root <v0.529.3-built-root> --candidate-root <v0.529.4-built-root> --query "How does an atomic transaction block handle a raised exception, and how does the database connection roll back its savepoint?" --output <external-report.json> --pairs 8 --comparison query-unresolved-calls`. The scoped comparison permits only query-focus unresolved-call items to differ and does not by itself judge whether the new calls are relevant; the fixed source truth and task-retrieval verifier provide that check. First indexing, incremental sync, peak memory, held-out retrieval quality, and total Agent task time were not measured.
 
 ## v0.529.3 Python member-call receipts after bare yield
 

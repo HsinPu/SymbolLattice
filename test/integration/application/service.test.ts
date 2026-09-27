@@ -1026,6 +1026,39 @@ describe("SymbolLatticeService", () => {
     expect(updated.callees).toEqual([]);
   });
 
+  it("surfaces later query-relevant Python call receipts within the existing query limit", async () => {
+    const projectPath = await createInlineProject({ "transactions.py": [
+      "def rollback_transaction(connection):",
+      ...["prepare", "open", "begin", "check", "flush", "commit", "close", "finish"]
+        .map((name) => `    connection.${name}()`),
+      "    yield",
+      "    connection.savepoint_rollback()",
+      "    connection.rollback()",
+      "    connection.close()"
+    ].join("\n") });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const result = await service.explore(projectPath, "How does a transaction roll back its savepoint?");
+    const focus = result.focuses?.find((item) => item.symbol.name === "rollback_transaction");
+    expect(focus?.unresolvedCalls).toMatchObject({ state: "available", truncated: true });
+    expect(focus?.unresolvedCalls?.items).toHaveLength(8);
+    expect(focus?.unresolvedCalls?.items.filter((edge) => [11, 12].includes(edge.range.start.line)))
+      .toEqual([
+        expect.objectContaining({ referenceName: "connection.savepoint_rollback", resolution: "unresolved",
+          targetId: null, confidence: 0, range: expect.objectContaining({ start: { line: 11, column: 5 } }) }),
+        expect.objectContaining({ referenceName: "connection.rollback", resolution: "unresolved",
+          targetId: null, confidence: 0, range: expect.objectContaining({ start: { line: 12, column: 5 } }) })
+      ]);
+    const lines = focus?.unresolvedCalls?.items.map((edge) => edge.range.start.line) ?? [];
+    expect(lines).toEqual([...lines].sort((left, right) => left - right));
+
+    const exact = await service.explore(projectPath, "transactions.py#rollback_transaction");
+    expect(exact.unresolvedCalls).toMatchObject({ state: "available", truncated: false });
+    expect(exact.unresolvedCalls?.items).toHaveLength(11);
+    expect(exact.unresolvedCalls?.items[0]?.range.start.line).toBe(2);
+  });
+
   it("reports generation mismatch instead of mixing unresolved calls into exploration", async () => {
     const projectPath = await createInlineProject({ "payments.py": "def refund_payment(client):\n    client.refund()\n" });
     const store = new SqliteGraphStore();
@@ -1088,6 +1121,10 @@ describe("SymbolLatticeService", () => {
     expect(lead?.source?.text).toContain("return default_error_view");
     expect(lead?.nameFollowup).toMatchObject({ state: "unresolved-name-match", matchingDeclarationCount: 1 });
     expect(lead?.nameFollowup?.calls.every(edge => edge.targetId === null)).toBe(true);
+    for (const edge of lead?.nameFollowup?.calls ?? []) {
+      const owner = before.focuses?.find(item => item.symbol.id === edge.sourceId);
+      expect(owner?.unresolvedCalls?.items).toContainEqual(edge);
+    }
     expect(before.connections).toEqual([]);
     expect(before.queryPlan?.summary.selectedFileCount).toBe(5);
     expect(before.queryPlan?.limits.maximumFiles).toBe(5);

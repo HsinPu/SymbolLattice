@@ -24,13 +24,23 @@ export function scoreTask(task, result) {
   const evidence = task.evidence.map((item) => ({ ...item, found: sources.some((source) =>
     source.filePath === item.file && (source.lines ?? []).some((line) =>
       line.line === item.line && typeof line.text === "string" && line.text.includes(item.text))) }));
+  const unresolvedCallEvidence = (task.unresolvedCallEvidence ?? []).map((item) => ({ ...item,
+    found: (result.focuses ?? []).some((focus) => focus.reference === item.focus &&
+      focus.unresolvedCalls?.state === "available" && focus.unresolvedCalls.items.some((edge) =>
+        edge.sourceId === focus.symbol.id && edge.filePath === item.file &&
+        edge.range.start.line === item.line && edge.referenceName === item.referenceName &&
+        edge.kind === "calls" && edge.resolution === "unresolved" &&
+        edge.targetId === null && edge.confidence === 0)) }));
   const judged = truePositives.length + falsePositives.length;
   return {
     selected, truePositives, falsePositives, falseNegatives, unjudged,
     requiredFileRecall: required.size === 0 ? null : (required.size - falseNegatives.length) / required.size,
     judgedPrecision: judged === 0 ? null : truePositives.length / judged,
     judgedFraction: selected.length === 0 ? null : judged / selected.length,
-    evidence, evidenceRecall: evidence.length === 0 ? null : evidence.filter((item) => item.found).length / evidence.length
+    evidence, evidenceRecall: evidence.length === 0 ? null : evidence.filter((item) => item.found).length / evidence.length,
+    unresolvedCallEvidence,
+    unresolvedCallEvidenceRecall: unresolvedCallEvidence.length === 0 ? null :
+      unresolvedCallEvidence.filter((item) => item.found).length / unresolvedCallEvidence.length
   };
 }
 
@@ -482,6 +492,11 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
       const actual = readFileSync(resolve(project, item.file), "utf8").split(/\r?\n/)[item.line - 1];
       assert.ok(actual?.includes(item.text), `Source truth mismatch: ${task.id} ${item.file}:${item.line}`);
     }
+    for (const item of task.unresolvedCallEvidence ?? []) {
+      const actual = readFileSync(resolve(project, item.file), "utf8").split(/\r?\n/)[item.line - 1];
+      assert.ok(actual?.includes(item.text) && actual.includes(item.referenceName),
+        `Call source truth mismatch: ${task.id} ${item.file}:${item.line}`);
+    }
   }
   const root = productRoot === undefined ? resolve(dirname(fileURLToPath(import.meta.url)), "../..") : resolve(productRoot);
   const productBuild = productFingerprint(root);
@@ -524,7 +539,7 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
     conditions: { project: resolve(project), repetitions, node: process.version, platform: process.platform,
       timing: "Sequential fresh CLI processes against an existing index; includes startup, freshness checking and JSON serialization. Small-sample diagnostic, not a latency SLO.",
       indexing: "Not measured; this run reuses an existing index.",
-      scoring: "Distinct focus files per task; recall denominator is required files; precision denominator includes only manually judged returned files. Evidence checks cited source lines, not semantic graph correctness.",
+      scoring: "Distinct focus files per task; recall denominator is required files; precision denominator includes only manually judged returned files. Evidence checks cited source lines; optional unresolved-call truth requires a source-located, null-target call in the general-query response, not semantic cross-file correctness.",
       graphPrecision: "not-measured", agentCompletionTime: "not-measured" },
     results
   };
