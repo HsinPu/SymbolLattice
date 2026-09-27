@@ -178,7 +178,9 @@ export function matchCallableSource(
       }
     }
     // A lone incidental word is insufficient to introduce a body-only candidate.
-    const matches = [...found.entries()].sort(([left], [right]) => left - right).map(([, match]) => match);
+    // Preserve comment-only hits, but cite a non-comment occurrence when one was seen.
+    const matches = [...found.entries()].sort(([left], [right]) => left - right)
+      .map(([index, match]) => nonCommentFound.get(index) ?? match);
     const nonCommentMatches = [...nonCommentFound.entries()].sort(([left], [right]) => left - right).map(([, match]) => match);
     if (symbol.kind === "variable" && numericTerms.length > 0 &&
         !numericTerms.some(term => identifierNumbers(symbol.name).includes(term) ||

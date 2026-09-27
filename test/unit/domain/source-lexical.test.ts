@@ -32,6 +32,24 @@ describe("callable source lexical evidence", () => {
     expect(javascript.candidates[0]!.nonCommentMatches?.map(match => match.term)).toEqual(["values"]);
   });
 
+  it("cites a non-comment occurrence before an earlier whole-line comment for the same term", () => {
+    const source = "function run() {\n  // rollback after failure\n  connection.rollback();\n}";
+    const groups = [["rollback"], ["connection"]];
+    const result = matchCallableSource(source, [callable(1, 4)], groups);
+    expect(result.candidates[0]!.matches.map(match => [match.term, match.range.start.line])).toEqual([
+      ["rollback", 3], ["connection", 3]
+    ]);
+    expect(result.candidates[0]!.nonCommentMatches).toEqual(result.candidates[0]!.matches);
+
+    const commentOnly = matchCallableSource(
+      "function run() {\n  // rollback after failure\n  connection.commit();\n}",
+      [callable(1, 4)], groups
+    );
+    expect(commentOnly.candidates[0]!.matches.map(match => [match.term, match.range.start.line])).toEqual([
+      ["rollback", 2], ["connection", 3]
+    ]);
+  });
+
   it("keeps literal receipts inside an exported error property without borrowing neighboring definitions", () => {
     const source = "INVALID_MEDIA_TYPE: createError(\n  'Unsupported Media Type',\n  415\n),\nOTHER_TYPE: createError('Unsupported Other Type')";
     const property = { ...callable(1, 4, "variable"), name: "INVALID_MEDIA_TYPE", isExported: true,
