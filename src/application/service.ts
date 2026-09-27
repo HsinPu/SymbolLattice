@@ -186,7 +186,6 @@ import {
   referenceResolverPluginProjectVersion,
   type ReferenceResolverPluginRegistry
 } from "./reference-resolver-plugins.js";
-import { resolveProjectFacts } from "./resolution.js";
 import {
   AFFECTED_MAX_VISITED_FILES_PER_INPUT,
   CONTEXT_MATCH_CANDIDATE_LIMIT,
@@ -1682,7 +1681,7 @@ export class SymbolLatticeService {
     }
     performance.end("extraction", extractionStartedAt);
     diagnostic.advance("store-initialize");
-    this.replaceGeneration(
+    await this.replaceGeneration(
       projectPath,
       scan,
       artifactFacts,
@@ -1955,7 +1954,7 @@ export class SymbolLatticeService {
       reuseInvalidationReasons: [...reuseInvalidationReasons].sort(compareText)
     };
     performance.end("change-planning", changePlanningStartedAt);
-    this.replaceGeneration(projectPath, scan, artifactFacts, work, performance, diagnostic);
+    await this.replaceGeneration(projectPath, scan, artifactFacts, work, performance, diagnostic);
     diagnostic.advance("status-read");
     const statusStartedAt = performance.start();
     const status = {
@@ -5280,17 +5279,18 @@ export class SymbolLatticeService {
     };
   }
 
-  private replaceGeneration(
+  private async replaceGeneration(
     projectPath: string,
     scan: ProjectScan,
     artifactFacts: readonly PersistedArtifactFacts[],
     indexWork: IndexWork,
     performance: IndexPerformanceRecorder,
     diagnostic: LifecycleDiagnosticOperation
-  ): void {
+  ): Promise<void> {
     const indexedAt = new Date().toISOString();
     diagnostic.advance("resolution");
     const resolutionStartedAt = performance.start();
+    const { resolveProjectFacts } = await import("./resolution.js");
     const snapshot = resolveProjectFacts({
       sourceDocuments: scan.sourceDocuments,
       extractedFiles: artifactFacts,
