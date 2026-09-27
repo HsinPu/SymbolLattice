@@ -2612,7 +2612,9 @@ function readActiveBoundedGraphBundle(
   projectPath: string,
   request: BoundedGraphQueryRequest
 ): ActiveBoundedGraphBundle {
-  const active = readActiveStatusState(database, projectPath);
+  // Explore reports freshness, but its bounded read does not consume the
+  // previous index operation's potentially large file lists.
+  const active = readActiveStatusState(database, projectPath, false);
   const sourceSearchVersion = readActiveSourceSearchVersion(database, active.generationId);
   const bounds = boundedGraphQueryBounds(request);
   const generationMatched =
@@ -2836,7 +2838,8 @@ function readActiveGraphBundle(
 
 function readActiveStatusState(
   database: DatabaseSync,
-  projectPath: string
+  projectPath: string,
+  includeIndexWork = true
 ): {
   readonly schemaVersion: SupportedSchemaVersion;
   readonly generationId: string | null;
@@ -2847,7 +2850,9 @@ function readActiveStatusState(
   const generationId =
     supportsGenerationData(schemaVersion) ? getActiveGenerationId(database) : null;
   const generation = readGeneration(database, generationId);
-  const indexWork = readActiveIndexWork(database, schemaVersion, generationId);
+  const indexWork = includeIndexWork
+    ? readActiveIndexWork(database, schemaVersion, generationId)
+    : null;
   const statusWithoutWork: IndexStatus = {
     initialized: true,
     stale: false,

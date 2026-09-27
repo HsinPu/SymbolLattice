@@ -2316,6 +2316,7 @@ describe("SqliteGraphStore", () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();
     const graphSnapshot = boundedGraphSnapshot();
+    const work = indexWork("full", "bounded");
     store.replaceProjectFacts({
       projectPath,
       snapshot: graphSnapshot,
@@ -2324,7 +2325,8 @@ describe("SqliteGraphStore", () => {
       indexInputs: indexInputs("bounded-exact"),
       resolverVersion: "bounded-resolver-v1",
       sourceDocuments: sourceDocuments(graphSnapshot, "Root Target Tail"),
-      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION,
+      indexWork: work
     });
 
     const exact = store.getActiveBoundedGraphBundle?.(
@@ -2343,6 +2345,8 @@ describe("SqliteGraphStore", () => {
     expect(exact?.indexInputs).toEqual(indexInputs("bounded-exact"));
     expect(exact?.extractorVersion).toBe("test-extractor-v1");
     expect(exact?.resolverVersion).toBe("bounded-resolver-v1");
+    expect(exact?.status).not.toHaveProperty("lastIndexWork");
+    expect(store.getStatus(projectPath).lastIndexWork).toEqual(work);
 
     const qualified = store.getActiveBoundedGraphBundle?.(
       projectPath,

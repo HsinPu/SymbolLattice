@@ -252,7 +252,7 @@ export interface GraphStore {
     sourceIds: readonly string[],
     limitPerSymbol: number
   ): ActiveUnresolvedCallsProjection;
-  /** Optional SQLite-driven bounded graph projection for explore queries. */
+  /** Optional SQLite-driven bounded graph projection for explore queries; status omits lastIndexWork. */
   getActiveBoundedGraphBundle?(
     projectPath: string,
     request: BoundedGraphQueryRequest
