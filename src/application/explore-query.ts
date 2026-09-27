@@ -1007,6 +1007,7 @@ function candidateFor(
   symbol: SymbolNode,
   fileHints: readonly string[],
   identifierTerms: readonly string[],
+  variantsByTerm: ReadonlyMap<string, readonly string[]>,
   roleIntent: ExploreQueryRoleIntent,
   filesByPath: ReadonlyMap<string, IndexedFile>,
   sourceMatches: readonly SourceLexicalMatch[] = [],
@@ -1058,7 +1059,7 @@ function candidateFor(
       if (name.includes(term)) coveredTerms.push(term);
       continue;
     }
-    if (identifierTermVariants(term).some((variant) => nameWords.has(variant))) {
+    if (variantsByTerm.get(term)!.some((variant) => nameWords.has(variant))) {
       inflectedSymbolTerm = true;
       matchedTerms.push(term);
       coveredTerms.push(term);
@@ -2706,6 +2707,9 @@ export function planExploreQuery(
   sourceLexical?: SourceLexicalRetrieval
 ): ExploreQueryPlan {
   const parsed = parseQuery(query);
+  // The same query terms are checked against every bounded graph symbol.
+  const variantsByTerm = new Map(parsed.identifierTerms.map((term) =>
+    [term, identifierTermVariants(term)] as const));
   const numericQueryTerms = new Set(numericIdentifierTerms(parsed.identifierTerms));
   const roleIntent: ExploreQueryRoleIntent = {
     tests: parsed.testIntentTerms.length > 0,
@@ -2720,6 +2724,7 @@ export function planExploreQuery(
       symbol,
       parsed.fileHints,
       parsed.identifierTerms,
+      variantsByTerm,
       roleIntent,
       filesByPath,
       sourceById.get(symbol.id)?.matches,

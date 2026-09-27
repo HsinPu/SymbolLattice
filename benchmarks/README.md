@@ -39,6 +39,7 @@ These tools generate or validate large-project evidence outside the published np
 | `mcp/` | `read-query-concurrency.mjs` | manual |
 | `mcp/` | `strict-fresh-read-lifecycle.mjs` | manual |
 | `mcp/` | `paired-explore.mjs` | manual alternating persistent-service latency and complete-response equality or explicitly scoped unresolved-call selection check |
+| `mcp/` | `paired-query-planning.mjs` | manual alternating focus-planning latency and complete-plan equality on one fixed bounded graph bundle |
 | `mcp/` | `paired-index-replace.mjs` | manual alternating full graph-generation replacement on separate disposable index copies |
 | `mcp/` | `edge-lookup.mjs` | manual pinned-corpus paired SQLite edge-read measurement |
 | `mcp/` | `bounded-graph-read.mjs` | manual pinned-corpus bounded graph read, response hash, latency, and post-GC memory measurement |
@@ -47,6 +48,18 @@ These tools generate or validate large-project evidence outside the published np
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## v0.529.8 query-term variant reuse
+
+Natural-language focus planning checks the same query terms against every bounded graph symbol. Queries now compute each term's identifier inflections once per plan, then reuse them while scoring symbols. This changes neither matching rules, returned evidence nor index format, so it is a patch with no reindex requirement.
+
+On the current v431 indexes of pinned Django `bc833e8883db4a333a6485d91637b78c85e2b13b`, Fastify `70b14e92c0b55e8201f5530ba2e6bab4e928c784`, and NestJS `35c3ded6dbf3f23f917ae88d0ed966932788cae6`, 30 alternating warm planning-only pairs reused each query's same bounded graph bundle and returned deeply equal plans. Upper-median planning time changed from 76.21 to 56.27 ms for Django atomic rollback (30/30 candidate pairs faster), 60.29 to 49.85 ms for Fastify unknown media type (30/30 faster), and 148.29 to 137.13 ms for NestJS request-pipe transforms (26/30 faster). The NestJS single-term module-init control changed from 95.39 to 92.56 ms (27/30 faster). This isolates focus planning, not source retrieval, freshness or total query time.
+
+Eight alternating warm full-service query pairs also returned identical complete answers for these fixed questions. Upper-median total time was 2,063.31 to 2,062.96 ms on Django, 648.09 to 642.65 ms on Fastify, 1,509.99 to 1,502.84 ms on NestJS request pipes, and 1,184.86 to 1,147.11 ms on the NestJS single-term control. These small samples do not establish a general search-speed improvement. Source retrieval and full-content freshness dominate these queries; cold startup, indexing, incremental sync, peak memory and total Agent task time were not measured in this comparison.
+
+The final v0.529.8 build passed all 20 pinned task manifests (27 tasks). Every complete explore response was deeply equal to v0.529.7 on the same indexes, retaining 58/58 required-file occurrences, 113/113 specified source facts, and 2/2 specified unresolved-call receipts. The four judged irrelevant files and 37 unjudged selections were unchanged; these known tasks do not establish corpus-wide precision or recall. `npm run check`, `npm run build`, the 81 focused query-planning tests, and the full suite passed (3,234 tests passed, four existing skips).
+
+Raw planning reports are `%TEMP%/SymbolLattice-evidence-0927-v5298-final-planning-{django,fastify,nest-pipes,nest-single}.json`; full-service reports are `%TEMP%/SymbolLattice-evidence-0927-v5298-final-paired-{django,fastify,nest-pipes,nest-single}.json`; final task reports and equality summary are `%TEMP%/SymbolLattice-evidence-0927-v5298-final-retrieval/*.json` and `%TEMP%/SymbolLattice-evidence-0927-v5298-final-complete-task-equality.json`. Reproduce the planning comparison with `node benchmarks/mcp/paired-query-planning.mjs --project <pinned-v431-indexed-checkout> --baseline-root <v0.529.7-built-root> --candidate-root <v0.529.8-built-root> --query "<fixed-task-query>" --output <external-report.json> --pairs 30`; use `benchmarks/mcp/paired-explore.mjs` with the same arguments and `--pairs 8 --comparison complete` for full-service comparison. Reproduce task results with the matching `benchmarks/mcp/*-tasks.json` manifest and `benchmarks/mcp/task-retrieval.mjs` against both builds on the same pinned index.
 
 ## v0.529.7 bounded graph read batches
 
