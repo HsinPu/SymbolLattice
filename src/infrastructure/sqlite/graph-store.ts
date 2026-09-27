@@ -65,6 +65,7 @@ const INDEXED_AT_META_KEY = "indexed_at";
 const ACTIVE_GENERATION_ID_META_KEY = "active_generation_id";
 const ACTIVE_SOURCE_SEARCH_GENERATION_ID_META_KEY = "active_source_search_generation_id";
 const SYMBOL_CASEFOLDS_GENERATION_ID_META_KEY = "symbol_casefolds_generation_id";
+const SYMBOL_TRIGRAMS_GENERATION_ID_META_KEY = "symbol_trigrams_generation_id";
 const SCHEMA_VERSION_META_KEY = "schema_version";
 const INDEX_INPUTS_SCHEMA_VERSION = "3";
 const INDEX_WORK_SCHEMA_VERSION = "4";
@@ -94,6 +95,7 @@ const READ_BUSY_TIMEOUT_MS = 1_000;
 const PERSISTENT_READ_CACHE_KIB = 16 * 1024;
 const MEMORY_TEMP_STORE_MIN_SYMBOLS = 8_192;
 const MEMORY_TEMP_STORE_MAX_SYMBOLS = 65_536;
+const MIN_SYMBOL_TRIGRAM_SYMBOLS = 16_384;
 
 /**
  * The v0.1 snapshot tables remain deliberately unpartitioned. They are a fast
@@ -339,6 +341,18 @@ const SYMBOL_CASEFOLDS_SCHEMA = `
     folded_name TEXT NOT NULL,
     folded_qualified_name TEXT NOT NULL
   ) STRICT;
+`;
+
+/** An external-content substring index for bounded, multi-concept symbol searches. */
+const SYMBOL_TRIGRAMS_SCHEMA = `
+  CREATE VIRTUAL TABLE IF NOT EXISTS symbol_trigrams USING fts5(
+    folded_name,
+    folded_qualified_name,
+    content='symbol_casefolds',
+    content_rowid='rowid',
+    tokenize='trigram',
+    detail='none'
+  );
 `;
 
 /** Additive lookup indexes used by the bounded explore read projection. */
@@ -681,6 +695,7 @@ function installCurrentAdditiveSchema(database: DatabaseSync): void {
   database.exec(SOURCE_SEARCH_SCHEMA);
   database.exec(ACTIVE_SOURCE_SEARCH_SCHEMA);
   database.exec(SYMBOL_CASEFOLDS_SCHEMA);
+  database.exec(SYMBOL_TRIGRAMS_SCHEMA);
 }
 
 function activeSourceSearchGeneration(database: DatabaseSync, generationId: string | null): string | null {
@@ -729,14 +744,34 @@ function refreshSymbolCasefolds(database: DatabaseSync, generationId: string): v
     is_exported, declaration_ordinal, lower(name), lower(qualified_name)
     FROM symbols`);
   setMeta(database, SYMBOL_CASEFOLDS_GENERATION_ID_META_KEY, generationId);
+  refreshSymbolTrigrams(database, generationId);
 }
 
-function backfillActiveSymbolCasefolds(database: DatabaseSync): void {
+function refreshSymbolTrigrams(database: DatabaseSync, generationId: string): void {
+  const enabled = readCount(database, "symbol_casefolds") >= MIN_SYMBOL_TRIGRAM_SYMBOLS;
+  database.exec(enabled
+    ? "INSERT INTO symbol_trigrams(symbol_trigrams) VALUES('rebuild')"
+    : "INSERT INTO symbol_trigrams(symbol_trigrams) VALUES('delete-all')");
+  setMeta(database, SYMBOL_TRIGRAMS_GENERATION_ID_META_KEY,
+    enabled ? generationId : `disabled:${generationId}`);
+}
+
+function backfillActiveSymbolCasefolds(database: DatabaseSync): boolean {
+  const generationId = getActiveGenerationId(database);
+  if (generationId === null || readGeneration(database, generationId) === null) return false;
+  if (getMeta(database, SYMBOL_CASEFOLDS_GENERATION_ID_META_KEY) === generationId &&
+    readCount(database, "symbol_casefolds") === readCount(database, "symbols")) return false;
+  refreshSymbolCasefolds(database, generationId);
+  return true;
+}
+
+function backfillActiveSymbolTrigrams(database: DatabaseSync, force: boolean): void {
   const generationId = getActiveGenerationId(database);
   if (generationId === null || readGeneration(database, generationId) === null) return;
-  if (getMeta(database, SYMBOL_CASEFOLDS_GENERATION_ID_META_KEY) === generationId &&
-    readCount(database, "symbol_casefolds") === readCount(database, "symbols")) return;
-  refreshSymbolCasefolds(database, generationId);
+  const expectedMarker = readCount(database, "symbol_casefolds") >= MIN_SYMBOL_TRIGRAM_SYMBOLS
+    ? generationId : `disabled:${generationId}`;
+  if (!force && getMeta(database, SYMBOL_TRIGRAMS_GENERATION_ID_META_KEY) === expectedMarker) return;
+  refreshSymbolTrigrams(database, generationId);
 }
 
 function cleanOrphanedSourceSearchRows(database: DatabaseSync): void {
@@ -761,6 +796,7 @@ function cleanOrphanedSourceSearchRows(database: DatabaseSync): void {
 function migrateDatabaseToCurrent(database: DatabaseSync): void {
   database.exec("BEGIN IMMEDIATE");
   try {
+    const missingSymbolTrigrams = !tableExists(database, "symbol_trigrams");
     // All historic revisions use the same v0.1 projection. The v2-v4
     // additions are independent side tables, so this is a strictly additive
     // upgrade that preserves the active graph and any raw facts already there.
@@ -770,7 +806,8 @@ function migrateDatabaseToCurrent(database: DatabaseSync): void {
     ensureGeneratedFileColumns(database);
     cleanOrphanedSourceSearchRows(database);
     backfillActiveGenerationSnapshot(database);
-    backfillActiveSymbolCasefolds(database);
+    const refreshedCasefolds = backfillActiveSymbolCasefolds(database);
+    backfillActiveSymbolTrigrams(database, missingSymbolTrigrams && !refreshedCasefolds);
     pruneRetainedGenerations(database, getActiveGenerationId(database));
     backfillActiveSourceSearch(database);
     setMeta(database, SCHEMA_VERSION_META_KEY, SCHEMA_VERSION);
@@ -791,6 +828,7 @@ function initializeNewDatabase(database: DatabaseSync): void {
     ensureGeneratedFileColumns(database);
     backfillActiveGenerationSnapshot(database);
     backfillActiveSymbolCasefolds(database);
+    backfillActiveSymbolTrigrams(database, false);
     pruneRetainedGenerations(database, getActiveGenerationId(database));
     backfillActiveSourceSearch(database);
     setMeta(database, SCHEMA_VERSION_META_KEY, SCHEMA_VERSION);
@@ -818,13 +856,15 @@ function ensureSchema(database: DatabaseSync, databaseExisted: boolean): void {
   // snapshot when the generation is real, then clean old FTS rows and prune.
   database.exec("BEGIN IMMEDIATE");
   try {
+    const missingSymbolTrigrams = !tableExists(database, "symbol_trigrams");
     installCurrentAdditiveSchema(database);
     database.exec(BOUNDED_GRAPH_QUERY_INDEXES_SCHEMA);
     ensurePendingReferenceExtensionColumn(database);
     ensureGeneratedFileColumns(database);
     cleanOrphanedSourceSearchRows(database);
     backfillActiveGenerationSnapshot(database);
-    backfillActiveSymbolCasefolds(database);
+    const refreshedCasefolds = backfillActiveSymbolCasefolds(database);
+    backfillActiveSymbolTrigrams(database, missingSymbolTrigrams && !refreshedCasefolds);
     pruneRetainedGenerations(database, getActiveGenerationId(database));
     backfillActiveSourceSearch(database);
     database.exec("COMMIT");
@@ -2234,6 +2274,16 @@ function readBoundedSymbolRows(
   // predicate on every row; retain it for paths, Unicode and short terms.
   const exactCoveredByPartial = identifierTerms.length > 0 && identifierTerms.every((term) =>
     /^[A-Za-z0-9_$]{2,}$/u.test(term) && partialLowerTerms.has(term.toLowerCase()));
+  // Trigram LIKE is indexed only for literal sequences of at least three
+  // characters. Keep the original predicates as the final exact filter, and
+  // use the index only when they cannot match outside this candidate set.
+  const useSymbolTrigrams = persistedCasefolds && totalSymbolCount >= MIN_SYMBOL_TRIGRAM_SYMBOLS &&
+    filePaths.length === 0 &&
+    (identifierTerms.length === 0 || exactCoveredByPartial) &&
+    partialTerms.length > 0 && partialTerms.length <= 24 &&
+    partialTerms.every((term) => /^[A-Za-z0-9]{3,}$/u.test(term)) &&
+    getMeta(database, SYMBOL_TRIGRAMS_GENERATION_ID_META_KEY) === activeGenerationId &&
+    tableExists(database, "symbol_trigrams");
 
   const where: string[] = [];
   const parameters: (string | number)[] = [];
@@ -2304,22 +2354,38 @@ function readBoundedSymbolRows(
     return `(CASE WHEN ${group.map(() => `instr(${lowerName}, ?) > 0`).join(" OR ")} THEN 1 ELSE 0 END)`;
   }).join(" + ");
 
-  const projection = !reuseCasefolds
-    ? symbolProjectionSelect()
-    : persistedCasefolds
-      ? symbolProjectionSelect("symbol_casefolds")
-      : `WITH symbol_casefolds AS MATERIALIZED (
-        SELECT *, lower(name) AS folded_name, lower(qualified_name) AS folded_qualified_name FROM symbols
-      ) ${symbolProjectionSelect("symbol_casefolds")}`;
+  const trigramParameters: string[] = [];
+  const projection = useSymbolTrigrams
+    ? `WITH candidate_rowids AS (
+        ${partialTerms.flatMap((term) => {
+          const folded = term.toLowerCase();
+          trigramParameters.push(`${folded}%`, `%${folded}%`);
+          return [
+            "SELECT rowid FROM symbol_trigrams WHERE folded_name LIKE ?",
+            "SELECT rowid FROM symbol_trigrams WHERE folded_qualified_name LIKE ?"
+          ];
+        }).join(" UNION ")}
+      ) ${symbolProjectionSelect("symbol_casefolds")}`
+    : !reuseCasefolds
+      ? symbolProjectionSelect()
+      : persistedCasefolds
+        ? symbolProjectionSelect("symbol_casefolds")
+        : `WITH symbol_casefolds AS MATERIALIZED (
+          SELECT *, lower(name) AS folded_name, lower(qualified_name) AS folded_qualified_name FROM symbols
+        ) ${symbolProjectionSelect("symbol_casefolds")}`;
+  const exactWhere = where.join(" OR ");
+  const boundedWhere = useSymbolTrigrams
+    ? `rowid IN (SELECT rowid FROM candidate_rowids) AND (${exactWhere})`
+    : exactWhere;
 
   const statement = database.prepare(
     `${projection}
-     WHERE ${where.join(" OR ")}
+     WHERE ${boundedWhere}
      ORDER BY (${coverageOrder}) DESC, ${exactOrder}, file_path, start_line, start_column, name, id
      LIMIT ?`
   );
   const readRows = (): readonly SymbolRow[] => statement.all(
-    ...parameters, ...coverageParameters, ...exactOrderParameters, limit
+    ...trigramParameters, ...parameters, ...coverageParameters, ...exactOrderParameters, limit
   ) as unknown as SymbolRow[];
 
   // For medium indexes, keep the ranking sort (and any fallback materialization)

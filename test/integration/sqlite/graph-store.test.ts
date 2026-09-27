@@ -2447,10 +2447,30 @@ describe("SqliteGraphStore", () => {
     try {
       expect(repaired.prepare("SELECT value FROM meta WHERE key = 'symbol_casefolds_generation_id'")
         .get()).toMatchObject({ value: secondGenerationId });
+      expect(repaired.prepare("SELECT value FROM meta WHERE key = 'symbol_trigrams_generation_id'")
+        .get()).toMatchObject({ value: `disabled:${secondGenerationId}` });
       expect(repaired.prepare("SELECT name FROM symbol_casefolds").get())
         .toMatchObject({ name: "afterOnly" });
     } finally {
       repaired.close();
+    }
+
+    const indexedResult = store.getActiveBoundedGraphBundle(projectPath, request);
+    const missingTrigrams = new DatabaseSync(databasePathFor(projectPath));
+    try {
+      missingTrigrams.exec("DROP TABLE symbol_trigrams");
+    } finally {
+      missingTrigrams.close();
+    }
+    expect(store.getActiveBoundedGraphBundle(projectPath, request)).toEqual(indexedResult);
+    store.initialize(projectPath);
+    expect(store.getActiveBoundedGraphBundle(projectPath, request)).toEqual(indexedResult);
+    const restoredTrigrams = new DatabaseSync(databasePathFor(projectPath), { readOnly: true });
+    try {
+      expect(restoredTrigrams.prepare("SELECT rowid FROM symbol_trigrams WHERE folded_name LIKE 'after%'")
+        .all()).toHaveLength(0);
+    } finally {
+      restoredTrigrams.close();
     }
 
     const missing = new DatabaseSync(databasePathFor(projectPath));
@@ -2463,6 +2483,69 @@ describe("SqliteGraphStore", () => {
     store.initialize(projectPath);
     expect(readTableCount(projectPath, "symbol_casefolds")).toBe(1);
     expect(selected()).toContain("after");
+  });
+
+  it("keeps name-prefix and qualified-name matches when trigram candidates narrow a multi-concept read", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const template = boundedGraphSnapshot();
+    const graphSnapshot: GraphSnapshot = {
+      ...template,
+      symbols: [
+        { ...boundedSymbol("name-only", "SavepointHandler", "src/a.ts"),
+          qualifiedName: "OpaqueReference" },
+        { ...boundedSymbol("qualified-only", "Fallback", "src/b.ts"),
+          qualifiedName: "DatabaseRollbackHandler" },
+        ...Array.from({ length: 16_382 }, (_, index) =>
+          boundedSymbol(`filler-${index}`, `Unrelated${index}`, "src/c.ts", index))
+      ],
+      edges: [],
+      pendingReferences: []
+    };
+    store.replaceProjectFacts({ projectPath, snapshot: graphSnapshot,
+      indexedAt: "2026-09-28T00:00:00.000Z", artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("trigram-candidates"), resolverVersion: "bounded-resolver-v1" });
+    const query = "savepoint rollback";
+    const request = { ...boundedRequest(query, { maxHops: 0 }), ...exploreQuerySeedTerms(query) };
+    const indexed = store.getActiveBoundedGraphBundle(projectPath, request);
+    expect(indexed.snapshot.symbols.map((node) => node.id))
+      .toEqual(expect.arrayContaining(["name-only", "qualified-only"]));
+
+    const database = new DatabaseSync(databasePathFor(projectPath));
+    try {
+      expect(database.prepare("SELECT rowid FROM symbol_trigrams WHERE folded_name LIKE 'savepoint%'")
+        .all()).toHaveLength(1);
+      expect(database.prepare("SELECT rowid FROM symbol_trigrams WHERE folded_qualified_name LIKE '%rollback%'")
+        .all()).toHaveLength(1);
+      database.exec("DROP TABLE symbol_trigrams");
+    } finally {
+      database.close();
+    }
+    expect(store.getActiveBoundedGraphBundle(projectPath, request)).toEqual(indexed);
+    store.initialize(projectPath);
+    const rebuilt = new DatabaseSync(databasePathFor(projectPath), { readOnly: true });
+    try {
+      expect(rebuilt.prepare("SELECT rowid FROM symbol_trigrams WHERE folded_name LIKE 'savepoint%'")
+        .all()).toHaveLength(1);
+    } finally {
+      rebuilt.close();
+    }
+
+    const reducedSnapshot = { ...graphSnapshot, symbols: graphSnapshot.symbols.slice(0, 2) };
+    store.replaceProjectFacts({ projectPath, snapshot: reducedSnapshot,
+      indexedAt: "2026-09-28T00:01:00.000Z", artifactFacts: persistedFacts(reducedSnapshot),
+      indexInputs: indexInputs("trigram-candidates-reduced"), resolverVersion: "bounded-resolver-v1" });
+    const reduced = new DatabaseSync(databasePathFor(projectPath), { readOnly: true });
+    try {
+      expect(reduced.prepare("SELECT rowid FROM symbol_trigrams WHERE folded_name LIKE 'savepoint%'")
+        .all()).toHaveLength(0);
+      expect(reduced.prepare("SELECT value FROM meta WHERE key = 'symbol_trigrams_generation_id'")
+        .get()).toMatchObject({ value: `disabled:${store.getStatus(projectPath).generationId}` });
+    } finally {
+      reduced.close();
+    }
+    expect(store.getActiveBoundedGraphBundle(projectPath, request).snapshot.symbols.map((node) => node.id))
+      .toEqual(expect.arrayContaining(["name-only", "qualified-only"]));
   });
 
   it("skips exact edges whose source or target symbol is absent during bounded traversal", async () => {
