@@ -47,12 +47,14 @@ export const EXPLORE_QUERY_PROPERTY_USE_FOLLOWUP = {
 } as const;
 export const EXPLORE_QUERY_CONNECTION_LIMITS = { perNeighbor: 60, maximumScore: 240 } as const;
 export const EXPLORE_QUERY_SOURCE_LEXICAL_SCORING = {
-  policy: "callable-source-ranking-v2",
+  policy: "callable-source-ranking-v3",
   density: SOURCE_LEXICAL_SCORING,
-  maximumScore: 1720,
+  maximumScore: 2020,
   admissionScore: 120,
   maximumCoverageScore: 1500,
   perAdditionalConcept: 500,
+  maximumExcessCoverageScore: 300,
+  perExcessConcept: 75,
   maximumDensityScore: 100,
   exactFileNameScore: 500
 } as const;
@@ -1113,8 +1115,18 @@ function candidateFor(
       ? "exported-binding-source-term" : "callable-source-term");
     const combinedConcepts = identifierTermGroups([...coveredTerms, ...sourceMatches.map((match) => match.term)]).length;
     const additionalConcepts = Math.max(0, combinedConcepts - 1) - Math.max(0, coveredConcepts - 1);
+    const coverageCap = EXPLORE_QUERY_SOURCE_LEXICAL_SCORING.maximumCoverageScore /
+      EXPLORE_QUERY_SOURCE_LEXICAL_SCORING.perAdditionalConcept;
+    // Extra body concepts corroborate a name or file-name hit; a generic
+    // callable with many incidental words must not consume an evidence slot.
+    // Numeric queries keep their separate literal/qualifier ranking.
+    const excessCoverageScore = nameMatchedTermCount === 0 || numericQueryTerms.size > 0 ? 0 :
+      Math.min(EXPLORE_QUERY_SOURCE_LEXICAL_SCORING.maximumExcessCoverageScore,
+        Math.max(0, additionalConcepts - coverageCap) *
+        EXPLORE_QUERY_SOURCE_LEXICAL_SCORING.perExcessConcept);
     sourceScore = Math.min(EXPLORE_QUERY_SOURCE_LEXICAL_SCORING.maximumCoverageScore,
       Math.max(0, additionalConcepts) * EXPLORE_QUERY_SOURCE_LEXICAL_SCORING.perAdditionalConcept) +
+      excessCoverageScore +
       Math.round(sourceScore / SOURCE_LEXICAL_SCORING.maximumScore * EXPLORE_QUERY_SOURCE_LEXICAL_SCORING.maximumDensityScore);
     if (!exactSymbolTerm && !qualifiedSymbolTerm && !partialSymbolTerm && !inflectedSymbolTerm) {
       sourceScore += EXPLORE_QUERY_SOURCE_LEXICAL_SCORING.admissionScore;

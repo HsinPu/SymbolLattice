@@ -17,6 +17,33 @@ import { matchCallableSource, scoreCallableSource, SOURCE_LEXICAL_POLICY, SOURCE
 import { identifierTermGroups } from "../../src/domain/identifier-search.js";
 
 describe("source-backed same-file focus coverage", () => {
+  it("surfaces a fully corroborated transaction step without losing the savepoint implementation", () => {
+    const query = "atomic transaction block exception database connection rollback savepoint";
+    const exit = symbol({ id: "exit", name: "exit", filePath: "src/transaction.ts" });
+    const generic = symbol({ id: "generic", name: "createDatabase", filePath: "src/creation.ts" });
+    const initializer = symbol({ id: "initializer", name: "initialize", filePath: "src/base.ts" });
+    const savepoint = symbol({ id: "savepoint", name: "savepointRollback", filePath: "src/base.ts" });
+    const matches = (node: SymbolNode, terms: readonly string[]) => terms.map((term, index) => ({
+      term, token: term, filePath: node.filePath,
+      range: { start: { line: 1, column: index * 12 + 1 },
+        end: { line: 1, column: index * 12 + term.length + 1 } }
+    }));
+    const lexical = { policy: SOURCE_LEXICAL_POLICY, limits: SOURCE_LEXICAL_LIMITS, state: "searched" as const,
+      scannedFiles: 3, scannedSymbols: 4, scannedCharacters: 400, truncated: false,
+      candidates: [
+        { symbolId: exit.id, score: 100, matches: matches(exit, query.split(" ")) },
+        { symbolId: generic.id, score: 1000,
+          matches: matches(generic, ["transaction", "exception", "database", "connection"]) },
+        { symbolId: initializer.id, score: 1000, matches: matches(initializer, query.split(" ")) },
+        { symbolId: savepoint.id, score: 800, matches: matches(savepoint, ["rollback", "savepoint"]) }
+      ] };
+    const plan = planExploreQuery({ symbols: [exit, generic, initializer, savepoint], edges: [] }, query, lexical);
+    const selected = plan.selection.map(item => item.symbol.id);
+    expect(selected.indexOf(exit.id)).toBeLessThan(selected.indexOf(generic.id));
+    expect(selected).toContain(savepoint.id);
+    expect(plan.selection.find(item => item.symbol.id === exit.id)?.sourceMatches).toHaveLength(8);
+  });
+
   it("keeps concrete rollback methods when broad same-class bodies consume both focus slots", () => {
     const filePath = "src/database.py";
     const query = "atomic block exception savepoint rollback";
