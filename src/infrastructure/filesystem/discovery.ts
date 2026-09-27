@@ -693,6 +693,7 @@ async function discoverSourcePaths(
 }
 
 function isPlayRoutesFile(filePath: string): boolean {
+  if (!filePath.endsWith("routes")) return false;
   const normalized = filePath.replaceAll("\\", "/");
   return /(?:^|\/)conf\/(?:routes|[^/]+\.routes)$/u.test(normalized);
 }
