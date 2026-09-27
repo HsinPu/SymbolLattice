@@ -2767,6 +2767,53 @@ describe("SqliteGraphStore", () => {
     expect(first?.snapshot.edges.map((edge) => edge.id)).toEqual(["edge-a-b", "edge-b-c"]);
   });
 
+  it("reuses bounded edge evidence only within the active generation of a persistent reader", async () => {
+    const projectPath = await temporaryProject();
+    const writer = new SqliteGraphStore();
+    const reader = new SqliteGraphStore({ persistentReadProjectPath: projectPath, readOnly: true });
+    persistentReadStores.push(reader);
+    const firstSnapshot = snapshot([symbol("caller", "caller"), symbol("callee", "callee")]);
+    writer.replaceProjectFacts({ projectPath, snapshot: firstSnapshot,
+      indexedAt: "2026-09-28T00:00:00.000Z", artifactFacts: persistedFacts(firstSnapshot),
+      indexInputs: indexInputs("edge-cache-first"), resolverVersion: "edge-cache-resolver" });
+    const request = boundedRequest("caller");
+    const first = reader.getActiveBoundedGraphBundle(projectPath, request);
+    expect(first.snapshot.edges[0]?.evidence?.ruleId).toBe("test.calls");
+    expect(reader.getActiveBoundedGraphBundle(projectPath, request)).toEqual(first);
+
+    const secondSnapshot: GraphSnapshot = { ...firstSnapshot, edges: firstSnapshot.edges.map((edge) => ({
+      ...edge, evidence: { ...edge.evidence, ruleId: "test.calls.updated" }
+    })) };
+    writer.replaceProjectFacts({ projectPath, snapshot: secondSnapshot,
+      indexedAt: "2026-09-28T00:01:00.000Z", artifactFacts: persistedFacts(secondSnapshot),
+      indexInputs: indexInputs("edge-cache-second"), resolverVersion: "edge-cache-resolver" });
+    const second = reader.getActiveBoundedGraphBundle(projectPath, request);
+    expect(second.status.generationId).not.toBe(first.status.generationId);
+    expect(second.snapshot.edges[0]?.id).toBe(first.snapshot.edges[0]?.id);
+    expect(second.snapshot.edges[0]?.evidence?.ruleId).toBe("test.calls.updated");
+    expect(reader.getActiveBoundedGraphBundle(projectPath, request)).toEqual(second);
+    expect(reader.getActiveBoundedGraphBundle(projectPath, boundedRequest("callee"))
+      .snapshot.edges[0]?.evidence?.ruleId).toBe("test.calls.updated");
+
+    const missingSnapshot: GraphSnapshot = { ...secondSnapshot,
+      edges: secondSnapshot.edges.map(({ evidence: _evidence, ...edge }) => edge) };
+    writer.replaceProjectFacts({ projectPath, snapshot: missingSnapshot,
+      indexedAt: "2026-09-28T00:02:00.000Z", artifactFacts: persistedFacts(missingSnapshot),
+      indexInputs: indexInputs("edge-cache-missing"), resolverVersion: "edge-cache-resolver" });
+    expect(reader.getActiveBoundedGraphBundle(projectPath, request).snapshot.edges[0]?.evidence)
+      .toBeUndefined();
+    expect(reader.getActiveBoundedGraphBundle(projectPath, request).snapshot.edges[0]?.evidence)
+      .toBeUndefined();
+    writer.replaceProjectFacts({ projectPath, snapshot: secondSnapshot,
+      indexedAt: "2026-09-28T00:03:00.000Z", artifactFacts: persistedFacts(secondSnapshot),
+      indexInputs: indexInputs("edge-cache-restored"), resolverVersion: "edge-cache-resolver" });
+    expect(reader.getActiveBoundedGraphBundle(projectPath, request).snapshot.edges[0]?.evidence?.ruleId)
+      .toBe("test.calls.updated");
+    reader.close();
+    expect(reader.getActiveBoundedGraphBundle(projectPath, request).snapshot.edges[0]?.evidence?.ruleId)
+      .toBe("test.calls.updated");
+  });
+
   it("uses only active source rows for bounded seeds and repairs a missing active projection", async () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();

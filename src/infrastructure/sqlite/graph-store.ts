@@ -90,6 +90,12 @@ const MAX_BOUNDED_RELATIONSHIPS = 16384;
 const MAX_BOUNDED_HOPS = 4;
 // Stay below SQLite's conservative 999-variable bound, including generation IDs.
 const BOUNDED_QUERY_PARAMETER_BATCH_SIZE = 900;
+const MAXIMUM_CACHED_BOUNDED_EDGE_EVIDENCE = 16_384;
+
+interface BoundedEdgeEvidenceCache {
+  generationId: string | null;
+  readonly jsonByEdgeId: Map<string, string | null>;
+}
 const SOURCE_SYMBOL_READ_BATCH_SIZE = 16;
 const READ_BUSY_TIMEOUT_MS = 1_000;
 const PERSISTENT_READ_CACHE_KIB = 16 * 1024;
@@ -2606,12 +2612,23 @@ function readBoundedEdgesByIds(
 function readBoundedEdgeEvidence(
   database: DatabaseSync,
   activeGenerationId: string | null,
-  rows: readonly EdgeRow[]
+  rows: readonly EdgeRow[],
+  cache?: BoundedEdgeEvidenceCache
 ): readonly GraphEdge[] {
   if (activeGenerationId === null) return rows.map(toGraphEdge);
-  const evidenceByEdgeId = new Map<string, string>();
-  for (let start = 0; start < rows.length; start += BOUNDED_QUERY_PARAMETER_BATCH_SIZE) {
-    const batch = rows.slice(start, start + BOUNDED_QUERY_PARAMETER_BATCH_SIZE);
+  if (cache !== undefined && cache.generationId !== activeGenerationId) {
+    cache.generationId = activeGenerationId;
+    cache.jsonByEdgeId.clear();
+  }
+  const evidenceByEdgeId = new Map<string, string | null>();
+  const uncached = cache === undefined ? rows : rows.filter((row) => {
+    const json = cache.jsonByEdgeId.get(row.id);
+    if (json === undefined) return true;
+    evidenceByEdgeId.set(row.id, json);
+    return false;
+  });
+  for (let start = 0; start < uncached.length; start += BOUNDED_QUERY_PARAMETER_BATCH_SIZE) {
+    const batch = uncached.slice(start, start + BOUNDED_QUERY_PARAMETER_BATCH_SIZE);
     const evidenceRows = database.prepare(
       `SELECT edge_id, evidence_json FROM edge_evidence
        WHERE generation_id = ? AND edge_id IN (${batch.map(() => "?").join(", ")})`
@@ -2621,13 +2638,23 @@ function readBoundedEdgeEvidence(
     }[];
     for (const evidence of evidenceRows) evidenceByEdgeId.set(evidence.edge_id, evidence.evidence_json);
   }
+  if (cache !== undefined) {
+    for (const row of uncached) {
+      const json = evidenceByEdgeId.get(row.id) ?? null;
+      if (cache.jsonByEdgeId.size >= MAXIMUM_CACHED_BOUNDED_EDGE_EVIDENCE) {
+        cache.jsonByEdgeId.delete(cache.jsonByEdgeId.keys().next().value!);
+      }
+      cache.jsonByEdgeId.set(row.id, json);
+    }
+  }
   return rows.map((row) => toGraphEdge({ ...row, evidence_json: evidenceByEdgeId.get(row.id) ?? null }));
 }
 
 function readActiveBoundedGraphBundle(
   database: DatabaseSync,
   projectPath: string,
-  request: BoundedGraphQueryRequest
+  request: BoundedGraphQueryRequest,
+  edgeEvidenceCache?: BoundedEdgeEvidenceCache
 ): ActiveBoundedGraphBundle {
   // Explore reports freshness, but its bounded read does not consume the
   // previous index operation's potentially large file lists.
@@ -2799,7 +2826,7 @@ function readActiveBoundedGraphBundle(
     .sort(compareEdgeRows);
   // Hydrate evidence only for edges that survive traversal and node bounds.
   // This read remains inside the same generation-fenced SQLite transaction.
-  const edges = readBoundedEdgeEvidence(database, active.generationId, retainedEdgeRows);
+  const edges = readBoundedEdgeEvidence(database, active.generationId, retainedEdgeRows, edgeEvidenceCache);
   const diagnostics: BoundedGraphQueryDiagnostics = {
     generationMatched,
     seedFiles: selectedFilePaths.length,
@@ -2932,6 +2959,9 @@ export class SqliteGraphStore implements GraphStore {
   private readonly persistentReadProjectPath: string | null;
   private readonly readOnly: boolean;
   private persistentReadDatabase: DatabaseSync | null = null;
+  private readonly boundedEdgeEvidenceCache: BoundedEdgeEvidenceCache = {
+    generationId: null, jsonByEdgeId: new Map()
+  };
 
   public constructor(options: SqliteGraphStoreOptions = {}) {
     this.persistentReadProjectPath =
@@ -2945,6 +2975,8 @@ export class SqliteGraphStore implements GraphStore {
   public close(): void {
     const database = this.persistentReadDatabase;
     this.persistentReadDatabase = null;
+    this.boundedEdgeEvidenceCache.generationId = null;
+    this.boundedEdgeEvidenceCache.jsonByEdgeId.clear();
     if (database !== null) {
       database.close();
     }
@@ -3201,7 +3233,9 @@ export class SqliteGraphStore implements GraphStore {
     }
 
     return this.withReadDatabase(normalizedProjectPath, (database) =>
-      readActiveBoundedGraphBundle(database, normalizedProjectPath, request)
+      readActiveBoundedGraphBundle(database, normalizedProjectPath, request,
+        normalizedProjectPath === this.persistentReadProjectPath
+          ? this.boundedEdgeEvidenceCache : undefined)
     );
   }
 

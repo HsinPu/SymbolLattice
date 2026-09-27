@@ -17,9 +17,10 @@ const query = argument("--query");
 const output = argument("--output");
 const pairs = Number(argument("--pairs") ?? 8);
 const comparison = argument("--comparison") ?? "complete";
+const persistentReader = process.argv.includes("--persistent-reader");
 if ([project, baselineRoot, candidateRoot, query, output].some((value) => value === null) ||
   !Number.isSafeInteger(pairs) || pairs < 1 || !["complete", "query-unresolved-calls", "timing-only"].includes(comparison)) {
-  throw new Error("Usage: --project <indexed-checkout> --baseline-root <built-product> --candidate-root <built-product> --query <text> --output <json> [--pairs <positive-integer>] [--comparison complete|query-unresolved-calls|timing-only]");
+  throw new Error("Usage: --project <indexed-checkout> --baseline-root <built-product> --candidate-root <built-product> --query <text> --output <json> [--pairs <positive-integer>] [--comparison complete|query-unresolved-calls|timing-only] [--persistent-reader]");
 }
 
 function withoutQueryUnresolvedCallItems(result) {
@@ -32,6 +33,7 @@ function withoutQueryUnresolvedCallItems(result) {
 }
 
 const roots = { baseline: resolve(baselineRoot), candidate: resolve(candidateRoot) };
+const projectPath = resolve(project);
 const cases = {};
 for (const [name, root] of Object.entries(roots)) {
   const load = async (path) => import(pathToFileURL(resolve(root, "dist", path)).href);
@@ -40,13 +42,13 @@ for (const [name, root] of Object.entries(roots)) {
   const { FileSystemSourceCatalog } = await load("infrastructure/filesystem/index.js");
   const { SqliteGraphStore } = await load("infrastructure/sqlite/index.js");
   const sink = new RecordingQueryTimingSink();
-  const store = new SqliteGraphStore({ readOnly: true });
+  const store = new SqliteGraphStore({ readOnly: true,
+    ...(persistentReader ? { persistentReadProjectPath: projectPath } : {}) });
   const service = new SymbolLatticeService(store, new FileSystemSourceCatalog(),
     { queryTimingSink: sink });
   cases[name] = { service, store, sink, samples: [] };
 }
 
-const projectPath = resolve(project);
 try {
   for (const entry of Object.values(cases)) await entry.service.explore(projectPath, query);
   for (let pair = 0; pair < pairs; pair += 1) {
@@ -88,6 +90,7 @@ try {
   }]));
   const report = { schemaVersion: 1, project: projectPath, query,
     conditions: { roots, pairs, warmupQueriesPerProduct: 1, order: "alternating",
+      persistentReader,
       statistic: "upper median", comparison, completeExploreResultsEqual,
       comparisonScopeEqual: comparison === "timing-only" ? null : true,
       firstIndexing: "not measured", incrementalSync: "not measured" },
