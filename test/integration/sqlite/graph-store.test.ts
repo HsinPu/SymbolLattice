@@ -2599,6 +2599,61 @@ describe("SqliteGraphStore", () => {
     expect(first?.snapshot.edges.map((edge) => edge.id)).toEqual(["edge-a-b", "edge-b-c"]);
   });
 
+  it("uses only active source rows for bounded seeds and repairs a missing active projection", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const graphSnapshot = boundedGraphSnapshot();
+    for (const [index, sourceText] of [
+      "function oldToken() { natural(); }",
+      "function oldToken() { natural(); }",
+      "function newToken() { natural(); }"
+    ].entries()) {
+      store.replaceProjectFacts({
+        projectPath,
+        snapshot: graphSnapshot,
+        indexedAt: `2026-08-25T0${index + 3}:00:00.000Z`,
+        artifactFacts: persistedFacts(graphSnapshot),
+        indexInputs: indexInputs(`active-source-${index}`),
+        resolverVersion: "bounded-resolver-v2",
+        sourceDocuments: sourceDocuments(graphSnapshot, sourceText),
+        sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION
+      });
+      if (index < 2) expect(readTableCount(projectPath, "active_source_search")).toBe(0);
+    }
+    const generationId = store.getStatus(projectPath).generationId;
+    expect(generationId).not.toBeNull();
+    expect(readTableCount(projectPath, "source_search")).toBe(9);
+    expect(readTableCount(projectPath, "active_source_search")).toBe(3);
+    const database = new DatabaseSync(databasePathFor(projectPath));
+    try {
+      expect((database.prepare("SELECT DISTINCT generation_id FROM active_source_search")
+        .get() as { readonly generation_id: string }).generation_id).toBe(generationId);
+    } finally {
+      database.close();
+    }
+
+    const request = { ...boundedRequest("newToken natural"),
+      ...exploreQuerySeedTerms("newToken natural") };
+    const active = store.getActiveBoundedGraphBundle(projectPath, request);
+    expect(active.diagnostics.usedSourceSearch).toBe(true);
+    expect(store.getActiveSourceSearchBundle(projectPath, sourceSearchRequest("oldToken")).hits).toEqual([]);
+    const sourceHits = store.getActiveSourceSearchBundle(projectPath, sourceSearchRequest("newToken")).hits;
+    expect(sourceHits).toHaveLength(3);
+
+    const outdated = new DatabaseSync(databasePathFor(projectPath));
+    try {
+      outdated.exec("DROP TABLE active_source_search");
+    } finally {
+      outdated.close();
+    }
+    expect(store.getActiveBoundedGraphBundle(projectPath, request)).toEqual(active);
+    store.initialize(projectPath);
+    expect(readTableCount(projectPath, "active_source_search")).toBe(3);
+    expect(store.getActiveBoundedGraphBundle(projectPath, request)).toEqual(active);
+    expect(store.getActiveSourceSearchBundle(projectPath, sourceSearchRequest("newToken")).hits)
+      .toEqual(sourceHits);
+  });
+
   it("preserves distinct generation-bound call receipts across evidence lookup batches", async () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();

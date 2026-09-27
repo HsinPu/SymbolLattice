@@ -63,6 +63,7 @@ const INDEX_DIRECTORY_NAME = ".SymbolLattice";
 const DATABASE_FILE_NAME = "index.sqlite";
 const INDEXED_AT_META_KEY = "indexed_at";
 const ACTIVE_GENERATION_ID_META_KEY = "active_generation_id";
+const ACTIVE_SOURCE_SEARCH_GENERATION_ID_META_KEY = "active_source_search_generation_id";
 const SYMBOL_CASEFOLDS_GENERATION_ID_META_KEY = "symbol_casefolds_generation_id";
 const SCHEMA_VERSION_META_KEY = "schema_version";
 const INDEX_INPUTS_SCHEMA_VERSION = "3";
@@ -300,6 +301,17 @@ const SOURCE_DOCUMENTS_SCHEMA = `
 
 const SOURCE_SEARCH_SCHEMA = `
   CREATE VIRTUAL TABLE IF NOT EXISTS source_search USING fts5(
+    generation_id UNINDEXED,
+    file_path UNINDEXED,
+    language UNINDEXED,
+    corpus
+  );
+`;
+
+// The historical FTS projection keeps source-search scores stable. Bounded
+// exploration reads this smaller active-only copy when it has been populated.
+const ACTIVE_SOURCE_SEARCH_SCHEMA = `
+  CREATE VIRTUAL TABLE IF NOT EXISTS active_source_search USING fts5(
     generation_id UNINDEXED,
     file_path UNINDEXED,
     language UNINDEXED,
@@ -656,7 +668,43 @@ function installCurrentAdditiveSchema(database: DatabaseSync): void {
   database.exec(GENERATION_SOURCE_SEARCH_SCHEMA);
   database.exec(SOURCE_DOCUMENTS_SCHEMA);
   database.exec(SOURCE_SEARCH_SCHEMA);
+  database.exec(ACTIVE_SOURCE_SEARCH_SCHEMA);
   database.exec(SYMBOL_CASEFOLDS_SCHEMA);
+}
+
+function activeSourceSearchGeneration(database: DatabaseSync, generationId: string | null): string | null {
+  if (generationId === null || readActiveSourceSearchVersion(database, generationId) === null) return null;
+  const row = database.prepare("SELECT COUNT(*) AS count FROM generation_source_search")
+    .get() as { readonly count: number };
+  // A second copy pays off only after several retained generations expand the
+  // historical FTS posting lists. Smaller indexes continue to use the original.
+  return row.count >= 3 ? generationId : null;
+}
+
+function refreshActiveSourceSearch(database: DatabaseSync, generationId: string | null): void {
+  database.exec("DELETE FROM active_source_search");
+  if (generationId !== null) {
+    database.prepare(`INSERT INTO active_source_search(generation_id, file_path, language, corpus)
+      SELECT source_search.generation_id, source_search.file_path,
+        source_search.language, source_search.corpus
+      FROM source_search
+      INNER JOIN source_documents
+        ON source_documents.generation_id = source_search.generation_id
+        AND source_documents.file_path = source_search.file_path
+      WHERE source_search.generation_id = ?`).run(generationId);
+  }
+  setMeta(database, ACTIVE_SOURCE_SEARCH_GENERATION_ID_META_KEY, generationId ?? "");
+}
+
+function backfillActiveSourceSearch(database: DatabaseSync): void {
+  const generationId = activeSourceSearchGeneration(database, getActiveGenerationId(database));
+  if (getMeta(database, ACTIVE_SOURCE_SEARCH_GENERATION_ID_META_KEY) === (generationId ?? "")) {
+    const expected = generationId === null ? 0 : (database.prepare(
+      "SELECT COUNT(*) AS count FROM source_search WHERE generation_id = ?"
+    ).get(generationId) as { readonly count: number }).count;
+    if (readCount(database, "active_source_search") === expected) return;
+  }
+  refreshActiveSourceSearch(database, generationId);
 }
 
 function refreshSymbolCasefolds(database: DatabaseSync, generationId: string): void {
@@ -713,6 +761,7 @@ function migrateDatabaseToCurrent(database: DatabaseSync): void {
     backfillActiveGenerationSnapshot(database);
     backfillActiveSymbolCasefolds(database);
     pruneRetainedGenerations(database, getActiveGenerationId(database));
+    backfillActiveSourceSearch(database);
     setMeta(database, SCHEMA_VERSION_META_KEY, SCHEMA_VERSION);
     database.exec("COMMIT");
   } catch (error) {
@@ -732,6 +781,7 @@ function initializeNewDatabase(database: DatabaseSync): void {
     backfillActiveGenerationSnapshot(database);
     backfillActiveSymbolCasefolds(database);
     pruneRetainedGenerations(database, getActiveGenerationId(database));
+    backfillActiveSourceSearch(database);
     setMeta(database, SCHEMA_VERSION_META_KEY, SCHEMA_VERSION);
     database.exec("COMMIT");
   } catch (error) {
@@ -765,6 +815,7 @@ function ensureSchema(database: DatabaseSync, databaseExisted: boolean): void {
     backfillActiveGenerationSnapshot(database);
     backfillActiveSymbolCasefolds(database);
     pruneRetainedGenerations(database, getActiveGenerationId(database));
+    backfillActiveSourceSearch(database);
     database.exec("COMMIT");
   } catch (error) {
     database.exec("ROLLBACK");
@@ -1008,6 +1059,9 @@ const INSERT_SOURCE_DOCUMENT_SQL = `INSERT INTO source_documents(
 const INSERT_SOURCE_SEARCH_SQL = `INSERT INTO source_search(
   generation_id, file_path, language, corpus
 ) VALUES (?, ?, ?, ?)`;
+const INSERT_ACTIVE_SOURCE_SEARCH_SQL = `INSERT INTO active_source_search(
+  generation_id, file_path, language, corpus
+) VALUES (?, ?, ?, ?)`;
 
 function insertFile(statement: StatementSync, file: IndexedFile): void {
   const generated = file.generated;
@@ -1133,16 +1187,14 @@ function insertSourceSearchVersion(
 function insertSourceDocument(
   documentStatement: StatementSync,
   searchStatement: StatementSync,
+  activeSearchStatement: StatementSync | null,
   generationId: string,
   document: IndexedSourceDocument
 ): void {
   documentStatement.run(generationId, document.filePath, document.language, document.sourceText);
-  searchStatement.run(
-      generationId,
-      document.filePath,
-      document.language,
-      sourceSearchCorpus(document.sourceText)
-  );
+  const corpus = sourceSearchCorpus(document.sourceText);
+  searchStatement.run(generationId, document.filePath, document.language, corpus);
+  activeSearchStatement?.run(generationId, document.filePath, document.language, corpus);
 }
 
 function emptySnapshot(): GraphSnapshot {
@@ -2113,18 +2165,20 @@ function readBoundedSourceSeedPaths(
   const roleOrder = prioritizeRoles
     ? `CASE WHEN COALESCE(json_extract(files.source_role_json, '$.role'), 'production') IN (${roles.map(() => "?").join(",")}) THEN 0 ELSE 1 END`
     : "0 + 0";
+  const searchTable = getMeta(database, ACTIVE_SOURCE_SEARCH_GENERATION_ID_META_KEY) === activeGenerationId &&
+    tableExists(database, "active_source_search") ? "active_source_search" : "source_search";
 
   const rows = database
     .prepare(
-      `SELECT source_search.file_path, bm25(source_search) AS relevance
-       FROM source_search
+      `SELECT ${searchTable}.file_path, bm25(${searchTable}) AS relevance
+       FROM ${searchTable}
        INNER JOIN source_documents
-         ON source_documents.generation_id = source_search.generation_id
-         AND source_documents.file_path = source_search.file_path
-       INNER JOIN files ON files.path = source_search.file_path
-       WHERE source_search MATCH ?
-         AND source_search.generation_id = ?
-       ORDER BY (${roleOrder}), relevance ASC, source_search.file_path ASC
+         ON source_documents.generation_id = ${searchTable}.generation_id
+         AND source_documents.file_path = ${searchTable}.file_path
+       INNER JOIN files ON files.path = ${searchTable}.file_path
+       WHERE ${searchTable} MATCH ?
+         AND ${searchTable}.generation_id = ?
+       ORDER BY (${roleOrder}), relevance ASC, ${searchTable}.file_path ASC
        LIMIT ?`
     )
     .all(matchQuery, activeGenerationId, ...(prioritizeRoles ? roles : []), maxFiles) as unknown as SourceSearchPathRow[];
@@ -3136,6 +3190,9 @@ export class SqliteGraphStore implements GraphStore {
         if (writesSourceSearch) {
           insertSourceSearchVersion(database, generationId, input.sourceSearchVersion);
         }
+        const maintainsActiveSourceSearch = writesSourceSearch &&
+          activeSourceSearchGeneration(database, generationId) !== null;
+        database.exec("DELETE FROM active_source_search");
 
         const artifactFactsInsert = database.prepare(INSERT_ARTIFACT_FACTS_SQL);
         for (const facts of input.artifactFacts) {
@@ -3145,15 +3202,20 @@ export class SqliteGraphStore implements GraphStore {
         if (writesSourceSearch) {
           const sourceDocumentInsert = database.prepare(INSERT_SOURCE_DOCUMENT_SQL);
           const sourceSearchInsert = database.prepare(INSERT_SOURCE_SEARCH_SQL);
+          const activeSourceSearchInsert = maintainsActiveSourceSearch
+            ? database.prepare(INSERT_ACTIVE_SOURCE_SEARCH_SQL) : null;
           for (const document of input.sourceDocuments) {
             insertSourceDocument(
               sourceDocumentInsert,
               sourceSearchInsert,
+              activeSourceSearchInsert,
               generationId,
               document
             );
           }
         }
+        setMeta(database, ACTIVE_SOURCE_SEARCH_GENERATION_ID_META_KEY,
+          maintainsActiveSourceSearch ? generationId : "");
 
         const edgeEvidenceInsert = database.prepare(INSERT_EDGE_EVIDENCE_SQL);
         for (const edge of input.snapshot.edges) {
