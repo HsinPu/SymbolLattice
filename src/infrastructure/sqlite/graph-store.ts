@@ -807,11 +807,10 @@ function supportsIndexWork(schemaVersion: SupportedSchemaVersion): boolean {
 }
 
 function supportsSourceSearch(database: DatabaseSync): boolean {
-  return (
-    tableExists(database, "generation_source_search") &&
-    tableExists(database, "source_documents") &&
-    tableExists(database, "source_search")
-  );
+  const row = database.prepare(`SELECT count(*) AS present FROM sqlite_master
+    WHERE type = 'table' AND name IN ('generation_source_search', 'source_documents', 'source_search')`)
+    .get() as { present: number };
+  return row.present === 3;
 }
 
 function parseJson<T>(json: string, description: string): T {
@@ -2096,8 +2095,7 @@ function readBoundedSourceSeedPaths(
   if (
     maxFiles === 0 ||
     activeGenerationId === null ||
-    sourceSearchVersion === null ||
-    !supportsSourceSearch(database)
+    sourceSearchVersion === null
   ) {
     return [];
   }
@@ -2472,8 +2470,9 @@ function readActiveBoundedGraphBundle(
   const identifierTerms = boundedIdentifierTerms(request);
   const lexicalGroups = boundedLexicalGroups(request);
   const lexicalTerms = lexicalGroups.flat();
+  // readActiveSourceSearchVersion already checked all three source-search tables.
   const sourceSearchAvailable =
-    sourceSearchVersion !== null && supportsSourceSearch(database) && active.generationId !== null;
+    sourceSearchVersion !== null && active.generationId !== null;
 
   if (!generationMatched || bounds.maxNodes === 0 || bounds.maxSeedFiles === 0 || bounds.maxSeedSymbols === 0) {
     const diagnostics: BoundedGraphQueryDiagnostics = {

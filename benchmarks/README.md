@@ -50,6 +50,14 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.529.10 bounded source-search table checks
+
+The bounded graph read now checks the three source-search tables in one SQLite metadata query and reuses that result within the same read. This is an internal patch: query fields, ranking, evidence and index format are unchanged; existing indexes do not need rebuilding.
+
+On pinned Django `bc833e8883db4a333a6485d91637b78c85e2b13b`, Fastify `70b14e92c0b55e8201f5530ba2e6bab4e928c784` and NestJS `35c3ded6dbf3f23f917ae88d0ed966932788cae6`, all 27 fixed-task bounded graph bundles were exactly equal to v0.529.9. Seven end-to-end tasks in three manifests also returned identical complete explore results, retaining 14/14 required-file occurrences, 23/23 specified source facts and 2/2 unresolved-call receipts. The four judged irrelevant selections in those tasks remain. Eight alternating warm bounded reads per corpus reduced metadata statement preparations from 12 to 4 per read. Their median times were 1150.78 → 1166.59 ms (Django), 463.16 → 466.24 ms (Fastify) and 916.30 → 916.19 ms (NestJS). These mixed timings do not establish an end-to-end speed improvement. Cold reads, memory and Agent task time were not measured.
+
+Raw equality reports are `%TEMP%/SymbolLattice-evidence-0927-source-table-bundle-equality.json` and `%TEMP%/SymbolLattice-evidence-0927-v52910-complete-task-equality.json`; task reports are under `%TEMP%/SymbolLattice-evidence-0927-v52910-retrieval/`. The task reports can be reproduced with `node benchmarks/mcp/task-retrieval.mjs --project <matching-pinned-indexed-checkout> --manifest benchmarks/mcp/<matching-tasks.json> --output <external-report.json> --repetitions 1`.
+
 ## v0.529.9 source-backed rejection lead in MCP text
 
 When a rejection query selects a CommonJS error declaration through an exact source-property reference, the MCP text now puts that source-backed pair before the ranked focus list. The lead requires both selected symbols and their cited exact edge in the returned connections. It names the reference site and declaration site, and states that a static reference does not prove the rejection branch executes. Other ranked focuses remain candidates rather than being presented as part of that path. The structured result, ranking, index format and CLI query contract are unchanged, so this is a patch; no reindex is needed.
