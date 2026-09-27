@@ -3180,7 +3180,8 @@ export class SymbolLatticeService {
           reference,
           bundle,
           source,
-          source === null ? "unavailable" : "active-generation"
+          source === null ? "unavailable" : "active-generation",
+          sourceDocument.sourceText
         );
       }
     }
@@ -3243,7 +3244,8 @@ export class SymbolLatticeService {
           reference,
           sourceBundle,
           source,
-          source === null ? "unavailable" : "active-generation"
+          source === null ? "unavailable" : "active-generation",
+          sourceDocument.sourceText
         );
       }
 
@@ -5954,7 +5956,8 @@ export class SymbolLatticeService {
     reference: string,
     bundle: ActiveGraphBundle,
     source: DeliveredSourceExcerpt | null,
-    sourceAvailability: NonNullable<ExploreResult["sourceAvailability"]>
+    sourceAvailability: NonNullable<ExploreResult["sourceAvailability"]>,
+    sourceText: string | null = null
   ): Promise<ExploreResult> {
     const match = matchSymbol(bundle.snapshot, reference);
     const status = await measureQueryTiming(
@@ -5992,6 +5995,25 @@ export class SymbolLatticeService {
       }),
       { focusCount: 1 }
     );
+    const unresolvedCalls = this.exploreUnresolvedCalls(normalizedProjectPath, bundle,
+      [match.symbol.id], NODE_RELATION_LIMIT).get(match.symbol.id)!;
+    let citedUnresolvedCalls = unresolvedCalls;
+    if (sourceAvailability === "active-generation" && sourceText !== null &&
+        match.symbol.kind === "method" && match.symbol.filePath.toLowerCase().endsWith(".py") &&
+        unresolvedCalls.state === "available" && unresolvedCalls.items.some((edge) =>
+          edge.referenceName?.startsWith("self.") &&
+          edge.evidence?.ruleId === "syntax.python.member-call.unknown-receiver")) {
+      const declarations = new Map<string, SymbolNode[]>();
+      for (const symbol of bundle.snapshot.symbols) {
+        if (symbol.kind !== "method" || symbol.filePath !== match.symbol.filePath) continue;
+        const names = declarations.get(symbol.qualifiedName) ?? [];
+        names.push(symbol);
+        declarations.set(symbol.qualifiedName, names);
+      }
+      const lines = sourceText.split(/\r\n|\r|\n|\u2028|\u2029/u);
+      citedUnresolvedCalls = withSameClassDeclarationLeads(unresolvedCalls, match.symbol,
+        declarations, (declaration) => lines[declaration.range.start.line - 1] ?? null, []);
+    }
     return {
       status,
       mode: "exact-symbol",
@@ -6000,7 +6022,7 @@ export class SymbolLatticeService {
       source,
       callers: relations.callers,
       callees: relations.callees,
-      unresolvedCalls: this.exploreUnresolvedCalls(normalizedProjectPath, bundle, [match.symbol.id], NODE_RELATION_LIMIT).get(match.symbol.id)!,
+      unresolvedCalls: citedUnresolvedCalls,
       impact: relations.impact,
       queryPlan: null,
       focuses: [],

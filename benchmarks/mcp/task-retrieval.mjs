@@ -236,7 +236,9 @@ export function verifyUnresolvedCalls(result, readSource) {
 /** Check each candidate lead against the written call and the pinned declaration line. */
 export function verifySameClassDeclarationLeads(result, readSource) {
   let verifiedLeads = 0, omittedLeads = 0;
-  for (const focus of result.focuses ?? []) {
+  const contexts = result.focuses?.length ? result.focuses :
+    [{ symbol: result.match?.symbol, unresolvedCalls: result.unresolvedCalls }];
+  for (const focus of contexts) {
     const evidence = focus.unresolvedCalls;
     const receipt = evidence?.sameClassDeclarationLeads;
     if (!receipt) continue;

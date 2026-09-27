@@ -145,6 +145,11 @@ describe("task retrieval benchmark judgments", () => {
     } }] };
     const read = () => "class Service:\n    def helper(self):\n        pass\n    def run(self):\n        self.helper()";
     expect(verifySameClassDeclarationLeads(result, read)).toEqual({ verifiedLeads: 1, omittedLeads: 1 });
+    const exact = { match: { status: 'exact', symbol: owner },
+      unresolvedCalls: structuredClone(result.focuses[0].unresolvedCalls), focuses: [] };
+    expect(verifySameClassDeclarationLeads(exact, read)).toEqual({ verifiedLeads: 1, omittedLeads: 1 });
+    exact.unresolvedCalls.sameClassDeclarationLeads.items[0].declarationLine.line = 3;
+    expect(() => verifySameClassDeclarationLeads(exact, read)).toThrow();
     for (const mutate of [
       r => { r.focuses[0].unresolvedCalls.sameClassDeclarationLeads.items[0].edgeId = "missing"; },
       r => { r.focuses[0].unresolvedCalls.sameClassDeclarationLeads.items[0].declaration.qualifiedName = "service.py#Other.helper"; },

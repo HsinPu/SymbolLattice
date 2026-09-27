@@ -1026,6 +1026,45 @@ describe("SymbolLatticeService", () => {
     expect(updated.callees).toEqual([]);
   });
 
+  it("cites active-generation same-class declaration leads for exact Python method followups", async () => {
+    const projectPath = await createInlineProject({ "forms.py": [
+      "class BaseForm:",
+      "    @property",
+      "    def errors(self):",
+      "        self.full_clean()",
+      "        return {}",
+      "    def full_clean(self):",
+      "        pass"
+    ].join("\n") });
+    const service = createService();
+    await service.init({ projectPath });
+
+    const exact = await service.explore(projectPath, "forms.py#BaseForm.errors");
+    expect(exact.mode).toBe("exact-symbol");
+    expect(exact.sourceAvailability).toBe("active-generation");
+    expect(exact.unresolvedCalls?.items).toEqual([
+      expect.objectContaining({ referenceName: "self.full_clean", resolution: "unresolved",
+        targetId: null, confidence: 0, range: expect.objectContaining({ start: { line: 4, column: 9 } }) })
+    ]);
+    expect(exact.unresolvedCalls?.sameClassDeclarationLeads).toMatchObject({
+      scope: "returned-bounded-graph",
+      omittedCount: 0,
+      items: [{ edgeId: exact.unresolvedCalls?.items[0]?.id,
+        declaration: { qualifiedName: "forms.py#BaseForm.full_clean", filePath: "forms.py" },
+        declarationLine: { line: 6, text: "    def full_clean(self):", truncated: false } }]
+    });
+    expect(exact.callees).toEqual([]);
+
+    await writeFile(join(projectPath, "forms.py"), [
+      "class BaseForm:", "    @property", "    def errors(self):", "        self.full_clean()",
+      "        return {}", "    def validate(self):", "        pass"
+    ].join("\n"), "utf8");
+    await service.sync({ projectPath });
+    const updated = await service.explore(projectPath, "forms.py#BaseForm.errors");
+    expect(updated.unresolvedCalls?.items[0]?.referenceName).toBe("self.full_clean");
+    expect(updated.unresolvedCalls?.sameClassDeclarationLeads).toBeUndefined();
+  });
+
   it("surfaces later query-relevant Python call receipts within the existing query limit", async () => {
     const projectPath = await createInlineProject({ "transactions.py": [
       "def rollback_transaction(connection):",
