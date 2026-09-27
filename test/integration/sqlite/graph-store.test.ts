@@ -2364,6 +2364,52 @@ describe("SqliteGraphStore", () => {
     expect(file?.snapshot.symbols.map((node) => node.id)).toContain("c-tail");
   });
 
+  it("replaces older edge lookup indexes without changing the active graph", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const graphSnapshot = boundedGraphSnapshot();
+    store.replaceProjectFacts({
+      projectPath,
+      snapshot: graphSnapshot,
+      indexedAt: "2026-09-27T00:00:00.000Z",
+      artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("edge-index-upgrade"),
+      resolverVersion: "bounded-resolver-v1"
+    });
+    const request = boundedRequest("Target");
+    const before = store.getActiveBoundedGraphBundle(projectPath, request);
+    const database = new DatabaseSync(databasePathFor(projectPath));
+    try {
+      database.exec(`
+        DROP INDEX edges_by_source_resolution_kind;
+        DROP INDEX edges_by_target_resolution_kind;
+        CREATE INDEX edges_by_source ON edges(source_id, kind);
+        CREATE INDEX edges_by_target ON edges(target_id, kind);
+      `);
+    } finally {
+      database.close();
+    }
+
+    store.initialize(projectPath);
+    store.initialize(projectPath);
+
+    const upgraded = new DatabaseSync(databasePathFor(projectPath), { readOnly: true });
+    try {
+      const columns = (name: string): string[] =>
+        (upgraded.prepare(`PRAGMA index_info(${name})`).all() as { readonly name: string }[])
+          .map((row) => row.name);
+      expect(columns("edges_by_source_resolution_kind"))
+        .toEqual(["source_id", "resolution", "kind"]);
+      expect(columns("edges_by_target_resolution_kind"))
+        .toEqual(["target_id", "resolution", "kind"]);
+      expect(columns("edges_by_source")).toEqual([]);
+      expect(columns("edges_by_target")).toEqual([]);
+    } finally {
+      upgraded.close();
+    }
+    expect(store.getActiveBoundedGraphBundle(projectPath, request)).toEqual(before);
+  });
+
   it("uses only the active generation's folded symbol copy and repairs an outdated copy", async () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();

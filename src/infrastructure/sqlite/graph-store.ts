@@ -151,8 +151,10 @@ const SNAPSHOT_SCHEMA = `
     reference_name TEXT
   ) STRICT;
 
-  CREATE INDEX IF NOT EXISTS edges_by_source ON edges(source_id, kind);
-  CREATE INDEX IF NOT EXISTS edges_by_target ON edges(target_id, kind);
+  CREATE INDEX IF NOT EXISTS edges_by_source_resolution_kind
+    ON edges(source_id, resolution, kind);
+  CREATE INDEX IF NOT EXISTS edges_by_target_resolution_kind
+    ON edges(target_id, resolution, kind);
 
   CREATE TABLE IF NOT EXISTS pending_refs (
     id TEXT PRIMARY KEY,
@@ -345,6 +347,14 @@ const BOUNDED_GRAPH_QUERY_INDEXES_SCHEMA = `
     ON symbols(lower(name));
   CREATE INDEX IF NOT EXISTS symbols_by_lower_qualified_name
     ON symbols(lower(qualified_name));
+  -- Replace the older source/target + kind indexes once. The exact-edge
+  -- traversal and unresolved-call lookup both filter on resolution.
+  DROP INDEX IF EXISTS edges_by_source;
+  DROP INDEX IF EXISTS edges_by_target;
+  CREATE INDEX IF NOT EXISTS edges_by_source_resolution_kind
+    ON edges(source_id, resolution, kind);
+  CREATE INDEX IF NOT EXISTS edges_by_target_resolution_kind
+    ON edges(target_id, resolution, kind);
   CREATE INDEX IF NOT EXISTS edges_by_file_path
     ON edges(file_path);
   CREATE INDEX IF NOT EXISTS pending_refs_by_file_path
