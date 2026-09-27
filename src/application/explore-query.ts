@@ -19,6 +19,7 @@ import { downstreamFocusPaths, type ExploreFlowFocus } from "./explore-flow-focu
 
 export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v29" as const;
 export const EXPLORE_REJECTION_REFERENCE_PRIORITY_POLICY = "rejection-source-reference-first-v1" as const;
+export const EXPLORE_REJECTION_REFERENCE_FILTER_POLICY = "rejection-source-reference-filter-v1" as const;
 export const EXPLORE_NAMED_METHOD_FOCUS = {
   minimumRelativeScore: 0.55,
   minimumCompoundNameConcepts: 2
@@ -500,6 +501,16 @@ export interface ExploreQueryPlan {
     readonly previousSourceRank: number;
     readonly previousErrorRank: number;
     readonly sharedTerms: readonly string[];
+  };
+  readonly rejectionReferenceFiltering?: {
+    readonly policy: typeof EXPLORE_REJECTION_REFERENCE_FILTER_POLICY;
+    readonly evidenceScope: "returned-bounded-graph";
+    readonly sourceSymbolId: string;
+    readonly errorSymbolId: string;
+    readonly coveredTerms: readonly string[];
+    readonly unmatchedQueryTerms: readonly string[];
+    readonly omitted: readonly { readonly symbolId: string; readonly filePath: string;
+      readonly matchedTerms: readonly string[] }[];
   };
   readonly numericContainerFiltering?: {
     readonly policy: typeof EXPLORE_NUMERIC_CONTAINER_FILTER.policy;
@@ -2645,12 +2656,18 @@ function selectPropertyUseFollowup(
   return receipts;
 }
 
+interface RejectionReferencePromotion {
+  readonly priority: NonNullable<ExploreQueryPlan["rejectionReferencePriority"]>;
+  readonly directlyLinked: ReadonlySet<string>;
+}
+
 /** Put a cited rejection site before incidental matches without treating a property reference as a call. */
 function promoteRejectionReferenceFocuses(
   selected: Candidate[], receipts: ReadonlyMap<string, ExploreQueryPropertyUseFollowup>,
   graph: ExploreQueryGraph, query: string
-): ExploreQueryPlan["rejectionReferencePriority"] {
+): RejectionReferencePromotion | undefined {
   if (!/\breject(?:s|ed|ing|ion)?\b/iu.test(query)) return undefined;
+  const selectedById = new Map(selected.map(candidate => [candidate.symbol.id, candidate]));
   const pairs = [...receipts].flatMap(([sourceId, receipt]) => {
     const sourceIndex = selected.findIndex(candidate => candidate.symbol.id === sourceId);
     const errorIndex = selected.findIndex(candidate => candidate.symbol.id === receipt.anchorSymbolId);
@@ -2662,13 +2679,24 @@ function promoteRejectionReferenceFocuses(
     const errorTerms = new Set(error.matchedTerms);
     const sharedTerms = [...new Set(source.matchedTerms.filter(term => errorTerms.has(term)))].sort(compareText);
     if (sharedTerms.length === 0) return [];
-    const edgeIds = graph.edges.filter(edge => receipt.edgeIds.includes(edge.id) &&
-      edge.sourceId === sourceId && edge.targetId === error.symbol.id &&
-      edge.kind === "references" && edge.resolution === "exact" &&
-      edge.evidence?.ruleId === "module.commonjs-object-property-reference")
-      .map(edge => edge.id).sort(compareText);
+    const edgeIds: string[] = [];
+    const directlyLinked = new Set<string>();
+    for (const edge of graph.edges) {
+      if (receipt.edgeIds.includes(edge.id) && edge.sourceId === sourceId &&
+          edge.targetId === error.symbol.id && edge.kind === "references" &&
+          edge.resolution === "exact" &&
+          edge.evidence?.ruleId === "module.commonjs-object-property-reference") edgeIds.push(edge.id);
+      const sourceAnchored = edge.sourceId === sourceId || edge.sourceId === error.symbol.id;
+      const targetAnchored = edge.targetId === sourceId || edge.targetId === error.symbol.id;
+      if (sourceAnchored === targetAnchored || edge.resolution !== "exact" || edge.targetId === null ||
+          edge.evidence?.ruleId === undefined ||
+          edge.filePath !== selectedById.get(edge.sourceId)?.symbol.filePath) continue;
+      const neighborId = sourceAnchored ? edge.targetId : edge.sourceId;
+      if (selectedById.has(neighborId)) directlyLinked.add(neighborId);
+    }
+    edgeIds.sort(compareText);
     if (edgeIds.length === 0) return [];
-    return [{ source, error, sourceIndex, errorIndex, sharedTerms, edgeIds }];
+    return [{ source, error, sourceIndex, errorIndex, sharedTerms, edgeIds, directlyLinked }];
   }).sort((left, right) => left.errorIndex - right.errorIndex ||
     right.sharedTerms.length - left.sharedTerms.length || left.sourceIndex - right.sourceIndex ||
     compareText(left.source.symbol.id, right.source.symbol.id));
@@ -2677,14 +2705,59 @@ function promoteRejectionReferenceFocuses(
   selected.splice(0, selected.length, pair.source, pair.error,
     ...selected.filter(candidate => candidate !== pair.source && candidate !== pair.error));
   return {
-    policy: EXPLORE_REJECTION_REFERENCE_PRIORITY_POLICY,
-    evidenceScope: "static-property-reference",
-    sourceSymbolId: pair.source.symbol.id,
-    errorSymbolId: pair.error.symbol.id,
-    edgeIds: pair.edgeIds,
-    previousSourceRank: pair.sourceIndex + 1,
-    previousErrorRank: pair.errorIndex + 1,
-    sharedTerms: pair.sharedTerms
+    priority: {
+      policy: EXPLORE_REJECTION_REFERENCE_PRIORITY_POLICY,
+      evidenceScope: "static-property-reference",
+      sourceSymbolId: pair.source.symbol.id,
+      errorSymbolId: pair.error.symbol.id,
+      edgeIds: pair.edgeIds,
+      previousSourceRank: pair.sourceIndex + 1,
+      previousErrorRank: pair.errorIndex + 1,
+      sharedTerms: pair.sharedTerms
+    },
+    directlyLinked: pair.directlyLinked
+  };
+}
+
+/** Omit redundant lexical focuses within the bounded graph; absence of a link is not proof of irrelevance. */
+function filterRedundantRejectionFocuses(
+  selected: Candidate[], priority: ExploreQueryPlan["rejectionReferencePriority"],
+  directlyLinked: ReadonlySet<string>, queryTerms: readonly string[],
+  coverageReceipts: ReadonlyMap<string, ExploreQueryFocusCoverage>,
+  sourceGapReceipts: ReadonlyMap<string, ExploreQuerySourceGapCoverage>,
+  propertyUseReceipts: ReadonlyMap<string, ExploreQueryPropertyUseFollowup>
+): ExploreQueryPlan["rejectionReferenceFiltering"] {
+  if (priority === undefined) return undefined;
+  const source = selected.find(candidate => candidate.symbol.id === priority.sourceSymbolId);
+  const error = selected.find(candidate => candidate.symbol.id === priority.errorSymbolId);
+  if (source === undefined || error === undefined ||
+      new Set(source.sourceMatches?.map(match => match.term) ?? []).size < 2) return undefined;
+  const coveredTerms = new Set([...source.matchedTerms, ...error.matchedTerms]);
+  if (selected.some(candidate => candidate !== source && candidate !== error &&
+      candidate.matchedTerms.some(term => !coveredTerms.has(term)))) return undefined;
+
+  const propertyAnchorIds = new Set([...propertyUseReceipts.values()]
+    .map(receipt => receipt.anchorSymbolId));
+  const omitted = selected.filter(candidate => candidate !== source && candidate !== error &&
+    !candidate.explicitFile && candidate.numericQualifier === undefined &&
+    !candidate.baseReasons.includes("exact-symbol-term") &&
+    !directlyLinked.has(candidate.symbol.id) &&
+    !propertyAnchorIds.has(candidate.symbol.id) &&
+    candidate.graphExpansion.path.length === 0 &&
+    !coverageReceipts.has(candidate.symbol.id) && !sourceGapReceipts.has(candidate.symbol.id) &&
+    !propertyUseReceipts.has(candidate.symbol.id));
+  if (omitted.length === 0) return undefined;
+  const omittedIds = new Set(omitted.map(candidate => candidate.symbol.id));
+  selected.splice(0, selected.length, ...selected.filter(candidate => !omittedIds.has(candidate.symbol.id)));
+  return {
+    policy: EXPLORE_REJECTION_REFERENCE_FILTER_POLICY,
+    evidenceScope: "returned-bounded-graph",
+    sourceSymbolId: source.symbol.id,
+    errorSymbolId: error.symbol.id,
+    coveredTerms: [...coveredTerms].sort(compareText),
+    unmatchedQueryTerms: queryTerms.filter(term => !coveredTerms.has(term)),
+    omitted: omitted.map(candidate => ({ symbolId: candidate.symbol.id,
+      filePath: candidate.symbol.filePath, matchedTerms: candidate.matchedTerms }))
   };
 }
 
@@ -2949,10 +3022,15 @@ export function planExploreQuery(
       ...sourceGapReceipts.keys(), ...propertyUseReceipts.keys()
     ]));
   }
-  const rejectionReferencePriority = naturalLanguage && parsed.fileHints.length === 0 &&
+  const rejectionPromotion = naturalLanguage && parsed.fileHints.length === 0 &&
     numericQueryTerms.size === 0
     ? promoteRejectionReferenceFocuses(selected, propertyUseReceipts, graph, parsed.boundedQuery)
     : undefined;
+  const rejectionReferencePriority = rejectionPromotion?.priority;
+  const rejectionReferenceFiltering = filterRedundantRejectionFocuses(selected,
+    rejectionReferencePriority, rejectionPromotion?.directlyLinked ?? new Set(),
+    parsed.identifierTerms, coverageReceipts, sourceGapReceipts,
+    propertyUseReceipts);
   const selection: ExploreQuerySelection[] = selected.map((candidate, index) => {
     const score = rawScore(candidate);
     return {
@@ -3051,6 +3129,7 @@ export function planExploreQuery(
       terms: numericImplementationAnchor.numericQualifier!.terms
     } }),
     ...(rejectionReferencePriority === undefined ? {} : { rejectionReferencePriority }),
+    ...(rejectionReferenceFiltering === undefined ? {} : { rejectionReferenceFiltering }),
     ...(omittedNumericContainers.length === 0 ? {} : { numericContainerFiltering: {
       policy: EXPLORE_NUMERIC_CONTAINER_FILTER.policy,
       limits: EXPLORE_NUMERIC_CONTAINER_FILTER,

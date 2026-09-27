@@ -38,7 +38,7 @@ These tools generate or validate large-project evidence outside the published np
 | `r/` | `lifecycle.mjs` | manual |
 | `mcp/` | `read-query-concurrency.mjs` | manual |
 | `mcp/` | `strict-fresh-read-lifecycle.mjs` | manual |
-| `mcp/` | `paired-explore.mjs` | manual alternating persistent-service latency and complete-response equality or explicitly scoped unresolved-call selection check |
+| `mcp/` | `paired-explore.mjs` | manual alternating persistent-service latency; complete-response equality, scoped unresolved-call comparison, or timing-only mode for separately validated output changes |
 | `mcp/` | `paired-explore-text.mjs` | manual same-response MCP text comparison across two built products |
 | `mcp/` | `paired-query-planning.mjs` | manual alternating focus-planning latency and complete-plan equality on one fixed bounded graph bundle |
 | `mcp/` | `paired-index-replace.mjs` | manual alternating full graph-generation replacement on separate disposable index copies |
@@ -49,6 +49,16 @@ These tools generate or validate large-project evidence outside the published np
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## v0.530.0 bounded rejection-focus filtering
+
+For natural-language rejection queries, an exact, source-located CommonJS reference can identify a source callable and its exported error declaration. When the source also has at least two matching source terms, other selected focuses are omitted only if they add no query term and lack a directly cited link in the returned bounded graph. Explicit file, numeric and exact-symbol matches, graph-expanded or coverage focuses, and both sides of selected property-use receipts remain selected. The optional `queryPlan.rejectionReferenceFiltering` receipt names omitted symbols and uncovered query terms; MCP text states the omission and how to query further. Missing links in a bounded graph do not prove those files irrelevant. This adds an output receipt and changes focus selection, so it is a minor `0.x` release. The index format is unchanged and existing indexes need no rebuild.
+
+The same 20 fixed task manifests on pinned [Django](https://github.com/django/django) `bc833e8883db4a333a6485d91637b78c85e2b13b`, [Fastify](https://github.com/fastify/fastify) `70b14e92c0b55e8201f5530ba2e6bab4e928c784` and [NestJS](https://github.com/nestjs/nest) `35c3ded6dbf3f23f917ae88d0ed966932788cae6` yielded 27 tasks with 58/58 required-file occurrences, 113/113 specified source facts and 2/2 specified unresolved-call receipts. Only Fastify's development task “How is an unknown media type rejected?” changed: `lib/validation.js` and `lib/schemas.js`, both independently judged irrelevant to this rejection branch, left the selected files while `lib/contentTypeParser.js` and `lib/errors.js` remained with all specified source lines and exact property-use receipts. Judged false-positive file occurrences across these tasks fell from four to two; 37 selected file occurrences remain unjudged. This does not measure repository-wide precision or establish improvement on held-out tasks. The changed task's structured response was 505,639 → 234,748 bytes and its Markdown projection 26,542 → 11,763 bytes.
+
+Eight alternating warm full-service query pairs for that Fastify task compared v0.529.13 with v0.530.0 on the same indexed checkout. Upper-median total time was 656.12 → 653.08 ms, seed retrieval 457.48 → 457.23 ms, and planning 63.14 → 75.60 ms. The smaller response reduces output volume, but this small total-time difference does not establish a query-latency improvement; planning was slower on this case. The timing-only comparison mode deliberately does not assert result equality or compare call selection; the fixed task manifests validate the changed response independently. First indexing, incremental synchronization, cold queries, peak memory and total Agent task time were not measured.
+
+Raw task reports and comparison are `%TEMP%/SymbolLattice-evidence-0927-v5300-retrieval/` and `%TEMP%/SymbolLattice-evidence-0927-v5300-task-comparison.json`; the timing report is `%TEMP%/SymbolLattice-evidence-0927-v5300-paired-fastify-unknown-final.json`. Reproduce task checks with `node benchmarks/mcp/task-retrieval.mjs --project <matching-pinned-indexed-checkout> --manifest benchmarks/mcp/<matching-task-manifest>.json --output <external-report.json> --repetitions 1`; reproduce warm timing with `node benchmarks/mcp/paired-explore.mjs --project <pinned-indexed-fastify> --baseline-root <v0.529.13-built-root> --candidate-root <v0.530.0-built-root> --query "How is an unknown media type rejected?" --output <external-report.json> --pairs 8 --comparison timing-only`.
 
 ## v0.529.13 bounded callable-source symbol reads
 

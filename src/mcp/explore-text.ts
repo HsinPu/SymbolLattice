@@ -363,6 +363,11 @@ function renderLimitations(result: UnknownRecord): string[] {
   if (sourceLexical?.state === "unavailable") notes.add("Indexed source is unavailable for lexical ranking; this result uses symbol and graph evidence.");
   if (record(plan?.input)?.truncated === true) notes.add("Query text was truncated; retry with a shorter query.");
   if (record(plan?.summary)?.truncated === true) notes.add("Focus selection was truncated; narrow the query to a file or qualified symbol.");
+  const rejectionFiltering = record(plan?.rejectionReferenceFiltering);
+  const omittedRejectionFocuses = records(rejectionFiltering?.omitted);
+  if (rejectionFiltering?.evidenceScope === "returned-bounded-graph" && omittedRejectionFocuses.length > 0) {
+    notes.add(`${omittedRejectionFocuses.length} lower-priority symbol focuses with covered query terms were omitted from this bounded result. Their files may still matter; inspect \`queryPlan.rejectionReferenceFiltering.omitted\` with \`SymbolLattice explore <query> --json --project <project>\`, or query a file directly.`);
+  }
   if (result.connectionsTruncated === true) notes.add("Additional exact connections were truncated.");
   if (record(record(result.sourceWindowPlan)?.summary)?.truncated === true ||
       record(record(result.sourceWindowAllocation)?.summary)?.truncated === true) {

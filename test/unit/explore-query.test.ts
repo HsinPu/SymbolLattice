@@ -600,6 +600,44 @@ describe("source-proven property use followup", () => {
     expect(planExploreQuery(sourceGraph, "unknown media type", lexical).rejectionReferencePriority).toBeUndefined();
     expect(planExploreQuery(sourceGraph, "How is an unknown media type 415 rejected?", lexical)
       .rejectionReferencePriority).toBeUndefined();
+
+    const noNovelSchemas = { ...schemas, name: "selectMediaTypeSchema",
+      qualifiedName: `${schemas.filePath}#selectMediaTypeSchema` };
+    const noNovelHandler = { ...handler, name: "handleMediaType",
+      qualifiedName: `${handler.filePath}#handleMediaType` };
+    const noNovelResolver = symbol({ id: "resolver", name: "resolveMediaType",
+      filePath: "lib/mime.js" });
+    const redundantGraph = { ...sourceGraph,
+      symbols: [validation, noNovelSchemas, noNovelHandler, noNovelResolver, error, run],
+      files: [validation, noNovelSchemas, noNovelHandler, noNovelResolver, error, run]
+        .map(item => indexedFile(item.filePath, false)) };
+    const sourceEvidence = { ...lexical, candidates: [run, validation, noNovelSchemas, noNovelHandler,
+      noNovelResolver]
+      .map(item => ({ symbolId: item.id, score: item === run ? 300 : 1000,
+        matches: ["media", "type"].map(term => ({ term, token: term,
+          filePath: item.filePath, range: item.range })) })) };
+    const filtered = planExploreQuery(redundantGraph, query, sourceEvidence);
+    expect(filtered.selection.map(item => item.symbol.id)).toEqual([run.id, error.id]);
+    expect(filtered.rejectionReferenceFiltering).toMatchObject({
+      policy: "rejection-source-reference-filter-v1", evidenceScope: "returned-bounded-graph",
+      sourceSymbolId: run.id, errorSymbolId: error.id,
+      coveredTerms: ["media", "type"], unmatchedQueryTerms: ["unknown", "rejected"],
+      omitted: expect.arrayContaining([
+        { symbolId: validation.id, filePath: validation.filePath, matchedTerms: ["media", "type"] },
+        { symbolId: noNovelResolver.id, filePath: noNovelResolver.filePath,
+          matchedTerms: ["media", "type"] }
+      ])
+    });
+    const directlyLinkedGraph = { ...redundantGraph, edges: [...redundantGraph.edges,
+      { ...edge("validation-to-run", validation.id, run.id), kind: "references" as const,
+        filePath: validation.filePath }] };
+    const linked = planExploreQuery(directlyLinkedGraph, query, sourceEvidence);
+    expect(linked.rejectionReferencePriority).toBeDefined();
+    expect(linked.selection.some(item => item.symbol.id === validation.id)).toBe(true);
+    expect(linked.rejectionReferenceFiltering?.omitted.some(item => item.symbolId === validation.id)).toBe(false);
+    const withNewConcept = planExploreQuery(redundantGraph, `${query} validation`, sourceEvidence);
+    expect(withNewConcept.selection.some(item => item.symbol.id === validation.id)).toBe(true);
+    expect(withNewConcept.rejectionReferenceFiltering).toBeUndefined();
   });
 
   it("retains a rare literal source concept and follows only its exact production property use", () => {

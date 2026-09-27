@@ -18,8 +18,8 @@ const output = argument("--output");
 const pairs = Number(argument("--pairs") ?? 8);
 const comparison = argument("--comparison") ?? "complete";
 if ([project, baselineRoot, candidateRoot, query, output].some((value) => value === null) ||
-  !Number.isSafeInteger(pairs) || pairs < 1 || !["complete", "query-unresolved-calls"].includes(comparison)) {
-  throw new Error("Usage: --project <indexed-checkout> --baseline-root <built-product> --candidate-root <built-product> --query <text> --output <json> [--pairs <positive-integer>] [--comparison complete|query-unresolved-calls]");
+  !Number.isSafeInteger(pairs) || pairs < 1 || !["complete", "query-unresolved-calls", "timing-only"].includes(comparison)) {
+  throw new Error("Usage: --project <indexed-checkout> --baseline-root <built-product> --candidate-root <built-product> --query <text> --output <json> [--pairs <positive-integer>] [--comparison complete|query-unresolved-calls|timing-only]");
 }
 
 function withoutQueryUnresolvedCallItems(result) {
@@ -66,12 +66,12 @@ try {
   const completeExploreResultsEqual = isDeepStrictEqual(candidateResult, baselineResult);
   if (comparison === "complete") {
     assert.ok(completeExploreResultsEqual, "Candidate changed the complete explore result.");
-  } else {
+  } else if (comparison === "query-unresolved-calls") {
     assert.deepEqual(withoutQueryUnresolvedCallItems(candidateResult),
       withoutQueryUnresolvedCallItems(baselineResult),
       "Candidate changed output beyond query-focus unresolved-call items.");
   }
-  const changedCallSelections = (candidateResult.focuses ?? []).flatMap((focus, index) => {
+  const changedCallSelections = comparison === "timing-only" ? null : (candidateResult.focuses ?? []).flatMap((focus, index) => {
     const previous = baselineResult.focuses?.[index];
     const before = previous?.unresolvedCalls?.items.map((edge) => edge.id) ?? [];
     const after = focus.unresolvedCalls?.items.map((edge) => edge.id) ?? [];
@@ -89,13 +89,13 @@ try {
   const report = { schemaVersion: 1, project: projectPath, query,
     conditions: { roots, pairs, warmupQueriesPerProduct: 1, order: "alternating",
       statistic: "upper median", comparison, completeExploreResultsEqual,
-      comparisonScopeEqual: true,
+      comparisonScopeEqual: comparison === "timing-only" ? null : true,
       firstIndexing: "not measured", incrementalSync: "not measured" },
     medians, changedCallSelections, samples: Object.fromEntries(Object.entries(cases).map(([name, entry]) =>
       [name, entry.samples])) };
   writeFileSync(resolve(output), `${JSON.stringify(report, null, 2)}\n`, "utf8");
   console.log(JSON.stringify({ output: resolve(output), medians,
-    completeExploreResultsEqual, changedCallSelectionCount: changedCallSelections.length }));
+    completeExploreResultsEqual, changedCallSelectionCount: changedCallSelections?.length ?? null }));
 } finally {
   for (const entry of Object.values(cases)) entry.store.close();
 }

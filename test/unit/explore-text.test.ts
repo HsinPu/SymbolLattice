@@ -13,6 +13,17 @@ describe("MCP explore text rendering", () => {
     expect(output).toContain("Some lexical receipts did not match");
     expect(output).toContain("Source for some lexical hits was unavailable");
   });
+  it("discloses bounded rejection-focus omissions and how to inspect them", () => {
+    const output = renderExploreText({ queryPlan: { rejectionReferenceFiltering: {
+      evidenceScope: "returned-bounded-graph", omitted: [
+        { symbolId: "one", filePath: "lib/validation.js" },
+        { symbolId: "two", filePath: "lib/schemas.js" }
+      ] } }, focuses: [{ symbol: { name: "run" } }] });
+    expect(output).toContain("2 lower-priority symbol focuses");
+    expect(output).toContain("Their files may still matter");
+    expect(output).toContain("queryPlan.rejectionReferenceFiltering.omitted");
+    expect(output).toContain("query a file directly");
+  });
   it("labels supplementary same-name declarations as unresolved and cites the originating calls", () => {
     const output = renderExploreText({ queryPlan: { nameFollowupSearch: { state: "searched", callsTruncated: true } }, focuses: [{
       symbol: { name: "resolve_error_handler" }, numericQualifier: { terms: ["503"] },
