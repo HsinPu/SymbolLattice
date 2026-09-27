@@ -2355,16 +2355,33 @@ function readBoundedSymbolRows(
   }).join(" + ");
 
   const trigramParameters: string[] = [];
+  const distinctTrigramTerms = [...new Set(partialTerms.map((term) => term.toLowerCase()))];
+  const useTrigramMatch = useSymbolTrigrams &&
+    distinctTrigramTerms.reduce((total, term) => total + term.length - 2, 0) <= 256;
+  // Every literal substring contains all of its consecutive trigrams. FTS5's
+  // detail=none index can intersect those three-character tokens in one read;
+  // the original name/qualified-name predicates below still reject scattered
+  // trigrams and preserve the exact candidate order. Keep the LIKE route for
+  // unusually long input, which can exceed FTS5's expression depth.
+  const trigramCandidates = !useSymbolTrigrams ? "" : useTrigramMatch
+    ? (() => {
+        trigramParameters.push(distinctTrigramTerms.map((term) => `(${[
+          ...new Set(Array.from({ length: term.length - 2 }, (_, index) =>
+            `"${term.slice(index, index + 3)}"`))
+        ].join(" AND ")})`).join(" OR "));
+        return "SELECT rowid FROM symbol_trigrams WHERE symbol_trigrams MATCH ?";
+      })()
+    : partialTerms.flatMap((term) => {
+        const folded = term.toLowerCase();
+        trigramParameters.push(`${folded}%`, `%${folded}%`);
+        return [
+          "SELECT rowid FROM symbol_trigrams WHERE folded_name LIKE ?",
+          "SELECT rowid FROM symbol_trigrams WHERE folded_qualified_name LIKE ?"
+        ];
+      }).join(" UNION ");
   const projection = useSymbolTrigrams
     ? `WITH candidate_rowids AS (
-        ${partialTerms.flatMap((term) => {
-          const folded = term.toLowerCase();
-          trigramParameters.push(`${folded}%`, `%${folded}%`);
-          return [
-            "SELECT rowid FROM symbol_trigrams WHERE folded_name LIKE ?",
-            "SELECT rowid FROM symbol_trigrams WHERE folded_qualified_name LIKE ?"
-          ];
-        }).join(" UNION ")}
+        ${trigramCandidates}
       ) ${symbolProjectionSelect("symbol_casefolds")}`
     : !reuseCasefolds
       ? symbolProjectionSelect()

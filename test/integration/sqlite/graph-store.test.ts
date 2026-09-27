@@ -2500,7 +2500,9 @@ describe("SqliteGraphStore", () => {
           qualifiedName: "OpaqueReference" },
         { ...boundedSymbol("qualified-only", "Fallback", "src/b.ts"),
           qualifiedName: "DatabaseRollbackHandler" },
-        ...Array.from({ length: 16_382 }, (_, index) =>
+        { ...boundedSymbol("scattered-trigrams", "sav_ave_vep_epo_poi_oin_int", "src/c.ts"),
+          qualifiedName: "OpaqueScattered" },
+        ...Array.from({ length: 16_381 }, (_, index) =>
           boundedSymbol(`filler-${index}`, `Unrelated${index}`, "src/c.ts", index))
       ],
       edges: [],
@@ -2514,6 +2516,11 @@ describe("SqliteGraphStore", () => {
     const indexed = store.getActiveBoundedGraphBundle(projectPath, request);
     expect(indexed.snapshot.symbols.map((node) => node.id))
       .toEqual(expect.arrayContaining(["name-only", "qualified-only"]));
+    expect(indexed.snapshot.symbols.map((node) => node.id)).not.toContain("scattered-trigrams");
+    const longQuery = `${"x".repeat(300)} rollback`;
+    const longRequest = { ...boundedRequest(longQuery, { maxHops: 0 }), ...exploreQuerySeedTerms(longQuery) };
+    expect(store.getActiveBoundedGraphBundle(projectPath, longRequest).snapshot.symbols.map((node) => node.id))
+      .toContain("qualified-only");
 
     const database = new DatabaseSync(databasePathFor(projectPath));
     try {
