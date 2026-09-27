@@ -366,7 +366,11 @@ function renderLimitations(result: UnknownRecord): string[] {
   const rejectionFiltering = record(plan?.rejectionReferenceFiltering);
   const omittedRejectionFocuses = records(rejectionFiltering?.omitted);
   if (rejectionFiltering?.evidenceScope === "returned-bounded-graph" && omittedRejectionFocuses.length > 0) {
-    notes.add(`${omittedRejectionFocuses.length} lower-priority symbol focuses with covered query terms were omitted from this bounded result. Their files may still matter; inspect \`queryPlan.rejectionReferenceFiltering.omitted\` with \`SymbolLattice explore <query> --json --project <project>\`, or query a file directly.`);
+    const omittedPaths = [...new Set(omittedRejectionFocuses.map((focus) => text(focus.filePath))
+      .filter((path): path is string => path !== null))];
+    const locations = omittedPaths.length === 0 ? "" :
+      ` at ${omittedPaths.map((path) => `\`${path}\``).join(", ")}`;
+    notes.add(`${omittedRejectionFocuses.length} lower-priority symbol focuses${locations} with covered query terms were omitted from this bounded result. Their files may still matter; inspect \`queryPlan.rejectionReferenceFiltering.omitted\` with \`SymbolLattice explore <query> --json --project <project>\`, or query a file directly.`);
   }
   if (result.connectionsTruncated === true) notes.add("Additional exact connections were truncated.");
   if (record(record(result.sourceWindowPlan)?.summary)?.truncated === true ||

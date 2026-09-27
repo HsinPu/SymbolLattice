@@ -6,7 +6,7 @@ SymbolLattice is a local code search tool for developers and AI agents. Query a 
 
 [繁體中文](README.md) · [Get started](docs/getting-started.en.md) · [Validation and limitations](benchmarks/README.md) · [Report an issue](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.530.0` · Node.js `>=22.13 <25` · MIT
+`v0.530.1` · Node.js `>=22.13 <25` · MIT
 
 ## Start with “Where is this implemented?”
 
@@ -80,7 +80,7 @@ Covers TypeScript/JavaScript, Python, Java, Go, Rust, C/C++, C#, and various tem
 
 SymbolLattice uses static analysis. Text matches may come from comments or strings, so check their source before drawing a semantic conclusion. Dynamic calls, reflection, and external dependencies may remain unresolved; same-name declarations are not confirmed call targets. A verified source reference can help rank results, but a reference alone does not prove execution order. Results have count and source-excerpt limits. Missing relationships cannot guarantee that a change or deletion is safe. Sync stale indexes before querying; live queries may refuse to return results when freshness cannot be verified.
 
-For rejection queries with an exact source reference, lower-priority focuses that only repeat covered query terms may be omitted. JSON lists them in `queryPlan.rejectionReferenceFiltering`. The bounded graph cannot prove those files irrelevant; query a file directly when needed.
+For rejection queries with an exact source reference, lower-priority focuses that only repeat covered query terms may be omitted. MCP text names their file paths; JSON lists the full omissions in `queryPlan.rejectionReferenceFiltering`. The bounded graph cannot prove those files irrelevant; query a file directly when needed.
 
 For Python, direct same-class `self.method()` calls can include `async def` methods when the target is unambiguous. Functions with a safely recovered bare-`yield` parser gap also retain written member-call locations; unknown receiver types remain unresolved rather than becoming guessed targets. When a general query's unresolved-call list is limited, matching call names get priority for inclusion while the selected calls remain in source order; use the returned exact symbol reference to follow up with a larger source-ordered list when needed.
 

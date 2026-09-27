@@ -20,6 +20,7 @@ describe("MCP explore text rendering", () => {
         { symbolId: "two", filePath: "lib/schemas.js" }
       ] } }, focuses: [{ symbol: { name: "run" } }] });
     expect(output).toContain("2 lower-priority symbol focuses");
+    expect(output).toContain("at `lib/validation.js`, `lib/schemas.js`");
     expect(output).toContain("Their files may still matter");
     expect(output).toContain("queryPlan.rejectionReferenceFiltering.omitted");
     expect(output).toContain("query a file directly");
