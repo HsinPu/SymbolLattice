@@ -105,6 +105,10 @@ See the [validation documentation](../benchmarks/README.md) for measured results
 
 Use the installation flow above with a new fixed commit or existing tag. After reinstalling, repeat Codex integration and run `SymbolLattice sync .` in each project. The project is in `0.x` development; check the target version's compatibility and migration notes before upgrading.
 
+### Upgrading to v0.532.0
+
+The structured responses from `explore --json` and MCP `explore` still report index freshness, stale reasons, generation, and file/symbol/relationship counts, but no longer include `status.lastIndexWork`. If a script reads the previous index operation's file lists from a query result, use `SymbolLattice status <project-path> --json` for the full `lastIndexWork`. The index format is unchanged, so this change alone does not require a rebuild; you can still run `sync` after a normal upgrade to check for updates.
+
 ### From v0.420.0 or earlier
 
 Old package names and indexes are not migrated automatically. Keep a recoverable copy, then remove the old integration and CLI:

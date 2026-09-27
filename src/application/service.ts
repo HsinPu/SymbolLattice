@@ -5502,6 +5502,17 @@ export class SymbolLatticeService {
     };
   }
 
+  private async getExploreStatusForBundle(
+    normalizedProjectPath: string,
+    bundle: ActiveGraphBundle
+  ): Promise<GraphContext["status"]> {
+    const status = await this.getStatusForBundle(normalizedProjectPath, bundle);
+    // Index-work file lists describe the previous write, not the current query.
+    // Keep freshness evidence in explore and leave full work telemetry in status.
+    const { lastIndexWork: _lastIndexWork, ...freshnessStatus } = status;
+    return freshnessStatus;
+  }
+
   /**
    * Reusable non-mutating broad-path guard for explicit index lifecycles.
    * Foreground watch calls it before its first status scan so a fresh unsafe
@@ -5818,7 +5829,7 @@ export class SymbolLatticeService {
       status: await measureQueryTiming(
         this.queryTimingSink,
         "status",
-        () => this.getStatusForBundle(normalizedProjectPath, bundle)
+        () => this.getExploreStatusForBundle(normalizedProjectPath, bundle)
       ),
       mode: "query",
       match: matchSymbol(bundle.snapshot, query),
@@ -5915,7 +5926,7 @@ export class SymbolLatticeService {
     const status = await measureQueryTiming(
       this.queryTimingSink,
       "status",
-      () => this.getStatusForBundle(normalizedProjectPath, bundle)
+      () => this.getExploreStatusForBundle(normalizedProjectPath, bundle)
     );
     if (match.status !== "exact") {
       return {

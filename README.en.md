@@ -6,7 +6,7 @@ SymbolLattice is a local code search tool for developers and AI agents. Query a 
 
 [繁體中文](README.md) · [Get started](docs/getting-started.en.md) · [Validation and limitations](benchmarks/README.md) · [Report an issue](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.531.1` · Node.js `>=22.13 <25` · MIT
+`v0.532.0` · Node.js `>=22.13 <25` · MIT
 
 ## Start with “Where is this implemented?”
 
@@ -96,6 +96,8 @@ See [language capabilities and limitations](src/domain/language-depth.ts) and [r
 | Bug reports or feature requests | [GitHub Issues](https://github.com/HsinPu/SymbolLattice/issues) |
 
 The project is in `0.x` development; check compatibility notes before upgrading. **Package names and indexes from v0.420.0 or earlier are not migrated automatically.** Follow the upgrade guide.
+
+**v0.532.0 breaking change:** The JSON `status` inside `explore` no longer includes the previous index operation's full file lists. Use `SymbolLattice status <project-path> --json` to retrieve `lastIndexWork`. The index format is unchanged, so this change alone does not require rebuilding an index.
 
 ## Development
 

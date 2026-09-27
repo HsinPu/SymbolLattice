@@ -105,6 +105,10 @@ SymbolLattice serve --mcp --project C:\path\to\project
 
 使用上方安裝流程指定新的固定 commit 或既有 tag，重新安裝後執行 Codex 整合，並在各專案執行 `SymbolLattice sync .`。目前為 `0.x` 開發階段，升級前請核對對應版本的相容性與遷移說明。
 
+### 升級至 v0.532.0
+
+`explore --json` 及 MCP `explore` 的結構化回應仍提供索引是否過期、原因、索引世代識別碼與檔案／符號／關係數量，但其 `status.lastIndexWork` 已移除。若你的腳本從查詢結果讀取上次索引作業的檔案清單，請改用 `SymbolLattice status <project-path> --json` 取得完整的 `lastIndexWork`。本次不變更索引格式，無須因此重建；一般升級後仍可執行 `sync` 檢查更新。
+
 ### 從 v0.420.0 或更早版本升級
 
 舊套件名稱與索引不會自動遷移。先保留可回復副本，再移除舊整合與 CLI：

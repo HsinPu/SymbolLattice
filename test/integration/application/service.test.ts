@@ -12637,6 +12637,18 @@ describe("SymbolLatticeService", () => {
     expect(graphStore.getActiveGenerationBundle(projectPath).status.lastIndexWork).toEqual(
       synced.lastIndexWork
     );
+    const status = await service.getStatus(projectPath);
+    expect(status.lastIndexWork).toEqual(synced.lastIndexWork);
+    for (const reference of ["src/math.ts#add", "How does add work?"]) {
+      const exploration = await service.explore(projectPath, reference);
+      expect(exploration.status).toMatchObject({
+        generationId: status.generationId,
+        stale: status.stale,
+        staleReasons: status.staleReasons,
+        counts: status.counts
+      });
+      expect(exploration.status).not.toHaveProperty("lastIndexWork");
+    }
   });
 
   it("does not publish a new generation for a no-op sync", async () => {

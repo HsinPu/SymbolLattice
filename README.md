@@ -6,7 +6,7 @@ SymbolLattice 是提供給開發者與 AI Agent 的本機程式碼搜尋工具�
 
 [English](README.en.md) · [開始使用](docs/getting-started.md) · [驗證與限制](benchmarks/README.md) · [回報問題](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.531.1` · Node.js `>=22.13 <25` · MIT
+`v0.532.0` · Node.js `>=22.13 <25` · MIT
 
 ## 從「這段功能在哪裡？」開始
 
@@ -96,6 +96,8 @@ Python 同類別中可確認的直接 `self.method()` 呼叫包含 `async def` �
 | 回報錯誤或提出需求 | [GitHub Issues](https://github.com/HsinPu/SymbolLattice/issues) |
 
 目前為 `0.x` 開發階段，升級前請確認相容性說明。**v0.420.0 或更早版本的套件名稱與索引不會自動遷移**，請依升級指南處理。
+
+**v0.532.0 破壞性變更：**`explore` 的 JSON `status` 不再附上上次索引工作的完整檔案清單；需要 `lastIndexWork` 時，改用 `SymbolLattice status <project-path> --json`。本次不改變索引格式，無須因這項變更重建索引。
 
 ## 開發
 
