@@ -47,6 +47,7 @@ export const EXPLORE_QUERY_PROPERTY_USE_FOLLOWUP = {
   policy: "source-property-use-followup-v1", maximumFiles: 1, maximumSymbolsPerFile: 2
 } as const;
 export const EXPLORE_QUERY_CONNECTION_LIMITS = { perNeighbor: 60, maximumScore: 240 } as const;
+const MAXIMUM_GRAPH_CONNECTION_WITNESSES = 1;
 export const EXPLORE_QUERY_SOURCE_LEXICAL_SCORING = {
   policy: "callable-source-ranking-v3",
   density: SOURCE_LEXICAL_SCORING,
@@ -184,6 +185,17 @@ export interface ExploreQueryGraphMass {
   readonly rankingContribution: number;
   readonly truncated: boolean;
   readonly relationCounts: Readonly<Partial<Record<EdgeKind, number>>>;
+}
+
+export interface ExploreQueryGraphConnectionEvidence {
+  readonly policy: "bounded-candidate-graph-connections-v1";
+  readonly scope: "returned-bounded-graph";
+  readonly symbolId: string;
+  /** A relation kind and neighbor pair counts once, even if several edges cite it. */
+  readonly distinctRelationCount: number;
+  readonly omittedRelationCount: number;
+  readonly witnesses: readonly { readonly edge: GraphEdge; readonly neighbor: Pick<SymbolNode,
+    "id" | "qualifiedName" | "filePath"> }[];
 }
 
 export interface ExploreQueryGraphExpansionPathSegment {
@@ -529,6 +541,7 @@ export interface ExploreQueryPlan {
     }[];
   };
   readonly nameFollowupSearch?: import("./explore-name-followups.js").ExploreNameFollowupSearch;
+  readonly graphConnectionEvidence?: readonly ExploreQueryGraphConnectionEvidence[];
   readonly sourceLexical?: (Omit<SourceLexicalRetrieval, "candidates"> & { readonly matchedSymbols: number }) | null;
   readonly queryIntent: {
     readonly tests: boolean;
@@ -2820,16 +2833,24 @@ export function planExploreQuery(
     string,
     Map<string, GraphMassRelationship>
   >();
-  const connectedNeighbors = new Map<string, Set<string>>();
+  const connectedRelationships = new Map<string, Map<string, {
+    readonly edge: GraphEdge; readonly neighbor: SymbolNode;
+  }>>();
   const addConnection = (candidate: Candidate, edge: GraphEdge, neighborId: string): void => {
     // A document heading's containment hierarchy does not corroborate query
     // relevance. Keep containment between code symbols: it can locate the owner of
     // a selected declaration or binding.
     if (edge.kind === "contains" &&
         (candidate.symbol.kind === "resource" || symbolsById.get(neighborId)?.kind === "resource")) return;
-    const neighbors = connectedNeighbors.get(candidate.symbol.id) ?? new Set<string>();
-    neighbors.add(`${edge.kind}:${neighborId}`);
-    connectedNeighbors.set(candidate.symbol.id, neighbors);
+    const neighbor = symbolsById.get(neighborId);
+    if (neighbor === undefined) return;
+    const neighbors = connectedRelationships.get(candidate.symbol.id) ?? new Map();
+    const key = `${edge.kind}:${neighborId}`;
+    const existing = neighbors.get(key);
+    if (existing === undefined || compareText(edge.id, existing.edge.id) < 0) {
+      neighbors.set(key, { edge, neighbor });
+    }
+    connectedRelationships.set(candidate.symbol.id, neighbors);
     candidate.connectionScore = Math.min(EXPLORE_QUERY_CONNECTION_LIMITS.maximumScore,
       neighbors.size * EXPLORE_QUERY_CONNECTION_LIMITS.perNeighbor);
   };
@@ -3031,6 +3052,25 @@ export function planExploreQuery(
     rejectionReferencePriority, rejectionPromotion?.directlyLinked ?? new Set(),
     parsed.identifierTerms, coverageReceipts, sourceGapReceipts,
     propertyUseReceipts);
+  const graphConnectionEvidence: ExploreQueryGraphConnectionEvidence[] = selected.flatMap((candidate) => {
+    if (candidate.connectionScore === 0) return [];
+    const relationships = [...(connectedRelationships.get(candidate.symbol.id)?.values() ?? [])]
+      .sort((left, right) =>
+        EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS[right.edge.kind] -
+          EXPLORE_QUERY_GRAPH_MASS_RELATION_WEIGHTS[left.edge.kind] ||
+        Number(right.neighbor.filePath !== candidate.symbol.filePath) -
+          Number(left.neighbor.filePath !== candidate.symbol.filePath) ||
+        compareText(left.edge.kind, right.edge.kind) ||
+        compareText(left.neighbor.filePath, right.neighbor.filePath) ||
+        compareText(left.neighbor.id, right.neighbor.id) ||
+        compareText(left.edge.id, right.edge.id));
+    const witnesses = relationships.slice(0, MAXIMUM_GRAPH_CONNECTION_WITNESSES)
+      .map(({ edge, neighbor }) => ({ edge, neighbor: { id: neighbor.id,
+        qualifiedName: neighbor.qualifiedName, filePath: neighbor.filePath } }));
+    return [{ policy: "bounded-candidate-graph-connections-v1", scope: "returned-bounded-graph",
+      symbolId: candidate.symbol.id, distinctRelationCount: relationships.length,
+      omittedRelationCount: relationships.length - witnesses.length, witnesses }];
+  });
   const selection: ExploreQuerySelection[] = selected.map((candidate, index) => {
     const score = rawScore(candidate);
     return {
@@ -3119,6 +3159,7 @@ export function planExploreQuery(
     input: parsed.input,
     fileHints: parsed.fileHints,
     identifierTerms: parsed.identifierTerms,
+    ...(graphConnectionEvidence.length === 0 ? {} : { graphConnectionEvidence }),
     ...(parsed.maximumIdentifierTerms === EXPLORE_NUMERIC_QUERY.maximumIdentifierTerms ? { numericQuery: EXPLORE_NUMERIC_QUERY } : {}),
     ...(numericCoverageAnchor === undefined ? {} : { numericCoverage: { policy: "numeric-query-coverage-v1" as const,
       symbolId: numericCoverageAnchor.symbol.id, terms: numericCoverageAnchor.numericQualifier!.terms } }),

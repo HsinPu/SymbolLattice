@@ -1625,6 +1625,33 @@ describe("explore query planning", () => {
     });
   });
 
+  it("cites bounded graph links behind a connection score, including unselected neighbors", () => {
+    const worker = symbol({ id: "worker", name: "worker", filePath: "src/work.ts" });
+    const helpers = Array.from({ length: 5 }, (_, index) => symbol({
+      id: `helper-${index}`, name: `workerHelper${index}`, filePath: `src/helper-${index}.ts`
+    }));
+    const links = helpers.map((helper, index) => ({
+      ...edge(`call-${index}`, worker.id, helper.id), filePath: worker.filePath
+    }));
+    const graph = { symbols: [worker, ...helpers], edges: links };
+    const plan = planExploreQuery(graph, "worker");
+    const focus = plan.selection.find((item) => item.symbol.id === worker.id);
+    const receipt = plan.graphConnectionEvidence?.find((item) => item.symbolId === worker.id);
+    expect(focus?.connectionScore).toBe(240);
+    expect(focus?.reasons).toContain("graph-connected");
+    expect(receipt).toMatchObject({
+      policy: "bounded-candidate-graph-connections-v1", scope: "returned-bounded-graph",
+      symbolId: worker.id, distinctRelationCount: 5, omittedRelationCount: 4
+    });
+    expect(receipt?.witnesses.map(({ edge: cited, neighbor }) =>
+      [cited.id, cited.sourceId, cited.targetId, cited.filePath, neighbor.id]))
+      .toEqual(helpers.slice(0, 1).map((helper, index) =>
+        [`call-${index}`, worker.id, helper.id, worker.filePath, helper.id]));
+    expect(planExploreQuery({ symbols: [...graph.symbols].reverse(), edges: [...links].reverse() },
+      "worker").graphConnectionEvidence?.find((item) => item.symbolId === worker.id))
+      .toEqual(receipt);
+  });
+
   it("uses exact multi-hop diffusion to rank a seed-connected candidate above an equal dead end", () => {
     const seed = symbol({
       id: "seed",

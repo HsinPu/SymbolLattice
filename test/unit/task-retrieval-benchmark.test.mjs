@@ -242,21 +242,34 @@ describe("task retrieval benchmark judgments", () => {
     const edge = { id: "call", kind: "calls", resolution: "exact", sourceId: source.id,
       targetId: target.id, filePath: "a.ts", range: { start: { line: 1, column: 1 },
         end: { line: 1, column: 5 } }, evidence: { ruleId: "syntax.call" } };
-    const result = { connections: [{ source, target, edge }], pathSpinePlan: { spines: [{ path: {
+    const result = { connections: [{ source, target, edge }], focuses: [{ symbol: source,
+      reasons: ['graph-connected'], connectionScore: 60 }], queryPlan: {
+      graphConnectionEvidence: [{ policy: 'bounded-candidate-graph-connections-v1',
+        scope: 'returned-bounded-graph', distinctRelationCount: 1, omittedRelationCount: 0,
+        symbolId: source.id, witnesses: [{ edge, neighbor: target }] }] },
+      pathSpinePlan: { spines: [{ path: {
       symbols: [source, target], edges: [edge], steps: [{ from: source, to: target, edge }]
     } }] } };
     const read = () => "call()\n";
     expect(verifyGraphEvidence(result, read)).toEqual({ verifiedEdges: 1,
-      verifiedConnections: 1, verifiedPathSteps: 1, verifiedReverseSteps: 0 });
+      verifiedConnections: 1, verifiedRankingConnections: 1, verifiedPathSteps: 1,
+      verifiedReverseSteps: 0 });
     const reverse = structuredClone(result);
-    reverse.impact = [{ symbols: [target, source], edges: [edge],
-      steps: [{ from: target, to: source, edge }] }];
+    const reverseSource = reverse.connections[0].source;
+    const reverseTarget = reverse.connections[0].target;
+    const reverseEdge = reverse.connections[0].edge;
+    reverse.impact = [{ symbols: [reverseTarget, reverseSource], edges: [reverseEdge],
+      steps: [{ from: reverseTarget, to: reverseSource, edge: reverseEdge }] }];
     expect(verifyGraphEvidence(reverse, read).verifiedReverseSteps).toBe(1);
     reverse.impact[0].steps[0].to.id = "other";
     expect(() => verifyGraphEvidence(reverse, read)).toThrow();
     const wrongTarget = structuredClone(result);
     wrongTarget.connections[0].edge.targetId = "other";
     expect(() => verifyGraphEvidence(wrongTarget, read)).toThrow();
+    const wrongRankingTarget = structuredClone(result);
+    wrongRankingTarget.queryPlan.graphConnectionEvidence[0].witnesses[0].neighbor =
+      { ...wrongRankingTarget.queryPlan.graphConnectionEvidence[0].witnesses[0].neighbor, id: 'other' };
+    expect(() => verifyGraphEvidence(wrongRankingTarget, read)).toThrow('Ranking witness');
     const wrongSite = structuredClone(result);
     wrongSite.connections[0].edge.range.end.column = 99;
     expect(() => verifyGraphEvidence(wrongSite, read)).toThrow("outside pinned source");

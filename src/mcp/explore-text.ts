@@ -195,6 +195,11 @@ function renderStatus(result: UnknownRecord): string {
 function renderFocuses(result: UnknownRecord): string[] {
   const focuses = records(result.focuses);
   if (focuses.length === 0) return [];
+  const graphConnectionsById = new Map(records(record(result.queryPlan)?.graphConnectionEvidence)
+    .flatMap((entry): readonly [string, UnknownRecord][] => {
+      const id = text(entry.symbolId);
+      return id === null ? [] : [[id, entry]];
+    }));
   const output = [`Found ${focuses.length} ranked focus${focuses.length === 1 ? "" : "es"}.`, "", "**Focuses**", ""];
   if (record(record(result.queryPlan)?.numericCoverage) !== null) output.push("Numeric coverage reserves a file slot for a supported numeric match so generic terms do not discard every numeric qualifier.", "");
   for (const focus of focuses) {
@@ -206,6 +211,21 @@ function renderFocuses(result: UnknownRecord): string[] {
     output.push(`- ${rank === null ? "" : `#${rank} `}\`${reference}\`${kind === null ? "" : ` (${kind})`}${location.length === 0 ? "" : ` — ${location}`}`);
     const sourceTerms = records(focus.sourceMatches).map(renderSourceTerm);
     if (sourceTerms.length > 0) output.push(`  Source terms (lexical, not resolved relationships): ${sourceTerms.join("; ")}.`);
+    const graphConnections = graphConnectionsById.get(text(symbol?.id) ?? "");
+    const witnesses = records(graphConnections?.witnesses);
+    if (witnesses.length > 0) {
+      output.push("  Graph ranking evidence (exact static links between bounded candidates; task relevance is not proven):");
+      for (const witness of witnesses) {
+        const edge = record(witness.edge);
+        const neighbor = record(witness.neighbor);
+        const from = edge?.sourceId === symbol?.id ? symbolReference(focus) : symbolReference(neighbor);
+        const to = edge?.sourceId === symbol?.id ? symbolReference(neighbor) : symbolReference(focus);
+        if (from !== null && to !== null && edge !== null) output.push(
+          `  - \`${from}\` → \`${to}\` (${text(edge.kind) ?? "related"})${edgeDetails(edge)}.`);
+      }
+      const omitted = finiteNumber(graphConnections?.omittedRelationCount) ?? 0;
+      if (omitted > 0) output.push(`  ${omitted} further candidate links omitted from this bounded ranking receipt.`);
+    }
     const numeric = record(focus.numericQualifier);
     if (numeric !== null && Array.isArray(numeric.terms)) output.push(
       `  Numeric qualifier: ${numeric.terms.filter(term => typeof term === "string").map(term => `\`${term}\``).join(", ")} matches the declaration name or cited source token.`);

@@ -38,6 +38,23 @@ describe("MCP explore text rendering", () => {
     expect(output).toContain("Numeric qualifier: `503`");
     expect(output).toContain("follow-up search reached its call or candidate bounds");
   });
+  it("shows graph ranking links with direction, source site and bounded omissions", () => {
+    const output = renderExploreText({ queryPlan: { graphConnectionEvidence: [{
+      symbolId: "worker", distinctRelationCount: 2, omittedRelationCount: 1,
+      witnesses: [{ neighbor: { id: "helper", name: "helper",
+        qualifiedName: "helper.ts#helper", filePath: "helper.ts" },
+      edge: { id: "call", sourceId: "worker", targetId: "helper", kind: "calls",
+        filePath: "work.ts", resolution: "exact", range: { start: { line: 3, column: 5 } },
+        evidence: { stage: "module", ruleId: "test.call" } } }] }] }, focuses: [{ rank: 1,
+      symbol: { id: "worker", name: "worker", qualifiedName: "work.ts#worker",
+        kind: "function", filePath: "work.ts", range: { start: { line: 1, column: 1 } } }
+    }] });
+    expect(output).toContain("Graph ranking evidence (exact static links between bounded candidates; task relevance is not proven)");
+    expect(output).toContain("`work.ts#worker` → `helper.ts#helper` (calls)");
+    expect(output).toContain("`work.ts:3`");
+    expect(output).toContain("rule `test.call`");
+    expect(output).toContain("1 further candidate links omitted");
+  });
   it("renders unknown call sites without claiming a target and discloses partial or mismatched reads", () => {
     const output = renderExploreText({ focuses: [
       { symbol: { name: "handle" }, unresolvedCalls: { state: "available", truncated: true, items: [{

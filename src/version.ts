@@ -4,4 +4,4 @@
  * Keep this value aligned with package.json; the version-contract test makes
  * accidental drift visible during every release verification run.
  */
-export const SYMBOL_LATTICE_VERSION = "0.532.2";
+export const SYMBOL_LATTICE_VERSION = "0.533.0";

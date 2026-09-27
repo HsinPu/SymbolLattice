@@ -372,6 +372,7 @@ export function verifyGraphEvidence(result, readSource) {
   const uniqueEdges = new Map();
   const linesByPath = new Map();
   let verifiedConnections = 0;
+  let verifiedRankingConnections = 0;
   let verifiedPathSteps = 0;
   let verifiedReverseSteps = 0;
   const verifyEdge = (edge) => {
@@ -419,6 +420,39 @@ export function verifyGraphEvidence(result, readSource) {
     assert.equal(connection.edge.targetId, connection.target.id);
     verifiedConnections++;
   }
+  const rankingReceipts = result.queryPlan?.graphConnectionEvidence ?? [];
+  assert.equal(new Set(rankingReceipts.map(receipt => receipt.symbolId)).size,
+    rankingReceipts.length, 'Duplicate graph ranking focus receipt');
+  const rankingById = new Map(rankingReceipts.map(receipt => [receipt.symbolId, receipt]));
+  for (const focus of result.focuses ?? []) {
+    const receipt = rankingById.get(focus.symbol.id);
+    if (!receipt) {
+      assert.ok(!focus.reasons?.includes('graph-connected'),
+        'Graph-connected ranking requires cited candidate links');
+      continue;
+    }
+    assert.equal(receipt.policy, 'bounded-candidate-graph-connections-v1');
+    assert.equal(receipt.scope, 'returned-bounded-graph');
+    assert.equal(receipt.symbolId, focus.symbol.id);
+    assert.ok(focus.reasons?.includes('graph-connected'));
+    assert.equal(receipt.witnesses.length, 1);
+    assert.equal(receipt.distinctRelationCount,
+      receipt.witnesses.length + receipt.omittedRelationCount);
+    assert.equal(focus.connectionScore, Math.min(240, receipt.distinctRelationCount * 60));
+    const keys = new Set();
+    for (const { edge, neighbor } of receipt.witnesses) {
+      assert.equal(edge.resolution, 'exact');
+      assert.ok(edge.sourceId === focus.symbol.id && edge.targetId === neighbor.id ||
+        edge.targetId === focus.symbol.id && edge.sourceId === neighbor.id,
+      'Ranking witness must join the selected focus to its cited candidate');
+      const key = `${edge.kind}:${neighbor.id}`;
+      assert.ok(!keys.has(key), 'Duplicate ranking relationship');
+      keys.add(key);
+      verifiedRankingConnections++;
+    }
+  }
+  assert.equal(rankingReceipts.length, (result.focuses ?? [])
+    .filter(focus => focus.reasons?.includes('graph-connected')).length);
   const paths = [
     ...(result.pathSpinePlan?.spines ?? []).map(spine => spine.path),
     ...(result.evidencePaths ?? []).filter(item => item.status === 'path').map(item => item.path),
@@ -451,7 +485,7 @@ export function verifyGraphEvidence(result, readSource) {
       verifiedReverseSteps++;
     }
   }
-  return { verifiedEdges: uniqueEdges.size, verifiedConnections, verifiedPathSteps,
+  return { verifiedEdges: uniqueEdges.size, verifiedConnections, verifiedRankingConnections, verifiedPathSteps,
     verifiedReverseSteps };
 }
 
