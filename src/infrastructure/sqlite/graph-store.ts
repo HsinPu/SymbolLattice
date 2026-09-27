@@ -2556,13 +2556,15 @@ function compareSymbolRows(left: SymbolRow, right: SymbolRow): number {
   );
 }
 
+const edgeRowCollator = new Intl.Collator();
+
 function compareEdgeRows(left: EdgeRow, right: EdgeRow): number {
   return (
-    left.file_path.localeCompare(right.file_path) ||
+    edgeRowCollator.compare(left.file_path, right.file_path) ||
     left.start_line - right.start_line ||
     left.start_column - right.start_column ||
-    left.kind.localeCompare(right.kind) ||
-    left.id.localeCompare(right.id)
+    edgeRowCollator.compare(left.kind, right.kind) ||
+    edgeRowCollator.compare(left.id, right.id)
   );
 }
 
