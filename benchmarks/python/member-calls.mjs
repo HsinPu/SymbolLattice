@@ -18,8 +18,25 @@ const commit=git('rev-parse','HEAD'),repository=git('remote','get-url','origin')
 if(git('status','--porcelain','--untracked-files=no'))throw Error('Corpus tracked sources must be clean');
 execFileSync(python,[fileURLToPath(new URL('./MemberCallOracle.py',import.meta.url)),project,output+'.truth.json'],{windowsHide:true});
 const truth=JSON.parse(readFileSync(output+'.truth.json','utf8'));
-let tp=0,fp=0,fn=0,unsupported=0,rejected=0,existingFactsChanged=0;
+let tp=0,fp=0,fn=0,unsupported=0,rejected=0,existingFactsChanged=0,bareYieldFiles=0,bareYieldCalls=0;
+let newUnresolved=0,newBareYieldUnresolved=0;
 const failures=[];const start=performance.now();
+function inspectParser(text){
+ const cursor=parser.parse(text).cursor();let invalid=false,rootError=false,bareYieldOnly=true;
+ do{if(cursor.type.isError){
+  invalid=true;const node=cursor.node,parent=node.parent;
+  rootError ||= parent?.name==='Script';
+  let inFunction=false;
+  for(let ancestor=parent?.parent;ancestor!==null&&ancestor!==undefined;ancestor=ancestor.parent){
+   if(ancestor.name==='FunctionDefinition'){inFunction=true;break;}
+   if(ancestor.name==='ClassDefinition'||ancestor.name==='Script')break;
+  }
+  bareYieldOnly &&= node.from===node.to &&
+   (parent?.name==='YieldStatement'||parent?.name==='YieldExpression') &&
+   text.slice(parent.from,parent.to)==='yield' && inFunction;
+ }}while(cursor.next());
+ return {invalid,rootError,bareYieldOnly:invalid&&bareYieldOnly};
+}
 for(const record of truth.records){
  if(record.rejected){rejected++;continue;}
  const raw=readFileSync(resolve(project,record.path));
@@ -28,11 +45,14 @@ for(const record of truth.records){
  const input={filePath:record.path,language:'python',sourceText};
  const facts=extractPythonFileFacts(input),previous=old.extractPythonFileFacts(input);
  const added=facts.edges.filter(e=>e.evidence?.ruleId==='syntax.python.member-call.unknown-receiver');
- if(!isDeepStrictEqual({...facts,edges:facts.edges.filter(e=>!added.includes(e))},previous)){existingFactsChanged++;failures.push({path:record.path,existingFactsChanged:true});}
- const cursor=parser.parse(sourceText).cursor();let invalid=false,rootError=false;
- do{if(cursor.type.isError){invalid=true;rootError ||= cursor.node.parent?.name==='Script';}}while(cursor.next());
- if(invalid&&!rootError&&sourceText.includes('\r\n')){const normalized=parser.parse(sourceText.replace(/\r\n/gu,'\n')).cursor();invalid=false;do{invalid ||= normalized.type.isError;}while(normalized.next());}
- if(invalid){unsupported+=record.calls.length;if(added.length)failures.push({path:record.path,invalid:true});continue;}
+ const previousEdgeIds=new Set(previous.edges.map(e=>e.id));
+ const newEdges=added.filter(e=>!previousEdgeIds.has(e.id));
+ newUnresolved+=newEdges.length;
+ if(!isDeepStrictEqual({...facts,edges:facts.edges.filter(e=>!newEdges.includes(e))},previous)){existingFactsChanged++;failures.push({path:record.path,existingFactsChanged:true});}
+ let parsed=inspectParser(sourceText);
+ if(parsed.invalid&&!parsed.rootError&&sourceText.includes('\r\n'))parsed=inspectParser(sourceText.replace(/\r\n/gu,'\n'));
+ if(parsed.invalid&&!parsed.bareYieldOnly){unsupported+=record.calls.length;if(added.length)failures.push({path:record.path,invalid:true});continue;}
+ if(parsed.bareYieldOnly){bareYieldFiles++;bareYieldCalls+=record.calls.length;newBareYieldUnresolved+=newEdges.length;}
  const expected=record.calls.filter(c=>!previous.edges.some(e=>e.kind==='calls'&&e.resolution==='exact'&&e.range.end.line===c.range.end.line&&e.range.end.column===c.range.end.column));
  const actual=added.map(e=>{const s=facts.symbols.find(s=>s.id===e.sourceId);return {owner:{name:s?.name,line:s?.range.start.line},referenceName:e.referenceName,range:e.range};});
  const key=x=>JSON.stringify(x),a=new Set(actual.map(key)),b=new Set(expected.map(key));
@@ -42,9 +62,10 @@ for(const record of truth.records){
 }
 if(git('rev-parse','HEAD')!==commit||git('status','--porcelain','--untracked-files=no'))throw Error('Corpus changed during audit');
 const report={version:SYMBOL_LATTICE_VERSION,extractor:ARTIFACT_FACTS_EXTRACTOR_VERSION,node:process.version,python:truth.python,
- repository,commit,command:process.argv.slice(1),scope:'CPython dotted-name member calls in function bodies, excluding lambda and class-body execution, decorators and default arguments, and existing exact calls. Lezer rejected files (after eligible closed CRLF recovery) are counted separately. Targets are not inferred.',
+ repository,commit,command:process.argv.slice(1),scope:'CPython dotted-name member calls in function bodies, excluding lambda and class-body execution, decorators and default arguments, and existing exact calls. Lezer rejected files remain unsupported except eligible closed CRLF recovery and isolated zero-width bare-yield parser gaps inside functions. Targets are not inferred.',
  tp,fp,fn,precision:tp+fp?tp/(tp+fp):null,recall:tp+fn?tp/(tp+fn):null,
- unsupported,rejected,existingFactsChanged,files:truth.records.length,ms:performance.now()-start,failures};
+ unsupported,rejected,bareYieldFiles,bareYieldCalls,newUnresolved,newBareYieldUnresolved,
+ existingFactsChanged,files:truth.records.length,ms:performance.now()-start,failures};
 writeFileSync(output,JSON.stringify(report,null,2));
 console.log(JSON.stringify({...report,failures:failures.slice(0,5)},null,2));
 if(fp||fn||failures.length)process.exitCode=1;

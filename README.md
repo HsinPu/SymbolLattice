@@ -6,7 +6,7 @@ SymbolLattice 是提供給開發者與 AI Agent 的本機程式碼搜尋工具�
 
 [English](README.en.md) · [開始使用](docs/getting-started.md) · [驗證與限制](benchmarks/README.md) · [回報問題](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.529.2` · Node.js `>=22.13 <25` · MIT
+`v0.529.3` · Node.js `>=22.13 <25` · MIT
 
 ## 從「這段功能在哪裡？」開始
 
@@ -78,7 +78,7 @@ SymbolLattice doctor codex
 
 SymbolLattice 使用靜態分析。文字命中也可能來自註解或字串，須查看來源確認語意。動態呼叫、反射與外部依賴可能無法解析，同名宣告也不代表已確認的呼叫目標；已確認的來源引用可協助排序，但單靠引用不能證明執行順序。結果有數量與來源片段上限；未找到關係不能用來保證修改或刪除安全。索引過期時請先同步，無法確認新鮮度的即時查詢可能拒絕回傳結果。
 
-Python 同類別中可確認的直接 `self.method()` 呼叫包含 `async def` 方法；動態覆寫或無法確認的目標仍不會當成精確關係。
+Python 同類別中可確認的直接 `self.method()` 呼叫包含 `async def` 方法。對可安全恢復的裸 `yield` 解析缺口，函式內寫出的成員呼叫也會保留來源位置；接收者型別未知時標示為未解析，不猜測目標。
 
 詳見[語言能力與限制](src/domain/language-depth.ts)及[真實專案驗證](benchmarks/README.md)。查找品質與速度依專案及查詢而異。
 

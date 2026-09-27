@@ -735,6 +735,8 @@ function pythonSyntaxErrors(root: PythonSyntaxNode): readonly PythonSyntaxNode[]
 
 interface PythonRecoveryCompatibility {
   readonly mode: "full" | "declarations-only";
+  /** Only error-free trees and isolated bare-yield parser gaps retain stable call nodes. */
+  readonly memberCallsSafe?: true;
   readonly unsafeBindings: readonly {
     readonly name: string;
     readonly from: number;
@@ -749,7 +751,7 @@ function pythonRecoveryCompatibility(
   const errors = pythonSyntaxErrors(root);
 
   if (errors.length === 0) {
-    return { mode: "full", unsafeBindings: [] };
+    return { mode: "full", memberCallsSafe: true, unsafeBindings: [] };
   }
 
   function isClosedBareYield(error: PythonSyntaxNode): boolean {
@@ -785,7 +787,7 @@ function pythonRecoveryCompatibility(
   }
 
   if (errors.every((error) => isClosedBareYield(error))) {
-    return { mode: "full", unsafeBindings: [] };
+    return { mode: "full", memberCallsSafe: true, unsafeBindings: [] };
   }
 
   const typeParameterLists = new Set<PythonSyntaxNode>();
@@ -7387,7 +7389,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
 
   // Preserve written member invocations even when the receiver's runtime type
   // is unknown. These are source receipts, not name-based target guesses.
-  if (recoveryCompatibility?.mode === "full" && !hasSyntaxError(root)) {
+  if (recoveryCompatibility?.memberCallsSafe === true) {
     const resolvedCalls = new Set(edges.filter((edge) => edge.kind === "calls" && edge.resolution === "exact")
       .map((edge) => `${edge.sourceId}:${edge.range.end.line}:${edge.range.end.column}`));
     function staticMemberName(node: PythonSyntaxNode): string | null {

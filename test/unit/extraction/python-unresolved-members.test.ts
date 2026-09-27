@@ -28,6 +28,19 @@ describe("Python unresolved member invocation evidence", () => {
       .toEqual([["outer", "client.send"], ["inner", "nested.work"], ["method", "service.api.run"]]);
   });
 
+  it("keeps written member calls around a recoverable bare yield", () => {
+    const facts = extract("def stream(client):\n    client.before()\n    yield\n    client.after()\n");
+    const owner = facts.symbols.find((symbol) => symbol.name === "stream")!;
+    expect(facts.edges.filter((edge) => edge.evidence?.ruleId === ruleId)).toEqual([
+      expect.objectContaining({ sourceId: owner.id, targetId: null,
+        referenceName: "client.before", resolution: "unresolved", confidence: 0,
+        range: { start: { line: 2, column: 5 }, end: { line: 2, column: 18 } } }),
+      expect.objectContaining({ sourceId: owner.id, targetId: null,
+        referenceName: "client.after", resolution: "unresolved", confidence: 0,
+        range: { start: { line: 4, column: 5 }, end: { line: 4, column: 17 } } })
+    ]);
+  });
+
   it("does not duplicate resolved calls or confuse member access and dynamic receivers with static callees", () => {
     const facts = extract(["class Box:", "    def helper(self): pass", "    def run(self, obj):",
       "        self.helper()", "        obj.member", "        factory().run()", "        obj['key']()", "        obj.unknown()"].join("\n"));
