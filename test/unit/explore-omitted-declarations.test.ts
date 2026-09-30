@@ -3,6 +3,7 @@ import { planExploreQuery } from "../../src/application/explore-query.js";
 import { supplementOmittedCallDeclarations } from "../../src/application/explore-omitted-declarations.js";
 import type { GraphEdge, SymbolNode } from "../../src/domain/types.js";
 import type { UnresolvedCallEvidence } from "../../src/application/types.js";
+import { classifySourceRole } from "../../src/domain/source-roles.js";
 
 const node = (id: string, name: string, filePath: string): SymbolNode => ({
   id, name, filePath, qualifiedName: `${filePath}#${name}`, kind: "method", isExported: false,
@@ -26,6 +27,75 @@ function fixture(tail = "checking constraints") {
 }
 
 describe("declaration leads for omitted query concepts", () => {
+  it("emits a complete selected-file ambiguity group without choosing a call target", () => {
+    const f = fixture();
+    const sibling = { ...f.declaration, id: "wrapper", kind: "function" as const, filePath: f.owner.filePath };
+    const graph = { ...f.graph, symbols: [f.owner, f.context] };
+    const lookup = { names: [f.declaration.name], projection: { generationMatched: true,
+      declarations: [f.declaration, sibling], truncated: false } };
+    const next = supplementOmittedCallDeclarations(graph, f.plan, f.calls, true, lookup);
+    expect(next.selection.slice(0, f.plan.selection.length)).toEqual(f.plan.selection);
+    const additions = next.selection.slice(f.plan.selection.length);
+    expect(additions.map(item => item.symbol.id)).toEqual([f.declaration.id, sibling.id]);
+    for (const item of additions) {
+      expect(item.omittedQueryDeclaration).toMatchObject({ scope: "selected-files-index",
+        matchingDeclarationCount: 2, matchingDeclarationIds: [f.declaration.id, sibling.id], call: f.call });
+      expect(item.score).toBe(0);
+      expect(item.graphDiffusion.rankingContribution).toBe(0);
+    }
+    expect(f.call).toMatchObject({ targetId: null, resolution: "unresolved", confidence: 0 });
+    expect(next.omittedDeclarationSearch).toMatchObject({ candidateCount: 2, emittedCount: 2 });
+    expect(next.limits.maximumSymbols).toBe(10);
+    for (const projection of [
+      { ...lookup.projection, truncated: true }, { ...lookup.projection, generationMatched: false },
+      { ...lookup.projection, declarations: [f.declaration, { ...sibling, id: f.declaration.id }] },
+      { ...lookup.projection, declarations: [f.declaration, sibling, { ...sibling, id: "third" }] }
+    ]) {
+      expect(supplementOmittedCallDeclarations(graph, f.plan, f.calls, true, { ...lookup, projection }).selection).toEqual(f.plan.selection);
+    }
+  });
+
+  it("does not partially emit an ambiguous group when a sibling is ineligible or capacity is occupied", () => {
+    const f = fixture();
+    const sibling = { ...f.declaration, id: "second" };
+    const graph = { ...f.graph, symbols: [f.owner, f.context] };
+    const lookup = { names: [f.declaration.name], projection: { generationMatched: true,
+      declarations: [f.declaration, sibling], truncated: false } };
+    const selected = { ...f.plan, selection: [...f.plan.selection, { ...f.plan.selection[0]!, symbol: sibling }] };
+    const selectedCalls = new Map(f.calls); selectedCalls.set(sibling.id, { state: "available", items: [], truncated: false });
+    expect(supplementOmittedCallDeclarations(graph, selected, selectedCalls, true, lookup).selection).toEqual(selected.selection);
+    const testFile = "tests/base.py";
+    const withTestFile = { ...f.plan, selection: f.plan.selection.map(item => item.symbol.id === f.context.id ?
+      { ...item, symbol: { ...item.symbol, filePath: testFile } } : item) };
+    const ineligible = { ...lookup, projection: { ...lookup.projection, declarations: [
+      { ...f.declaration, filePath: f.owner.filePath }, { ...sibling, filePath: testFile }
+    ] } };
+    expect(supplementOmittedCallDeclarations({ ...graph, files: [{ path: testFile, sourceRole: classifySourceRole(testFile) }] },
+      withTestFile, f.calls, true, ineligible).selection).toEqual(withTestFile.selection);
+    const full = { ...f.plan, selection: [...f.plan.selection,
+      ...Array.from({ length: 7 }, (_, i) => ({ ...f.plan.selection[0]!, symbol: node(`slot:${i}`, "other", "src/slots.py") }))] };
+    const calls = new Map(full.selection.map(item => [item.symbol.id,
+      { state: "available" as const, items: item.symbol.id === f.owner.id ? [f.call] : [], truncated: false }]));
+    const exhausted = supplementOmittedCallDeclarations(graph, full, calls, true, lookup);
+    expect(exhausted.selection).toEqual(full.selection);
+    expect(exhausted.omittedDeclarationSearch).toMatchObject({ candidateCount: 2, emittedCount: 0, candidatesTruncated: true });
+  });
+
+  it("fits a complete pair at ten total focuses and four in one file", () => {
+    const f = fixture();
+    const sibling = { ...f.declaration, id: "second" };
+    const full = { ...f.plan, selection: [...f.plan.selection,
+      ...Array.from({ length: 6 }, (_, i) => ({ ...f.plan.selection[0]!,
+        symbol: node(`slot:${i}`, "other", i === 0 ? f.context.filePath : `src/slot${i}.py`) }))] };
+    const calls = new Map(full.selection.map(item => [item.symbol.id,
+      { state: "available" as const, items: item.symbol.id === f.owner.id ? [f.call] : [], truncated: false }]));
+    const next = supplementOmittedCallDeclarations({ ...f.graph, symbols: [f.owner, f.context] }, full, calls, true,
+      { names: [f.declaration.name], projection: { generationMatched: true, truncated: false, declarations: [f.declaration, sibling] } });
+    expect(next.selection).toHaveLength(10);
+    expect(next.selection.filter(item => item.symbol.filePath === f.context.filePath)).toHaveLength(4);
+    expect(next.selection.slice(0, 8)).toEqual(full.selection);
+  });
+
   it("supplements a missing graph declaration only from a complete matching-generation selected-file projection", () => {
     const f = fixture();
     const graph = { ...f.graph, symbols: [f.owner, f.context] };
@@ -40,7 +110,6 @@ describe("declaration leads for omitted query concepts", () => {
       filePaths: expect.arrayContaining([f.owner.filePath, f.context.filePath]) });
     expect(next.omittedDeclarationSearch?.selectedFileLookup?.filePaths).toHaveLength(2);
     for (const changed of [{ ...projection, generationMatched: false }, { ...projection, truncated: true },
-      { ...projection, declarations: [f.declaration, { ...f.declaration, id: "ambiguous" }] },
       { ...projection, declarations: [{ ...f.declaration, filePath: "src/outside.py" }] }]) {
       expect(supplementOmittedCallDeclarations(graph, f.plan, f.calls, true,
         { names, projection: changed }).selection).toEqual(f.plan.selection);

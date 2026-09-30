@@ -3,7 +3,7 @@ export const DEFAULT_CONTEXT_SOURCE_CHARACTER_BUDGET = 24_000;
 export const MIN_CONTEXT_SOURCE_CHARACTER_BUDGET = 2_048;
 export const MAX_CONTEXT_SOURCE_CHARACTER_BUDGET = 64_000;
 export const CONTEXT_SOURCE_MINIMUM_PER_REFERENCE = 256;
-export const CONTEXT_SOURCE_MAXIMUM_REFERENCES = 9;
+export const CONTEXT_SOURCE_MAXIMUM_REFERENCES = 10;
 
 export interface ContextSourceAllocationCandidate {
   readonly referenceIndex: number;

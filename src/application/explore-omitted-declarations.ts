@@ -8,7 +8,7 @@ import { EXPLORE_QUERY_LIMITS, EXPLORE_SUPPLEMENTARY_FOCUS_LIMIT, exploreQueryOm
 
 export const EXPLORE_OMITTED_DECLARATION_LIMITS = {
   maximumTerms: 8, minimumMatchedConcepts: 2, maximumCallsPerFocus: 8,
-  maximumCandidateSymbols: 4096, maximumAdditionalSymbols: EXPLORE_SUPPLEMENTARY_FOCUS_LIMIT
+  maximumCandidateSymbols: 4096, maximumAdditionalSymbols: 2, maximumAmbiguousDeclarations: 2
 } as const;
 
 export const EXPLORE_SELECTED_DECLARATION_LIMITS = { maximumNames: 8, maximumFiles: 8, maximumDeclarations: 16 } as const;
@@ -47,6 +47,8 @@ export interface ExploreOmittedDeclarationLead {
   readonly matchedOmittedTerms: readonly string[];
   /** Only within the stated search scope, never global uniqueness or dispatch. */
   readonly matchingDeclarationCount: number;
+  /** Complete selected-file ambiguity group, emitted together; not possible runtime targets. */
+  readonly matchingDeclarationIds?: readonly string[];
 }
 
 export interface ExploreOmittedDeclarationSearch {
@@ -119,7 +121,7 @@ export function supplementOmittedCallDeclarations(graph: ExploreQueryGraph, plan
     }
   }
   const position = (a: GraphEdge["range"]["start"], b: GraphEdge["range"]["start"]) => a.line - b.line || a.column - b.column;
-  const candidates = new Map<string, ExploreQueryPlan["selection"][number]>();
+  const candidates = new Map<string, ExploreQueryPlan["selection"][number][]>();
   const inheritedLookup = inheritedSourceLookup(graph);
   for (const owner of original) {
     if (owner.sourceRole.role !== "production" || owner.generated.generated) continue;
@@ -129,32 +131,50 @@ export function supplementOmittedCallDeclarations(graph: ExploreQueryGraph, plan
           position(call.range.start, owner.symbol.range.start) < 0 || position(call.range.end, owner.symbol.range.end) > 0 ||
           position(call.range.end, call.range.start) <= 0) continue;
       const declarations = byName.get(call.referenceName?.split(".").at(-1) ?? "") ?? [];
-      if (declarations.length !== 1) continue;
-      const declaration = declarations[0]!;
-      const inheritedSource = selectedFiles.has(declaration.filePath) ? undefined : inheritedLookup(owner.symbol, call, declaration);
-      if (candidates.has(declaration.id) || selectedIds.has(declaration.id) ||
-          (!selectedFiles.has(declaration.filePath) && inheritedSource === undefined) ||
-          plan.selection.filter(item => item.symbol.filePath === declaration.filePath).length >=
-            EXPLORE_QUERY_LIMITS.maximumSymbolsPerFile + EXPLORE_SUPPLEMENTARY_FOCUS_LIMIT) continue;
-      const words = new Set(identifierWords(declaration.name).flatMap(identifierTermVariants));
-      const matched = groups.filter(group => group.some(term => words.has(term))).map(group => group[0]!);
-      if (matched.length < limits.minimumMatchedConcepts) continue;
-      const item = planExploreQuery({ ...graph, symbols: [declaration], edges: [] }, declaration.name).selection[0];
-      if (item === undefined || item.generated.generated || item.sourceRole.role !== "production") continue;
-      candidates.set(declaration.id, { ...item, score: 0, baseScore: 0, rankingScore: 0,
-        connectionScore: 0, sourceScore: 0, matchedTerms: [], sourceMatches: [], reasons: ["omitted-query-call-declaration"],
-        graphDiffusion: { ...item.graphDiffusion, state: "no-mass", seed: false, seedWeight: 0,
-          nodeMass: 0, fileMass: 0, normalizedFileMass: 0, score: 0, rankingContribution: 0 },
-        omittedQueryDeclaration: { state: "unresolved-name-candidate",
-          scope: inheritedSource !== undefined ? "inspected-inherited-source" :
-            projectedNames.has(declaration.name) ? "selected-files-index" : "inspected-bounded-graph", call,
-          ...(inheritedSource === undefined ? {} : { inheritedSource }),
-          matchedOmittedTerms: matched, matchingDeclarationCount: declarations.length } });
+      const ambiguous = declarations.length > 1;
+      if (declarations.length !== 1 && !(lookupState === "available" && projectedNames.has(declarations[0]?.name ?? "") &&
+          declarations.length === limits.maximumAmbiguousDeclarations &&
+          new Set(declarations.map(symbol => symbol.id)).size === declarations.length)) continue;
+      const key = declarations.map(symbol => symbol.id).join("\u0000");
+      if (candidates.has(key)) continue;
+      const group: ExploreQueryPlan["selection"][number][] = [];
+      for (const declaration of declarations) {
+        const inheritedSource = selectedFiles.has(declaration.filePath) ? undefined : inheritedLookup(owner.symbol, call, declaration);
+        if (selectedIds.has(declaration.id) ||
+            (!selectedFiles.has(declaration.filePath) && inheritedSource === undefined) ||
+            plan.selection.filter(item => item.symbol.filePath === declaration.filePath).length >=
+              EXPLORE_QUERY_LIMITS.maximumSymbolsPerFile + declarations.length) continue;
+        const words = new Set(identifierWords(declaration.name).flatMap(identifierTermVariants));
+        const matched = groups.filter(group => group.some(term => words.has(term))).map(group => group[0]!);
+        if (matched.length < limits.minimumMatchedConcepts) continue;
+        const item = planExploreQuery({ ...graph, symbols: [declaration], edges: [] }, declaration.name).selection[0];
+        if (item === undefined || item.generated.generated || item.sourceRole.role !== "production") continue;
+        group.push({ ...item, score: 0, baseScore: 0, rankingScore: 0,
+          connectionScore: 0, sourceScore: 0, matchedTerms: [], sourceMatches: [], reasons: ["omitted-query-call-declaration"],
+          graphDiffusion: { ...item.graphDiffusion, state: "no-mass", seed: false, seedWeight: 0,
+            nodeMass: 0, fileMass: 0, normalizedFileMass: 0, score: 0, rankingContribution: 0 },
+          omittedQueryDeclaration: { state: "unresolved-name-candidate",
+            scope: inheritedSource !== undefined ? "inspected-inherited-source" :
+              projectedNames.has(declaration.name) ? "selected-files-index" : "inspected-bounded-graph", call,
+            ...(inheritedSource === undefined ? {} : { inheritedSource }),
+            matchedOmittedTerms: matched, matchingDeclarationCount: declarations.length,
+            ...(ambiguous ? { matchingDeclarationIds: declarations.map(symbol => symbol.id) } : {}) } });
+      }
+      // Never pick an arbitrary winner when a sibling is invalid or already selected.
+      if (group.length === declarations.length) candidates.set(key, group);
     }
   }
-  const additions = [...candidates.values()].slice(0, Math.min(limits.maximumAdditionalSymbols,
-    Math.max(0, EXPLORE_QUERY_LIMITS.maximumSymbols + EXPLORE_SUPPLEMENTARY_FOCUS_LIMIT - plan.selection.length)))
-    .map((item, index) => ({ ...item, rank: plan.selection.length + index + 1 }));
+  const groupsToAdd = [...candidates.values()];
+  const chosen = groupsToAdd.find(group => {
+    const capacity = group.length === 2 ? EXPLORE_QUERY_LIMITS.maximumSymbols + 2 :
+      EXPLORE_QUERY_LIMITS.maximumSymbols + EXPLORE_SUPPLEMENTARY_FOCUS_LIMIT;
+    if (group.length === 2 && plan.selection.length > EXPLORE_QUERY_LIMITS.maximumSymbols) return false;
+    return plan.selection.length + group.length <= capacity && [...new Set(group.map(item => item.symbol.filePath))].every(filePath =>
+      plan.selection.filter(item => item.symbol.filePath === filePath).length + group.filter(item => item.symbol.filePath === filePath).length <=
+        EXPLORE_QUERY_LIMITS.maximumSymbolsPerFile + group.length);
+  }) ?? [];
+  const candidateCount = groupsToAdd.reduce((count, group) => count + group.length, 0);
+  const additions = chosen.map((item, index) => ({ ...item, rank: plan.selection.length + index + 1 }));
   const selection = [...plan.selection, ...additions];
   return { ...plan, selection,
     limits: { ...plan.limits,
@@ -162,9 +182,9 @@ export function supplementOmittedCallDeclarations(graph: ExploreQueryGraph, plan
       maximumSymbols: Math.max(plan.limits.maximumSymbols, EXPLORE_QUERY_LIMITS.maximumSymbols + additions.length),
       maximumSymbolsPerFile: Math.max(plan.limits.maximumSymbolsPerFile,
         EXPLORE_QUERY_LIMITS.maximumSymbolsPerFile + additions.length) },
-    omittedDeclarationSearch: { ...receipt, candidateCount: candidates.size, emittedCount: additions.length,
-      candidatesTruncated: receipt.candidatesTruncated || candidates.size > additions.length },
-    summary: { ...plan.summary, candidateCount: plan.summary.candidateCount + candidates.size,
+    omittedDeclarationSearch: { ...receipt, candidateCount, emittedCount: additions.length,
+      candidatesTruncated: receipt.candidatesTruncated || candidateCount > additions.length },
+    summary: { ...plan.summary, candidateCount: plan.summary.candidateCount + candidateCount,
       selectedCount: selection.length, selectedFileCount: new Set(selection.map(item => item.symbol.filePath)).size,
-      truncated: plan.summary.truncated || candidates.size > additions.length } };
+      truncated: plan.summary.truncated || candidateCount > additions.length } };
 }

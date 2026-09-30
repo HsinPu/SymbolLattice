@@ -6,7 +6,7 @@ SymbolLattice 是提供給開發者與 AI Agent 的本機程式碼搜尋工具�
 
 [English](README.en.md) · [開始使用](docs/getting-started.md) · [驗證與限制](benchmarks/README.md) · [回報問題](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.540.1` · Node.js `>=22.13 <25` · MIT
+`v0.541.0` · Node.js `>=22.13 <25` · MIT
 
 ## 從「這段功能在哪裡？」開始
 
@@ -87,7 +87,7 @@ SymbolLattice 使用靜態分析。文字命中也可能來自註解或字串；
 
 較長查詢若有一個來源涵蓋詞數預算內保留的全部概念，部分只涵蓋共用詞的次要焦點也可能被省略。JSON 的 `queryPlan.coveredContextFiltering` 提供判定依據、來源位置與精確符號參照，MCP 文字會列出補查路徑；這不證明檔案無關或流程已完整解析。
 
-長問句中被截斷的概念，也可與已引用的未解析呼叫共同支持一個同名宣告候選，補上已選到檔案中的來源。JSON 的 `queryPlan.omittedDeclarationSearch` 與焦點的 `omittedQueryDeclaration` 說明概念、呼叫依據與候選圖截斷；沒有候選不代表宣告不存在。主圖中缺少宣告時，可再精確補查既有結果的檔案；`selectedFileLookup` 記錄範圍與可用性，不擴大檔案或來源預算。候選不代表已確認的接收者型別或呼叫目標。**0.537.0 破壞性變更（每檔結果上限）**：補充候選可使同一檔案最多回傳 3 個焦點；總焦點仍最多 9 個。自行處理 JSON 的程式請依回傳的 `limits` 配置，勿固定每檔只能有 2 項；索引不需因這項變更重建。
+長問句中省略的概念可與來源中的未解析呼叫共同支持同名宣告候選。主圖中缺少宣告時，可在已選檔案精確補查；若完整、世代一致的結果恰有兩個同名宣告，會一起提供候選來源及 `matchingDeclarationIds`，不選定呼叫目標。JSON 的 `queryPlan.omittedDeclarationSearch` 記錄範圍、限制與截斷。**0.541.0 破壞性變更（結果上限）**：候選組可使總焦點最多 10 個、每檔最多 4 個；JSON 使用者須依回傳的 `limits` 處理。檔案與總來源字元預算不增加，這項變更不需重建索引。
 
 Python 以專案根目錄為範圍，解析絕對匯入指向的單一基底類別，保留匯入、套件標記與繼承位置的證據；支援名稱清單與別名。命名空間套件、來源根目錄推導、多重繼承與動態派發仍不在此範圍。繼承方法的呼叫仍可能未解析。長問句中省略的概念若與直接 `self.method()` 呼叫相符，也可從既有有界圖補上一個跨檔基底方法候選，附上呼叫所屬類別、匯入、直接繼承與宣告歸屬證據；只支援已解析的絕對具名匯入與單層來源鏈，不推論執行時派發。這類候選的 JSON `omittedQueryDeclaration.scope` 為 `inspected-inherited-source`，並附上 `inheritedSource`；請依回傳的 `limits` 處理補充檔案與焦點。升級後請執行 `SymbolLattice sync .` 更新解析證據。
 

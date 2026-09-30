@@ -251,6 +251,9 @@ function renderFocuses(result: UnknownRecord): string[] {
       const scope = omittedDeclaration.scope === "selected-files-index" ? "selected-file index lookup" :
         omittedDeclaration.scope === "inspected-inherited-source" ? "bounded direct-base source inspection" : "bounded graph inspection";
       output.push(`  ${finiteNumber(omittedDeclaration.matchingDeclarationCount) ?? "Unknown number of"} matching declarations in the ${scope}, not repository-wide uniqueness or dispatch.`);
+      if (Array.isArray(omittedDeclaration.matchingDeclarationIds)) {
+        output.push("  All declarations in this selected-file ambiguity group are shown together; no candidate is identified as the call target.");
+      }
     }
     if (imported !== null) {
       output.push("  Supplementary declaration candidate from imported construction context; receiver and call target remain unconfirmed.");

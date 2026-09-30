@@ -62,7 +62,23 @@ export function verifyOmittedDeclarationLeads(result, readSource) {
       assert.ok(lookup.filePaths.includes(focus.symbol.filePath));
       assert.ok(lookup.filePaths.every(path => focuses.some(item => !item.omittedQueryDeclaration && item.symbol.filePath === path)));
     }
-    assert.equal(receipt.matchingDeclarationCount, 1);
+    if (receipt.matchingDeclarationCount === 2) {
+      assert.equal(receipt.scope, "selected-files-index");
+      assert.equal(search?.selectedFileLookup?.state, "available");
+      assert.equal(receipt.matchingDeclarationIds?.length, 2);
+      assert.equal(new Set(receipt.matchingDeclarationIds).size, 2);
+      assert.ok(receipt.matchingDeclarationIds.includes(focus.symbol.id));
+      for (const id of receipt.matchingDeclarationIds) {
+        const sibling = focuses.find(item => item.symbol.id === id);
+        assert.ok(sibling && sibling.symbol.name === focus.symbol.name);
+        assert.equal(sibling.omittedQueryDeclaration?.scope, "selected-files-index");
+        assert.deepEqual(sibling.omittedQueryDeclaration.matchingDeclarationIds, receipt.matchingDeclarationIds);
+        assert.deepEqual(sibling.omittedQueryDeclaration.call, receipt.call);
+      }
+    } else {
+      assert.equal(receipt.matchingDeclarationCount, 1);
+      assert.equal(receipt.matchingDeclarationIds, undefined);
+    }
     assert.equal(search?.policy, "omitted-query-call-declarations-v1");
     assert.equal(search.state, "searched");
     assert.ok(search.omittedTerms.length <= 8);
@@ -137,9 +153,11 @@ export function verifyOmittedDeclarationLeads(result, readSource) {
     verifiedLeads++;
     verifiedOrigins++;
   }
-  assert.ok(verifiedLeads <= 1);
+  assert.ok(verifiedLeads <= 2);
   if (search) assert.equal(search.emittedCount, verifiedLeads);
-  if (verifiedLeads) assert.ok(focuses.length <= 9);
+  if (verifiedLeads) assert.ok(focuses.length <= 10);
+  if (verifiedLeads === 2) assert.ok(focuses.filter(item => item.omittedQueryDeclaration)
+    .every(item => item.omittedQueryDeclaration.matchingDeclarationCount === 2));
   return { verifiedLeads, verifiedOrigins };
 }
 

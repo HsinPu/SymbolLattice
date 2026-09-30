@@ -681,7 +681,7 @@ export function planExploreSourceWindows(
     }
   }
   const sites = [...connectionSites, ...spineSites, ...callSites, ...calleeSites]
-    .filter((site) => !coveredByPrimarySource(site, focuses))
+    .filter((site) => site.relevanceWeight > 0 && !coveredByPrimarySource(site, focuses))
     .sort(
       (left, right) =>
         left.focus.rank - right.focus.rank ||
@@ -865,6 +865,7 @@ export function planExploreSourceWindows(
   }, focuses));
   let lexicalSelected = 0, lexicalReplacements = 0;
   for (const candidate of lexical.candidates) {
+    if (candidate.focus.score <= 0) continue;
     if (lexicalSelected >= EXPLORE_LEXICAL_WINDOW_LIMITS.maximumWindows) break;
     if (selected.length >= EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows) {
       const index = selected.findLastIndex(window => window.reason === "exact-focus-call" &&
@@ -884,7 +885,7 @@ export function planExploreSourceWindows(
     lexicalSelected++;
   }
 
-  const uncoveredCallees = [...sourceCallees.values()].filter(({ site }) => !selected.some((window) =>
+  const uncoveredCallees = [...sourceCallees.values()].filter(({ site }) => site.relevanceWeight > 0 && !selected.some((window) =>
     window.filePath === site.filePath && window.startLine <= site.evidenceStartLine && window.endLine >= site.evidenceEndLine));
   const calleeSearch = sourceDocuments === undefined || queryTerms.length === 0 ? undefined :
     matchExploreCalleeSource(uncoveredCallees.map(({ symbol }) => symbol), queryTerms, sourceDocuments);
@@ -904,7 +905,7 @@ export function planExploreSourceWindows(
   // A named flow's proven callees need not repeat the caller's identifier.
   // Append only to spare slots; allocation also protects all earlier windows.
   const flowCandidates: MutableWindow[] = [...flowCallees.values()]
-    .filter(({ site }) => !coveredByPrimarySource(site, focuses) && ![...selected, ...sourceCandidates].some(window =>
+    .filter(({ site }) => site.relevanceWeight > 0 && !coveredByPrimarySource(site, focuses) && ![...selected, ...sourceCandidates].some(window =>
       window.filePath === site.filePath && window.startLine <= site.evidenceStartLine && window.endLine >= site.evidenceEndLine))
     .sort((left, right) => left.site.focus.rank - right.site.focus.rank ||
       Number(right.site.filePath === right.site.focus.symbol.filePath) - Number(left.site.filePath === left.site.focus.symbol.filePath) ||

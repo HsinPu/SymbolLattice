@@ -210,6 +210,12 @@ describe("literal source for differently named exact callees", () => {
     expect(planExploreSourceWindows([{ ...primary, source: focus(1, caller, 1, 40).source }], [], undefined, ["shutdown"], documents).windows).toEqual([]);
   });
 
+  it("does not allocate ranked call windows for a zero-score supplementary source candidate", () => {
+    const candidate = { ...primary, score: 0 };
+    expect(planExploreSourceWindows([candidate], [], undefined, ["finish"], documents).windows).toEqual([]);
+    expect(planExploreSourceWindows([candidate], [], undefined, ["shutdown"], documents).windows).toEqual([]);
+  });
+
   it("rejects heuristic or inconsistent call receipts and never fetches additional files", () => {
     for (const invalid of [{ ...call, resolution: "heuristic" as const }, { ...call, kind: "imports" as const },
       { ...call, sourceId: "wrong" }, { ...call, targetId: "wrong" }, { ...call, filePath: "wrong.ts" }]) {

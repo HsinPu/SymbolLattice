@@ -116,17 +116,17 @@ This bounded output heuristic does not guarantee that omitted files are irreleva
 
 General-query ranking can corroborate exact directory words, such as a named database backend, with at least two distinct source concepts. A focus’s `directoryContext` records query terms, full directory components, path and score contribution; filenames and partial directory strings do not qualify for this evidence. This is relevance evidence, without confirming code relationships or a complete flow. Search/source budgets are unchanged; no index rebuild is needed.
 
-### Upgrading to v0.538.0
+### Upgrading to v0.541.0
 
-If omitted-concept supplementation finds no candidate in the primary graph, it can now perform an exact-name lookup in files already selected. It requests at most 8 names, 8 files and 16 declarations; only complete, generation-matched results can support a candidate. Multiple same-name declarations are rejected. This does not infer receiver type or call target, or search new files.
+If omitted-concept supplementation finds no candidate in the primary graph, it can now perform an exact-name lookup in files already selected. It requests at most 8 names, 8 files and 16 declarations; only complete, generation-matched results can support a candidate. Exactly two eligible same-name declarations can be supplied together as a complete candidate group. This does not infer receiver type or call target, or search new files. Only complete, generation-matched lookups support a group; more than two declarations, ineligible siblings or an occupied supplementary slot do not cause an arbitrary winner to be selected. `matchingDeclarationIds` lists the group within the selected-file scope.
 
-JSON `queryPlan.omittedDeclarationSearch.selectedFileLookup` records names, files, availability and name-budget truncation. A projected candidate has `omittedQueryDeclaration.scope: selected-files-index`; its matching count applies only to that lookup scope. Focus limits, per-file limits and the total source character budget do not increase; this query capability requires no index rebuild.
+JSON `queryPlan.omittedDeclarationSearch.selectedFileLookup` records names, files, availability and name-budget truncation. A projected candidate has `omittedQueryDeclaration.scope: selected-files-index`; its matching count applies only to that lookup scope. Unique candidates retain one supplementary slot; two same-name candidates share the existing total source character budget. This query capability requires no index rebuild.
 
-### Upgrading to v0.537.0
+### Result limits for long-question declaration supplements
 
 Omitted concepts from long questions can corroborate a same-name declaration candidate with an unresolved source call, supplementing source in an already selected file. This does not establish receiver type or call target. JSON `queryPlan.omittedDeclarationSearch` and the focus's `omittedQueryDeclaration` record receipts and truncation.
 
-**Breaking change**: supplementary candidates can raise the per-file maximum to 3 focuses; the total remains at most 9. JSON clients must honor returned `limits` and remove assumptions of exactly 2 items per file. The existing source character budget does not increase; this change requires no index rebuild.
+**0.541.0 breaking change**: a complete candidate group can raise the per-file maximum to 4 focuses and the total to 10. JSON clients must honor returned `limits` and remove assumptions of 2/3 items per file or 9 overall. The existing source character budget does not increase; this change requires no index rebuild.
 
 ### Upgrading to v0.536.0
 

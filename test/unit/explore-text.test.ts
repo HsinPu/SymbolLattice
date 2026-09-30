@@ -4,6 +4,14 @@ import { sourceDeliveryIdentityFromText } from "../../src/application/source-del
 import { McpSourceSession } from "../../src/mcp/source-session.js";
 
 describe("MCP explore text rendering", () => {
+  it("labels the complete selected-file candidate group without choosing a dispatch target", () => {
+    const output = renderExploreText({ focuses: [{ symbol: { name: "set_autocommit" },
+      omittedQueryDeclaration: { scope: "selected-files-index", matchingDeclarationCount: 2,
+        matchingDeclarationIds: ["method", "wrapper"] } }] });
+    expect(output).toContain("2 matching declarations in the selected-file index lookup");
+    expect(output).toContain("All declarations in this selected-file ambiguity group are shown together");
+    expect(output).toContain("no candidate is identified as the call target");
+  });
   it("labels literal directory context as ranking evidence rather than a resolved relation", () => {
     const output = renderExploreText({ focuses: [{ symbol: { name: "version" },
       directoryContext: { terms: ["mysql"], filePath: "src/mysql/base.py" } }] });

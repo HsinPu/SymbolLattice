@@ -46,6 +46,22 @@ describe("task retrieval benchmark judgments", () => {
     indexed.queryPlan.omittedDeclarationSearch.selectedFileLookup = {
       state: "available", names: ["constraint_checks_disabled"], filePaths: ["a.py", "b.py"] };
     expect(verifyOmittedDeclarationLeads(indexed, source)).toEqual({ verifiedLeads: 1, verifiedOrigins: 1 });
+    const ambiguous = structuredClone(indexed);
+    ambiguous.queryPlan.omittedDeclarationSearch.emittedCount = 2;
+    ambiguous.focuses.push({ ...structuredClone(ambiguous.focuses[2]),
+      symbol: { ...ambiguous.focuses[2].symbol, id: "sibling" } });
+    for (const lead of ambiguous.focuses.slice(2)) {
+      lead.omittedQueryDeclaration.matchingDeclarationCount = 2;
+      lead.omittedQueryDeclaration.matchingDeclarationIds = ["lead", "sibling"];
+    }
+    expect(verifyOmittedDeclarationLeads(ambiguous, source)).toEqual({ verifiedLeads: 2, verifiedOrigins: 2 });
+    for (const mutate of [r => r.focuses.pop(),
+      r => { r.focuses[2].omittedQueryDeclaration.matchingDeclarationIds = ["lead", "lead"]; },
+      r => { r.focuses[3].omittedQueryDeclaration.call.sourceId = "foreign"; },
+      r => { r.focuses[3].omittedQueryDeclaration.scope = "inspected-bounded-graph"; }]) {
+      const forged = structuredClone(ambiguous); mutate(forged);
+      expect(() => verifyOmittedDeclarationLeads(forged, source)).toThrow();
+    }
     for (const mutate of [r => { r.queryPlan.omittedDeclarationSearch.selectedFileLookup.state = "truncated"; },
       r => { r.queryPlan.omittedDeclarationSearch.selectedFileLookup.names = ["wrong"]; },
       r => { r.queryPlan.omittedDeclarationSearch.selectedFileLookup.filePaths.push("outside.py"); }]) {

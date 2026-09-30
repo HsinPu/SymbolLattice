@@ -6,7 +6,7 @@ SymbolLattice is a local code search tool for developers and AI agents. Query a 
 
 [繁體中文](README.md) · [Get started](docs/getting-started.en.md) · [Validation and limitations](benchmarks/README.md) · [Report an issue](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.540.1` · Node.js `>=22.13 <25` · MIT
+`v0.541.0` · Node.js `>=22.13 <25` · MIT
 
 ## Start with “Where is this implemented?”
 
@@ -87,7 +87,7 @@ For rejection queries with an exact source reference, lower-priority focuses tha
 
 For longer queries with one source covering every concept retained within the term budget, some secondary focuses matching only shared terms may also be omitted. JSON `queryPlan.coveredContextFiltering` includes the decision evidence, source locations and exact symbol references; MCP text names follow-up paths. This does not establish irrelevance or complete flow resolution.
 
-Concepts omitted from a long question can also corroborate a same-name declaration candidate through a cited unresolved call, supplying source from an already selected file. JSON `queryPlan.omittedDeclarationSearch` and the focus's `omittedQueryDeclaration` cite the concepts, call and candidate-graph truncation; no candidate does not establish that a declaration is absent. A declaration missing from the primary graph can be looked up by exact name in existing result files; `selectedFileLookup` records scope and availability without expanding file or source budgets. The receiver type and target remain unconfirmed. **0.537.0 breaking change (per-file result limit):** a supplement can produce up to three focuses in one file; the overall maximum remains nine. JSON consumers should honor the returned `limits` rather than hard-code two items per file. This change does not require rebuilding the index.
+Concepts omitted from a long question can corroborate same-name declaration candidates through cited unresolved calls. Missing declarations can be looked up in selected files; a complete, generation-matched result with exactly two same-name declarations supplies both sources and `matchingDeclarationIds`, without selecting a call target. JSON `queryPlan.omittedDeclarationSearch` records scope, limits and truncation. **0.541.0 breaking change (result limits):** a candidate group can raise the maximum to ten focuses overall and four per file. JSON consumers must honor returned `limits`. File and total source-character budgets do not increase; this change requires no index rebuild.
 
 Python resolves a single written base class through absolute named imports at the indexed project root, citing the import, package markers and base location. Import lists and aliases are supported; namespace packages, inferred source roots, multiple inheritance and dynamic dispatch remain outside this scope. Calls to inherited methods can remain unresolved. When concepts omitted from a long question match a direct `self.method()` call, the existing bounded graph can supply one cross-file base-method candidate, citing caller containment, import, direct inheritance and declaration containment. This supports resolved absolute named imports and one source hop; it does not infer runtime dispatch. These candidates use JSON `omittedQueryDeclaration.scope: inspected-inherited-source` with `inheritedSource`; honor returned `limits` for supplementary files and focuses. After upgrading, run `SymbolLattice sync .` to refresh this evidence.
 
