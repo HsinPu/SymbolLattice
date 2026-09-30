@@ -6,7 +6,7 @@ SymbolLattice is a local code search tool for developers and AI agents. Query a 
 
 [繁體中文](README.md) · [Get started](docs/getting-started.en.md) · [Validation and limitations](benchmarks/README.md) · [Report an issue](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.534.3` · Node.js `>=22.13 <25` · MIT
+`v0.535.0` · Node.js `>=22.13 <25` · MIT
 
 ## Start with “Where is this implemented?”
 
@@ -86,6 +86,8 @@ For rejection queries with an exact source reference, lower-priority focuses tha
 For Python, direct same-class `self.method()` calls can include `async def` methods when the target is unambiguous. Functions with a safely recovered bare-`yield` parser gap also retain written member-call locations; unknown receiver types remain unresolved rather than becoming guessed targets. General queries and exact-symbol follow-ups can cite same-class declaration leads from the returned bounded graph and indexed source for some unresolved `self.method()` calls. These are follow-up candidates, not proof of receiver type or runtime dispatch. When a general query's unresolved-call list is limited, matching call names get priority for inclusion while the selected calls remain in source order; use the returned exact symbol reference to follow up with a larger source-ordered list when needed.
 
 See [language capabilities and limitations](src/domain/language-depth.ts) and [real-project validation](benchmarks/README.md). Retrieval quality and speed depend on the project and query.
+
+Static named TypeScript optional member calls (such as `signal?.isCycle()`) retain source locations for the method name and remain unresolved. This does not establish execution, receiver type, or dispatch target. After upgrading to this version, run `SymbolLattice sync .` to refresh extraction evidence in existing indexes.
 
 ## Documentation and participation
 

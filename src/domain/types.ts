@@ -297,6 +297,7 @@ export interface PendingReference {
   /** Syntax-proven invocation semantics that are stronger than a generic identifier reference. */
   readonly callSemantics?:
     | "typescript-array-sort-comparator"
+    | "typescript-optional-member-call"
     | "typescript-proven-receiver-member-call";
   /** Static class or interface binding that proves a TypeScript member-call receiver. */
   readonly callReceiverTypeName?: string;

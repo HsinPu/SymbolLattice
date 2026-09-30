@@ -20,6 +20,7 @@ These tools generate or validate large-project evidence outside the published np
 | `python/` | `correctness-oracle.mjs`, `PythonOracle.py` | manual CPython stdlib AST oracle |
 | `python/` | `module-bindings.mjs`, `ModuleBindingOracle.py` | manual CPython AST declaration/source-range audit; optional baseline fact comparison |
 | `python/` | `member-calls.mjs`, `MemberCallOracle.py` | manual CPython AST unresolved member-call name, ownership and source-range audit; required baseline fact preservation check |
+| `typescript/` | `optional-member-receipts.mjs` | manual TypeScript compiler AST optional member-token oracle and baseline declaration/relation preservation check |
 | `python/` | `direct-self-call-receipts.py`, `django-async-self-truth.json` | manual pinned-corpus CPython AST target/receipt audit and separately fixed async-call recall observations |
 | `sfc/` | `correctness-oracle.mjs` | manual Vue/Svelte/Astro component relation oracle |
 | `shell/` | `correctness-oracle.mjs` | manual mvdan ABI v2 direct-call oracle |
@@ -49,6 +50,32 @@ These tools generate or validate large-project evidence outside the published np
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## v0.535.0 TypeScript optional member call receipts
+
+Static named TypeScript optional member calls now retain their written method-token locations as unresolved `calls` edges, including optional receivers, optional invocation and nested optional chains. The rule is `syntax.typescript.optional-member-call.unknown-receiver`: target is null, confidence is zero and target candidates are empty. A same-named local function, imported function or typed class member cannot turn this receipt into an exact edge. Computed members and standalone JavaScript members are outside this addition. These are written call-site facts, not proof of execution, receiver type or dispatch. This is a minor release because it adds previously unreported source evidence. Extractor `multi-language-ast-v432` and resolver `project-resolver-v207` invalidate older extraction/projection inputs; run `sync` to re-extract and project the graph without deleting the index or changing its format.
+
+Windows / Node.js 24.19.0 validation used disposable copies of the existing pinned corpora. The independent TypeScript 5.9.3 AST oracle examines static named optional member call tokens in indexed TypeScript files. It checks each added edge's path, line, column, method spelling, null target and empty candidates, and separately preserves every baseline declaration and relation. In this bounded source-token scope:
+
+| Corpus | Commit | TypeScript files | Compiler sites / verified new receipts | TP / FP / FN | Preserved baseline relations |
+| --- | --- | ---: | ---: | --- | ---: |
+| [Nest](https://github.com/nestjs/nest) | `35c3ded6dbf3f23f917ae88d0ed966932788cae6` | 1,606 | 73 / 73 | 73 / 0 / 0 | 44,760 |
+| [Fastify](https://github.com/fastify/fastify) | `70b14e92c0b55e8201f5530ba2e6bab4e928c784` | 35 | 1 / 1 | 1 / 0 / 0 | 19,167 |
+
+Precision and recall are both 1 within this compiler-site denominator. They do not establish semantic graph precision, receiver resolution or task-file recall. The compiler oracle is retained at `typescript/optional-member-receipts.mjs`; it also rejects modified tracked corpus sources. The 20 prior retrieval manifests / 27 tasks retained identical selected files, required-file judgments and specified evidence: 45/45 required-file occurrences, 58 judged-relevant occurrences and 113/113 specified source facts. Two judged irrelevant Django selections and 37 unjudged selections remain. The new circular-dependency task now returns the source-located `isCycle` receipt at `injector.ts:143:41-48`, but still finds only 2/3 required files and 3/4 required source facts. `settlement-signal.ts` remains omitted: **call extraction improved; the file-retrieval failure is not repaired**.
+
+Eight alternating persistent-reader explore pairs, after one warm-up query per product, compared frozen v0.534.2 code (`31ce28f`; production behavior is unchanged in documentation-only v0.534.3) against v0.535.0. Each product used its applicable index on an identical source checkout. `paired-explore.mjs --candidate-project` supports this separate-index condition; timing-only mode does not claim whole-response equality across differing generations and added evidence. Retrieval and source correctness were checked separately above. Upper-median total milliseconds were:
+
+| Query | v0.534.2 | v0.535.0 |
+| --- | ---: | ---: |
+| Django atomic rollback (`bc833e8883db4a333a6485d91637b78c85e2b13b`) | 1,451.27 | 1,478.82 |
+| Fastify response header errors | 522.93 | 544.34 |
+| Nest constructor dependencies | 1,173.43 | 1,155.87 |
+| Nest pending-provider circular dependency | 1,096.59 | 1,129.82 |
+
+These small-sample warm-cache results range from approximately 1.5% faster to 4.1% slower; this release makes no speed-improvement claim. Index refreshes completed on all three copies, but their timings overlapped other validation and are not an isolated indexing benchmark. Agent completion time, query count, cold-cache latency and peak memory were not measured. Type checking, build, language-depth verification and package dry-run passed. The full test run had 3,257 passes, four existing skips and one failure because the new benchmark directory was absent from the repository-layout allowlist; after adding its evidence domain, the layout and optional-call suites passed all six tests on rerun. The earlier focused extraction/resolution run passed 89 tests.
+
+Reproduce the oracle with `node benchmarks/typescript/optional-member-receipts.mjs --project <candidate-indexed-copy> --baseline-project <baseline-indexed-copy> --output <external-report.json>`. Retrieval uses `node benchmarks/mcp/task-retrieval.mjs --project <candidate-indexed-copy> --manifest benchmarks/mcp/<manifest>.json --output <external-report.json> --repetitions 1`. Timing uses `node benchmarks/mcp/paired-explore.mjs --project <baseline-indexed-copy> --candidate-project <candidate-indexed-copy> --baseline-root <frozen-v0.534.2> --candidate-root . --query <manifest-query> --output <external-report.json> --pairs 8 --comparison timing-only --persistent-reader`. Outputs are `%TEMP%/SymbolLattice-v5350-*-optional-member-oracle.json`, `%TEMP%/SymbolLattice-v5350-retrieval/`, `%TEMP%/SymbolLattice-v5350-paired-*.json`; candidate corpora are `%TEMP%/SymbolLattice-v5350-optional-member-corpora/` and the frozen product is `%TEMP%/SymbolLattice-v5342-optional-member-baseline/`.
 
 ## v0.534.3 pending-provider circular-dependency regression
 

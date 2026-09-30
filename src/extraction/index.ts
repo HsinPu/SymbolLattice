@@ -9348,6 +9348,14 @@ export function extractFileFacts(
           memberCall.receiverBindingSpace ?? undefined,
           memberCall.receiverMemberKind
         );
+      } else if (ts.isCallChain(node) && ts.isPropertyAccessExpression(node.expression) &&
+          ts.isIdentifier(node.expression.name)) {
+        // Retain the written member name, not a guessed receiver or dispatch
+        // target. Optional calls may never execute; nested optional receivers
+        // and method?.() are still useful source-located follow-up evidence.
+        addPendingReference(currentCallOwner(node).id, node.expression.name.text,
+          "calls", node.expression.name, undefined, undefined, undefined,
+          "typescript-optional-member-call");
       }
     }
 

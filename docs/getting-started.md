@@ -106,6 +106,12 @@ SymbolLattice serve --mcp --project C:\path\to\project
 
 使用上方安裝流程指定新的固定 commit 或既有 tag，重新安裝後執行 Codex 整合，並在各專案執行 `SymbolLattice sync .`。目前為 `0.x` 開發階段，升級前請核對對應版本的相容性與遷移說明。
 
+### 升級至 v0.535.0
+
+本版新增 TypeScript 具名 optional member call 的來源紀錄，例如 `signal?.isCycle()`、`signal.isCycle?.()`。紀錄引用方法名稱在原始碼中的位置，目標維持未解析；不推定接收者型別，也不保證呼叫會執行。動態或字面值 computed member（例如 `signal?.[name]()`）不包含在此新增範圍。
+
+安裝後在每個被分析的專案執行 `SymbolLattice sync .`。新的 extractor／resolver 版本會觸發必要的重新擷取與圖投影，第一次同步可能較久；索引格式未變，不需手動刪除索引。呼叫證據增加不代表已找齊任務必要檔案；已知的 Nest 循環依賴召回缺口仍記錄於驗證文件。
+
 ### 升級至 v0.532.0
 
 `explore --json` 及 MCP `explore` 的結構化回應仍提供索引是否過期、原因、索引世代識別碼與檔案／符號／關係數量，但其 `status.lastIndexWork` 已移除。若你的腳本從查詢結果讀取上次索引作業的檔案清單，請改用 `SymbolLattice status <project-path> --json` 取得完整的 `lastIndexWork`。本次不變更索引格式，無須因此重建；一般升級後仍可執行 `sync` 檢查更新。

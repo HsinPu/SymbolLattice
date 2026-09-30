@@ -2222,6 +2222,15 @@ export function resolveProjectFacts(input: {
       continue;
     }
 
+    if (reference.relationKind === "calls" && reference.callSemantics === "typescript-optional-member-call") {
+      // A lexical/imported function or class method with the same name does
+      // not establish the target of an optional member call.
+      unresolvedReferences.push(reference);
+      resolvedEdges.push(referenceEdge(reference, null, "unresolved", 0,
+        referenceEvidence("syntax.typescript.optional-member-call.unknown-receiver", "unresolved", [])));
+      continue;
+    }
+
     if (
       reference.relationKind === "calls" &&
       reference.callSemantics === "typescript-proven-receiver-member-call" &&

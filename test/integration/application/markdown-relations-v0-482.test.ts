@@ -36,8 +36,8 @@ describe("Markdown reference-link project relations v0.482", () => {
     const referenceEdges = snapshot.edges.filter((edge) => edge.kind === "references");
 
     expect(status).toMatchObject({ initialized: true, stale: false });
-    expect(store.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v431");
-    expect(store.getActiveGraphBundle(projectPath).resolverVersion).toContain("project-resolver-v206");
+    expect(store.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v432");
+    expect(store.getActiveGraphBundle(projectPath).resolverVersion).toContain("project-resolver-v207");
     expect(referenceEdges).toHaveLength(2);
     expect(referenceEdges).toEqual(expect.arrayContaining([
       expect.objectContaining({

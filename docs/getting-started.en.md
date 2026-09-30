@@ -106,6 +106,12 @@ See the [validation documentation](../benchmarks/README.md) for measured results
 
 Use the installation flow above with a new fixed commit or existing tag. After reinstalling, repeat Codex integration and run `SymbolLattice sync .` in each project. The project is in `0.x` development; check the target version's compatibility and migration notes before upgrading.
 
+### Upgrading to v0.535.0
+
+This version adds source receipts for static named TypeScript optional member calls, including `signal?.isCycle()` and `signal.isCycle?.()`. Receipts cite the written method token and retain an unresolved target; they do not establish receiver type or execution. Computed members, including literal computed members such as `signal?.[name]()`, are outside this addition.
+
+After installation, run `SymbolLattice sync .` in each analyzed project. The updated extractor and resolver versions trigger the required re-extraction and graph projection, so the first sync may take longer. The index format is unchanged; do not manually delete the index. Additional call evidence does not establish complete task-file retrieval; the known Nest circular-dependency recall gap remains recorded in the validation documentation.
+
 ### Upgrading to v0.532.0
 
 The structured responses from `explore --json` and MCP `explore` still report index freshness, stale reasons, generation, and file/symbol/relationship counts, but no longer include `status.lastIndexWork`. If a script reads the previous index operation's file lists from a query result, use `SymbolLattice status <project-path> --json` for the full `lastIndexWork`. The index format is unchanged, so this change alone does not require a rebuild; you can still run `sync` after a normal upgrade to check for updates.
