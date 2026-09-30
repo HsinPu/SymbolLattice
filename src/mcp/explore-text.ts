@@ -239,7 +239,17 @@ function renderFocuses(result: UnknownRecord): string[] {
       const call = record(omittedDeclaration.call);
       if (call !== null) output.push(`  Written call \`${text(call.referenceName) ?? "?"}\`${edgeDetails(call)}.`);
       output.push(`  Omitted query concepts: ${Array.isArray(omittedDeclaration.matchedOmittedTerms) ? omittedDeclaration.matchedOmittedTerms.filter(term => typeof term === "string").join(", ") : "unknown"}.`);
-      const scope = omittedDeclaration.scope === "selected-files-index" ? "selected-file index lookup" : "bounded graph inspection";
+      const inheritedSource = record(omittedDeclaration.inheritedSource);
+      if (inheritedSource !== null) {
+        output.push("  Written direct-base source context; runtime inheritance and dispatch remain unconfirmed.");
+        for (const [label, key] of [["Caller containment", "callerContainment"], ["Base import", "importEdge"],
+          ["Written inheritance", "inheritance"], ["Declaration containment", "declarationContainment"]]) {
+          const edge = record(inheritedSource[key!]);
+          if (edge !== null) output.push(`  ${label}${edgeDetails(edge)}.`);
+        }
+      }
+      const scope = omittedDeclaration.scope === "selected-files-index" ? "selected-file index lookup" :
+        omittedDeclaration.scope === "inspected-inherited-source" ? "bounded direct-base source inspection" : "bounded graph inspection";
       output.push(`  ${finiteNumber(omittedDeclaration.matchingDeclarationCount) ?? "Unknown number of"} matching declarations in the ${scope}, not repository-wide uniqueness or dispatch.`);
     }
     if (imported !== null) {

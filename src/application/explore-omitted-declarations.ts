@@ -2,6 +2,7 @@ import { identifierTermGroups, identifierTermVariants, identifierWords } from ".
 import type { GraphEdge } from "../domain/types.js";
 import type { UnresolvedCallEvidence } from "./types.js";
 import type { ActiveNamedDeclarationsProjection } from "../ports/graph-store.js";
+import { inheritedSourceLookup, type InheritedSourceWitness } from "./explore-inherited-source.js";
 import { EXPLORE_QUERY_LIMITS, EXPLORE_SUPPLEMENTARY_FOCUS_LIMIT, exploreQueryOmittedTerms, planExploreQuery,
   type ExploreQueryGraph, type ExploreQueryPlan } from "./explore-query.js";
 
@@ -40,7 +41,8 @@ export function omittedDeclarationLookupNames(plan: ExploreQueryPlan,
 
 export interface ExploreOmittedDeclarationLead {
   readonly state: "unresolved-name-candidate";
-  readonly scope: "inspected-bounded-graph" | "selected-files-index";
+  readonly scope: "inspected-bounded-graph" | "selected-files-index" | "inspected-inherited-source";
+  readonly inheritedSource?: InheritedSourceWitness;
   readonly call: GraphEdge;
   readonly matchedOmittedTerms: readonly string[];
   /** Only within the stated search scope, never global uniqueness or dispatch. */
@@ -118,6 +120,7 @@ export function supplementOmittedCallDeclarations(graph: ExploreQueryGraph, plan
   }
   const position = (a: GraphEdge["range"]["start"], b: GraphEdge["range"]["start"]) => a.line - b.line || a.column - b.column;
   const candidates = new Map<string, ExploreQueryPlan["selection"][number]>();
+  const inheritedLookup = inheritedSourceLookup(graph);
   for (const owner of original) {
     if (owner.sourceRole.role !== "production" || owner.generated.generated) continue;
     for (const call of (callsBySource.get(owner.symbol.id)?.items ?? []).slice(0, limits.maximumCallsPerFocus)) {
@@ -128,7 +131,9 @@ export function supplementOmittedCallDeclarations(graph: ExploreQueryGraph, plan
       const declarations = byName.get(call.referenceName?.split(".").at(-1) ?? "") ?? [];
       if (declarations.length !== 1) continue;
       const declaration = declarations[0]!;
-      if (candidates.has(declaration.id) || selectedIds.has(declaration.id) || !selectedFiles.has(declaration.filePath) ||
+      const inheritedSource = selectedFiles.has(declaration.filePath) ? undefined : inheritedLookup(owner.symbol, call, declaration);
+      if (candidates.has(declaration.id) || selectedIds.has(declaration.id) ||
+          (!selectedFiles.has(declaration.filePath) && inheritedSource === undefined) ||
           plan.selection.filter(item => item.symbol.filePath === declaration.filePath).length >=
             EXPLORE_QUERY_LIMITS.maximumSymbolsPerFile + EXPLORE_SUPPLEMENTARY_FOCUS_LIMIT) continue;
       const words = new Set(identifierWords(declaration.name).flatMap(identifierTermVariants));
@@ -141,7 +146,9 @@ export function supplementOmittedCallDeclarations(graph: ExploreQueryGraph, plan
         graphDiffusion: { ...item.graphDiffusion, state: "no-mass", seed: false, seedWeight: 0,
           nodeMass: 0, fileMass: 0, normalizedFileMass: 0, score: 0, rankingContribution: 0 },
         omittedQueryDeclaration: { state: "unresolved-name-candidate",
-          scope: projectedNames.has(declaration.name) ? "selected-files-index" : "inspected-bounded-graph", call,
+          scope: inheritedSource !== undefined ? "inspected-inherited-source" :
+            projectedNames.has(declaration.name) ? "selected-files-index" : "inspected-bounded-graph", call,
+          ...(inheritedSource === undefined ? {} : { inheritedSource }),
           matchedOmittedTerms: matched, matchingDeclarationCount: declarations.length } });
     }
   }
@@ -151,6 +158,7 @@ export function supplementOmittedCallDeclarations(graph: ExploreQueryGraph, plan
   const selection = [...plan.selection, ...additions];
   return { ...plan, selection,
     limits: { ...plan.limits,
+      maximumFiles: plan.limits.maximumFiles + additions.filter(item => !selectedFiles.has(item.symbol.filePath)).length,
       maximumSymbols: Math.max(plan.limits.maximumSymbols, EXPLORE_QUERY_LIMITS.maximumSymbols + additions.length),
       maximumSymbolsPerFile: Math.max(plan.limits.maximumSymbolsPerFile,
         EXPLORE_QUERY_LIMITS.maximumSymbolsPerFile + additions.length) },

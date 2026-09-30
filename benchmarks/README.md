@@ -54,6 +54,28 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.540.0 Bounded direct-base method source
+
+Long-question omitted concepts can now support a Python base-method source candidate outside already selected files. The candidate must match at least two omitted concepts and a written, unresolved direct `self.method()` call from a selected production method. The existing bounded graph must contain the caller's class containment, one exact absolute named-import class-base relation, the target class's method containment and a matching exact file-import witness. Missing or ambiguous links do not emit a lead. Only one source hop is inspected; this does not infer MRO, runtime receiver type, method dispatch, or repository-wide uniqueness.
+
+The focus retains zero lexical/graph ranking contribution and the original unresolved call (`targetId: null`, confidence zero). JSON `omittedQueryDeclaration.scope: inspected-inherited-source` and `inheritedSource` expose both classes and all four edge witnesses with source coordinates and resolver provenance; MCP text cites each step and its uncertainty. Primary ranking and existing source budgets remain unchanged. This uses the existing shared one-focus supplement (nine total focuses), and may add one file; consumers must honor returned `limits` (six files for the fixed MySQL case). Truncated graph inspection remains disclosed. There is no extra SQL/declaration/full-snapshot read to find this lead. The new query capability warrants a minor version. Index format and extractor/resolver versions remain unchanged; no additional index rebuild is required for this query change.
+
+The fixed Django MySQL question now retrieves both necessary files (previously 1/2) and all eight specified source facts (previously 3/8), including the base context manager's connection ownership, cursor yield and conditional close. The question and truth judgments were not adjusted. The task was already development; its provenance now records use for this change. CPython AST independently verifies the fixed MySQL/PostgreSQL import, written base and method source sites; a separate read-only SQLite check matches all four emitted MySQL witness identities, endpoints, kinds, ranges and certainty to the active generation. Reports are `%TEMP%/SymbolLattice-v5400-inherited-source-ast.json` and `SymbolLattice-v5400-inherited-index-receipts.json`. These checks do not prove runtime dispatch.
+
+On the same pinned Django, Nest and Fastify copies used in v0.539.1, all 26 manifests / 33 tasks preserve every prior positive file and specified fact. Thirty-two complete raw responses are identical; only MySQL adds the new source candidate. Fixed judgments now cover 57/57 required files and 140/143 specified facts, with 71 TP, zero judged FP, zero FN and 52 unjudged task/file pairs. This is not global precision or complete task evidence: atomic-entry facts remain 2/5. Reports are `%TEMP%/SymbolLattice-v5400-retrieval-final` and `SymbolLattice-v5400-retrieval-preservation.json`.
+
+Eight alternating service pairs with one warmup per product and a persistent reader compare built v0.539.1 (commit `c583e57118bdf2b749f8b2a4d55373829835b7ac`) against v0.540.0 on unchanged indexes. Timings were collected without concurrent tests or builds:
+
+| Fixed query | v0.539.1 → v0.540.0 total upper median | Output comparison |
+| --- | --- | --- |
+| MySQL temporary connection | 1538.70 → 1541.94 ms | Separately verified new source; timing-only comparison |
+| PostgreSQL database version | 1391.36 → 1385.98 ms | Complete response equal |
+| Fastify cookie headers | 518.89 → 507.42 ms | Complete response equal |
+
+Reports are `%TEMP%/SymbolLattice-v5400-<manifest-stem>-service-paired.json`; commands use `mcp/paired-explore.mjs --pairs 8 --persistent-reader`, `--comparison timing-only` for MySQL and `--comparison complete` for the other two. MySQL raw JSON grows from 671,082 to 716,720 bytes, and MCP text from 43,798 to 46,904 bytes. Verified source grows from 16,285 to 16,871 characters, supplying the missing method under existing budgets. These observations do not establish a general speed improvement or resolve the earlier PostgreSQL query regression. First indexing and incremental sync were not remeasured because index generation is unchanged.
+
+All 67 focused tests and the full suite (3,319 passed / 4 skipped) passed, as did type checking and build. Focused tests cover missing/heuristic links, unknown receiver, conflicting base edges, broken containment, mismatched imports, unchanged uncertainty, real indexed source delivery and absence of extra full-snapshot/declaration reads. The full-suite log is `%TEMP%/SymbolLattice-v5400-full-test.log`; external reports and corpora remain outside the repository.
+
 ## v0.539.1 Source token-loop replay
 
 The callable-source scanner reuses its invocation-local regular expression through `exec`, resetting the cursor for each bounded line. Declaration scopes, token frequencies, source coordinates, truncation, query-local membership caching and BM25 scoring retain their contracts. This internal performance change is a patch release; ranking policy, extractor/resolver versions and index format are unchanged, with no index rebuild required.

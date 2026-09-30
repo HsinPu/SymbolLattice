@@ -53,7 +53,7 @@ export function verifyOmittedDeclarationLeads(result, readSource) {
     const receipt = focus.omittedQueryDeclaration;
     if (!receipt) continue;
     assert.equal(receipt.state, "unresolved-name-candidate");
-    assert.ok(["inspected-bounded-graph", "selected-files-index"].includes(receipt.scope));
+    assert.ok(["inspected-bounded-graph", "selected-files-index", "inspected-inherited-source"].includes(receipt.scope));
     if (receipt.scope === "selected-files-index") {
       const lookup = search?.selectedFileLookup;
       assert.equal(lookup?.state, "available");
@@ -101,7 +101,35 @@ export function verifyOmittedDeclarationLeads(result, readSource) {
       position(call.range.end, call.range.start) > 0);
     assert.equal(owner.unresolvedCalls.state, "available");
     assert.deepEqual(call, owner.unresolvedCalls.items.find(edge => edge.id === call.id));
-    assert.ok(primary.some(item => item.symbol.filePath === focus.symbol.filePath), "Lead introduced an unselected file");
+    if (receipt.scope === "inspected-inherited-source") {
+      const w = receipt.inheritedSource;
+      assert.ok(w && w.callerClass.kind === "class" && w.declarationClass.kind === "class");
+      assert.equal(call.referenceName, `self.${focus.symbol.name}`);
+      assert.equal(call.evidence?.ruleId, "syntax.python.member-call.unknown-receiver");
+      for (const [edge, kind, source, target] of [
+        [w.callerContainment, "contains", w.callerClass, owner.symbol],
+        [w.inheritance, "extends", w.callerClass, w.declarationClass],
+        [w.declarationContainment, "contains", w.declarationClass, focus.symbol]]) {
+        assert.equal(edge.kind, kind); assert.equal(edge.sourceId, source.id); assert.equal(edge.targetId, target.id);
+        assert.equal(edge.filePath, source.filePath); assert.equal(edge.resolution, "exact"); assert.equal(edge.confidence, 1);
+        const sourceLines = readSource(edge.filePath).split(/\r\n|\r|\n|\u2028|\u2029/u);
+        const text = sourceLines.slice(edge.range.start.line - 1, edge.range.end.line).join("\n");
+        assert.ok(text.includes(kind === "contains" ? target.name : edge.referenceName));
+      }
+      assert.equal(w.callerClass.filePath, owner.symbol.filePath);
+      assert.equal(w.declarationClass.filePath, focus.symbol.filePath);
+      assert.equal(w.inheritance.evidence?.ruleId, "module.python.regular-package.absolute-named-import.unique-top-level-class-inheritance");
+      assert.deepEqual(w.inheritance.evidence.resolutionPath, [owner.symbol.filePath, focus.symbol.filePath]);
+      assert.equal(w.importEdge.kind, "imports"); assert.equal(w.importEdge.resolution, "exact");
+      assert.equal(w.importEdge.confidence, 1); assert.equal(w.importEdge.filePath, owner.symbol.filePath);
+      assert.equal(w.importEdge.evidence?.ruleId, "module.python.regular-package.absolute-named-base-import");
+      assert.deepEqual(w.importEdge.evidence.resolutionPath, w.inheritance.evidence.resolutionPath);
+      const importLines = readSource(w.importEdge.filePath).split(/\r\n|\r|\n|\u2028|\u2029/u);
+      assert.ok(importLines[w.importEdge.range.start.line - 1]?.includes(w.importEdge.referenceName));
+    } else {
+      assert.equal(receipt.inheritedSource, undefined);
+      assert.ok(primary.some(item => item.symbol.filePath === focus.symbol.filePath), "Lead introduced an unselected file");
+    }
     assert.ok(focuses.filter(item => item.symbol.filePath === focus.symbol.filePath).length <= 3);
     const lines = readSource(focus.symbol.filePath).split(/\r\n|\r|\n|\u2028|\u2029/u);
     const header = lines[focus.symbol.range.start.line - 1];
