@@ -2,6 +2,7 @@ import { isUtf8 } from "node:buffer";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { open } from "node:fs/promises";
+import { readNativeFilePrefix } from "./native-prefix-read.js";
 import { homedir } from "node:os";
 import { isAbsolute, parse, relative, resolve, sep } from "node:path";
 
@@ -710,26 +711,12 @@ function isObjectiveCHeaderPath(filePath: string): boolean {
   return filePath.toLowerCase().endsWith(OBJECTIVE_C_HEADER_EXTENSION);
 }
 
-async function readShellShebangPrefix(
-  absolutePath: string,
-  maximumBytes: number
-): Promise<Uint8Array> {
-  const handle = await open(absolutePath, "r");
-  try {
-    const buffer = Buffer.alloc(maximumBytes);
-    const { bytesRead } = await handle.read(buffer, 0, maximumBytes, 0);
-    return buffer.subarray(0, bytesRead);
-  } finally {
-    await handle.close();
-  }
-}
-
 function sourceShebangReader(
   options: SourceDiscoveryOptions | undefined,
   filesystemReader: ProjectFilesystemReader
 ): ShellShebangReader {
   if (options?.shellShebangReader !== undefined) return options.shellShebangReader;
-  if (filesystemReader === nativeProjectFilesystemReader) return readShellShebangPrefix;
+  if (filesystemReader === nativeProjectFilesystemReader) return readNativeFilePrefix;
   return async (absolutePath, maximumBytes) =>
     (await filesystemReader.readFile(absolutePath)).slice(0, maximumBytes);
 }

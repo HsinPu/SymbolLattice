@@ -55,6 +55,40 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.541.1 Asynchronous native prefix reads
+
+Native shell-shebang candidate discovery reads the same bounded prefix with asynchronous callback-based open/read/close operations under one Promise. It no longer allocates a promise FileHandle for each candidate. Results settle only after close, including read/allocation failures; close errors retain the previous try/finally precedence. Custom filesystem and shebang readers are unchanged. Scope, ignore rules, maximum read bytes, exact shebang matching, concurrency limits, full-content source hashes and configuration checks are unchanged. This internal performance change warrants a patch release; no index format, parser/resolver or public query contract changes, sync or rebuild are required.
+
+The retained `filesystem/freshness-verify.mjs` now opens the index read-only, compares complete freshness receipts excluding timing telemetry, and records repository URL/commit, generation, runtime and relevant compiled-module SHA-256 values. It checks stable fingerprints after measurement and rejects tracked corpus modifications. Replay uses two warmup pairs and eight alternating measured pairs on one unchanged index:
+
+```sh
+node benchmarks/filesystem/freshness-verify.mjs --project <pinned-indexed-corpus> --baseline-product-root <v5410-built-root> --candidate-product-root <current-built-root> --output <external-report.json> --repetitions 8
+```
+
+Built v0.541.0 (`807275103068024ec4a1e37fcb691b6e8b71b9fb`) and v0.541.1 were compared on Windows / Node.js 24.19.0 without concurrent tests or builds. Corpora remain the unchanged Django, Nest and Fastify copies pinned in v0.540.1. Every measured verification returned `proven-unchanged`, complete, with the expected file count and identical evidence receipt:
+
+| Corpus | Indexed files | Full freshness median v0.541.0 → v0.541.1 | Discovery median |
+| --- | --- | --- | --- |
+| Django | 3,366 | 734.75 → 676.05 ms | 374.85 → 291.19 ms |
+| Nest | 1,738 | 298.94 → 285.06 ms | 102.28 → 92.22 ms |
+| Fastify | 338 | 56.55 → 57.08 ms | 13.61 → 13.87 ms |
+
+Reports are `%TEMP%/SymbolLattice-v5411-<corpus>-freshness-final.json`. These are full-content freshness and discovery measurements, not first indexing, incremental sync or total Agent completion time. They do not prove a universal speedup. Initial external prototype observations were also retained: Django 749.45 → 657.93 ms, Nest 289.59 → 311.60 ms and Fastify 55.59 → 55.47 ms; the differing totals show measurement variability rather than a guaranteed per-project improvement.
+
+Complete service runs use one warmup per product, eight alternating pairs, a persistent read-only reader and `mcp/paired-explore.mjs --comparison complete`. Every complete query output is equal:
+
+| Fixed task | Service total upper median v0.541.0 → v0.541.1 |
+| --- | --- |
+| Django PostgreSQL version | 1369.21 → 1278.92 ms |
+| Nest shutdown | 1156.18 → 1128.66 ms |
+| Fastify cookie headers | 544.46 → 566.07 ms |
+
+Because the first Fastify total increased while isolated freshness differed by only 0.53 ms, a follow-up with 16 alternating pairs checked the unresolved timing concern. It measured 486.65 → 486.49 ms with complete output equality. Both runs are retained at `%TEMP%/SymbolLattice-v5411-<manifest-stem>-service-paired.json` and `SymbolLattice-v5411-fastify-cookie-tasks-service-repeat.json`; neither is discarded or substituted for the other. Fixed Django total improvement is observed in this run, while small-project totals are mixed. This does not establish that the earlier PostgreSQL regression against older indexes and reader conditions has been fully resolved.
+
+All 26 manifests / 33 fixed tasks retain complete raw result equality with v0.541.0, including the two-candidate ambiguity group and all source/graph receipt verifiers. Coverage remains 57/57 required files and 143/143 specified facts, with 71 TP, zero judged FP/FN and 52 unjudged task/file pairs; this is not global precision or complete runtime relationship evidence. Reports are `%TEMP%/SymbolLattice-v5411-retrieval-final` and `SymbolLattice-v5411-retrieval-preservation.json`. Validation CLI timings were concurrent with tests and are not used for latency claims.
+
+Type checking, build, 76 focused filesystem tests and the full suite (3,334 passed / 4 skipped) passed. The new prefix-reader tests verify exact returned bytes, bounded read arguments, settling after close, open failure without a read, asynchronous/synchronous read failure cleanup, close-error precedence and allocation failure cleanup. Existing native shebang tests exercise actual filesystem discovery and exact allowlist/rejection rules. The full-suite log is `%TEMP%/SymbolLattice-v5411-full-test.log`; corpus copies, indexes and raw reports remain outside the repository.
+
 ## v0.541.0 Complete selected-file ambiguity groups
 
 A complete, generation-matched exact-name lookup can now supply both eligible declarations when a selected-file scope contains exactly two same-name callables corroborated by at least two omitted query concepts and a cited unresolved call. Both candidates are emitted together with `matchingDeclarationCount: 2` and identical `matchingDeclarationIds`. The original call remains unresolved, null-target and confidence zero; the group does not identify receiver type, possible runtime targets or repository-wide uniqueness. Graph-only ambiguity, stale/truncated projections, duplicate IDs, more than two declarations, an ineligible/already-selected sibling or occupied supplementary capacity do not cause an arbitrary winner to be emitted.
