@@ -4,6 +4,12 @@ import { sourceDeliveryIdentityFromText } from "../../src/application/source-del
 import { McpSourceSession } from "../../src/mcp/source-session.js";
 
 describe("MCP explore text rendering", () => {
+  it("labels literal directory context as ranking evidence rather than a resolved relation", () => {
+    const output = renderExploreText({ focuses: [{ symbol: { name: "version" },
+      directoryContext: { terms: ["mysql"], filePath: "src/mysql/base.py" } }] });
+    expect(output).toContain("mysql matches a directory component of `src/mysql/base.py`");
+    expect(output).toContain("ranking evidence, not a resolved relation");
+  });
   it("cites omitted-concept declaration leads without confirming the receiver or target", () => {
     const output = renderExploreText({ queryPlan: { input: { identifierTermsTruncated: true },
       omittedDeclarationSearch: { state: "searched", candidatesTruncated: true } }, focuses: [{

@@ -112,6 +112,10 @@ For queries with at least 6 concept groups and one primary focus whose indexed s
 
 This bounded output heuristic does not guarantee that omitted files are irrelevant or that the flow is complete. "Every group" means groups retained within the term budget; if `queryPlan.input.identifierTermsTruncated` is true, later terms may not participate, so shorten the query and check again. Investigate using an exact symbol reference from the receipt or a file-specific query. Shorter queries, queries without complete source coverage, and explicit file queries do not apply this rule. No index format or extraction version changes; this adjustment does not require rebuilding an index.
 
+### Upgrading to v0.538.1
+
+General-query ranking can corroborate exact directory words, such as a named database backend, with at least two distinct source concepts. A focus’s `directoryContext` records query terms, full directory components, path and score contribution; filenames and partial directory strings do not qualify for this evidence. This is relevance evidence, without confirming code relationships or a complete flow. Search/source budgets are unchanged; no index rebuild is needed.
+
 ### Upgrading to v0.538.0
 
 If omitted-concept supplementation finds no candidate in the primary graph, it can now perform an exact-name lookup in files already selected. It requests at most 8 names, 8 files and 16 declarations; only complete, generation-matched results can support a candidate. Multiple same-name declarations are rejected. This does not infer receiver type or call target, or search new files.

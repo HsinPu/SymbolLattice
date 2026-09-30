@@ -4,8 +4,23 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { scoreTask, verifySourceExcerpts, verifyGraphEvidence, verifyLexicalMatches, verifyCoveredContextFiltering, verifySourceReuse, verifyUnresolvedCalls, verifySameClassDeclarationLeads, verifyNameFollowups, verifyOmittedDeclarationLeads, verifyPropertyUseFollowups, verifyNumericQualifiers, verifyNumericContainerFiltering, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
+import { verifyDirectoryContexts } from "../../benchmarks/mcp/task-retrieval.mjs";
 
 describe("task retrieval benchmark judgments", () => {
+  it("checks directory evidence against query terms, complete components and distinct source concepts", () => {
+    const result = { queryPlan: { identifierTerms: ["mysql", "version", "cursor"] }, focuses: [{
+      symbol: { filePath: "src/mysql/base.py" }, reasons: ["query-directory-context"],
+      sourceMatches: [{ term: "version" }, { term: "cursor" }], directoryContext: {
+        policy: "literal-query-directory-v1", filePath: "src/mysql/base.py", terms: ["mysql"], score: 500 } }] };
+    expect(verifyDirectoryContexts(result)).toEqual({ verifiedContexts: 1 });
+    for (const mutate of [r => { r.focuses[0].directoryContext.terms = ["invented"]; },
+      r => { r.focuses[0].directoryContext.filePath = "src/mysql-tools/base.py"; },
+      r => { r.focuses[0].sourceMatches = [{ term: "checks" }, { term: "checking" }]; },
+      r => { r.focuses[0].directoryContext.score = 999; }]) {
+      const forged = structuredClone(result); mutate(forged);
+      expect(() => verifyDirectoryContexts(forged)).toThrow();
+    }
+  });
   it("rejects fabricated query concepts, dispatch certainty, origins and declaration headers", () => {
     const range = { start: { line: 1, column: 1 }, end: { line: 10, column: 1 } };
     const call = { id: "call", sourceId: "owner", filePath: "a.py", kind: "calls", referenceName: "connection.constraint_checks_disabled",

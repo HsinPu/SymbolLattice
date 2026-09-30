@@ -6,7 +6,7 @@ SymbolLattice 是提供給開發者與 AI Agent 的本機程式碼搜尋工具�
 
 [English](README.en.md) · [開始使用](docs/getting-started.md) · [驗證與限制](benchmarks/README.md) · [回報問題](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.538.0` · Node.js `>=22.13 <25` · MIT
+`v0.538.1` · Node.js `>=22.13 <25` · MIT
 
 ## 從「這段功能在哪裡？」開始
 
@@ -78,6 +78,8 @@ SymbolLattice doctor codex
 ## 支援範圍
 
 涵蓋 TypeScript／JavaScript、Python、Java、Go、Rust、C／C++、C# 與多種模板、設定格式。**各語言的解析深度不同**，可掃描不代表完整支援其型別、框架或跨檔語意。
+
+問句中的詞若精確對應目錄名稱，且來源也涵蓋至少兩個概念，排序會採用這個目錄脈絡。JSON 的 `directoryContext` 會列出目錄詞與加權依據；這是字面相關性線索，不是已解析的程式關係。
 
 SymbolLattice 使用靜態分析。文字命中也可能來自註解或字串；以常見註解標記開頭的命中會標示，仍須查看來源確認語意。動態呼叫、反射與外部依賴可能無法解析，同名宣告也不代表已確認的呼叫目標；已確認的來源引用可協助排序，但單靠引用不能證明執行順序。結果有數量與來源片段上限；未找到關係不能用來保證修改或刪除安全。索引過期時請先同步，無法確認新鮮度的即時查詢可能拒絕回傳結果。
 

@@ -17,6 +17,33 @@ import { matchCallableSource, scoreCallableSource, SOURCE_LEXICAL_POLICY, SOURCE
 import { identifierTermGroups } from "../../src/domain/identifier-search.js";
 
 describe("source-backed same-file focus coverage", () => {
+  it("corroborates an exact directory qualifier with two literal source concepts without inventing a relation", () => {
+    const mysql = symbol({ id: "mysql", name: "inspect", filePath: "src/mysql/service.ts",
+      range: { start: { line: 1, column: 1 }, end: { line: 3, column: 2 } } });
+    const other = { ...mysql, id: "other", filePath: "src/postgresql/service.ts" };
+    const text = "function inspect() {\n  return connection.version + cursor.info;\n}";
+    const groups = identifierTermGroups(["mysql", "version", "cursor"]);
+    const lexical = { policy: SOURCE_LEXICAL_POLICY, limits: SOURCE_LEXICAL_LIMITS, state: "searched" as const,
+      scannedFiles: 2, scannedSymbols: 2, scannedCharacters: text.length * 2, truncated: false,
+      candidates: [mysql, other].flatMap(node => matchCallableSource(text, [node], groups).candidates) };
+    const graph = { symbols: [mysql, other], edges: [] };
+    const plan = planExploreQuery(graph, "MySQL version cursor", lexical);
+    expect(plan.selection[0]?.symbol.id).toBe("mysql");
+    expect(plan.selection[0]?.directoryContext).toEqual({ policy: "literal-query-directory-v1",
+      filePath: mysql.filePath, terms: ["mysql"], score: 500 });
+    expect(plan.selection[0]?.matchedTerms).not.toContain("mysql");
+    expect(plan.graphConnectionEvidence ?? []).toEqual([]);
+    for (const filePath of ["src/mysql-tools/service.ts", "mysql.ts", "src/postgresql/mysql.ts"]) {
+      const node = { ...mysql, filePath };
+      const candidates = matchCallableSource(text, [node], groups).candidates;
+      expect(planExploreQuery({ symbols: [node], edges: [] }, "MySQL version cursor",
+        { ...lexical, candidates }).selection[0]?.directoryContext).toBeUndefined();
+    }
+    const one = { ...lexical, candidates: lexical.candidates.map(item => ({ ...item,
+      matches: item.matches.filter(match => match.term === "version") })) };
+    expect(planExploreQuery(graph, "MySQL version cursor", one).selection.every(item => !item.directoryContext)).toBe(true);
+  });
+
   it("surfaces a fully corroborated transaction step without losing the savepoint implementation", () => {
     const query = "atomic transaction block exception database connection rollback savepoint";
     const exit = symbol({ id: "exit", name: "exit", filePath: "src/transaction.ts" });
@@ -854,7 +881,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v30",
+      policy: "explore-query-plan-v31",
       queryIntent: {
         tests: false,
         icons: false,
@@ -972,7 +999,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v30",
+      policy: "explore-query-plan-v31",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1204,7 +1231,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v30",
+      policy: "explore-query-plan-v31",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1628,7 +1655,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v30",
+      policy: "explore-query-plan-v31",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v2",
@@ -2354,7 +2381,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v30",
+      policy: "explore-query-plan-v31",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,

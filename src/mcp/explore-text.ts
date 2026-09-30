@@ -230,6 +230,8 @@ function renderFocuses(result: UnknownRecord): string[] {
     if (numeric !== null && Array.isArray(numeric.terms)) output.push(
       `  Numeric qualifier: ${numeric.terms.filter(term => typeof term === "string").map(term => `\`${term}\``).join(", ")} matches the declaration name or cited source token.`);
     const followup = record(focus.nameFollowup);
+    const directory = record(focus.directoryContext);
+    if (directory !== null) output.push(`  Query directory context: ${Array.isArray(directory.terms) ? directory.terms.join(", ") : "unknown"} matches a directory component of \`${text(directory.filePath) ?? "?"}\`, corroborated by literal source concepts; this is ranking evidence, not a resolved relation.`);
     const imported = record(focus.importedCallDeclaration);
     const omittedDeclaration = record(focus.omittedQueryDeclaration);
     if (omittedDeclaration !== null) {

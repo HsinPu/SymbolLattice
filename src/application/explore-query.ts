@@ -17,7 +17,7 @@ import { identifierNumbers, numericIdentifierTerms, identifierTermGroups, identi
 import { SOURCE_LEXICAL_SCORING, type SourceLexicalCandidate, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
 import { downstreamFocusPaths, type ExploreFlowFocus } from "./explore-flow-focus.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v30" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v31" as const;
 export const EXPLORE_REJECTION_REFERENCE_PRIORITY_POLICY = "rejection-source-reference-first-v1" as const;
 export const EXPLORE_REJECTION_REFERENCE_FILTER_POLICY = "rejection-source-reference-filter-v1" as const;
 export const EXPLORE_NAMED_METHOD_FOCUS = {
@@ -170,6 +170,7 @@ export type ExploreQuerySelectionReason =
   | "uncovered-source-concept"
   | "source-property-use"
   | "imported-call-declaration"
+  | "query-directory-context"
   | "omitted-query-call-declaration";
 
 export interface ExploreNumericQualifier {
@@ -368,6 +369,8 @@ export interface ExploreQuerySourceGapCoverage {
 }
 
 export interface ExploreQuerySelection {
+  readonly directoryContext?: { readonly policy: "literal-query-directory-v1"; readonly filePath: string;
+    readonly terms: readonly string[]; readonly score: 500 };
   readonly rank: number;
   readonly symbol: SymbolNode;
   readonly score: number;
@@ -641,6 +644,7 @@ export interface ExploreQueryGraph {
 }
 
 interface Candidate {
+  readonly directoryContext?: ExploreQuerySelection["directoryContext"];
   readonly symbol: SymbolNode;
   readonly explicitFile: boolean;
   readonly matchedTerms: readonly string[];
@@ -1060,7 +1064,7 @@ function candidateFor(
   variantsByTerm: ReadonlyMap<string, readonly string[]>,
   roleIntent: ExploreQueryRoleIntent,
   filesByPath: ReadonlyMap<string, IndexedFile>,
-  fileTermsByPath: Map<string, { name: string; stem: string }>,
+  fileTermsByPath: Map<string, { name: string; stem: string; directories: ReadonlySet<string> }>,
   sourceMatches: readonly SourceLexicalMatch[] = [],
   sourceScore = 0,
   executionIntent = false,
@@ -1073,7 +1077,8 @@ function candidateFor(
   let fileTerms = fileTermsByPath.get(symbol.filePath);
   if (fileTerms === undefined) {
     const name = fileName(symbol.filePath);
-    fileTerms = { name: normalizedIdentifier(name), stem: normalizedIdentifier(name.replace(/\.[^.]+$/u, "")) };
+    fileTerms = { name: normalizedIdentifier(name), stem: normalizedIdentifier(name.replace(/\.[^.]+$/u, "")),
+      directories: new Set(symbol.filePath.split("/").slice(0, -1).map(part => part.normalize("NFKC").toLowerCase())) };
     if (fileTermsByPath.size < EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumNodes) {
       fileTermsByPath.set(symbol.filePath, fileTerms);
     }
@@ -1138,6 +1143,14 @@ function candidateFor(
   if (!explicitFile && matchedTerms.length === 0) return null;
   const baseReasons: ExploreQuerySelectionReason[] = [];
   let baseScore = 0;
+  const directoryTerms = identifierTerms.filter(term => fileTerms.directories.has(term));
+  const directoryContext: ExploreQuerySelection["directoryContext"] = directoryTerms.length > 0 &&
+    identifierTermGroups([...new Set(sourceMatches.map(match => match.term))]).length >= 2
+    ? { policy: "literal-query-directory-v1", filePath: symbol.filePath, terms: directoryTerms, score: 500 } : undefined;
+  if (directoryContext !== undefined) {
+    baseReasons.push("query-directory-context");
+    baseScore += directoryContext.score;
+  }
   if (explicitFile) {
     baseReasons.push("explicit-file");
     baseScore += 1_000;
@@ -1227,6 +1240,7 @@ function candidateFor(
     matchedTerms: [...new Set(matchedTerms)],
     sourceMatches,
     sourceScore,
+    ...(directoryContext === undefined ? {} : { directoryContext }),
     ...(numericQualifier === undefined ? {} : { numericQualifier }),
     baseReasons,
     baseScore,
@@ -2918,7 +2932,7 @@ export function planExploreQuery(
   };
   const executionIntent = hasExploreExecutionIntent(parsed.boundedQuery);
   const filesByPath = new Map((graph.files ?? []).map((file) => [file.path, file]));
-  const fileTermsByPath = new Map<string, { name: string; stem: string }>();
+  const fileTermsByPath = new Map<string, { name: string; stem: string; directories: ReadonlySet<string> }>();
   const sourceById = new Map((sourceLexical?.candidates ?? []).map((candidate) => [candidate.symbolId, candidate]));
   const lexicalCandidates = graph.symbols
     .map((symbol) => candidateFor(
@@ -3199,6 +3213,7 @@ export function planExploreQuery(
       baseScore: candidate.baseScore,
       sourceMatches: candidate.sourceMatches ?? [],
       sourceScore: candidate.sourceScore ?? 0,
+      ...(candidate.directoryContext === undefined ? {} : { directoryContext: candidate.directoryContext }),
       ...(candidate.numericQualifier === undefined ? {} : { numericQualifier: candidate.numericQualifier }),
       connectionScore: candidate.connectionScore,
       graphMass: {

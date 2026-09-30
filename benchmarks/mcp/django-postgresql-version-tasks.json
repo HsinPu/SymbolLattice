@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/django/django",
+  "commit": "bc833e8883db4a333a6485d91637b78c85e2b13b",
+  "truthMethod": "Manually fixed from pinned postgresql/base.py after the external directory-context trial rule was frozen and before inspecting either product output for this task. The wrapper reads connection.info.server_version under temporary_connection, and returns a major/minor tuple using divmod with 10000. Scope is the PostgreSQL version value and its conversion, not base connection lifecycle, validation thresholds or third-party overrides. The base temporary-connection implementation is therefore optional context, not a required file for this question. Unknown receiver dispatch remains unconfirmed. Other returned files are unjudged. This is held-out verification on a known repository, not an unseen project. Initially held out for the first directory-context trial, then used during the scan-order cost investigation; it is now development. The question, files and facts are unchanged.",
+  "tasks": [
+    {
+      "id": "postgresql-server-version-tuple",
+      "split": "development",
+      "query": "How does PostgreSQL report the database version from its server connection information?",
+      "requiredFiles": [
+        "django/db/backends/postgresql/base.py"
+      ],
+      "supportingFiles": [
+        "django/db/backends/base/base.py"
+      ],
+      "irrelevantFiles": [],
+      "evidence": [
+        {
+          "file": "django/db/backends/postgresql/base.py",
+          "line": 235,
+          "text": "return divmod(self.pg_version, 10000)"
+        },
+        {
+          "file": "django/db/backends/postgresql/base.py",
+          "line": 543,
+          "text": "with self.temporary_connection():"
+        },
+        {
+          "file": "django/db/backends/postgresql/base.py",
+          "line": 544,
+          "text": "return self.connection.info.server_version"
+        }
+      ]
+    }
+  ]
+}

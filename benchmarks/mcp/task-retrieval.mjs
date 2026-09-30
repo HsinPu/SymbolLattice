@@ -115,6 +115,25 @@ export function verifyOmittedDeclarationLeads(result, readSource) {
   return { verifiedLeads, verifiedOrigins };
 }
 
+export function verifyDirectoryContexts(result) {
+  let verifiedContexts = 0;
+  for (const focus of result.focuses ?? []) {
+    const receipt = focus.directoryContext;
+    if (focus.reasons?.includes("query-directory-context")) assert.ok(receipt);
+    if (!receipt) continue;
+    assert.equal(receipt.policy, "literal-query-directory-v1");
+    assert.equal(receipt.filePath, focus.symbol.filePath);
+    assert.equal(receipt.score, 500);
+    assert.ok(focus.reasons.includes("query-directory-context"));
+    const directories = new Set(receipt.filePath.split("/").slice(0, -1).map(part => part.normalize("NFKC").toLowerCase()));
+    assert.ok(receipt.terms.length > 0 && receipt.terms.every(term =>
+      result.queryPlan.identifierTerms.includes(term) && directories.has(term)));
+    assert.ok(identifierTermGroups([...new Set(focus.sourceMatches.map(match => match.term))]).length >= 2);
+    verifiedContexts++;
+  }
+  return { verifiedContexts };
+}
+
 export function verifyNameFollowups(result) {
   let verifiedFollowups = 0, verifiedOrigins = 0;
   const focuses = result.focuses ?? [];
@@ -706,6 +725,7 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
       sameClassDeclarationVerification: verifySameClassDeclarationLeads(response,
         (file) => readFileSync(resolve(project, file), "utf8")),
       nameFollowupVerification: verifyNameFollowups(response),
+      directoryContextVerification: verifyDirectoryContexts(response),
       omittedDeclarationVerification: verifyOmittedDeclarationLeads(response,
         (file) => readFileSync(resolve(project, file), "utf8")),
       propertyUseFollowupVerification: verifyPropertyUseFollowups(response),
