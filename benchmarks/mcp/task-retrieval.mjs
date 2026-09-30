@@ -5,6 +5,7 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 import { performance } from "node:perf_hooks";
+import { identifierTermGroups, identifierTermVariants, identifierWords } from "../../dist/domain/identifier-search.js";
 
 /** File judgments are deliberately incomplete; unknown output is never a false positive. */
 export function scoreTask(task, result) {
@@ -42,6 +43,68 @@ export function scoreTask(task, result) {
     unresolvedCallEvidenceRecall: unresolvedCallEvidence.length === 0 ? null :
       unresolvedCallEvidence.filter((item) => item.found).length / unresolvedCallEvidence.length
   };
+}
+
+export function verifyOmittedDeclarationLeads(result, readSource) {
+  const focuses = result.focuses ?? [];
+  const search = result.queryPlan?.omittedDeclarationSearch;
+  let verifiedLeads = 0, verifiedOrigins = 0;
+  for (const focus of focuses) {
+    const receipt = focus.omittedQueryDeclaration;
+    if (!receipt) continue;
+    assert.equal(receipt.state, "unresolved-name-candidate");
+    assert.equal(receipt.scope, "inspected-bounded-graph");
+    assert.equal(receipt.matchingDeclarationCount, 1);
+    assert.equal(search?.policy, "omitted-query-call-declarations-v1");
+    assert.equal(search.state, "searched");
+    assert.ok(search.omittedTerms.length <= 8);
+    const normalize = value => value.normalize("NFKC").toLocaleLowerCase().replace(/[^\p{L}\p{N}_$]/gu, "");
+    const queryTerms = new Set([...result.queryPlan.query.trim().slice(0, 512)
+      .matchAll(/[\p{L}\p{N}_$][\p{L}\p{N}_$.-]*/gu)].map(match => normalize(match[0])));
+    assert.ok(search.omittedTerms.every(term => queryTerms.has(term) && !result.queryPlan.identifierTerms.includes(term)),
+      "Follow-up terms must occur in the bounded question outside primary retrieval");
+    const groups = identifierTermGroups(receipt.matchedOmittedTerms);
+    assert.ok(groups.length >= 2 && groups.length === receipt.matchedOmittedTerms.length);
+    const omittedGroups = identifierTermGroups(search.omittedTerms);
+    const words = new Set(identifierWords(focus.symbol.name).flatMap(identifierTermVariants));
+    for (const group of groups) {
+      assert.ok(omittedGroups.some(other => other[0] === group[0]), "Invented omitted query concept");
+      assert.ok(group.some(term => words.has(term)), "Declaration name does not corroborate the omitted concept");
+    }
+    assert.equal(focus.score, 0);
+    assert.equal(focus.baseScore, 0);
+    assert.equal(focus.graphDiffusion.rankingContribution, 0);
+    assert.deepEqual(focus.matchedTerms, []);
+    assert.deepEqual(focus.sourceMatches, []);
+    assert.equal(focus.generated.generated, false);
+    assert.equal(focus.sourceRole.role, "production");
+    const call = receipt.call;
+    assert.equal(call.kind, "calls");
+    assert.equal(call.targetId, null);
+    assert.equal(call.resolution, "unresolved");
+    assert.equal(call.confidence, 0);
+    assert.equal(call.referenceName.split(".").at(-1), focus.symbol.name);
+    const primary = focuses.filter(item => !item.omittedQueryDeclaration && !item.nameFollowup && !item.importedCallDeclaration);
+    const owner = primary.find(item => item.symbol.id === call.sourceId);
+    assert.ok(owner && owner.sourceRole.role === "production" && !owner.generated.generated);
+    assert.equal(owner.symbol.filePath, call.filePath);
+    const position = (a, b) => a.line - b.line || a.column - b.column;
+    assert.ok(position(call.range.start, owner.symbol.range.start) >= 0 && position(call.range.end, owner.symbol.range.end) <= 0 &&
+      position(call.range.end, call.range.start) > 0);
+    assert.equal(owner.unresolvedCalls.state, "available");
+    assert.deepEqual(call, owner.unresolvedCalls.items.find(edge => edge.id === call.id));
+    assert.ok(primary.some(item => item.symbol.filePath === focus.symbol.filePath), "Lead introduced an unselected file");
+    assert.ok(focuses.filter(item => item.symbol.filePath === focus.symbol.filePath).length <= 3);
+    const lines = readSource(focus.symbol.filePath).split(/\r\n|\r|\n|\u2028|\u2029/u);
+    const header = lines[focus.symbol.range.start.line - 1];
+    assert.ok(header?.includes(focus.symbol.name), "Declaration header is not source-backed");
+    verifiedLeads++;
+    verifiedOrigins++;
+  }
+  assert.ok(verifiedLeads <= 1);
+  if (search) assert.equal(search.emittedCount, verifiedLeads);
+  if (verifiedLeads) assert.ok(focuses.length <= 9);
+  return { verifiedLeads, verifiedOrigins };
 }
 
 export function verifyNameFollowups(result) {
@@ -632,6 +695,8 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
       sameClassDeclarationVerification: verifySameClassDeclarationLeads(response,
         (file) => readFileSync(resolve(project, file), "utf8")),
       nameFollowupVerification: verifyNameFollowups(response),
+      omittedDeclarationVerification: verifyOmittedDeclarationLeads(response,
+        (file) => readFileSync(resolve(project, file), "utf8")),
       propertyUseFollowupVerification: verifyPropertyUseFollowups(response),
       numericQualifierVerification: verifyNumericQualifiers(response),
       numericContainerVerification: verifyNumericContainerFiltering(response,

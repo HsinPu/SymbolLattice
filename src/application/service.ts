@@ -141,6 +141,7 @@ import {
   type ExploreQueryPlan
 } from "./explore-query.js";
 import { EXPLORE_NAME_FOLLOWUP_LIMITS, supplementExploreNameFollowups } from "./explore-name-followups.js";
+import { supplementOmittedCallDeclarations } from "./explore-omitted-declarations.js";
 import { EXPLORE_IMPORTED_DECLARATION_LIMITS, supplementImportedCallDeclarations } from "./explore-imported-declarations.js";
 import {
   EXPLORE_UNRESOLVED_CALL_CANDIDATE_LIMIT,
@@ -5670,6 +5671,7 @@ export class SymbolLatticeService {
     const followupCallIds = new Map<string, Set<string>>();
     for (const selection of plan.selection) {
       for (const edge of [...(selection.nameFollowup?.calls ?? []),
+        ...(selection.omittedQueryDeclaration === undefined ? [] : [selection.omittedQueryDeclaration.call]),
         ...(selection.importedCallDeclaration === undefined ? [] : [selection.importedCallDeclaration.call])]) {
         const ids = followupCallIds.get(edge.sourceId) ?? new Set<string>();
         ids.add(edge.id);
@@ -5918,9 +5920,10 @@ export class SymbolLatticeService {
         read.call(this.graphStore, projectPath, generationId,
           calls.slice(0, EXPLORE_IMPORTED_DECLARATION_LIMITS.maximumCalls).map(edge => edge.id),
           EXPLORE_IMPORTED_DECLARATION_LIMITS.maximumWitnesses));
-    const result = calls.length === 0 ? supplemented : supplementImportedCallDeclarations(bundle.snapshot, supplemented,
+    const withImportedDeclarations = calls.length === 0 ? supplemented : supplementImportedCallDeclarations(bundle.snapshot, supplemented,
       projection, calls.length > EXPLORE_IMPORTED_DECLARATION_LIMITS.maximumCalls ||
         [...candidates.values()].some(evidence => evidence.truncated));
+    const result = supplementOmittedCallDeclarations(bundle.snapshot, withImportedDeclarations, followupCalls);
     this.exploreCallEvidence.set(result, candidates);
     return result;
   }

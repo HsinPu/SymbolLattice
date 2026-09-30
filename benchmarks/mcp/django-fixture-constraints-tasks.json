@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/django/django",
+  "commit": "bc833e8883db4a333a6485d91637b78c85e2b13b",
+  "truthMethod": "Manually fixed from pinned loaddata.py and base/base.py before opening either product's output for this task. Fixture loading installs labels and deferred fields under a constraint-check context manager, then checks the affected tables. The standard base-wrapper context manager disables and restores checks. This task was held out from the first omitted-concept implementation, which retained its baseline 4/5 source facts. It then became a development regression for shared supplementary capacity. The question, required files and source facts are unchanged. Backend-specific SQL and third-party connection overrides are outside this task; unknown receiver dispatch is not assumed resolved. Other returned files are unjudged.",
+  "tasks": [{
+    "id": "fixture-installation-constraint-context",
+    "split": "development",
+    "query": "How does fixture loading install objects into a database while temporarily disabling and then checking constraints?",
+    "requiredFiles": ["django/core/management/commands/loaddata.py", "django/db/backends/base/base.py"],
+    "supportingFiles": ["django/db/transaction.py"],
+    "irrelevantFiles": [],
+    "evidence": [
+      {"file": "django/core/management/commands/loaddata.py", "line": 162, "text": "with connection.constraint_checks_disabled():"},
+      {"file": "django/core/management/commands/loaddata.py", "line": 164, "text": "self.load_label(fixture_label)"},
+      {"file": "django/core/management/commands/loaddata.py", "line": 172, "text": "connection.check_constraints(table_names=table_names)"},
+      {"file": "django/db/backends/base/base.py", "line": 533, "text": "disabled = self.disable_constraint_checking()"},
+      {"file": "django/db/backends/base/base.py", "line": 538, "text": "self.enable_constraint_checking()"}
+    ]
+  }]
+}

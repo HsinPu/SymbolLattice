@@ -6,7 +6,7 @@ SymbolLattice 是提供給開發者與 AI Agent 的本機程式碼搜尋工具�
 
 [English](README.en.md) · [開始使用](docs/getting-started.md) · [驗證與限制](benchmarks/README.md) · [回報問題](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.536.3` · Node.js `>=22.13 <25` · MIT
+`v0.537.0` · Node.js `>=22.13 <25` · MIT
 
 ## 從「這段功能在哪裡？」開始
 
@@ -84,6 +84,8 @@ SymbolLattice 使用靜態分析。文字命中也可能來自註解或字串；
 對有精確來源引用的拒絕查詢，僅重複已涵蓋查詢詞的次要焦點可能被省略；MCP 文字會列出所在路徑，JSON 的 `queryPlan.rejectionReferenceFiltering` 會列出完整省略項。有限範圍內未找到直接關係不代表檔案無關，仍可指定檔案補查。
 
 較長查詢若有一個來源涵蓋詞數預算內保留的全部概念，部分只涵蓋共用詞的次要焦點也可能被省略。JSON 的 `queryPlan.coveredContextFiltering` 提供判定依據、來源位置與精確符號參照，MCP 文字會列出補查路徑；這不證明檔案無關或流程已完整解析。
+
+長問句中被截斷的概念，也可與已引用的未解析呼叫共同支持一個同名宣告候選，補上已選到檔案中的來源。JSON 的 `queryPlan.omittedDeclarationSearch` 與焦點的 `omittedQueryDeclaration` 說明概念與呼叫依據；候選不代表已確認的接收者型別或呼叫目標。**0.537.0 破壞性變更（每檔結果上限）**：補充候選可使同一檔案最多回傳 3 個焦點；總焦點仍最多 9 個。自行處理 JSON 的程式請依回傳的 `limits` 配置，勿固定每檔只能有 2 項；索引不需因這項變更重建。
 
 Python 同類別中可確認的直接 `self.method()` 呼叫包含 `async def` 方法。對可安全恢復的裸 `yield` 解析缺口，函式內寫出的成員呼叫也會保留來源位置；接收者型別未知時標示為未解析，不猜測目標。一般查詢與精確符號補查，都可從已回傳的有界圖，為部分未解析的 `self.method()` 呼叫附上索引來源中的同類別宣告線索；這只供補查，不證明接收者型別或實際派發。未解析呼叫清單受限時，一般查詢會優先呈現符合查詢詞的呼叫；可用回傳的精確符號參照追查按來源順序排列的較完整清單。
 

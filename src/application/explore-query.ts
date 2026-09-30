@@ -146,6 +146,8 @@ export const EXPLORE_QUERY_LIMITS = {
   maximumSymbolsPerFile: 2,
   maximumConnections: 16
 } as const;
+/** Shared by declaration supplements; primary ranking keeps its own limits. */
+export const EXPLORE_SUPPLEMENTARY_FOCUS_LIMIT = 1;
 
 export type ExploreQuerySelectionReason =
   | "explicit-file"
@@ -167,7 +169,8 @@ export type ExploreQuerySelectionReason =
   | "graph-diffusion"
   | "uncovered-source-concept"
   | "source-property-use"
-  | "imported-call-declaration";
+  | "imported-call-declaration"
+  | "omitted-query-call-declaration";
 
 export interface ExploreNumericQualifier {
   readonly policy: typeof EXPLORE_NUMERIC_QUERY.policy;
@@ -402,6 +405,7 @@ export interface ExploreQuerySelection {
   readonly numericQualifier?: ExploreNumericQualifier;
   readonly nameFollowup?: import("./explore-name-followups.js").ExploreNameFollowup;
   readonly importedCallDeclaration?: import("./explore-imported-declarations.js").ExploreImportedDeclarationLead;
+  readonly omittedQueryDeclaration?: import("./explore-omitted-declarations.js").ExploreOmittedDeclarationLead;
   readonly reasons: readonly ExploreQuerySelectionReason[];
 }
 
@@ -543,6 +547,7 @@ export interface ExploreQueryPlan {
     }[];
   };
   readonly nameFollowupSearch?: import("./explore-name-followups.js").ExploreNameFollowupSearch;
+  readonly omittedDeclarationSearch?: import("./explore-omitted-declarations.js").ExploreOmittedDeclarationSearch;
   readonly coveredContextFiltering?: {
     readonly policy: "covered-context-focus-v1";
     readonly evidenceScope: "returned-bounded-graph";
@@ -592,10 +597,11 @@ export interface ExploreQueryPlan {
     readonly graphExpansion: ExploreQueryGraphExpansionReceipt;
     readonly graphDiffusion: ExploreQueryGraphDiffusionReceipt;
   };
-  readonly limits: Omit<typeof EXPLORE_QUERY_LIMITS, "maximumIdentifierTerms" | "maximumFiles" | "maximumSymbols"> & {
+  readonly limits: Omit<typeof EXPLORE_QUERY_LIMITS, "maximumIdentifierTerms" | "maximumFiles" | "maximumSymbols" | "maximumSymbolsPerFile"> & {
     readonly maximumSymbols: number;
     readonly maximumIdentifierTerms: number;
     readonly maximumFiles: number;
+    readonly maximumSymbolsPerFile: number;
   };
   readonly summary: {
     readonly candidateCount: number;
@@ -860,6 +866,7 @@ function parseQuery(query: string): {
   readonly input: ExploreQueryPlan["input"];
   readonly fileHints: readonly string[];
   readonly identifierTerms: readonly string[];
+  readonly omittedIdentifierTerms: readonly string[];
   readonly maximumIdentifierTerms: number;
   readonly testIntentTerms: readonly string[];
   readonly iconIntentTerms: readonly string[];
@@ -946,6 +953,7 @@ function parseQuery(query: string): {
     },
     fileHints,
     identifierTerms,
+    omittedIdentifierTerms: compactTerms.slice(maximumTerms),
     maximumIdentifierTerms: maximumTerms,
     testIntentTerms,
     iconIntentTerms,
@@ -2367,6 +2375,13 @@ export function exploreQuerySeedTerms(query: string): {
       ...new Set([...group, ...originalIdentifiers.filter((term) => group.includes(normalizedIdentifier(term)))])
     ])
   };
+}
+
+/** Terms outside primary retrieval; never changes its SQL or ranking seeds. */
+export function exploreQueryOmittedTerms(query: string): { readonly terms: readonly string[]; readonly truncated: boolean } {
+  const omitted = parseQuery(query).omittedIdentifierTerms;
+  return { terms: omitted.slice(0, EXPLORE_QUERY_LIMITS.maximumIdentifierTerms),
+    truncated: omitted.length > EXPLORE_QUERY_LIMITS.maximumIdentifierTerms };
 }
 
 /**

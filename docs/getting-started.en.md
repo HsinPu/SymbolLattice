@@ -112,6 +112,12 @@ For queries with at least 6 concept groups and one primary focus whose indexed s
 
 This bounded output heuristic does not guarantee that omitted files are irrelevant or that the flow is complete. "Every group" means groups retained within the term budget; if `queryPlan.input.identifierTermsTruncated` is true, later terms may not participate, so shorten the query and check again. Investigate using an exact symbol reference from the receipt or a file-specific query. Shorter queries, queries without complete source coverage, and explicit file queries do not apply this rule. No index format or extraction version changes; this adjustment does not require rebuilding an index.
 
+### Upgrading to v0.537.0
+
+Omitted concepts from long questions can corroborate a same-name declaration candidate with an unresolved source call, supplementing source in an already selected file. This does not establish receiver type or call target. JSON `queryPlan.omittedDeclarationSearch` and the focus's `omittedQueryDeclaration` record receipts and truncation.
+
+**Breaking change**: supplementary candidates can raise the per-file maximum to 3 focuses; the total remains at most 9. JSON clients must honor returned `limits` and remove assumptions of exactly 2 items per file. The existing source character budget does not increase; this change requires no index rebuild.
+
 ### Upgrading to v0.536.0
 
 General queries can supplement some unresolved TypeScript optional member calls with an imported declaration candidate. Exact import, class construction and declaration containment receipts are required; construction must occur in the caller or a directly called function in the same file. This is a follow-up lead, without confirming the unknown receiver's type or call target.

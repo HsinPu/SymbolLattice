@@ -4,6 +4,21 @@ import { sourceDeliveryIdentityFromText } from "../../src/application/source-del
 import { McpSourceSession } from "../../src/mcp/source-session.js";
 
 describe("MCP explore text rendering", () => {
+  it("cites omitted-concept declaration leads without confirming the receiver or target", () => {
+    const output = renderExploreText({ queryPlan: { input: { identifierTermsTruncated: true },
+      omittedDeclarationSearch: { state: "searched", candidatesTruncated: true } }, focuses: [{
+      symbol: { name: "constraint_checks_disabled", filePath: "src/base.py" }, omittedQueryDeclaration: {
+        matchedOmittedTerms: ["checking", "constraints"],
+        call: { referenceName: "connection.constraint_checks_disabled", kind: "calls", resolution: "unresolved",
+          filePath: "src/restore.py", range: { start: { line: 3, column: 1 }, end: { line: 3, column: 38 } } }
+      } }] });
+    expect(output).toContain("receiver and call target remain unconfirmed");
+    expect(output).toContain("src/restore.py:3");
+    expect(output).toContain("checking, constraints");
+    expect(output).toContain("not repository-wide uniqueness or dispatch");
+    expect(output).toContain("primary retrieval budget");
+    expect(output).toContain("term, call, candidate or focus bounds");
+  });
   it("discloses numeric coverage ordering and lexical-window omissions without claiming a relation", () => {
     const output = renderExploreText({ focuses: [{ symbol: { name: "codes" } }],
       queryPlan: { numericCoverage: { symbolId: "codes" } }, sourceWindowPlan: { lexicalWindowSearch: {

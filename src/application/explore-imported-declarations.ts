@@ -1,8 +1,9 @@
 import type { ActiveImportedCallDeclarationsProjection, ImportedCallDeclaration } from "../ports/graph-store.js";
-import { planExploreQuery, type ExploreQueryGraph, type ExploreQueryPlan } from "./explore-query.js";
+import { EXPLORE_QUERY_LIMITS, EXPLORE_SUPPLEMENTARY_FOCUS_LIMIT, planExploreQuery,
+  type ExploreQueryGraph, type ExploreQueryPlan } from "./explore-query.js";
 
 export const EXPLORE_IMPORTED_DECLARATION_LIMITS = { maximumCalls: 8, maximumWitnesses: 16,
-  maximumAdditionalFiles: 1, maximumAdditionalSymbols: 1 } as const;
+  maximumAdditionalFiles: 1, maximumAdditionalSymbols: EXPLORE_SUPPLEMENTARY_FOCUS_LIMIT } as const;
 
 export interface ExploreImportedDeclarationLead extends ImportedCallDeclaration {
   readonly state: "unresolved-declaration-candidate";
@@ -66,13 +67,14 @@ export function supplementImportedCallDeclarations(graph: ExploreQueryGraph, pla
         scope: "bounded-import-and-construction-context" as const,
         matchingDeclarationCount: unique.filter(other => other.declaration.name === context.declaration.name).length } }];
   });
-  const additions = candidates.slice(0, EXPLORE_IMPORTED_DECLARATION_LIMITS.maximumAdditionalSymbols)
+  const additions = candidates.slice(0, Math.min(EXPLORE_IMPORTED_DECLARATION_LIMITS.maximumAdditionalSymbols,
+    Math.max(0, EXPLORE_QUERY_LIMITS.maximumSymbols + EXPLORE_SUPPLEMENTARY_FOCUS_LIMIT - plan.selection.length)))
     .map((item, index) => ({ ...item, rank: plan.selection.length + index + 1 }));
   const selection = [...plan.selection, ...additions];
   return { ...plan, selection,
     importedDeclarationSearch: { ...receipt, candidateCount: candidates.length, emittedCount: additions.length,
       truncated: receipt.truncated || candidates.length > additions.length },
-    limits: { ...plan.limits, maximumSymbols: plan.limits.maximumSymbols + additions.length,
+    limits: { ...plan.limits, maximumSymbols: Math.max(plan.limits.maximumSymbols, EXPLORE_QUERY_LIMITS.maximumSymbols + additions.length),
       maximumFiles: plan.limits.maximumFiles + additions.length },
     summary: { ...plan.summary, candidateCount: plan.summary.candidateCount + candidates.length, selectedCount: selection.length,
       selectedFileCount: new Set(selection.map(item => item.symbol.filePath)).size,

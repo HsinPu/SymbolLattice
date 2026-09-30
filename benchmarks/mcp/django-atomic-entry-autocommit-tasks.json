@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/django/django",
+  "commit": "bc833e8883db4a333a6485d91637b78c85e2b13b",
+  "truthMethod": "Manually fixed from pinned transaction.py and base/base.py after the shared-capacity declaration rule was frozen, before opening this task's product output. The question concerns entry to an outermost atomic block with autocommit initially enabled: rollback state is reset, then the connection's autocommit setter is called with false. The standard base setter validates atomic-block state, ensures the connection and records the new autocommit value. Nested blocks, initially disabled autocommit, backend-specific SQL and third-party overrides are outside this task. This is a held-out task on a known repository, not an unseen project; dynamic receiver dispatch remains unconfirmed and other files are unjudged.",
+  "tasks": [{
+    "id": "outer-atomic-entry-autocommit-state",
+    "split": "held-out",
+    "query": "How does entering an outer atomic transaction initialize rollback state on a database connection before setting autocommit?",
+    "requiredFiles": ["django/db/transaction.py", "django/db/backends/base/base.py"],
+    "supportingFiles": [],
+    "irrelevantFiles": [],
+    "evidence": [
+      {"file": "django/db/transaction.py", "line": 197, "text": "connection.needs_rollback = False"},
+      {"file": "django/db/transaction.py", "line": 216, "text": "connection.set_autocommit("},
+      {"file": "django/db/backends/base/base.py", "line": 471, "text": "self.validate_no_atomic_block()"},
+      {"file": "django/db/backends/base/base.py", "line": 473, "text": "self.ensure_connection()"},
+      {"file": "django/db/backends/base/base.py", "line": 488, "text": "self.autocommit = autocommit"}
+    ]
+  }]
+}

@@ -231,6 +231,14 @@ function renderFocuses(result: UnknownRecord): string[] {
       `  Numeric qualifier: ${numeric.terms.filter(term => typeof term === "string").map(term => `\`${term}\``).join(", ")} matches the declaration name or cited source token.`);
     const followup = record(focus.nameFollowup);
     const imported = record(focus.importedCallDeclaration);
+    const omittedDeclaration = record(focus.omittedQueryDeclaration);
+    if (omittedDeclaration !== null) {
+      output.push("  Supplementary same-name declaration matching omitted query concepts; receiver and call target remain unconfirmed.");
+      const call = record(omittedDeclaration.call);
+      if (call !== null) output.push(`  Written call \`${text(call.referenceName) ?? "?"}\`${edgeDetails(call)}.`);
+      output.push(`  Omitted query concepts: ${Array.isArray(omittedDeclaration.matchedOmittedTerms) ? omittedDeclaration.matchedOmittedTerms.filter(term => typeof term === "string").join(", ") : "unknown"}.`);
+      output.push(`  ${finiteNumber(omittedDeclaration.matchingDeclarationCount) ?? "Unknown number of"} matching declarations in the bounded graph inspection, not repository-wide uniqueness or dispatch.`);
+    }
     if (imported !== null) {
       output.push("  Supplementary declaration candidate from imported construction context; receiver and call target remain unconfirmed.");
       for (const [label, value] of [["Written unresolved call", imported.call], ["Direct import", imported.importEdge],
@@ -424,7 +432,13 @@ function renderLimitations(result: UnknownRecord): string[] {
   if (Array.isArray(lexicalSearch?.unavailableFiles) && lexicalSearch.unavailableFiles.length > 0) notes.add("Source for some lexical hits was unavailable in this read.");
   const calleeSearch = record(record(result.sourceWindowPlan)?.calleeSourceSearch);
   if (record(record(result.queryPlan)?.input)?.identifierTermsTruncated === true) notes.add(
-    "Query terms exceeded the bounded term budget; later terms were omitted. Shorten the query to retain essential qualifiers.");
+    "Query terms exceeded the primary retrieval budget; later terms may only appear in bounded follow-up leads. Shorten the query to retain essential qualifiers.");
+  const omittedSearch = record(record(result.queryPlan)?.omittedDeclarationSearch);
+  if (omittedSearch !== null) {
+    if (omittedSearch.state !== "searched") notes.add(`Omitted-query declaration evidence ${text(omittedSearch.state) ?? "unavailable"}; no call target was inferred.`);
+    if (omittedSearch.termsTruncated === true || omittedSearch.callsTruncated === true || omittedSearch.candidatesTruncated === true) notes.add(
+      "Omitted-query declaration search reached its term, call, candidate or focus bounds; query the cited declaration directly for more evidence.");
+  }
   const followupSearch = record(record(result.queryPlan)?.nameFollowupSearch);
   if (followupSearch !== null) {
     if (followupSearch.state !== "searched") notes.add(`Same-name follow-up evidence ${text(followupSearch.state) ?? "unavailable"}; no call target was inferred.`);

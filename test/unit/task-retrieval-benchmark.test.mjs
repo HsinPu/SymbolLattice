@@ -3,9 +3,43 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { scoreTask, verifySourceExcerpts, verifyGraphEvidence, verifyLexicalMatches, verifyCoveredContextFiltering, verifySourceReuse, verifyUnresolvedCalls, verifySameClassDeclarationLeads, verifyNameFollowups, verifyPropertyUseFollowups, verifyNumericQualifiers, verifyNumericContainerFiltering, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
+import { scoreTask, verifySourceExcerpts, verifyGraphEvidence, verifyLexicalMatches, verifyCoveredContextFiltering, verifySourceReuse, verifyUnresolvedCalls, verifySameClassDeclarationLeads, verifyNameFollowups, verifyOmittedDeclarationLeads, verifyPropertyUseFollowups, verifyNumericQualifiers, verifyNumericContainerFiltering, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
 
 describe("task retrieval benchmark judgments", () => {
+  it("rejects fabricated query concepts, dispatch certainty, origins and declaration headers", () => {
+    const range = { start: { line: 1, column: 1 }, end: { line: 10, column: 1 } };
+    const call = { id: "call", sourceId: "owner", filePath: "a.py", kind: "calls", referenceName: "connection.constraint_checks_disabled",
+      targetId: null, resolution: "unresolved", confidence: 0,
+      range: { start: { line: 3, column: 1 }, end: { line: 3, column: 38 } } };
+    const role = { role: "production" }, generated = { generated: false };
+    const result = { queryPlan: { query: "alpha bravo charlie delta echo foxtrot golf hotel checking constraints",
+      identifierTerms: ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel"],
+      omittedDeclarationSearch: { policy: "omitted-query-call-declarations-v1", state: "searched",
+        omittedTerms: ["checking", "constraints"], emittedCount: 1 } }, focuses: [
+      { symbol: { id: "owner", filePath: "a.py", range }, sourceRole: role, generated,
+        unresolvedCalls: { state: "available", items: [call] } },
+      { symbol: { id: "context", filePath: "b.py", range }, sourceRole: role, generated },
+      { symbol: { id: "lead", name: "constraint_checks_disabled", filePath: "b.py", range },
+        sourceRole: role, generated, score: 0, baseScore: 0, matchedTerms: [], sourceMatches: [],
+        graphDiffusion: { rankingContribution: 0 }, omittedQueryDeclaration: { state: "unresolved-name-candidate",
+          scope: "inspected-bounded-graph", matchingDeclarationCount: 1, call, matchedOmittedTerms: ["checking", "constraints"] } }
+    ] };
+    const source = () => "def constraint_checks_disabled(self):\n";
+    expect(verifyOmittedDeclarationLeads(result, source)).toEqual({ verifiedLeads: 1, verifiedOrigins: 1 });
+    for (const mutate of [
+      r => { r.focuses[2].omittedQueryDeclaration.matchedOmittedTerms = ["checking", "invented"]; },
+      r => { r.focuses[2].omittedQueryDeclaration.call.targetId = "lead"; },
+      r => { r.focuses[0].unresolvedCalls.items = []; },
+      r => { r.focuses[2].symbol.filePath = "unselected.py"; },
+      r => { r.focuses[2].score = 999; },
+      r => { r.queryPlan.omittedDeclarationSearch.omittedTerms.push("invented"); },
+      r => { r.queryPlan.query = "alpha bravo " + "x".repeat(600) + " checking constraints"; }
+    ]) {
+      const forged = structuredClone(result); mutate(forged);
+      expect(() => verifyOmittedDeclarationLeads(forged, source)).toThrow();
+    }
+    expect(() => verifyOmittedDeclarationLeads(result, () => "def other(self):\n")).toThrow();
+  });
   it("checks omitted context source tokens and rejects false coverage receipts", () => {
     const terms = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"];
     const node = (id, filePath) => ({ id, filePath, range: { start: { line: 1, column: 1 }, end: { line: 2, column: 1 } } });
