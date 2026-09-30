@@ -3,9 +3,31 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { scoreTask, verifySourceExcerpts, verifyGraphEvidence, verifyLexicalMatches, verifySourceReuse, verifyUnresolvedCalls, verifySameClassDeclarationLeads, verifyNameFollowups, verifyPropertyUseFollowups, verifyNumericQualifiers, verifyNumericContainerFiltering, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
+import { scoreTask, verifySourceExcerpts, verifyGraphEvidence, verifyLexicalMatches, verifyCoveredContextFiltering, verifySourceReuse, verifyUnresolvedCalls, verifySameClassDeclarationLeads, verifyNameFollowups, verifyPropertyUseFollowups, verifyNumericQualifiers, verifyNumericContainerFiltering, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
 
 describe("task retrieval benchmark judgments", () => {
+  it("checks omitted context source tokens and rejects false coverage receipts", () => {
+    const terms = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"];
+    const node = (id, filePath) => ({ id, filePath, range: { start: { line: 1, column: 1 }, end: { line: 2, column: 1 } } });
+    const matches = (filePath, values) => values.map((term, index) => ({ term, token: term, filePath,
+      range: { start: { line: 1, column: values.slice(0, index).join(" ").length + (index ? 2 : 1) },
+        end: { line: 1, column: values.slice(0, index).join(" ").length + (index ? 2 : 1) + term.length } } }));
+    const anchor = node("anchor", "a.ts"), context = node("context", "b.ts");
+    const result = { focuses: [{ symbol: anchor }], queryPlan: { coveredContextFiltering: {
+      policy: "covered-context-focus-v1", evidenceScope: "returned-bounded-graph", anchor,
+      anchorSourceMatches: matches("a.ts", terms), queryTermGroups: terms.map(term => [term]),
+      omitted: [{ symbol: context, matchedTerms: terms.slice(0, 3), sourceMatches: matches("b.ts", terms.slice(0, 3)),
+        matchedConceptCount: 3, namedConceptCount: 0 }]
+    } } };
+    const read = file => (file === "a.ts" ? terms : terms.slice(0, 3)).join(" ") + "\n";
+    expect(verifyCoveredContextFiltering(result, read)).toEqual({ verifiedOmissions: 1, verifiedMatches: 9 });
+    for (const mutate of [r => r.queryPlan.coveredContextFiltering.anchorSourceMatches.pop(),
+      r => { r.queryPlan.coveredContextFiltering.omitted[0].matchedConceptCount = 2; },
+      r => { r.queryPlan.coveredContextFiltering.omitted[0].sourceMatches[0].token = "invented"; }]) {
+      const changed = structuredClone(result); mutate(changed);
+      expect(() => verifyCoveredContextFiltering(changed, read)).toThrow();
+    }
+  });
   it("verifies lexical windows against their original owner and rejects invented relationship claims", () => {
     const match = { term: '413', token: '413', filePath: 'a.ts', range: { start: { line: 2, column: 3 }, end: { line: 2, column: 6 } } };
     const result = { focuses: [{ rank: 1, symbol: { id: 'codes', filePath: 'a.ts',

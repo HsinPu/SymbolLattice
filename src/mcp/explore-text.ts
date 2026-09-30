@@ -407,6 +407,12 @@ function renderLimitations(result: UnknownRecord): string[] {
     notes.add(`${omittedRejectionFocuses.length} lower-priority symbol focuses${locations} with covered query terms were omitted from this bounded result. Their files may still matter; inspect \`queryPlan.rejectionReferenceFiltering.omitted\` with \`SymbolLattice explore <query> --json --project <project>\`, or query a file directly.`);
   }
   if (result.connectionsTruncated === true) notes.add("Additional exact connections were truncated.");
+  const coveredFiltering = record(plan?.coveredContextFiltering);
+  const omittedContext = records(coveredFiltering?.omitted);
+  if (omittedContext.length > 0) {
+    const paths = [...new Set(omittedContext.map(item => text(record(item.symbol)?.filePath)).filter(path => path !== null))];
+    notes.add(`${omittedContext.length} lower-priority focuses at ${paths.map(path => `\`${path}\``).join(", ")} were omitted because their query concepts are covered by the cited anchor. This bounded heuristic does not prove irrelevance or complete flow coverage. Inspect \`queryPlan.coveredContextFiltering\` for source receipts and exact symbol references, or query the file directly.`);
+  }
   if (record(record(result.sourceWindowPlan)?.summary)?.truncated === true ||
       record(record(result.sourceWindowAllocation)?.summary)?.truncated === true) {
     notes.add("Source windows were limited; additional call-site source may be omitted.");

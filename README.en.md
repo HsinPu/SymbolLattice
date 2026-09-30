@@ -6,7 +6,7 @@ SymbolLattice is a local code search tool for developers and AI agents. Query a 
 
 [繁體中文](README.md) · [Get started](docs/getting-started.en.md) · [Validation and limitations](benchmarks/README.md) · [Report an issue](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.536.1` · Node.js `>=22.13 <25` · MIT
+`v0.536.2` · Node.js `>=22.13 <25` · MIT
 
 ## Start with “Where is this implemented?”
 
@@ -82,6 +82,8 @@ Covers TypeScript/JavaScript, Python, Java, Go, Rust, C/C++, C#, and various tem
 SymbolLattice uses static analysis. Text matches may come from comments or strings; matches on lines beginning with common comment markers are labeled, and you should still inspect the source before drawing a semantic conclusion. Dynamic calls, reflection, and external dependencies may remain unresolved; same-name declarations are not confirmed call targets. A verified source reference can help rank results, but a reference alone does not prove execution order. Results have count and source-excerpt limits. Missing relationships cannot guarantee that a change or deletion is safe. Sync stale indexes before querying; live queries may refuse to return results when freshness cannot be verified.
 
 For rejection queries with an exact source reference, lower-priority focuses that only repeat covered query terms may be omitted. MCP text names their file paths; JSON lists the full omissions in `queryPlan.rejectionReferenceFiltering`. The bounded graph cannot prove those files irrelevant; query a file directly when needed.
+
+For longer queries with one source covering every concept retained within the term budget, some secondary focuses matching only shared terms may also be omitted. JSON `queryPlan.coveredContextFiltering` includes the decision evidence, source locations and exact symbol references; MCP text names follow-up paths. This does not establish irrelevance or complete flow resolution.
 
 For Python, direct same-class `self.method()` calls can include `async def` methods when the target is unambiguous. Functions with a safely recovered bare-`yield` parser gap also retain written member-call locations; unknown receiver types remain unresolved rather than becoming guessed targets. General queries and exact-symbol follow-ups can cite same-class declaration leads from the returned bounded graph and indexed source for some unresolved `self.method()` calls. These are follow-up candidates, not proof of receiver type or runtime dispatch. When a general query's unresolved-call list is limited, matching call names get priority for inclusion while the selected calls remain in source order; use the returned exact symbol reference to follow up with a larger source-ordered list when needed.
 

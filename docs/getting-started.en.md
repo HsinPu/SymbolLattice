@@ -106,6 +106,12 @@ See the [validation documentation](../benchmarks/README.md) for measured results
 
 Use the installation flow above with a new fixed commit or existing tag. After reinstalling, repeat Codex integration and run `SymbolLattice sync .` in each project. The project is in `0.x` development; check the target version's compatibility and migration notes before upgrading.
 
+### Upgrading to v0.536.2
+
+For queries with at least 6 concept groups and one primary focus whose indexed source covers every group, some secondary files matching only shared terms and at most half of the groups may no longer be expanded. Named operations, directly cited exact relationships, same-named declarations for written unresolved calls from protected focuses, and retained flow follow-ups are protected; name-based retention does not confirm a call target. `queryPlan.coveredContextFiltering` lists the anchor's hit locations and each omitted symbol's range and source hits; MCP text provides paths and follow-up instructions.
+
+This bounded output heuristic does not guarantee that omitted files are irrelevant or that the flow is complete. "Every group" means groups retained within the term budget; if `queryPlan.input.identifierTermsTruncated` is true, later terms may not participate, so shorten the query and check again. Investigate using an exact symbol reference from the receipt or a file-specific query. Shorter queries, queries without complete source coverage, and explicit file queries do not apply this rule. No index format or extraction version changes; this adjustment does not require rebuilding an index.
+
 ### Upgrading to v0.536.0
 
 General queries can supplement some unresolved TypeScript optional member calls with an imported declaration candidate. Exact import, class construction and declaration containment receipts are required; construction must occur in the caller or a directly called function in the same file. This is a follow-up lead, without confirming the unknown receiver's type or call target.

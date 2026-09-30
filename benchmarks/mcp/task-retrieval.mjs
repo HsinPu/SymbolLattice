@@ -277,6 +277,29 @@ export function verifySameClassDeclarationLeads(result, readSource) {
   return { verifiedLeads, omittedLeads };
 }
 
+export function verifyCoveredContextFiltering(result, readSource) {
+  const receipt = result.queryPlan?.coveredContextFiltering;
+  if (!receipt) return { verifiedOmissions: 0, verifiedMatches: 0 };
+  assert.equal(receipt.policy, "covered-context-focus-v1");
+  assert.equal(receipt.evidenceScope, "returned-bounded-graph");
+  const groups = receipt.queryTermGroups;
+  assert.ok(groups.length >= 6);
+  const count = terms => groups.filter(group => terms.some(term => group.includes(term))).length;
+  assert.equal(count(receipt.anchorSourceMatches.map(match => match.term)), groups.length);
+  assert.ok((result.focuses ?? []).some(focus => focus.symbol.id === receipt.anchor.id));
+  for (const item of receipt.omitted) {
+    assert.ok(!(result.focuses ?? []).some(focus => focus.symbol.id === item.symbol.id));
+    assert.equal(item.matchedConceptCount, count(item.matchedTerms));
+    assert.ok(item.matchedConceptCount <= groups.length / 2);
+    assert.ok(item.namedConceptCount < 2);
+    assert.notEqual(item.symbol.filePath, receipt.anchor.filePath);
+  }
+  const matches = verifyLexicalMatches({ focuses: [
+    { symbol: receipt.anchor, sourceMatches: receipt.anchorSourceMatches }, ...receipt.omitted
+  ] }, readSource);
+  return { verifiedOmissions: receipt.omitted.length, ...matches };
+}
+
 export function verifyLexicalMatches(result, readSource) {
   let verifiedMatches = 0;
   const verify = (match, symbol) => {
@@ -603,6 +626,8 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
       sourceVerification, graphEvidenceVerification: verifyGraphEvidence(response,
         (file) => readFileSync(resolve(project, file), "utf8")),
       lexicalVerification: verifyLexicalMatches(response, (file) => readFileSync(resolve(project, file), "utf8")),
+      coveredContextVerification: verifyCoveredContextFiltering(response,
+        (file) => readFileSync(resolve(project, file), "utf8")),
       unresolvedCallVerification: verifyUnresolvedCalls(response, (file) => readFileSync(resolve(project, file), "utf8")),
       sameClassDeclarationVerification: verifySameClassDeclarationLeads(response,
         (file) => readFileSync(resolve(project, file), "utf8")),

@@ -17,7 +17,7 @@ import { identifierNumbers, numericIdentifierTerms, identifierTermGroups, identi
 import { SOURCE_LEXICAL_SCORING, type SourceLexicalCandidate, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
 import { downstreamFocusPaths, type ExploreFlowFocus } from "./explore-flow-focus.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v29" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v30" as const;
 export const EXPLORE_REJECTION_REFERENCE_PRIORITY_POLICY = "rejection-source-reference-first-v1" as const;
 export const EXPLORE_REJECTION_REFERENCE_FILTER_POLICY = "rejection-source-reference-filter-v1" as const;
 export const EXPLORE_NAMED_METHOD_FOCUS = {
@@ -543,6 +543,20 @@ export interface ExploreQueryPlan {
     }[];
   };
   readonly nameFollowupSearch?: import("./explore-name-followups.js").ExploreNameFollowupSearch;
+  readonly coveredContextFiltering?: {
+    readonly policy: "covered-context-focus-v1";
+    readonly evidenceScope: "returned-bounded-graph";
+    readonly anchor: SymbolNode;
+    readonly anchorSourceMatches: readonly SourceLexicalMatch[];
+    readonly queryTermGroups: readonly (readonly string[])[];
+    readonly omitted: readonly {
+      readonly symbol: SymbolNode;
+      readonly matchedTerms: readonly string[];
+      readonly sourceMatches: readonly SourceLexicalMatch[];
+      readonly matchedConceptCount: number;
+      readonly namedConceptCount: number;
+    }[];
+  };
   readonly importedDeclarationSearch?: import("./explore-imported-declarations.js").ExploreImportedDeclarationSearch;
   readonly graphConnectionEvidence?: readonly ExploreQueryGraphConnectionEvidence[];
   readonly sourceLexical?: (Omit<SourceLexicalRetrieval, "candidates"> & { readonly matchedSymbols: number }) | null;
@@ -2795,6 +2809,59 @@ function filterRedundantRejectionFocuses(
   };
 }
 
+/** Coverage dominance controls output, never proves a file is irrelevant. */
+function filterCoveredContext(selected: Candidate[], graph: ExploreQueryGraph, queryTerms: readonly string[],
+  coverage: ReadonlyMap<string, ExploreQueryFocusCoverage>, gaps: ReadonlyMap<string, ExploreQuerySourceGapCoverage>,
+  properties: ReadonlyMap<string, ExploreQueryPropertyUseFollowup>): ExploreQueryPlan["coveredContextFiltering"] {
+  const groups = identifierTermGroups(queryTerms);
+  if (groups.length < 6) return undefined;
+  const count = (terms: readonly string[]) => groups.filter(group =>
+    terms.some(term => identifierTermVariants(term).some(variant => group.includes(variant)))).length;
+  const anchor = selected.find(candidate => candidate.sourceRole.role === "production" && !candidate.generated.generated &&
+    count(candidate.matchedTerms) === groups.length &&
+    count((candidate.sourceMatches ?? []).map(match => match.term)) === groups.length &&
+    (candidate.sourceMatches ?? []).every(match => match.filePath === candidate.symbol.filePath &&
+      match.range.start.line >= candidate.symbol.range.start.line && match.range.end.line <= candidate.symbol.range.end.line));
+  if (anchor === undefined) return undefined;
+  const named = new Map(selected.map(candidate => [candidate.symbol.id, count(identifierWords(candidate.symbol.name))]));
+  const protectedIds = new Set(selected.filter(candidate => candidate.symbol.filePath === anchor.symbol.filePath ||
+    candidate.explicitFile || candidate.numericQualifier !== undefined || candidate.baseReasons.includes("exact-symbol-term") ||
+    named.get(candidate.symbol.id)! >= 2 || candidate.graphExpansion.path.length > 0 ||
+    coverage.get(candidate.symbol.id)?.flow !== undefined || gaps.has(candidate.symbol.id) || properties.has(candidate.symbol.id))
+    .map(candidate => candidate.symbol.id));
+  const directlyLinked = new Set<string>();
+  const selectedById = new Map(selected.map(candidate => [candidate.symbol.id, candidate.symbol]));
+  const unresolvedNames = new Set<string>();
+  for (const edge of graph.edges) {
+    const source = selectedById.get(edge.sourceId);
+    if (source === undefined || edge.filePath !== source.filePath || edge.range.start.line < source.range.start.line ||
+        edge.range.end.line > source.range.end.line || edge.evidence?.ruleId === undefined) continue;
+    if (edge.kind === "calls" && edge.resolution === "unresolved" && edge.targetId === null && protectedIds.has(edge.sourceId)) {
+      const name = edge.referenceName?.split(".").at(-1);
+      if (name !== undefined) unresolvedNames.add(name);
+      continue;
+    }
+    if (edge.resolution !== "exact" || edge.targetId === null ||
+        !scoresAsExecutionRelationship(edge) || edge.kind === "contains" || edge.kind === "imports" || edge.kind === "exports") continue;
+    if (protectedIds.has(edge.sourceId)) directlyLinked.add(edge.targetId);
+    if (protectedIds.has(edge.targetId)) directlyLinked.add(edge.sourceId);
+  }
+  for (const candidate of selected) if (unresolvedNames.has(candidate.symbol.name)) directlyLinked.add(candidate.symbol.id);
+  const protectedFiles = new Set(selected.filter(candidate => protectedIds.has(candidate.symbol.id) || directlyLinked.has(candidate.symbol.id))
+    .map(candidate => candidate.symbol.filePath));
+  const weakFiles = new Set(selected.filter(candidate => !protectedFiles.has(candidate.symbol.filePath) &&
+    count(candidate.matchedTerms) <= groups.length / 2).map(candidate => candidate.symbol.filePath));
+  for (const candidate of selected) if (count(candidate.matchedTerms) > groups.length / 2) weakFiles.delete(candidate.symbol.filePath);
+  const omitted = selected.filter(candidate => weakFiles.has(candidate.symbol.filePath));
+  if (omitted.length === 0) return undefined;
+  selected.splice(0, selected.length, ...selected.filter(candidate => !weakFiles.has(candidate.symbol.filePath)));
+  return { policy: "covered-context-focus-v1", evidenceScope: "returned-bounded-graph", anchor: anchor.symbol,
+    anchorSourceMatches: anchor.sourceMatches ?? [], queryTermGroups: groups,
+    omitted: omitted.map(candidate => ({ symbol: candidate.symbol, matchedTerms: candidate.matchedTerms,
+      sourceMatches: candidate.sourceMatches ?? [], matchedConceptCount: count(candidate.matchedTerms),
+      namedConceptCount: named.get(candidate.symbol.id)! })) };
+}
+
 /** Builds a deterministic, bounded graph focus plan without reading live source. */
 /** Existing bounded English execution-intent heuristic, shared with source selection. */
 export function hasExploreExecutionIntent(query: string): boolean {
@@ -3073,6 +3140,9 @@ export function planExploreQuery(
     rejectionReferencePriority, rejectionPromotion?.directlyLinked ?? new Set(),
     parsed.identifierTerms, coverageReceipts, sourceGapReceipts,
     propertyUseReceipts);
+  const coveredContextFiltering = naturalLanguage && parsed.fileHints.length === 0 && numericQueryTerms.size === 0
+    ? filterCoveredContext(selected, graph, parsed.identifierTerms, coverageReceipts, sourceGapReceipts, propertyUseReceipts)
+    : undefined;
   const graphConnectionEvidence: ExploreQueryGraphConnectionEvidence[] = selected.flatMap((candidate) => {
     if (candidate.connectionScore === 0) return [];
     const relationships = [...(connectedRelationships.get(candidate.symbol.id)?.values() ?? [])]
@@ -3203,6 +3273,7 @@ export function planExploreQuery(
       evidenceScope: "selected-focuses" as const,
       excludedFiles
     } }),
+    ...(coveredContextFiltering === undefined ? {} : { coveredContextFiltering }),
     sourceLexical: sourceLexical === undefined ? null : {
       policy: sourceLexical.policy, limits: sourceLexical.limits, state: sourceLexical.state,
       scannedFiles: sourceLexical.scannedFiles, scannedSymbols: sourceLexical.scannedSymbols,
