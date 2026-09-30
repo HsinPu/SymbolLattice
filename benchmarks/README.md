@@ -22,6 +22,7 @@ These tools generate or validate large-project evidence outside the published np
 | `python/` | `member-calls.mjs`, `MemberCallOracle.py` | manual CPython AST unresolved member-call name, ownership and source-range audit; required baseline fact preservation check |
 | `typescript/` | `optional-member-receipts.mjs` | manual TypeScript compiler AST optional member-token oracle and baseline declaration/relation preservation check |
 | `python/` | `direct-self-call-receipts.py`, `django-async-self-truth.json` | manual pinned-corpus CPython AST target/receipt audit and separately fixed async-call recall observations |
+| `python/` | `inherited-source-gaps.py`, `django-inherited-source-truth.json` | manual fixed-site CPython AST import/base/declaration coverage observations; no runtime dispatch oracle |
 | `sfc/` | `correctness-oracle.mjs` | manual Vue/Svelte/Astro component relation oracle |
 | `shell/` | `correctness-oracle.mjs` | manual mvdan ABI v2 direct-call oracle |
 | `solidity/` | `correctness-oracle.mjs` | automatic solc AST private fixed-arity call oracle |
@@ -51,6 +52,20 @@ These tools generate or validate large-project evidence outside the published np
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## v0.538.2 Independent inherited-source gap diagnosis
+
+The retained MySQL retrieval task still misses `base/base.py` and five context-manager facts. Independent CPython AST review identifies an earlier missing link: MySQL's `DatabaseWrapper` names `BaseDatabaseWrapper` as its sole written base and imports it from `django.db.backends.base.base`, but the pinned index has no corresponding `extends` edge. PostgreSQL has the same gap. Its import statement contains multiple names, so merely extending the existing single-name relative-import resolver to absolute paths would still omit this case. Both `self.temporary_connection` calls remain unresolved with null targets and zero confidence; written inheritance and a matching declaration do not establish runtime dispatch, overrides or method resolution order.
+
+`python/inherited-source-gaps.py` verifies the clean corpus URL/commit, captures one SQLite read transaction, checks exact indexed source text against disk (preserving CRLF), and independently checks the fixed caller, import, base syntax and base method using CPython ASTs. It reports observed edge presence rather than using product output as truth. Source hashes, manifest hash, Python version and generation metadata accompany the observations. A missing edge is a reported coverage gap, not an audit execution failure; existing edges are observations, not validated resolver receipts. The two-site development manifest is not a whole-corpus inheritance denominator or untouched holdout. The tool rejects wrong pins, import/module mismatches, absent calls, nonunique declarations and stale/missing source. Output must be outside both product and corpus workspaces.
+
+```powershell
+python benchmarks/python/inherited-source-gaps.py <pinned-indexed-django> benchmarks/python/django-inherited-source-truth.json <external-report.json>
+```
+
+On Django commit `bc833e8883db4a333a6485d91637b78c85e2b13b`, the report `%TEMP%/SymbolLattice-v5382-inherited-source-gaps.json` records two missing inheritance edges and two unresolved calls. Diagnostic rejection probes independently rejected a wrong commit, wrong import module, wrong local base name, wrong call line and altered source text. This batch adds reproducible evidence tooling only: product ranking, source selection, parser/resolver versions, query output budgets and search performance are unchanged. No search speedup or recovered source facts are claimed. The next resolver change must preserve source binding ambiguity, package/path rules and unsupported dynamic behavior before retrieval can safely follow inherited declaration candidates.
+
+Typecheck, build, the version test and `git diff --check` pass. The first version-test invocation could not spawn under the sandbox (`EPERM`); the same test passed when retried with the required permissions. No full product suite or retrieval latency comparison was run for this benchmark-only change.
 
 ## v0.538.1 Corroborate literal directory context in ranking
 

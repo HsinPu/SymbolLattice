@@ -1,0 +1,29 @@
+{
+  "repository": "https://github.com/django/django",
+  "commit": "bc833e8883db4a333a6485d91637b78c85e2b13b",
+  "truthMethod": "Development observations fixed from CPython AST and pinned source review before resolver changes. Written absolute imports and single bare base names are source links, not runtime dispatch proof. These observations diagnose two backend calls; they are not a corpus-wide inheritance denominator. MySQL imports one name; PostgreSQL imports multiple names in the same statement, so a single-name-only extension would not cover both. Neither observation changes retrieval truth.",
+  "observations": [
+    {
+      "file": "django/db/backends/mysql/base.py",
+      "class": "DatabaseWrapper",
+      "owner": "mysql_server_data",
+      "line": 404,
+      "module": "django.db.backends.base.base",
+      "baseName": "BaseDatabaseWrapper",
+      "baseClass": "BaseDatabaseWrapper",
+      "baseFile": "django/db/backends/base/base.py",
+      "method": "temporary_connection"
+    },
+    {
+      "file": "django/db/backends/postgresql/base.py",
+      "class": "DatabaseWrapper",
+      "owner": "pg_version",
+      "line": 543,
+      "module": "django.db.backends.base.base",
+      "baseName": "BaseDatabaseWrapper",
+      "baseClass": "BaseDatabaseWrapper",
+      "baseFile": "django/db/backends/base/base.py",
+      "method": "temporary_connection"
+    }
+  ]
+}
