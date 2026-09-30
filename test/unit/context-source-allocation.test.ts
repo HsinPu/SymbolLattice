@@ -7,6 +7,23 @@ import {
 } from "../../src/application/context-source-allocation.js";
 
 describe("context source allocation", () => {
+  it("fits eight primary references and one supplement within the minimum envelope", () => {
+    const result = allocateContextSource({
+      characterBudget: 2_048,
+      referenceCount: 9,
+      candidates: Array.from({ length: 9 }, (_, referenceIndex) => ({
+        referenceIndex, reference: `src/${referenceIndex}.ts#method`,
+        filePath: `src/${referenceIndex}.ts`, requestedCharacters: 2_000
+      }))
+    });
+    expect(result.contexts).toHaveLength(9);
+    expect(result.budget.minimumPerReference).toBe(227);
+    expect(result.summary.allocatedCharacters).toBe(2_048);
+    expect(result.contexts.every(item => item.allocatedCharacters >= 227)).toBe(true);
+    expect(() => allocateContextSource({ characterBudget: 2_048,
+      referenceCount: 10, candidates: [] })).toThrow(/reference count/u);
+  });
+
   it("shares one strict budget by explicit reference order", () => {
     const result = allocateContextSource({
       characterBudget: 2_048,

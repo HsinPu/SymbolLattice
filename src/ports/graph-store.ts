@@ -97,6 +97,23 @@ export interface ActiveUnresolvedCallsProjection {
   }[];
 }
 
+/** Declaration leads supported by imported construction context, never inferred dispatch. */
+export interface ImportedCallDeclaration {
+  readonly call: GraphSnapshot["edges"][number];
+  readonly declaration: GraphSnapshot["symbols"][number];
+  readonly owner: GraphSnapshot["symbols"][number];
+  readonly importEdge: GraphSnapshot["edges"][number];
+  readonly constructionEdge: GraphSnapshot["edges"][number];
+  readonly containmentEdge: GraphSnapshot["edges"][number];
+  readonly callerEdge?: GraphSnapshot["edges"][number];
+}
+
+export interface ActiveImportedCallDeclarationsProjection {
+  readonly generationMatched: boolean;
+  readonly candidates: readonly ImportedCallDeclaration[];
+  readonly truncated: boolean;
+}
+
 /**
  * Bounded query input for the SQLite-backed explore read projection. The
  * limits are deliberately carried by the request so the application can keep
@@ -252,6 +269,13 @@ export interface GraphStore {
     sourceIds: readonly string[],
     limitPerSymbol: number
   ): ActiveUnresolvedCallsProjection;
+  /** At most eight recorded optional calls and sixteen declaration-context witnesses. */
+  getActiveImportedCallDeclarations?(
+    projectPath: string,
+    expectedGenerationId: string,
+    callIds: readonly string[],
+    limit: number
+  ): ActiveImportedCallDeclarationsProjection;
   /** Optional SQLite-driven bounded graph projection for explore queries; status omits lastIndexWork. */
   getActiveBoundedGraphBundle?(
     projectPath: string,

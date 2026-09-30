@@ -166,7 +166,8 @@ export type ExploreQuerySelectionReason =
   | "graph-mass"
   | "graph-diffusion"
   | "uncovered-source-concept"
-  | "source-property-use";
+  | "source-property-use"
+  | "imported-call-declaration";
 
 export interface ExploreNumericQualifier {
   readonly policy: typeof EXPLORE_NUMERIC_QUERY.policy;
@@ -400,6 +401,7 @@ export interface ExploreQuerySelection {
   readonly propertyUseFollowup?: ExploreQueryPropertyUseFollowup;
   readonly numericQualifier?: ExploreNumericQualifier;
   readonly nameFollowup?: import("./explore-name-followups.js").ExploreNameFollowup;
+  readonly importedCallDeclaration?: import("./explore-imported-declarations.js").ExploreImportedDeclarationLead;
   readonly reasons: readonly ExploreQuerySelectionReason[];
 }
 
@@ -541,6 +543,7 @@ export interface ExploreQueryPlan {
     }[];
   };
   readonly nameFollowupSearch?: import("./explore-name-followups.js").ExploreNameFollowupSearch;
+  readonly importedDeclarationSearch?: import("./explore-imported-declarations.js").ExploreImportedDeclarationSearch;
   readonly graphConnectionEvidence?: readonly ExploreQueryGraphConnectionEvidence[];
   readonly sourceLexical?: (Omit<SourceLexicalRetrieval, "candidates"> & { readonly matchedSymbols: number }) | null;
   readonly queryIntent: {
@@ -575,7 +578,8 @@ export interface ExploreQueryPlan {
     readonly graphExpansion: ExploreQueryGraphExpansionReceipt;
     readonly graphDiffusion: ExploreQueryGraphDiffusionReceipt;
   };
-  readonly limits: Omit<typeof EXPLORE_QUERY_LIMITS, "maximumIdentifierTerms" | "maximumFiles"> & {
+  readonly limits: Omit<typeof EXPLORE_QUERY_LIMITS, "maximumIdentifierTerms" | "maximumFiles" | "maximumSymbols"> & {
+    readonly maximumSymbols: number;
     readonly maximumIdentifierTerms: number;
     readonly maximumFiles: number;
   };

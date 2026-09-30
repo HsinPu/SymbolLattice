@@ -10,6 +10,7 @@ export const QUERY_TIMING_STAGES = [
   "snapshot",
   "seed-retrieval",
   "planning",
+  "imported-declaration-read",
   "path-spine",
   "context",
   "source",

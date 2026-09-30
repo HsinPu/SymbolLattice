@@ -6,7 +6,7 @@ SymbolLattice is a local code search tool for developers and AI agents. Query a 
 
 [繁體中文](README.md) · [Get started](docs/getting-started.en.md) · [Validation and limitations](benchmarks/README.md) · [Report an issue](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.535.0` · Node.js `>=22.13 <25` · MIT
+`v0.536.0` · Node.js `>=22.13 <25` · MIT
 
 ## Start with “Where is this implemented?”
 
@@ -87,7 +87,7 @@ For Python, direct same-class `self.method()` calls can include `async def` meth
 
 See [language capabilities and limitations](src/domain/language-depth.ts) and [real-project validation](benchmarks/README.md). Retrieval quality and speed depend on the project and query.
 
-Static named TypeScript optional member calls (such as `signal?.isCycle()`) retain source locations for the method name and remain unresolved. This does not establish execution, receiver type, or dispatch target. After upgrading to this version, run `SymbolLattice sync .` to refresh extraction evidence in existing indexes.
+Static named TypeScript optional member calls (such as `signal?.isCycle()`) retain source locations for the method name and remain unresolved. When corroborated by import and construction receipts, a general query can add at most one imported declaration candidate with source evidence for each step. This does not establish execution, receiver type, or dispatch target. After upgrading, run `SymbolLattice sync .` to refresh extraction evidence in existing indexes.
 
 ## Documentation and participation
 

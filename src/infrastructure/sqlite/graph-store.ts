@@ -48,6 +48,7 @@ import type {
   ActiveSourceDocumentsBundle,
   ActiveSourceDocumentsProjection,
   ActiveUnresolvedCallsProjection,
+  ActiveImportedCallDeclarationsProjection,
   ActiveSourceSearchBundle,
   BoundedGraphQueryRequest,
   BoundedGraphQueryDiagnostics,
@@ -3201,6 +3202,70 @@ export class SqliteGraphStore implements GraphStore {
           return { sourceId, items: rows.slice(0, limitPerSymbol).map(toGraphEdge), truncated: rows.length > limitPerSymbol };
         })
       };
+    });
+  }
+
+  public getActiveImportedCallDeclarations(
+    projectPath: string, expectedGenerationId: string, callIds: readonly string[], limit: number
+  ): ActiveImportedCallDeclarationsProjection {
+    if (callIds.length > 8 || !Number.isInteger(limit) || limit < 0 || limit > 16) {
+      throw new RangeError("Imported-call declarations allow at most eight calls and 0–16 witnesses.");
+    }
+    const normalizedProjectPath = resolve(projectPath);
+    if (!this.isInitialized(normalizedProjectPath)) return { generationMatched: false, candidates: [], truncated: false };
+    return this.withReadDatabase(normalizedProjectPath, database => {
+      if (getActiveGenerationId(database) !== expectedGenerationId) return { generationMatched: false, candidates: [], truncated: false };
+      const ids = [...new Set(callIds)];
+      if (ids.length === 0) return { generationMatched: true, candidates: [], truncated: false };
+      const rows = database.prepare(`WITH sites AS (
+        SELECT c.* FROM edges c JOIN edge_evidence ce ON ce.edge_id = c.id AND ce.generation_id = ?
+        WHERE c.id IN (${ids.map(() => "?").join(",")}) AND c.kind = 'calls'
+          AND c.target_id IS NULL AND c.resolution = 'unresolved' AND c.confidence = 0
+          AND json_extract(ce.evidence_json, '$.ruleId') = 'syntax.typescript.optional-member-call.unknown-receiver'
+      ), paths AS (
+        SELECT c.id call_id, i.id construction_id, i.target_id class_id, NULL caller_id
+        FROM sites c JOIN edges i ON i.source_id = c.source_id AND i.kind = 'instantiates'
+          AND i.resolution = 'exact' AND i.file_path = c.file_path
+        UNION ALL
+        SELECT c.id, i.id, i.target_id, b.id FROM sites c
+        JOIN edges b ON b.source_id = c.source_id AND b.kind = 'calls' AND b.resolution = 'exact'
+          AND b.file_path = c.file_path
+        JOIN edges i ON i.source_id = b.target_id AND i.kind = 'instantiates'
+          AND i.resolution = 'exact' AND i.file_path = c.file_path
+      ) SELECT DISTINCT c.id call_id, p.construction_id, p.class_id, p.caller_id,
+          im.id import_id, ct.id containment_id, d.id declaration_id,
+          c.file_path call_file, c.start_line call_line, c.start_column call_column,
+          d.file_path declaration_file, d.start_line declaration_line
+        FROM paths p JOIN sites c ON c.id = p.call_id
+        JOIN symbols owner ON owner.id = p.class_id AND owner.kind = 'class'
+        JOIN edges ct ON ct.source_id = p.class_id AND ct.kind = 'contains' AND ct.resolution = 'exact'
+        JOIN symbols d ON d.id = ct.target_id AND d.kind = 'method' AND d.name = c.reference_name
+          AND d.file_path = owner.file_path AND d.file_path <> c.file_path
+        JOIN edges im ON im.file_path = c.file_path AND im.kind = 'imports' AND im.resolution = 'exact'
+        JOIN symbols f ON f.id = im.target_id AND f.kind = 'file' AND f.file_path = d.file_path
+        JOIN symbols sf ON sf.id = im.source_id AND sf.kind = 'file' AND sf.file_path = c.file_path
+        ORDER BY call_file, call_line, call_column, declaration_file, declaration_line,
+          declaration_id, caller_id, construction_id, import_id LIMIT ?`)
+        .all(expectedGenerationId, ...ids, limit + 1) as unknown as readonly {
+          call_id: string; construction_id: string; class_id: string; caller_id: string | null;
+          import_id: string; containment_id: string; declaration_id: string;
+        }[];
+      const kept = rows.slice(0, limit);
+      if (kept.length === 0) return { generationMatched: true, candidates: [], truncated: rows.length > limit };
+      const edgeIds = [...new Set(kept.flatMap(row => [row.call_id, row.construction_id,
+        row.import_id, row.containment_id, ...(row.caller_id === null ? [] : [row.caller_id])]))];
+      const edgeRows = database.prepare(`SELECT * FROM edges WHERE id IN (${edgeIds.map(() => "?").join(",")})`)
+        .all(...edgeIds) as unknown as readonly EdgeRow[];
+      const edges = new Map(readBoundedEdgeEvidence(database, expectedGenerationId, edgeRows).map(edge => [edge.id, edge]));
+      const symbolIds = [...new Set(kept.flatMap(row => [row.class_id, row.declaration_id]))];
+      const symbols = new Map((database.prepare(`${symbolProjectionSelect()} WHERE id IN (${symbolIds.map(() => "?").join(",")})`)
+        .all(...symbolIds) as unknown as readonly SymbolRow[]).map(row => [row.id, toSymbolNode(row)]));
+      return { generationMatched: true, truncated: rows.length > limit, candidates: kept.map(row => ({
+        call: edges.get(row.call_id)!, declaration: symbols.get(row.declaration_id)!, owner: symbols.get(row.class_id)!,
+        importEdge: edges.get(row.import_id)!, constructionEdge: edges.get(row.construction_id)!,
+        containmentEdge: edges.get(row.containment_id)!,
+        ...(row.caller_id === null ? {} : { callerEdge: edges.get(row.caller_id)! })
+      })) };
     });
   }
 

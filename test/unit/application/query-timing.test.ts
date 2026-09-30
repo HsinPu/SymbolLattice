@@ -16,6 +16,7 @@ describe("query timing sink", () => {
       "snapshot",
       "seed-retrieval",
       "planning",
+      "imported-declaration-read",
       "path-spine",
       "context",
       "source",

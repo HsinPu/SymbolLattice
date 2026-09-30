@@ -6,7 +6,7 @@ SymbolLattice 是提供給開發者與 AI Agent 的本機程式碼搜尋工具�
 
 [English](README.en.md) · [開始使用](docs/getting-started.md) · [驗證與限制](benchmarks/README.md) · [回報問題](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.535.0` · Node.js `>=22.13 <25` · MIT
+`v0.536.0` · Node.js `>=22.13 <25` · MIT
 
 ## 從「這段功能在哪裡？」開始
 
@@ -87,7 +87,7 @@ Python 同類別中可確認的直接 `self.method()` 呼叫包含 `async def` �
 
 詳見[語言能力與限制](src/domain/language-depth.ts)及[真實專案驗證](benchmarks/README.md)。查找品質與速度依專案及查詢而異。
 
-TypeScript 的具名 optional member call（例如 `signal?.isCycle()`）會保留方法名稱的來源位置，並標示為未解析；這不保證呼叫會執行，也不確認接收者型別或目標。升級至本版後請執行 `SymbolLattice sync .`，更新既有索引中的解析證據。
+TypeScript 的具名 optional member call（例如 `signal?.isCycle()`）會保留方法名稱的來源位置，並標示為未解析。若有可核對的匯入與建構來源，一般查詢可另外提供最多一個跨檔候選宣告，附上各步來源；這不保證呼叫會執行，也不確認接收者型別或目標。升級後請執行 `SymbolLattice sync .`，更新既有索引中的解析證據。
 
 ## 文件與參與
 

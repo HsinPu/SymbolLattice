@@ -230,6 +230,17 @@ function renderFocuses(result: UnknownRecord): string[] {
     if (numeric !== null && Array.isArray(numeric.terms)) output.push(
       `  Numeric qualifier: ${numeric.terms.filter(term => typeof term === "string").map(term => `\`${term}\``).join(", ")} matches the declaration name or cited source token.`);
     const followup = record(focus.nameFollowup);
+    const imported = record(focus.importedCallDeclaration);
+    if (imported !== null) {
+      output.push("  Supplementary declaration candidate from imported construction context; receiver and call target remain unconfirmed.");
+      for (const [label, value] of [["Written unresolved call", imported.call], ["Direct import", imported.importEdge],
+        ["Caller context", imported.callerEdge], ["Construction context", imported.constructionEdge],
+        ["Declaration containment", imported.containmentEdge]] as const) {
+        const edge = record(value);
+        if (edge !== null) output.push(`  ${label}${edgeDetails(edge)}.`);
+      }
+      output.push(`  ${finiteNumber(imported.matchingDeclarationCount) ?? "Unknown number of"} matching declarations in the bounded read; this is not repository-wide uniqueness or confirmed dispatch.`);
+    }
     if (followup !== null) {
       output.push("  Supplementary same-name declaration; the call target remains unresolved.");
       for (const edge of records(followup.calls)) output.push(
@@ -413,6 +424,11 @@ function renderLimitations(result: UnknownRecord): string[] {
     if (followupSearch.state !== "searched") notes.add(`Same-name follow-up evidence ${text(followupSearch.state) ?? "unavailable"}; no call target was inferred.`);
     if (followupSearch.callsTruncated === true || followupSearch.candidatesTruncated === true) notes.add(
       "Same-name follow-up search reached its call or candidate bounds; inspect the cited unresolved calls for additional leads.");
+  }
+  const importedSearch = record(record(result.queryPlan)?.importedDeclarationSearch);
+  if (importedSearch !== null) {
+    if (importedSearch.state !== "searched") notes.add(`Imported construction declaration evidence ${text(importedSearch.state) ?? "unavailable"}; no receiver or call target was inferred.`);
+    if (importedSearch.truncated === true) notes.add("Imported construction declaration search reached its call, witness or supplementary-file bounds; query the cited call or declaration directly for more evidence.");
   }
   if (calleeSearch?.truncated === true) notes.add("Related callee source search reached its bounds; narrow the query or retrieve the cited callee directly.");
   const unavailableCalleeFiles = Array.isArray(calleeSearch?.unavailableFiles)

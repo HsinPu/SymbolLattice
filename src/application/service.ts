@@ -141,6 +141,7 @@ import {
   type ExploreQueryPlan
 } from "./explore-query.js";
 import { EXPLORE_NAME_FOLLOWUP_LIMITS, supplementExploreNameFollowups } from "./explore-name-followups.js";
+import { EXPLORE_IMPORTED_DECLARATION_LIMITS, supplementImportedCallDeclarations } from "./explore-imported-declarations.js";
 import {
   EXPLORE_UNRESOLVED_CALL_CANDIDATE_LIMIT,
   selectQueryUnresolvedCalls,
@@ -5668,7 +5669,8 @@ export class SymbolLatticeService {
     ]);
     const followupCallIds = new Map<string, Set<string>>();
     for (const selection of plan.selection) {
-      for (const edge of selection.nameFollowup?.calls ?? []) {
+      for (const edge of [...(selection.nameFollowup?.calls ?? []),
+        ...(selection.importedCallDeclaration === undefined ? [] : [selection.importedCallDeclaration.call])]) {
         const ids = followupCallIds.get(edge.sourceId) ?? new Set<string>();
         ids.add(edge.id);
         followupCallIds.set(edge.sourceId, ids);
@@ -5895,8 +5897,7 @@ export class SymbolLatticeService {
 
   private planExploreWithFollowups(projectPath: string, bundle: ActiveGraphBundle, query: string): ExploreQueryPlan {
     const plan = planExploreQuery(bundle.snapshot, query, bundle.sourceLexical);
-    if (plan.selection.length === 0 || plan.selection.length >= EXPLORE_QUERY_LIMITS.maximumSymbols ||
-        plan.fileHints.length > 0 || plan.identifierTerms.length < 2) return plan;
+    if (plan.selection.length === 0 || plan.fileHints.length > 0 || plan.identifierTerms.length < 2) return plan;
     const candidates = this.exploreUnresolvedCalls(projectPath, bundle,
       plan.selection.map(item => item.symbol.id), EXPLORE_UNRESOLVED_CALL_CANDIDATE_LIMIT);
     const followupCalls = new Map([...candidates].map(([sourceId, evidence]) => [sourceId, {
@@ -5904,9 +5905,24 @@ export class SymbolLatticeService {
       items: evidence.items.slice(0, EXPLORE_NAME_FOLLOWUP_LIMITS.maximumCallsPerFocus),
       truncated: evidence.truncated || evidence.items.length > EXPLORE_NAME_FOLLOWUP_LIMITS.maximumCallsPerFocus
     }] as const));
-    const supplemented = supplementExploreNameFollowups(bundle.snapshot, plan, followupCalls, bundle.sourceLexical);
-    this.exploreCallEvidence.set(supplemented, candidates);
-    return supplemented;
+    const supplemented = plan.selection.length >= EXPLORE_QUERY_LIMITS.maximumSymbols ? plan :
+      supplementExploreNameFollowups(bundle.snapshot, plan, followupCalls, bundle.sourceLexical);
+    const optionalCalls = [...candidates.values()].filter(evidence => evidence.state === "available")
+      .flatMap(evidence => evidence.items).filter(edge =>
+        edge.evidence?.ruleId === "syntax.typescript.optional-member-call.unknown-receiver");
+    const calls = [...new Map(optionalCalls.map(edge => [edge.id, edge])).values()];
+    const read = this.graphStore.getActiveImportedCallDeclarations;
+    const generationId = bundle.status.generationId;
+    const projection = calls.length === 0 || read === undefined || generationId === null ? undefined :
+      measureQueryTiming(this.queryTimingSink, "imported-declaration-read", () =>
+        read.call(this.graphStore, projectPath, generationId,
+          calls.slice(0, EXPLORE_IMPORTED_DECLARATION_LIMITS.maximumCalls).map(edge => edge.id),
+          EXPLORE_IMPORTED_DECLARATION_LIMITS.maximumWitnesses));
+    const result = calls.length === 0 ? supplemented : supplementImportedCallDeclarations(bundle.snapshot, supplemented,
+      projection, calls.length > EXPLORE_IMPORTED_DECLARATION_LIMITS.maximumCalls ||
+        [...candidates.values()].some(evidence => evidence.truncated));
+    this.exploreCallEvidence.set(result, candidates);
+    return result;
   }
 
   private boundedCallRelations(

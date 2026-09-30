@@ -106,6 +106,12 @@ SymbolLattice serve --mcp --project C:\path\to\project
 
 使用上方安裝流程指定新的固定 commit 或既有 tag，重新安裝後執行 Codex 整合，並在各專案執行 `SymbolLattice sync .`。目前為 `0.x` 開發階段，升級前請核對對應版本的相容性與遷移說明。
 
+### 升級至 v0.536.0
+
+一般查詢可為部分未解析的 TypeScript optional member call 補上跨檔候選宣告。必須同時有精確的匯入、類別建構與宣告包含關係；建構可位於呼叫所在函式，或其直接呼叫的同檔函式。這是補查線索，不推定未知接收者的型別或呼叫目標。
+
+最多檢查 8 個呼叫與 16 組來源依據，在原有最多 8 個焦點之外增加最多 1 個候選宣告；總來源字元預算不增加。JSON 的 `queryPlan.importedDeclarationSearch` 記錄搜尋範圍、可用性與截斷，焦點的 `importedCallDeclaration` 附上來源依據。結果仍可能不完整，可依回傳的精確符號參照補查。從 v0.535.0 升級不因本項查詢能力而要求重建索引；更早版本仍須依下節同步解析證據。
+
 ### 升級至 v0.535.0
 
 本版新增 TypeScript 具名 optional member call 的來源紀錄，例如 `signal?.isCycle()`、`signal.isCycle?.()`。紀錄引用方法名稱在原始碼中的位置，目標維持未解析；不推定接收者型別，也不保證呼叫會執行。動態或字面值 computed member（例如 `signal?.[name]()`）不包含在此新增範圍。

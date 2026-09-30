@@ -106,6 +106,12 @@ See the [validation documentation](../benchmarks/README.md) for measured results
 
 Use the installation flow above with a new fixed commit or existing tag. After reinstalling, repeat Codex integration and run `SymbolLattice sync .` in each project. The project is in `0.x` development; check the target version's compatibility and migration notes before upgrading.
 
+### Upgrading to v0.536.0
+
+General queries can supplement some unresolved TypeScript optional member calls with an imported declaration candidate. Exact import, class construction and declaration containment receipts are required; construction must occur in the caller or a directly called function in the same file. This is a follow-up lead, without confirming the unknown receiver's type or call target.
+
+The lookup checks at most 8 calls and 16 witness groups, adding at most 1 declaration beyond the existing maximum of 8 primary focuses. The total source character budget does not increase. JSON `queryPlan.importedDeclarationSearch` records scope, availability and truncation; the focus's `importedCallDeclaration` carries the supporting receipts. Results may remain incomplete; use the returned exact symbol reference to investigate further. Upgrading from v0.535.0 does not require rebuilding the index for this query capability; earlier versions still need the extraction refresh described below.
+
 ### Upgrading to v0.535.0
 
 This version adds source receipts for static named TypeScript optional member calls, including `signal?.isCycle()` and `signal.isCycle?.()`. Receipts cite the written method token and retain an unresolved target; they do not establish receiver type or execution. Computed members, including literal computed members such as `signal?.[name]()`, are outside this addition.

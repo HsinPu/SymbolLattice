@@ -3,7 +3,7 @@ export const DEFAULT_CONTEXT_SOURCE_CHARACTER_BUDGET = 24_000;
 export const MIN_CONTEXT_SOURCE_CHARACTER_BUDGET = 2_048;
 export const MAX_CONTEXT_SOURCE_CHARACTER_BUDGET = 64_000;
 export const CONTEXT_SOURCE_MINIMUM_PER_REFERENCE = 256;
-export const CONTEXT_SOURCE_MAXIMUM_REFERENCES = 8;
+export const CONTEXT_SOURCE_MAXIMUM_REFERENCES = 9;
 
 export interface ContextSourceAllocationCandidate {
   readonly referenceIndex: number;
@@ -58,6 +58,8 @@ export function allocateContextSource(input: {
   readonly referenceCount: number;
 }): ContextSourceAllocation {
   validateContextSourceAllocation(input);
+  const minimumPerReference = Math.min(CONTEXT_SOURCE_MINIMUM_PER_REFERENCE,
+    Math.floor(input.characterBudget / Math.max(1, input.referenceCount)));
   const allocations: MutableAllocation[] = [...input.candidates]
     .sort((left, right) => left.referenceIndex - right.referenceIndex)
     .map((candidate) => ({
@@ -65,7 +67,7 @@ export function allocateContextSource(input: {
       referenceOrderWeight: input.referenceCount - candidate.referenceIndex,
       allocatedCharacters: Math.min(
         candidate.requestedCharacters,
-        CONTEXT_SOURCE_MINIMUM_PER_REFERENCE
+        minimumPerReference
       )
     }));
 
@@ -123,7 +125,7 @@ export function allocateContextSource(input: {
       characterBudget: input.characterBudget,
       minimumCharacterBudget: MIN_CONTEXT_SOURCE_CHARACTER_BUDGET,
       maximumCharacterBudget: MAX_CONTEXT_SOURCE_CHARACTER_BUDGET,
-      minimumPerReference: CONTEXT_SOURCE_MINIMUM_PER_REFERENCE
+      minimumPerReference
     },
     summary: {
       candidateCount: contexts.length,
