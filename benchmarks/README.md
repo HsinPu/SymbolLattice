@@ -43,6 +43,7 @@ These tools generate or validate large-project evidence outside the published np
 | `mcp/` | `paired-explore.mjs` | manual alternating service latency; optional `--persistent-reader` mirrors the default-project MCP worker; complete-response equality, scoped unresolved-call comparison, or timing-only mode for separately validated output changes |
 | `mcp/` | `paired-explore-text.mjs` | manual same-response MCP text comparison across two built products |
 | `mcp/` | `paired-query-planning.mjs` | manual alternating focus-planning latency, complete-plan equality, and separate seed-sort work counts on one fixed bounded graph bundle |
+| `mcp/` | `paired-source-lexical.mjs` | manual alternating frozen source-input replay with complete tokens, receipts, truncation and BM25 score equality; excludes whole-query latency |
 | `mcp/` | `paired-index-replace.mjs` | manual alternating full graph-generation replacement on separate disposable index copies |
 | `mcp/` | `edge-lookup.mjs` | manual pinned-corpus paired SQLite edge-read measurement |
 | `mcp/` | `django-restore-constraints-tasks.json` | manual pinned-source development retrieval truth; originally held out for v0.536.2, with a known context-manager source gap |
@@ -52,6 +53,34 @@ These tools generate or validate large-project evidence outside the published np
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## v0.539.1 Source token-loop replay
+
+The callable-source scanner reuses its invocation-local regular expression through `exec`, resetting the cursor for each bounded line. Declaration scopes, token frequencies, source coordinates, truncation, query-local membership caching and BM25 scoring retain their contracts. This internal performance change is a patch release; ranking policy, extractor/resolver versions and index format are unchanged, with no index rebuild required.
+
+Frozen inputs were captured from actual bounded-reader scanner calls by temporarily instrumenting only the external v0.539.0 baseline build and restoring it afterward. The capture script and inputs remain outside the repository at `%TEMP%/SymbolLattice-v5391-source-loop-pairs.mjs` and `%TEMP%/SymbolLattice-v5391-<manifest-stem>-source-inputs.json`. Replay requires those frozen inputs and separately built products:
+
+```sh
+node benchmarks/mcp/paired-source-lexical.mjs --inputs <frozen-source-inputs.json> --baseline-root <v5390-built-root> --candidate-root <current-built-root> --output <external-report.json> --pairs 60
+```
+
+Reports record corpus URL/commit, generation, query, input SHA-256, product hashes, runtime and raw samples. The tool uses four warmups per product and 60 alternating pairs, checks complete output equality for every pair, and verifies stable build fingerprints. Timers cover source scanning and scoring, excluding input loading, assertions, SQL, graph planning, freshness and transport. These are performance replay checks, not independent relation or runtime-dispatch oracles.
+
+On Windows with Node.js 24.19.0, pinned Django `bc833e8883db4a333a6485d91637b78c85e2b13b` and Fastify `70b14e92c0b55e8201f5530ba2e6bab4e928c784` produced these upper-median scanner timings:
+
+| Fixed task | Input files / characters / symbols | v0.539.0 → v0.539.1 |
+| --- | --- | --- |
+| Django PostgreSQL version | 81 / 1,048,356 / 1,714 | 90.73 → 82.43 ms |
+| Django MySQL temporary connection | 56 / 1,048,373 / 1,589 | 87.98 → 78.97 ms |
+| Fastify cookie headers | 79 / 1,048,550 / 555 | 27.93 → 25.09 ms |
+
+The scanner/scoring reduction is approximately 9–10% on these inputs. Reports are `%TEMP%/SymbolLattice-v5391-<manifest-stem>-source-paired-final.json`. Two separately tried SQL frontier/endpoint variants preserved outputs but increased bounded-read latency and were discarded; product graph-store code is unchanged.
+
+Complete-service measurements on the same current indexes used one warmup and eight alternating pairs with a persistent reader, matching the default-project MCP worker. PostgreSQL total upper median was 1361.25 → 1356.48 ms, MySQL 1552.56 → 1533.05 ms, and cookie headers 492.42 → 498.27 ms; complete raw responses were identical. Reports are `%TEMP%/SymbolLattice-v5391-<manifest-stem>-service-paired.json`. Mixed small changes do not establish a general query speedup or resolve the previously observed v0.539.0 PostgreSQL regression, whose comparison used different index versions and reader conditions.
+
+All 26 manifests / 33 tasks retain complete raw result equality with v0.539.0: 56/57 required files, 135/143 specified facts, 70 TP, zero judged FP, one FN and 52 unjudged pairs. This is fixed-truth coverage, not global precision. Reports are `%TEMP%/SymbolLattice-v5391-retrieval-final`, with equality checks in `SymbolLattice-v5391-retrieval-run.log`. The cookie task is now development, retaining `originalSplit: held-out`, because it was reused for performance variant selection; its query, file judgments and source facts are unchanged. Missing MySQL inherited method evidence and atomic-entry facts remain open.
+
+Type checking, build, all 14 focused source-lexical tests and the full suite (3,308 passed / 4 skipped) passed. The full-suite log is `%TEMP%/SymbolLattice-v5391-full-test.log`. No external corpora, indexes or raw reports are committed.
 
 ## v0.539.0 Absolute imported base-class source evidence
 

@@ -2,10 +2,11 @@
   "schemaVersion": 1,
   "repository": "https://github.com/fastify/fastify",
   "commit": "70b14e92c0b55e8201f5530ba2e6bab4e928c784",
-  "truthMethod": "Manual reading of pinned reply.js before implementing anonymous member-assignment source extraction. Repeated set-cookie values are normalized to an array and appended; other header values replace the previous value. Both product outputs are held out during development. This is an unseen task on a known repository, with incomplete judgments of other files.",
+  "truthMethod": "Manual reading of pinned reply.js before implementing anonymous member-assignment source extraction. Repeated set-cookie values are normalized to an array and appended; other header values replace the previous value. Both product outputs are held out during development. This is an unseen task on a known repository, with incomplete judgments of other files. Originally held out for the anonymous member-assignment extraction work; reused for bounded-reader and token-loop performance variant selection in v0.539.1, so the task is now development rather than untouched validation. Query, required/supporting/irrelevant file judgments and source facts are unchanged.",
   "tasks": [{
     "id": "preserve-multiple-cookie-headers",
-    "split": "held-out",
+    "split": "development",
+    "originalSplit": "held-out",
     "query": "How are multiple cookie headers preserved instead of overwriting earlier values?",
     "requiredFiles": ["lib/reply.js"],
     "supportingFiles": ["types/reply.d.ts", "docs/Reference/Reply.md"],

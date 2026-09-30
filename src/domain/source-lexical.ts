@@ -143,7 +143,11 @@ export function matchCallableSource(
       const scoped = original.slice(start, end);
       if (scoped.length > remaining) truncated = true;
       const bounded = scoped.slice(0, remaining);
-      for (const match of (numericLines === undefined || numericLines.has(line) ? bounded : "").matchAll(tokenExpression)) {
+      const tokenText = numericLines === undefined || numericLines.has(line) ? bounded : "";
+      // Reuse this invocation's expression without cloning an iterator per line.
+      // Reset the cursor so every bounded line keeps its own source coordinates.
+      tokenExpression.lastIndex = 0;
+      for (let match = tokenExpression.exec(tokenText); match !== null; match = tokenExpression.exec(tokenText)) {
         const token = match[0];
         if (token.length > 128) continue;
         // A character budget must not create a fabricated partial identifier.
