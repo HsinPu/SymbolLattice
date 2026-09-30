@@ -1965,6 +1965,25 @@ function graphDiffusionFor(
     if (index !== undefined) restart[index] = weight;
   }
   const alpha = EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.restartProbability;
+  // The selected graph is immutable during iteration. Preserve neighbor order
+  // and the existing sum/division operations, but compute transition weights
+  // once instead of allocating and dividing again for every iteration.
+  const transitionOffsets = new Uint32Array(nodeIds.length + 1);
+  const transitionTargets = new Uint32Array(selectedRelationships.size * 2);
+  const transitionWeights = new Float64Array(selectedRelationships.size * 2);
+  const transitionTotals = new Float64Array(nodeIds.length);
+  let transitionCount = 0;
+  for (let index = 0; index < weightedAdjacency.length; index += 1) {
+    const neighbors = weightedAdjacency[index]!;
+    const totalWeight = [...neighbors.values()].reduce((sum, weight) => sum + weight, 0);
+    transitionTotals[index] = totalWeight;
+    for (const [neighborIndex, weight] of neighbors) {
+      transitionTargets[transitionCount] = neighborIndex;
+      transitionWeights[transitionCount] = weight / totalWeight;
+      transitionCount += 1;
+    }
+    transitionOffsets[index + 1] = transitionCount;
+  }
   let mass = restart.slice();
   let residual = 0;
   let iterations = 0;
@@ -1973,14 +1992,12 @@ function graphDiffusionFor(
     const next = restart.map((value) => alpha * value);
     let danglingMass = 0;
     for (let index = 0; index < mass.length; index += 1) {
-      const neighbors = weightedAdjacency[index]!;
-      const totalWeight = [...neighbors.values()].reduce((sum, weight) => sum + weight, 0);
-      if (totalWeight === 0) {
+      if (transitionTotals[index] === 0) {
         danglingMass += mass[index]!;
         continue;
       }
-      for (const [neighborIndex, weight] of neighbors) {
-        next[neighborIndex]! += (1 - alpha) * mass[index]! * (weight / totalWeight);
+      for (let cursor = transitionOffsets[index]!; cursor < transitionOffsets[index + 1]!; cursor += 1) {
+        next[transitionTargets[cursor]!]! += (1 - alpha) * mass[index]! * transitionWeights[cursor]!;
       }
     }
     if (danglingMass > 0) {
