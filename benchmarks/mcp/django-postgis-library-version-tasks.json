@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/django/django",
+  "commit": "bc833e8883db4a333a6485d91637b78c85e2b13b",
+  "truthMethod": "Fixed from the manually read pinned PostGIS operations source and CPython AST before running this question against either product. This is a contrasting held-out question on a known development repository, not an unseen project: the operations file is irrelevant to the existing PostgreSQL connection.info.server_version question, but necessary here. Scope is fetching the PostGIS library scalar through SQL and converting that scalar to a tuple; connection initialization, schema changes and test-database creation are outside scope. Base temporary-connection lifecycle is optional supporting context. Other returned files are unjudged. No product ranking rule was tuned in the audit batch, and this question must not be used to justify a file-path exclusion for the PostgreSQL case.",
+  "tasks": [
+    {
+      "id": "postgis-library-version-sql-tuple",
+      "split": "heldout",
+      "query": "How is the PostGIS library version retrieved through SQL and converted to a version tuple?",
+      "requiredFiles": ["django/contrib/gis/db/backends/postgis/operations.py"],
+      "supportingFiles": ["django/db/backends/base/base.py"],
+      "irrelevantFiles": [
+        "django/db/backends/postgresql/creation.py",
+        "django/db/backends/postgresql/schema.py"
+      ],
+      "evidence": [
+        {
+          "file": "django/contrib/gis/db/backends/postgis/operations.py",
+          "line": 334,
+          "text": "cursor.execute(\"SELECT %s()\" % func)"
+        },
+        {
+          "file": "django/contrib/gis/db/backends/postgis/operations.py",
+          "line": 335,
+          "text": "return cursor.fetchone()[0]"
+        },
+        {
+          "file": "django/contrib/gis/db/backends/postgis/operations.py",
+          "line": 343,
+          "text": "return self._get_postgis_func(\"postgis_lib_version\")"
+        },
+        {
+          "file": "django/contrib/gis/db/backends/postgis/operations.py",
+          "line": 362,
+          "text": "version = self.postgis_lib_version()"
+        },
+        {
+          "file": "django/contrib/gis/db/backends/postgis/operations.py",
+          "line": 363,
+          "text": "return (version,) + get_version_tuple(version)"
+        }
+      ]
+    }
+  ]
+}

@@ -55,6 +55,16 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.541.3 PostgreSQL/PostGIS file judgment audit
+
+This patch updates benchmark truth and documentation, not product query rules or performance. The unchanged PostgreSQL server-information question now judges three previously unjudged files as irrelevant based on manual pinned-source reading and independent CPython AST spans: PostGIS library-version operations, test-database creation and schema SQL. [The audit](mcp/django-postgresql-version-noise-audit.md) records the scope, source anchors and discarded SQL `version()` sanity-check exception. It is a development-case refinement after inspecting returned files, not blinded validation or a global non-reachability claim.
+
+Original v0.541.1/v0.541.2 reports are preserved. Both historical sets of 33 raw responses were re-scored with the revised judgments and yield identical totals: 71 TP, 3 FP, zero FN, 49 unjudged task/file pairs, judged precision 71/74 (95.95%), 57/57 required files and 143/143 specified facts. The previous zero-judged-FP reports used narrower judgment coverage; this change exposes existing noise rather than a new product regression. Other unjudged results are not classified as FP. The live v0.541.3 PostgreSQL response equals v0.541.2 and finds all three required source facts, while retaining those three now-judged irrelevant files; per-task judged precision is 1/4.
+
+A contrasting PostGIS library-version question was fixed before its first product run and remains held out on a known repository. Its live query finds the required operations file and all five specified SQL/scalar/tuple facts, with three other returned files still unjudged. This validates the positive case without claiming general precision or permitting path-specific exclusions. The fixed corpus is Django (`https://github.com/django/django`, `bc833e8883db4a333a6485d91637b78c85e2b13b`); no ranking, index, extractor or resolver change was made.
+
+Type checking, build, 19 benchmark-contract tests, version consistency and local documentation links passed. Live source/graph/lexical receipt verifiers ran for both questions; the other 33-task observations are explicitly historical re-scoring, not a fresh full-corpus run. No new latency claim is made. AST evidence, re-scored totals and live reports remain at `%TEMP%/SymbolLattice-v5413-postgresql-noise-ast.json`, `SymbolLattice-v5413-retrieval-rescore.json`, `SymbolLattice-v5413-postgresql-live.json` and `SymbolLattice-v5413-postgis-live.json`.
+
 ## v0.541.2 Edge object hydration
 
 Edge hydration constructs one fresh output object directly from the persisted row and its separately loaded evidence JSON. It avoids copying the SQLite row to attach JSON and copying the output again to attach parsed evidence. Evidence is still parsed per return: the generation-bound cache stores JSON, not caller-visible objects. Missing evidence remains an absent property, and parsing errors retain their diagnostics. The private helper preserves existing CLI/MCP contracts, ranking, index format and extractor/resolver versions; this is a patch release with no index rebuild.

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "repository": "https://github.com/django/django",
   "commit": "bc833e8883db4a333a6485d91637b78c85e2b13b",
-  "truthMethod": "Manually fixed from pinned postgresql/base.py after the external directory-context trial rule was frozen and before inspecting either product output for this task. The wrapper reads connection.info.server_version under temporary_connection, and returns a major/minor tuple using divmod with 10000. Scope is the PostgreSQL version value and its conversion, not base connection lifecycle, validation thresholds or third-party overrides. The base temporary-connection implementation is therefore optional context, not a required file for this question. Unknown receiver dispatch remains unconfirmed. Other returned files are unjudged. This is held-out verification on a known repository, not an unseen project. Initially held out for the first directory-context trial, then used during the scan-order cost investigation; it is now development. The question, files and facts are unchanged.",
+  "truthMethod": "Manually fixed from pinned postgresql/base.py after the external directory-context trial rule was frozen and before inspecting either product output for this task. The wrapper reads connection.info.server_version under temporary_connection, and returns a major/minor tuple using divmod with 10000. Scope is the PostgreSQL version value and its conversion, not base connection lifecycle, validation thresholds or third-party overrides. The base temporary-connection implementation is therefore optional context, not a required file for this question. Unknown receiver dispatch remains unconfirmed. A 2026-10-01 manual pinned-source/CPython AST audit now judges three previously unjudged files irrelevant to this unchanged server-information question: PostGIS library-version operations, test-database creation and schema SQL. The PostGIS SQL version() sanity-check return is discarded; it does not supply the specified connection.info.server_version value or divmod conversion. Scope and source anchors are recorded in benchmarks/mcp/django-postgresql-version-noise-audit.md. This refinement followed inspection of returned files, so it is not blinded validation; no product rule was tuned in the audit batch. Original reports remain unchanged; both comparison versions are re-scored under the revised judgments. Other returned files are unjudged. The original task was held-out verification on a known repository, not an unseen project. Initially held out for the first directory-context trial, then used during the scan-order cost investigation; it is now development. The question, required/supporting files and required source facts are unchanged; negative file judgments are expanded by the documented 2026-10-01 audit.",
   "tasks": [
     {
       "id": "postgresql-server-version-tuple",
@@ -14,7 +14,11 @@
       "supportingFiles": [
         "django/db/backends/base/base.py"
       ],
-      "irrelevantFiles": [],
+      "irrelevantFiles": [
+        "django/contrib/gis/db/backends/postgis/operations.py",
+        "django/db/backends/postgresql/creation.py",
+        "django/db/backends/postgresql/schema.py"
+      ],
       "evidence": [
         {
           "file": "django/db/backends/postgresql/base.py",
