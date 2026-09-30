@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/nestjs/nest",
+  "commit": "35c3ded6dbf3f23f917ae88d0ed966932788cae6",
+  "truthMethod": "Manual pinned-source inspection before the initial query. Injector.loadInstance checks a pending instance with settlementSignal.isCycle and throws CircularDependencyException. settlement-signal.ts defines the cycle predicate; circular-dependency.exception.ts defines the reported explanation. The initial task exposed a required-file omission in v0.534.2 and is now a development regression case, not a held-out tuning sample. Judgments of other files are incomplete. TypeScript compiler AST independently confirms the optional member call at injector.ts:143; this does not prove its runtime target.",
+  "tasks": [{
+    "id": "pending-provider-circular-dependency",
+    "split": "development",
+    "query": "How does provider creation detect a circular dependency while another instance is still being created, and report the error?",
+    "requiredFiles": [
+      "packages/core/injector/injector.ts",
+      "packages/core/injector/settlement-signal.ts",
+      "packages/core/errors/exceptions/circular-dependency.exception.ts"
+    ],
+    "supportingFiles": [
+      "packages/core/injector/instance-wrapper.ts",
+      "packages/common/utils/forward-ref.util.ts"
+    ],
+    "irrelevantFiles": [],
+    "evidence": [
+      { "file": "packages/core/injector/injector.ts", "line": 143, "text": "settlementSignal?.isCycle(inquirer.id)" },
+      { "file": "packages/core/injector/injector.ts", "line": 144, "text": "throw new CircularDependencyException" },
+      { "file": "packages/core/injector/settlement-signal.ts", "line": 57, "text": "return !this.completed && this._refs.has(wrapperId);" },
+      { "file": "packages/core/errors/exceptions/circular-dependency.exception.ts", "line": 7, "text": "A circular dependency has been detected" }
+    ]
+  }]
+}
