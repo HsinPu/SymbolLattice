@@ -179,6 +179,47 @@ function staticPythonRelativeNamedImport(
   return [];
 }
 
+/** Parser-clean absolute dotted imports; lists and aliases retain each written binding. */
+function staticPythonAbsoluteNamedImports(input: PythonExtractFileFactsInput,
+  node: PythonSyntaxNode): readonly StaticPythonRelativeNamedImport[] {
+  if (node.name !== "ImportStatement" || hasSyntaxError(node)) return [];
+  const children = directChildren(node).filter(child => child.name !== "Comment");
+  const importIndex = children.findIndex(child => child.name === "import");
+  if (children[0]?.name !== "from" || importIndex < 2) return [];
+  const moduleNodes = children.slice(1, importIndex);
+  if (!moduleNodes.every((child, index) => index % 2 === 0 ? child.name === "VariableName" : child.name === ".") ||
+      moduleNodes.length % 2 === 0) return [];
+  const moduleName = input.sourceText.slice(moduleNodes[0]!.from, moduleNodes.at(-1)!.to);
+  if (!/^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/u.test(moduleName)) return [];
+  if (moduleName === "__future__") return [];
+  let bindings = children.slice(importIndex + 1);
+  const parenthesized = bindings[0]?.name === "(";
+  if (parenthesized) {
+    if (bindings.at(-1)?.name !== ")") return [];
+    bindings = bindings.slice(1, -1);
+  }
+  const result: StaticPythonRelativeNamedImport[] = [];
+  for (let index = 0; index < bindings.length;) {
+    const imported = bindings[index++];
+    if (imported?.name !== "VariableName") return [];
+    let local = imported;
+    if (bindings[index]?.name === "as") {
+      index += 1;
+      const alias = bindings[index++];
+      if (alias?.name !== "VariableName") return [];
+      local = alias;
+    }
+    const importedName = declarationName(input, imported);
+    const localName = declarationName(input, local);
+    if (importedName === null || localName === null) return [];
+    result.push({ moduleName, importedName, localName,
+      moduleFrom: moduleNodes[0]!.from, moduleTo: moduleNodes.at(-1)!.to });
+    if (index === bindings.length) break;
+    if (bindings[index++]?.name !== "," || (index === bindings.length && !parenthesized)) return [];
+  }
+  return result;
+}
+
 function hasPythonWildcardImport(
   input: PythonExtractFileFactsInput,
   topLevelNodes: readonly PythonSyntaxNode[]
@@ -4792,6 +4833,7 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
   const pythonFacts: {
     topLevelDeclarations: PythonTopLevelDeclarationFact[];
     relativeNamedImports: PythonRelativeNamedImportFact[];
+    absoluteNamedImports?: PythonRelativeNamedImportFact[];
     importedFunctionCalls: PythonImportedFunctionCallFact[];
     importedClassInstantiations: PythonImportedClassInstantiationFact[];
     importedClassInheritances: PythonImportedClassInheritanceFact[];
@@ -5053,7 +5095,8 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
 
   function addSameFileTopLevelFunctionCalls(
     topLevelNodes: readonly PythonSyntaxNode[],
-    relativeNamedImports: readonly StaticPythonRelativeNamedImport[]
+    relativeNamedImports: readonly StaticPythonRelativeNamedImport[],
+    absoluteNamedImports: readonly StaticPythonRelativeNamedImport[]
   ): void {
     if (
       topLevelNodes.some(
@@ -5389,6 +5432,28 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       });
     }
 
+    const absoluteBindingCounts = new Map<string, number>();
+    for (const imported of absoluteNamedImports) {
+      absoluteBindingCounts.set(imported.localName, (absoluteBindingCounts.get(imported.localName) ?? 0) + 1);
+    }
+    const writtenBaseNames = new Set(topLevelNodes.flatMap(statement => {
+      if (statement.name !== "ClassDefinition") return [];
+      const base = pythonSingleBareClassBase(input, statement);
+      const name = base === null ? null : declarationName(input, base);
+      return name === null ? [] : [name];
+    }));
+    const eligibleAbsoluteImports = absoluteNamedImports.filter(imported => writtenBaseNames.has(imported.localName) &&
+      topLevelBindCounts.get(imported.localName) === 1 &&
+      absoluteBindingCounts.get(imported.localName) === 1 &&
+      !artifactCallTaint.dynamicGlobalHazard && !artifactCallTaint.globalTaintedNames.has(imported.localName));
+    if (eligibleAbsoluteImports.length > 0) {
+      pythonFacts.absoluteNamedImports = eligibleAbsoluteImports.map(imported => ({
+        sourceId: fileNode.id, filePath: input.filePath, moduleName: imported.moduleName,
+        importedName: imported.importedName, localName: imported.localName,
+        range: rangeFor(lineStarts, imported.moduleFrom, imported.moduleTo)
+      }));
+    }
+
     for (const statement of topLevelNodes) {
       if (statement.name === "DecoratedStatement") {
         continue;
@@ -5421,7 +5486,10 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
       }
       const base = pythonSingleBareClassBase(input, statement);
       const localName = base === null ? null : declarationName(input, base);
-      const matchingImports = localName === null ? [] : importsByLocalName.get(localName) ?? [];
+      const matchingImports = localName === null ? [] : [
+        ...(importsByLocalName.get(localName) ?? []),
+        ...eligibleAbsoluteImports.filter(imported => imported.localName === localName)
+      ];
       if (
         base === null ||
         localName === null ||
@@ -5852,7 +5920,9 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
     const pythonRelativeNamedImports = hasPythonWildcardImport(input, topLevelNodes)
       ? []
       : topLevelNodes.flatMap((node) => staticPythonRelativeNamedImport(input, node));
-    addSameFileTopLevelFunctionCalls(topLevelNodes, pythonRelativeNamedImports);
+    const pythonAbsoluteNamedImports = !cleanModule || hasPythonWildcardImport(input, topLevelNodes)
+      ? [] : topLevelNodes.flatMap(node => staticPythonAbsoluteNamedImports(input, node));
+    addSameFileTopLevelFunctionCalls(topLevelNodes, pythonRelativeNamedImports, pythonAbsoluteNamedImports);
 
     const imports = topLevelNodes.flatMap((node) => staticFastApiImports(input, node));
     const djangoNinjaImports = topLevelNodes.flatMap((node) => staticDjangoNinjaImports(input, node));

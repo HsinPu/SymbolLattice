@@ -88,8 +88,32 @@ def audit(project, manifest_path):
             require(len(written) == 1, "Missing/nonunique written self call")
             declarations = [n for n in base.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == site["method"]]
             require(len(declarations) == 1, "Missing/nonunique base declaration")
-            relation = database.execute("SELECT id,resolution,confidence FROM edges WHERE source_id=? AND target_id=? AND kind='extends'",
-                                        (indexed_cls["id"], indexed_base["id"])).fetchall()
+            relation = database.execute("SELECT e.*,ee.evidence_json FROM edges e LEFT JOIN edge_evidence ee ON ee.edge_id=e.id AND ee.generation_id=? WHERE e.source_id=? AND e.target_id=? AND e.kind='extends'",
+                                        (generation, indexed_cls["id"], indexed_base["id"])).fetchall()
+            if relation:
+                require(len(relation) == 1, "Duplicate indexed inheritance")
+                edge = relation[0]
+                evidence = json.loads(edge["evidence_json"] or "null")
+                written_base = cls.bases[0]
+                directories = pathlib.PurePosixPath(base_file).parts[:-1]
+                markers = ["/".join(directories[:length]) + "/__init__.py"
+                           for length in range(1, len(directories) + 1)]
+                for marker in markers:
+                    tree(marker)
+                source_lines = (project / file).read_bytes().decode("utf-8-sig").splitlines()
+                def column(line, byte_offset):
+                    prefix = source_lines[line - 1].encode("utf-8")[:byte_offset].decode("utf-8")
+                    return len(prefix.encode("utf-16-le")) // 2 + 1
+                require(edge["file_path"] == file and edge["reference_name"] == site["baseName"] and
+                        edge["resolution"] == "exact" and edge["confidence"] == 1 and
+                        (edge["start_line"], edge["start_column"], edge["end_line"], edge["end_column"]) ==
+                        (written_base.lineno, column(written_base.lineno, written_base.col_offset),
+                         written_base.end_lineno, column(written_base.end_lineno, written_base.end_col_offset)) and
+                        isinstance(evidence, dict) and evidence.get("stage") == "module" and
+                        evidence.get("ruleId") == "module.python.regular-package.absolute-named-import.unique-top-level-class-inheritance" and
+                        evidence.get("candidateSymbolIds") == [indexed_base["id"]] and
+                        evidence.get("configurationPaths") == markers and
+                        evidence.get("resolutionPath") == [file, base_file], "Invalid inheritance source/target receipt")
             indexed_calls = database.execute("SELECT e.id,e.target_id,e.resolution,e.confidence FROM edges e JOIN symbols s ON s.id=e.source_id WHERE e.file_path=? AND e.kind='calls' AND e.start_line=? AND e.reference_name=? AND s.start_line=? AND s.name=?",
                                              (file, site["line"], "self." + site["method"], methods[0].lineno, site["owner"])).fetchall()
             require(len(indexed_calls) == 1, "Missing/nonunique indexed call")
@@ -97,6 +121,7 @@ def audit(project, manifest_path):
                                  "baseDeclarationLine": declarations[0].lineno,
                                  "extendsEdges": [dict(row) for row in relation],
                                  "extendsCoverage": "present" if relation else "missing",
+                                 "extendsReceipt": "AST-verified" if relation else "not-emitted",
                                  "call": dict(indexed_calls[0]),
                                  "certainty": "written-import/base/declaration; runtime dispatch unproven"})
         return {"scope": "fixed source sites; not whole-corpus precision or runtime dispatch",

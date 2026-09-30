@@ -38,6 +38,34 @@ afterEach(async () => {
 });
 
 describe("Python B2 regular-package resolution", () => {
+  it("persists absolute inherited source receipts and withdraws them when a package marker disappears", async () => {
+    const projectPath = await createInlineProject({
+      "pkg/__init__.py": "",
+      "pkg/base.py": "class Base:\n    def acquire(self):\n        return 1\n",
+      "pkg/child.py": "from pkg.base import Other, Base as Parent\nclass Child(Parent):\n    def run(self):\n        return self.acquire()\n"
+    });
+    const store = new SqliteGraphStore();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    const inherited = () => store.getSnapshot(projectPath).edges.filter(edge =>
+      edge.evidence?.ruleId === "module.python.regular-package.absolute-named-import.unique-top-level-class-inheritance");
+    expect(inherited()).toHaveLength(1);
+    const receipt = await service.explainEdge(projectPath, inherited()[0]!.id);
+    expect(JSON.stringify(receipt)).toContain("pkg/base.py");
+    expect(JSON.stringify(receipt)).toContain("pkg/__init__.py");
+    expect(store.getSnapshot(projectPath).edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ referenceName: "self.acquire", kind: "calls", resolution: "unresolved", targetId: null })
+    ]));
+    const generation = store.getActiveGenerationBundle(projectPath).status.generationId;
+    await rm(resolve(projectPath, "pkg/__init__.py"));
+    await service.sync({ projectPath });
+    expect(inherited()).toEqual([]);
+    expect(store.getActiveGenerationBundle(projectPath).status.generationId).not.toBe(generation);
+    await writeFile(resolve(projectPath, "pkg/__init__.py"), "", "utf8");
+    await service.sync({ projectPath });
+    expect(inherited()).toHaveLength(1);
+  });
+
   it("re-extracts stale Python facts after the extractor version upgrades", async () => {
     const projectPath = await createInlineProject({
       "src/requests/__init__.py": "",
@@ -127,8 +155,8 @@ describe("Python B2 regular-package resolution", () => {
         })
       ])
     );
-    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v432");
-    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v207");
+    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v433");
+    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v208");
     expect(upgradedStore.getActiveGenerationBundle(projectPath)).toMatchObject({
       extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION,
       resolverVersion: `${PROJECT_RESOLVER_VERSION}+${SOURCE_ROLE_CLASSIFIER_VERSION}`

@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v432";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v433";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v207";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v208";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -2725,7 +2725,7 @@ export interface PythonImportedClassInstantiationFact {
   readonly range: SourceRange;
 }
 
-/** One direct class base written through one syntax-proven Python relative named import. */
+/** One direct class base written through one syntax-proven Python named import. */
 export interface PythonImportedClassInheritanceFact {
   readonly sourceId: string;
   readonly filePath: string;
@@ -2737,6 +2737,8 @@ export interface PythonImportedClassInheritanceFact {
 export interface PythonFacts {
   readonly topLevelDeclarations: readonly PythonTopLevelDeclarationFact[];
   readonly relativeNamedImports: readonly PythonRelativeNamedImportFact[];
+  /** Project-root absolute imports used for written base-class relationships, not calls. */
+  readonly absoluteNamedImports?: readonly PythonRelativeNamedImportFact[];
   readonly importedFunctionCalls: readonly PythonImportedFunctionCallFact[];
   readonly importedClassInstantiations?: readonly PythonImportedClassInstantiationFact[];
   readonly importedClassInheritances: readonly PythonImportedClassInheritanceFact[];

@@ -1,5 +1,6 @@
 import { compareStableText, createEdgeId, type EdgeEvidence, type GraphEdge, type SymbolNode } from "../../domain/index.js";
 import type { ExtractedFileFacts } from "../../extraction/index.js";
+import { resolvePythonAbsoluteModule } from "./python-route-projector-helpers.js";
 
 type ReferenceEvidenceFactory = (
   ruleId: EdgeEvidence["ruleId"],
@@ -13,7 +14,10 @@ type ReferenceEvidenceFactory = (
  * Resolves the deliberately narrow Python B2 surface: one named import from a
  * sibling module in a regular package.  Python's broader import machinery is
  * intentionally outside this resolver; every missing, duplicate, decorated,
- * rebound, namespace-package, or non-single-name shape simply emits no edge.
+ * rebound, namespace-package, or unsupported shape simply emits no edge.
+ * Absolute named imports additionally support written single-base inheritance
+ * at the indexed project root, including import lists/aliases. They never
+ * resolve construction, inherited method dispatch, or inferred source roots.
  */
 export function projectPythonRegularPackageRelativeNamedImports(input: {
   readonly factsByFile: ReadonlyMap<string, ExtractedFileFacts>;
@@ -198,6 +202,47 @@ export function projectPythonRegularPackageRelativeNamedImports(input: {
             )
           });
         }
+      }
+    }
+    // Written base-class identity only. Do not infer construction or inherited dispatch.
+    const emittedAbsoluteImports = new Set<string>();
+    for (const imported of pythonFacts.absoluteNamedImports ?? []) {
+      if (imported.filePath !== filePath || pythonFacts.dynamicGlobalHazard === true ||
+          pythonFacts.artifactGlobalTaintedNames?.includes(imported.localName)) continue;
+      const targetFilePath = resolvePythonAbsoluteModule(input.knownFilePaths, filePath, imported.moduleName);
+      if (targetFilePath === null) continue;
+      const sourceFile = input.fileSymbols.get(filePath);
+      const targetFile = input.fileSymbols.get(targetFilePath);
+      const targetFacts = input.factsByFile.get(targetFilePath)?.pythonFacts;
+      if (sourceFile?.id !== imported.sourceId || targetFile === undefined || targetFacts === undefined ||
+          targetFacts.dynamicGlobalHazard === true || targetFacts.artifactGlobalTaintedNames?.includes(imported.importedName)) continue;
+      const bindings = [...pythonFacts.relativeNamedImports, ...(pythonFacts.absoluteNamedImports ?? [])]
+        .filter(candidate => candidate.localName === imported.localName);
+      const declarations = targetFacts.topLevelDeclarations.filter(candidate => candidate.name === imported.importedName);
+      if (bindings.length !== 1 || declarations.length !== 1 || declarations[0]?.kind !== "class") continue;
+      const declaration = declarations[0];
+      const inheritances = pythonFacts.importedClassInheritances.filter(candidate =>
+        candidate.filePath === filePath && candidate.localName === imported.localName);
+      if (inheritances.length === 0) continue;
+      const packageMarkers = targetFilePath.split("/").slice(0, -1).map((_, index, parts) =>
+        `${parts.slice(0, index + 1).join("/")}/__init__.py`);
+      const importId = createEdgeId({ sourceId: sourceFile.id, targetId: targetFile.id, kind: "imports",
+        line: imported.range.start.line, column: imported.range.start.column, referenceName: imported.moduleName });
+      if (!emittedAbsoluteImports.has(importId)) {
+        emittedAbsoluteImports.add(importId);
+        edges.push({ id: importId,
+        sourceId: sourceFile.id, targetId: targetFile.id, kind: "imports", filePath, range: imported.range,
+        resolution: "exact", confidence: 1, referenceName: imported.moduleName,
+        evidence: referenceEvidence("module.python.regular-package.absolute-named-base-import", "module",
+          [targetFile.id], packageMarkers, [filePath, targetFilePath]) });
+      }
+      for (const inheritance of inheritances) {
+        edges.push({ id: createEdgeId({ sourceId: inheritance.sourceId, targetId: declaration.symbolId, kind: "extends",
+          line: inheritance.range.start.line, column: inheritance.range.start.column, referenceName: imported.localName }),
+          sourceId: inheritance.sourceId, targetId: declaration.symbolId, kind: "extends", filePath, range: inheritance.range,
+          resolution: "exact", confidence: 1, referenceName: imported.localName,
+          evidence: referenceEvidence("module.python.regular-package.absolute-named-import.unique-top-level-class-inheritance",
+            "module", [declaration.symbolId], packageMarkers, [filePath, targetFilePath]) });
       }
     }
   }
