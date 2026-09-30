@@ -150,6 +150,29 @@ describe("source discovery", () => {
     expect(activeReads).toBe(0);
   });
 
+  it("retains queued access failures and omits disappeared files during freshness hashing", async () => {
+    const projectPath = resolve("failed-fingerprint-project");
+    const paths = Array.from({ length: MAXIMUM_FRESHNESS_CONCURRENT_READS + 8 },
+      (_, index) => join(projectPath, `source-${index}.ts`));
+    const started: string[] = [];
+    const reader: ProjectFilesystemReader = {
+      ...nativeProjectFilesystemReader,
+      async readFile(path) {
+        started.push(path);
+        const code = path === paths[0] ? "EACCES" : path === paths.at(-1) ? "EPERM" :
+          path === paths[1] ? "ENOENT" : undefined;
+        if (code !== undefined) throw Object.assign(new Error(code), { code, path });
+        return new TextEncoder().encode("export const value = 1;");
+      }
+    };
+    await expect(fingerprintSourcePaths(projectPath, paths, reader)).rejects.toMatchObject({
+      code: "PROJECT_PATH_UNREADABLE", total: 2,
+      evidence: [{ path: "source-0.ts", code: "EACCES" },
+        { path: `source-${paths.length - 1}.ts`, code: "EPERM" }]
+    });
+    expect(started).toHaveLength(paths.length);
+  });
+
   it("aggregates unreadable source files before failing the scan", async () => {
     const projectPath = await createProject();
     await writeFile(join(projectPath, "a.ts"), "export const a = 1;\n", "utf8");
@@ -210,6 +233,8 @@ describe("source discovery", () => {
       ["bom.ts", Buffer.from([0xef, 0xbb, 0xbf, ...Buffer.from("export const bom = true;\n")])],
       ["invalid.ts", Buffer.from([0x61, 0xf0, 0x9f, 0x61, 0x0a])],
       ["empty.ts", Buffer.alloc(0)],
+      ["buffered-boundary.ts", Buffer.alloc(262_144, 0x65)],
+      ["buffered-streamed.ts", Buffer.alloc(262_145, 0x66)],
       ["boundary.ts", Buffer.alloc(1024 * 1024, 0x61)],
       ["streamed.ts", Buffer.alloc(1024 * 1024 + 1, 0x62)]
     ] as const;
@@ -226,6 +251,18 @@ describe("source discovery", () => {
         hashSource(new TextDecoder("utf-8").decode(bytes))
       );
     }
+  });
+
+  it("does not hash stale bytes when native freshness buffers are reused for shorter files", async () => {
+    const projectPath = await createProject();
+    const paths = Array.from({ length: MAXIMUM_FRESHNESS_CONCURRENT_READS * 2 },
+      (_, index) => join(projectPath, `source-${String(index).padStart(3, "0")}.ts`));
+    const contents = paths.map((_, index) => index < MAXIMUM_FRESHNESS_CONCURRENT_READS
+      ? `export const value = '${"繁體中文🙂".repeat(128 + index)}';\n`
+      : `export const value = ${index};\n`);
+    await Promise.all(paths.map((path, index) => writeFile(path, contents[index]!, "utf8")));
+    const fingerprints = await fingerprintSourcePaths(projectPath, paths);
+    expect(fingerprints.map((file) => file.contentHash)).toEqual(contents.map(hashSource));
   });
 
   it("discovers scoped sources and project-wide configuration candidates in one walk", async () => {

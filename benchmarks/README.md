@@ -50,6 +50,22 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.534.2 reusable bounded freshness buffers
+
+Native UTF-8 freshness hashing retains the existing batches of 32 reads and now lazily reuses one 256 KiB plus one-byte scratch buffer per concurrent slot. It reads content without a preceding file stat, hashes only the bytes actually read, and streams the complete file when the bounded read fills. BOM and invalid UTF-8 still use the indexed decoded-text identity; raw-byte languages, classification, missing-file handling and aggregated access failures retain their existing contracts. This is an internal performance patch, with no index rebuild or public output change. The native scratch allocation is bounded to roughly 8 MiB per invocation; process peak memory was not measured. Large-file-heavy projects may have different performance because files above the cap are reopened for streaming.
+
+On Windows with Node.js 24.19.0, v0.534.1 (`ca1145d4b99fbeebf803b0de11918f5c923ead01`) and the built v0.534.2 candidate were compared against the same existing indexes. Freshness runs used two warm-up pairs followed by eight alternating measured pairs. Every run checked all indexed files and returned complete `proven-unchanged`. Persistent-reader explore runs used one warm-up query per product and eight alternating pairs; all three complete responses were equal.
+
+| Pinned corpus | Files | Full-content freshness median, before → after (ms) | Persistent explore upper median, before → after (ms) |
+| --- | ---: | ---: | ---: |
+| [Django](https://github.com/django/django), `bc833e8883db4a333a6485d91637b78c85e2b13b` | 3,366 | 791.86 → 726.23 | atomic exception rollback: 1,478.11 → 1,428.44 |
+| [Fastify](https://github.com/fastify/fastify), `70b14e92c0b55e8201f5530ba2e6bab4e928c784` | 338 | 66.10 → 60.44 | response header write errors: 553.86 → 538.40 |
+| [Nest](https://github.com/nestjs/nest), `35c3ded6dbf3f23f917ae88d0ed966932788cae6` | 1,738 | 325.22 → 297.09 | constructor dependencies: 1,161.23 → 1,146.16 |
+
+The 20 existing retrieval manifests (27 tasks) were rerun with one fresh CLI process per task. Their complete results equal the v0.534.1 reports, and the source and relationship receipt checks passed. The existing relevance gaps remain; this change does not improve retrieval precision or establish semantic relation correctness. First indexing, incremental synchronization, Agent completion time and Agent query count were not measured. These small-sample warm-cache timings are not a general latency guarantee.
+
+Reproduction uses `node benchmarks/filesystem/freshness-verify.mjs --project <indexed-corpus> --baseline-product-root <built-v0.534.1> --candidate-product-root . --output <external-report.json> --repetitions 8`, then `node benchmarks/mcp/paired-explore.mjs --project <indexed-corpus> --baseline-root <built-v0.534.1> --candidate-root . --query <first-query-in-corresponding-manifest> --output <external-report.json> --pairs 8 --comparison complete --persistent-reader`. Retrieval uses `node benchmarks/mcp/task-retrieval.mjs --project <indexed-corpus> --manifest benchmarks/mcp/<manifest>.json --output <external-report.json> --repetitions 1`. Reports are retained outside the repository under `%TEMP%/SymbolLattice-v5342-final-freshness-*.json`, `%TEMP%/SymbolLattice-v5342-final-explore-*.json` and `%TEMP%/SymbolLattice-evidence-0930-v5342-buffered-freshness-retrieval/`; the frozen baseline build is `%TEMP%/SymbolLattice-v5341-freshness-baseline-0930/`.
+
 ## v0.534.1 exact Python method follow-up declaration leads
 
 An exact-symbol `explore` follow-up now applies the existing bounded same-class declaration-lead policy to its unresolved Python `self.method()` calls. It uses the graph and active-generation source document already read for that exact symbol; no additional store read or index rebuild is required. The original call remains unresolved, and a matching declaration is only a source-cited follow-up candidate. Missing leads can mean the returned graph lacked the declaration, not that no declaration exists. This extends the v0.534.0 evidence behavior to a previously omitted query mode without changing ranking, relation resolution, index format, or the public field contract, so it is a patch.
