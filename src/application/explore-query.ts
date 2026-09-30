@@ -1052,6 +1052,7 @@ function candidateFor(
   variantsByTerm: ReadonlyMap<string, readonly string[]>,
   roleIntent: ExploreQueryRoleIntent,
   filesByPath: ReadonlyMap<string, IndexedFile>,
+  fileTermsByPath: Map<string, { name: string; stem: string }>,
   sourceMatches: readonly SourceLexicalMatch[] = [],
   sourceScore = 0,
   executionIntent = false,
@@ -1061,7 +1062,15 @@ function candidateFor(
   const explicitFile = fileHints.includes(symbol.filePath);
   const name = normalizedIdentifier(symbol.name);
   const qualifiedName = normalizedIdentifier(symbol.qualifiedName);
-  const normalizedFileName = normalizedIdentifier(fileName(symbol.filePath));
+  let fileTerms = fileTermsByPath.get(symbol.filePath);
+  if (fileTerms === undefined) {
+    const name = fileName(symbol.filePath);
+    fileTerms = { name: normalizedIdentifier(name), stem: normalizedIdentifier(name.replace(/\.[^.]+$/u, "")) };
+    if (fileTermsByPath.size < EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumNodes) {
+      fileTermsByPath.set(symbol.filePath, fileTerms);
+    }
+  }
+  const normalizedFileName = fileTerms.name;
   const nameWords = new Set(identifierWords(symbol.name));
   const nameNumbers = numericQueryTerms.size === 0 ? [] : identifierNumbers(symbol.name);
   const matchedTerms: string[] = [];
@@ -1175,10 +1184,10 @@ function candidateFor(
       sourceScore += EXPLORE_QUERY_SOURCE_LEXICAL_SCORING.admissionScore;
     }
     baseScore += sourceScore;
-    const stem = normalizedIdentifier(fileName(symbol.filePath).replace(/\.[^.]+$/u, ""));
+    const stem = fileTerms.stem;
     // Near-whole word stems (validate/validation) corroborate the file title;
     // a generic getter must not inherit that boost just by living in the file.
-    const corroboratedStem = identifierWords(symbol.name).some((word) => {
+    const corroboratedStem = [...nameWords].some((word) => {
       const length = Math.min(word.length, stem.length);
       return length >= 5 && word.slice(0, length - 1) === stem.slice(0, length - 1);
     });
@@ -1380,11 +1389,15 @@ function graphExpansionFor(
     group.push(seed);
     seedGroups.set(seed.symbol.filePath, group);
   }
-  const rankedSeedFiles = [...seedGroups.entries()].sort((left, right) => {
-    const leftBest = [...left[1]].sort(compareLexicalSeedCandidates)[0]!;
-    const rightBest = [...right[1]].sort(compareLexicalSeedCandidates)[0]!;
-    return compareLexicalSeedCandidates(leftBest, rightBest) || compareText(left[0], right[0]);
-  });
+  // Each file's seed order is fixed while ranking files. Sort it once rather
+  // than allocating and sorting both groups again for every file comparison.
+  const rankedSeedFiles = [...seedGroups.entries()]
+    .map(([path, seeds]) => [path, [...seeds].sort(compareLexicalSeedCandidates)] as const)
+    .sort((left, right) => {
+      const leftBest = left[1][0]!;
+      const rightBest = right[1][0]!;
+      return compareLexicalSeedCandidates(leftBest, rightBest) || compareText(left[0], right[0]);
+    });
   const selectedSeedFiles = rankedSeedFiles.slice(
     0,
     EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumSeedFiles
@@ -1392,9 +1405,7 @@ function graphExpansionFor(
   const selectedSeeds: Candidate[] = [];
   let seedSymbolLimitReached = false;
   for (const [, fileSeeds] of selectedSeedFiles) {
-    const perFile = [...fileSeeds]
-      .sort(compareLexicalSeedCandidates)
-      .slice(0, EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumSeedSymbolsPerFile);
+    const perFile = fileSeeds.slice(0, EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumSeedSymbolsPerFile);
     if (perFile.length < fileSeeds.length) seedSymbolLimitReached = true;
     for (const seed of perFile) {
       if (selectedSeeds.length >= EXPLORE_QUERY_GRAPH_EXPANSION_LIMITS.maximumSeedSymbols) {
@@ -1760,15 +1771,17 @@ function graphDiffusionFor(
     group.push(candidate);
     seedGroups.set(candidate.symbol.filePath, group);
   }
-  const rankedSeedFiles = [...seedGroups.entries()].sort((left, right) => {
-    const leftBest = [...left[1]].sort(compareLexicalSeedCandidates)[0];
-    const rightBest = [...right[1]].sort(compareLexicalSeedCandidates)[0];
-    if (leftBest !== undefined && rightBest !== undefined) {
-      const byCandidate = compareLexicalSeedCandidates(leftBest, rightBest);
-      if (byCandidate !== 0) return byCandidate;
-    }
-    return compareText(left[0], right[0]);
-  });
+  const rankedSeedFiles = [...seedGroups.entries()]
+    .map(([path, seeds]) => [path, [...seeds].sort(compareLexicalSeedCandidates)] as const)
+    .sort((left, right) => {
+      const leftBest = left[1][0];
+      const rightBest = right[1][0];
+      if (leftBest !== undefined && rightBest !== undefined) {
+        const byCandidate = compareLexicalSeedCandidates(leftBest, rightBest);
+        if (byCandidate !== 0) return byCandidate;
+      }
+      return compareText(left[0], right[0]);
+    });
   const selectedSeedFiles = rankedSeedFiles.slice(
     0,
     EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedFiles
@@ -1777,9 +1790,7 @@ function graphDiffusionFor(
   const selectedSeeds: Candidate[] = [];
   let seedSymbolLimitReached = false;
   for (const [, fileCandidates] of selectedSeedFiles) {
-    const selectedForFile = [...fileCandidates]
-      .sort(compareLexicalSeedCandidates)
-      .slice(0, EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedSymbolsPerFile);
+    const selectedForFile = fileCandidates.slice(0, EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedSymbolsPerFile);
     if (selectedForFile.length < fileCandidates.length) seedSymbolLimitReached = true;
     for (const candidate of selectedForFile) {
       if (selectedSeeds.length >= EXPLORE_QUERY_GRAPH_DIFFUSION_LIMITS.maximumSeedSymbols) {
@@ -2892,6 +2903,7 @@ export function planExploreQuery(
   };
   const executionIntent = hasExploreExecutionIntent(parsed.boundedQuery);
   const filesByPath = new Map((graph.files ?? []).map((file) => [file.path, file]));
+  const fileTermsByPath = new Map<string, { name: string; stem: string }>();
   const sourceById = new Map((sourceLexical?.candidates ?? []).map((candidate) => [candidate.symbolId, candidate]));
   const lexicalCandidates = graph.symbols
     .map((symbol) => candidateFor(
@@ -2901,6 +2913,7 @@ export function planExploreQuery(
       variantsByTerm,
       roleIntent,
       filesByPath,
+      fileTermsByPath,
       sourceById.get(symbol.id)?.matches,
       sourceById.get(symbol.id)?.score,
       executionIntent,

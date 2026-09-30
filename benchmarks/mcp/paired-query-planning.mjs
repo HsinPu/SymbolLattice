@@ -16,6 +16,27 @@ function isWithin(path, directory) {
     !remainder.startsWith("../") && !remainder.startsWith("..\\"));
 }
 
+// Run separately from timing: count work performed by the existing seed
+// comparator without changing its result or leaving the native sort replaced.
+function measureSeedSortWork(run) {
+  const originalSort = Array.prototype.sort;
+  const work = { calls: 0, comparisons: 0, inputElements: 0 };
+  try {
+    Array.prototype.sort = function (compare) {
+      if (compare?.name !== "compareLexicalSeedCandidates") return originalSort.call(this, compare);
+      work.calls += 1;
+      work.inputElements += this.length;
+      return originalSort.call(this, (left, right) => {
+        work.comparisons += 1;
+        return compare(left, right);
+      });
+    };
+    return { work, result: run() };
+  } finally {
+    Array.prototype.sort = originalSort;
+  }
+}
+
 const project = option("--project");
 const baselineRoot = option("--baseline-root");
 const candidateRoot = option("--candidate-root");
@@ -77,6 +98,12 @@ try {
   const upperMedian = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
   const candidateFasterPairs = cases.candidate.samples.filter((value, index) =>
     value < cases.baseline.samples[index]).length;
+  const seedSortWork = {};
+  for (const [name, entry] of Object.entries(cases)) {
+    const measured = measureSeedSortWork(() => entry.plan(bundle.snapshot, query, bundle.sourceLexical));
+    assert.deepEqual(measured.result, expected, `${name} work counting changed the complete query plan`);
+    seedSortWork[name] = measured.work;
+  }
   const report = {
     schemaVersion: 1,
     project: projectPath,
@@ -92,13 +119,14 @@ try {
     mediansMs: Object.fromEntries(Object.entries(cases).map(([name, entry]) =>
       [name, upperMedian(entry.samples)])),
     candidateFasterPairs,
+    seedSortWork,
     samples: Object.fromEntries(Object.entries(cases).map(([name, entry]) =>
       [name, entry.samples]))
   };
   mkdirSync(dirname(outputPath), { recursive: true });
   writeFileSync(outputPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   console.log(JSON.stringify({ output: outputPath, graph: report.graph,
-    mediansMs: report.mediansMs, candidateFasterPairs, pairs, completeQueryPlansEqual: true }));
+    mediansMs: report.mediansMs, candidateFasterPairs, pairs, seedSortWork, completeQueryPlansEqual: true }));
 } finally {
   store.close();
 }

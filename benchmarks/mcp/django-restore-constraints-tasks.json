@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "repository": "https://github.com/django/django",
   "commit": "bc833e8883db4a333a6485d91637b78c85e2b13b",
-  "truthMethod": "Manually fixed from pinned source before querying or implementing coverage filtering. The database creation helper restores serialized objects under an atomic block and the connection's constraint-check context manager restores checking in finally. The base wrapper supplies the context-manager contract; backend-specific SQL is outside this task. This task is retained as held-out validation for the atomic-rollback filtering change, not used to tune its rules. Other files are unjudged.",
+  "truthMethod": "Manually fixed from pinned source before querying or implementing coverage filtering. The database creation helper restores serialized objects under an atomic block and the connection's constraint-check context manager restores checking in finally. The base wrapper supplies the context-manager contract; backend-specific SQL is outside this task. This task was held-out validation for v0.536.2 atomic-rollback filtering, not used to tune its rules. Subsequent unsuccessful query-term experiments make it a development regression case; its query, required files and source facts remain unchanged. Other files are unjudged.",
   "tasks": [{
     "id": "restore-serialized-database-constraints",
-    "split": "held-out",
+    "split": "development",
     "query": "How does a test database restore serialized objects inside a transaction while temporarily disabling and then checking constraints?",
     "requiredFiles": ["django/db/backends/base/creation.py", "django/db/backends/base/base.py"],
     "supportingFiles": ["django/db/transaction.py"],

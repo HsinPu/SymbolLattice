@@ -41,16 +41,42 @@ These tools generate or validate large-project evidence outside the published np
 | `mcp/` | `strict-fresh-read-lifecycle.mjs` | manual |
 | `mcp/` | `paired-explore.mjs` | manual alternating service latency; optional `--persistent-reader` mirrors the default-project MCP worker; complete-response equality, scoped unresolved-call comparison, or timing-only mode for separately validated output changes |
 | `mcp/` | `paired-explore-text.mjs` | manual same-response MCP text comparison across two built products |
-| `mcp/` | `paired-query-planning.mjs` | manual alternating focus-planning latency and complete-plan equality on one fixed bounded graph bundle |
+| `mcp/` | `paired-query-planning.mjs` | manual alternating focus-planning latency, complete-plan equality, and separate seed-sort work counts on one fixed bounded graph bundle |
 | `mcp/` | `paired-index-replace.mjs` | manual alternating full graph-generation replacement on separate disposable index copies |
 | `mcp/` | `edge-lookup.mjs` | manual pinned-corpus paired SQLite edge-read measurement |
-| `mcp/` | `django-restore-constraints-tasks.json` | manual held-out pinned-source retrieval truth; known context-manager source gap |
+| `mcp/` | `django-restore-constraints-tasks.json` | manual pinned-source development retrieval truth; originally held out for v0.536.2, with a known context-manager source gap |
 | `mcp/` | `bounded-graph-read.mjs` | manual pinned-corpus bounded graph read, response hash, latency, and post-GC memory measurement |
 | `mcp/` | `task-retrieval.mjs`, `django-atomic-rollback-tasks.json`, `nest-retrieval-tasks.json`, `nest-source-tasks.json`, `nest-shutdown-tasks.json`, `nest-circular-dependency-tasks.json`, `fastify-retrieval-tasks.json`, `fastify-plugin-tasks.json`, `fastify-error-tasks.json`, `fastify-serializer-tasks.json`, `fastify-cookie-tasks.json`, `fastify-stream-error-tasks.json`, `fastify-serialization-hook-error-tasks.json`, `fastify-header-write-error-tasks.json`, `fastify-outgoing-hook-error-tasks.json`, `fastify-unhinted-content-type-tasks.json` | automatic scorer/source and directed graph receipt verifier contracts; manual pinned-corpus execution |
 | `filesystem/` | `freshness-verify.mjs` | manual paired full-content freshness measurement on an indexed external project |
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## v0.536.3 Reuse file lexical data and sorted seed groups
+
+CPU sampling of repeated planning on the pinned Nest graph showed work in both graph expansion and graph diffusion. Both stages sorted the same file's seed group again inside every file-ranking comparison, then sorted the selected groups once more. Each stage now sorts each group once and reuses that order for file comparison and per-file selection. Comparator rules, stable tie ordering, score arithmetic, candidate/graph limits, source coordinates and evidence certainty remain unchanged. No query policy, parser/resolver version, index format or caller migration changes. This is a patch-level reduction of repeated ranking work.
+
+The same sampling also identified identifier normalization and word splitting. Candidate scoring now reuses the normalized filename and stem for each path within one planning invocation, with at most 4,096 cached paths and uncached fallback beyond that limit. It also reuses the symbol-name words already computed by that candidate. There is no cross-query cache and no cached source score, source text, token position, frequency or relationship. Locale-sensitive normalization remains the existing function. This avoids repeating filename work for every declaration without introducing stale-source reuse.
+
+Final Windows / Node v24.19.0 runs used the fixed Nest circular-dependency, Django atomic-rollback and Fastify cookie-header tasks. Planning uses four warm-up pairs and 60 alternating measured pairs on the same graph; full service queries use one warm-up per product and eight alternating pairs with persistent readers. The table reports upper medians. No tests, builds or indexing ran during final timing; all complete plans and service responses were equal.
+
+| Task | Planning ms, v0.536.2 → v0.536.3 | Candidate faster planning pairs | Seed-sort calls, before → after | Full service ms, before → after |
+| --- | --- | --- | --- | --- |
+| Nest circular dependency | 82.63 → 79.94 | 46/60 | 580 → 72 | 1,126.10 → 1,102.17 |
+| Django atomic rollback | 55.20 → 53.72 | 44/60 | 334 → 44 | 1,419.10 → 1,429.59 |
+| Fastify cookie headers | 42.25 → 39.20 | 55/60 | 158 → 26 | 519.46 → 518.27 |
+
+The isolated planning reductions are approximately 3.2%, 2.7% and 7.2%; full service changes are small and mixed, so there is no general end-to-end speedup claim. A Django control using the identical v0.536.2 product on both sides also measured 1,402.77 → 1,413.06 ms; it demonstrates that small differences can occur without a product change, not that every observed regression is noise. Final reports are `%TEMP%/SymbolLattice-v5363-lexical-{nest,django,fastify}-{planning,service}-final.json`; the control is `%TEMP%/SymbolLattice-v5363-django-identical-product-control.json`. Earlier sort-only timing reports remain `%TEMP%/SymbolLattice-v5363-{nest,django,fastify}-{planning,service}-final.json`; they showed no consistent gain and are not the final implementation's timings.
+
+`paired-query-planning.mjs` additionally counts calls, comparator invocations and input elements for the existing `compareLexicalSeedCandidates` sort. This synchronous diagnostic runs after timing, delegates each comparison to the original comparator, restores the native sort in `finally`, and asserts its complete plan still equals the uninstrumented result. These counts measure sorting work, not source recall or runtime dispatch correctness.
+
+All 22 fixed manifests / 29 tasks returned complete structured responses deeply equal to v0.536.2, including source excerpts, token positions, truncation receipts and unresolved calls. Required-file occurrences remain 50/50; specified source facts remain 120/122. There are 63 judged relevant returned-file occurrences, zero judged irrelevant selections, and 41 unjudged occurrences; this is not repository-wide precision. The source verifier checked 328 excerpts and 572 lexical matches. Final reports and comparison are under `%TEMP%/SymbolLattice-v5363-lexical-retrieval-final`; the frozen baseline build is `%TEMP%/SymbolLattice-v5362-term-baseline`. The earlier sort-only reports remain separately under `%TEMP%/SymbolLattice-v5363-retrieval-final`.
+
+The restore-constraints question still delivers 3/5 specified facts. Its retained first eight query terms omit the final constraint-checking condition, but retaining that condition alone does not solve ranking: two discarded experiments (reserving two tail slots, then removing sentence scaffolding) both reduced required-file recall from 2/2 to 0/2. Neither experiment nor a separate concept-count cache is part of this release. The fixed query, required files and source facts have not been relaxed; the case is now marked development because it was used during these investigations. Its v0.536.2 held-out role remains recorded. The missing facts and broader query-intent/ranking interaction remain work to resolve, not a passed evidence-completeness claim. Trial reports are `%TEMP%/SymbolLattice-v5363-restore-trial.json`, `%TEMP%/SymbolLattice-v5363-scaffolding-trial.json` and `%TEMP%/SymbolLattice-v5363-term-trial`.
+
+Final `npm run check`, `npm run build` and `npm test -- --maxWorkers 2` passed: 3,267 tests passed and four existing tests were skipped. The final full-suite log is `%TEMP%/SymbolLattice-v5363-full-final-test.log`. Both README versions retain their existing usage and limitations with the synchronized version; no new usage steps are needed.
+
+Reproduce quality with `node benchmarks/mcp/task-retrieval.mjs --project <pinned-indexed-checkout> --manifest benchmarks/mcp/<manifest>.json --output <external-report.json> --repetitions 1`. Reproduce isolated planning with `node benchmarks/mcp/paired-query-planning.mjs --project <same-indexed-checkout> --baseline-root <frozen-v0.536.2-build> --candidate-root . --query <manifest-query> --output <external-report.json> --pairs 60`; this excludes SQLite reads, freshness, source rendering and transport. Full-query measurements use `paired-explore.mjs` with `--pairs 8 --persistent-reader` and its default complete-output equality assertion. Neither kind of warm local timing establishes cold-start, indexing, sync, peak-memory or Agent completion-time gains.
 
 ## v0.536.2 Covered secondary-context filtering
 
