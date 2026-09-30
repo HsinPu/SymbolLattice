@@ -5923,7 +5923,8 @@ export class SymbolLatticeService {
     const withImportedDeclarations = calls.length === 0 ? supplemented : supplementImportedCallDeclarations(bundle.snapshot, supplemented,
       projection, calls.length > EXPLORE_IMPORTED_DECLARATION_LIMITS.maximumCalls ||
         [...candidates.values()].some(evidence => evidence.truncated));
-    const result = supplementOmittedCallDeclarations(bundle.snapshot, withImportedDeclarations, followupCalls);
+    const result = supplementOmittedCallDeclarations(bundle.snapshot, withImportedDeclarations, followupCalls,
+      this.isBoundedTraversalTruncated(bundle));
     this.exploreCallEvidence.set(result, candidates);
     return result;
   }

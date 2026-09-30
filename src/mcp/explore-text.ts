@@ -437,7 +437,7 @@ function renderLimitations(result: UnknownRecord): string[] {
   if (omittedSearch !== null) {
     if (omittedSearch.state !== "searched") notes.add(`Omitted-query declaration evidence ${text(omittedSearch.state) ?? "unavailable"}; no call target was inferred.`);
     if (omittedSearch.termsTruncated === true || omittedSearch.callsTruncated === true || omittedSearch.candidatesTruncated === true) notes.add(
-      "Omitted-query declaration search reached its term, call, candidate or focus bounds; query the cited declaration directly for more evidence.");
+      "Omitted-query declaration search reached its term, call, graph, candidate or focus bounds; absence does not establish that a declaration is missing. Query the selected file or a cited declaration directly for more evidence.");
   }
   const followupSearch = record(record(result.queryPlan)?.nameFollowupSearch);
   if (followupSearch !== null) {

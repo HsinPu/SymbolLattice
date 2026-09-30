@@ -17,7 +17,13 @@ describe("MCP explore text rendering", () => {
     expect(output).toContain("checking, constraints");
     expect(output).toContain("not repository-wide uniqueness or dispatch");
     expect(output).toContain("primary retrieval budget");
-    expect(output).toContain("term, call, candidate or focus bounds");
+    expect(output).toContain("term, call, graph, candidate or focus bounds");
+  });
+  it("explains incomplete graph searches without requiring an emitted declaration", () => {
+    const output = renderExploreText({ queryPlan: { omittedDeclarationSearch: {
+      state: "searched", candidatesTruncated: true, candidateCount: 0, emittedCount: 0 } }, focuses: [] });
+    expect(output).toContain("absence does not establish that a declaration is missing");
+    expect(output).toContain("Query the selected file or a cited declaration directly");
   });
   it("discloses numeric coverage ordering and lexical-window omissions without claiming a relation", () => {
     const output = renderExploreText({ focuses: [{ symbol: { name: "codes" } }],

@@ -26,6 +26,19 @@ function fixture(tail = "checking constraints") {
 }
 
 describe("declaration leads for omitted query concepts", () => {
+  it("preserves upstream graph truncation even below the local declaration limit and with no candidate", () => {
+    const f = fixture();
+    const incomplete = { ...f.graph, symbols: [f.owner, f.context] };
+    const next = supplementOmittedCallDeclarations(incomplete, f.plan, f.calls, true);
+    expect(next.selection).toEqual(f.plan.selection);
+    expect(next.omittedDeclarationSearch).toMatchObject({ state: "searched", candidateCount: 0,
+      emittedCount: 0, candidatesTruncated: true });
+    expect(supplementOmittedCallDeclarations(incomplete, f.plan, f.calls).omittedDeclarationSearch?.candidatesTruncated).toBe(false);
+    const available = supplementOmittedCallDeclarations(f.graph, f.plan, f.calls, true);
+    expect(available.selection).toEqual(supplementOmittedCallDeclarations(f.graph, f.plan, f.calls).selection);
+    expect(available.omittedDeclarationSearch?.candidatesTruncated).toBe(true);
+  });
+
   it("keeps primary rank and unresolved certainty while supplementing an already selected file", () => {
     const f = fixture();
     const next = supplementOmittedCallDeclarations(f.graph, f.plan, f.calls);

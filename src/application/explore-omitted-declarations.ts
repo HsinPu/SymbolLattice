@@ -32,7 +32,7 @@ export interface ExploreOmittedDeclarationSearch {
 
 /** Supplement source in selected files without changing primary rank or call certainty. */
 export function supplementOmittedCallDeclarations(graph: ExploreQueryGraph, plan: ExploreQueryPlan,
-  callsBySource: ReadonlyMap<string, UnresolvedCallEvidence>): ExploreQueryPlan {
+  callsBySource: ReadonlyMap<string, UnresolvedCallEvidence>, graphTruncated = false): ExploreQueryPlan {
   if (plan.input.identifierTermsTruncated !== true || plan.fileHints.length > 0) return plan;
   const omitted = exploreQueryOmittedTerms(plan.query);
   const groups = identifierTermGroups(omitted.terms);
@@ -46,7 +46,8 @@ export function supplementOmittedCallDeclarations(graph: ExploreQueryGraph, plan
     policy: "omitted-query-call-declarations-v1", state, limits, omittedTerms: omitted.terms,
     termsTruncated: omitted.truncated,
     callsTruncated: inputs.some(input => input?.truncated || (input?.items.length ?? 0) > limits.maximumCallsPerFocus),
-    candidatesTruncated: graph.symbols.length > limits.maximumCandidateSymbols, candidateCount: 0, emittedCount: 0
+    candidatesTruncated: graphTruncated || graph.symbols.length > limits.maximumCandidateSymbols,
+    candidateCount: 0, emittedCount: 0
   };
   if (state !== "searched") return { ...plan, omittedDeclarationSearch: receipt };
   const selectedIds = new Set(plan.selection.map(item => item.symbol.id));
