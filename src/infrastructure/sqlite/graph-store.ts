@@ -332,7 +332,7 @@ const ACTIVE_SOURCE_SEARCH_SCHEMA = `
   );
 `;
 
-/** A rebuildable, generation-bound copy avoids case-folding every symbol on each multi-term search. */
+/** A rebuildable, generation-bound copy avoids case-folding every symbol on each search. */
 const SYMBOL_CASEFOLDS_SCHEMA = `
   CREATE TABLE IF NOT EXISTS symbol_casefolds (
     id TEXT NOT NULL,
@@ -351,7 +351,7 @@ const SYMBOL_CASEFOLDS_SCHEMA = `
   ) STRICT;
 `;
 
-/** An external-content substring index for bounded, multi-concept symbol searches. */
+/** An external-content substring index for bounded symbol searches. */
 const SYMBOL_TRIGRAMS_SCHEMA = `
   CREATE VIRTUAL TABLE IF NOT EXISTS symbol_trigrams USING fts5(
     folded_name,
@@ -2269,10 +2269,12 @@ function readBoundedSymbolRows(
 
   // The second read only needs symbols in selected files. Avoid materializing
   // the whole symbol table when the file-path index can bound that population.
-  const reuseCasefolds = lexicalGroups.length >= 2 && !restrictToFilePaths;
-  const persistedCasefolds = reuseCasefolds && activeGenerationId !== null &&
+  const persistedCasefolds = lexicalGroups.length > 0 && !restrictToFilePaths && activeGenerationId !== null &&
     getMeta(database, SYMBOL_CASEFOLDS_GENERATION_ID_META_KEY) === activeGenerationId &&
     tableExists(database, "symbol_casefolds");
+  // A single concept can reuse a current persisted copy too. Without one,
+  // preserve its direct-table path rather than materialize the whole index.
+  const reuseCasefolds = !restrictToFilePaths && (lexicalGroups.length >= 2 || persistedCasefolds);
   const lowerName = reuseCasefolds ? "folded_name" : "lower(name)";
   const lowerQualifiedName = reuseCasefolds ? "folded_qualified_name" : "lower(qualified_name)";
   const partialTerms = restrictToFilePaths ? [] : lexicalTerms.filter((term) => term.length >= 2);
@@ -2445,8 +2447,8 @@ function readBoundedSourceLexical(
   if (state === "searched") {
     truncated = filePaths.length > limits.maximumFiles;
     const paths = filePaths.slice(0, limits.maximumFiles);
-    const readSource = database.prepare(`SELECT substr(source_text, 1, ?) AS source_text,
-      length(source_text) AS characters FROM source_documents WHERE generation_id = ? AND file_path = ?`);
+    const readSource = database.prepare(`SELECT substr(source_text, 1, ?) AS source_text
+      FROM source_documents WHERE generation_id = ? AND file_path = ?`);
     const symbolKindFilter = numericBindingTerms.length > 0
       ? "kind IN ('function', 'method', 'entrypoint', 'variable')"
       : "kind IN ('function', 'method', 'entrypoint') OR (kind = 'variable' AND is_exported = 1 AND end_line - start_line <= 12 AND file_path NOT GLOB '*.d.*ts')";
@@ -2462,10 +2464,13 @@ function readBoundedSourceLexical(
       if (remaining <= 0 || remainingSymbols <= 0) { truncated = true; break; }
       const characterLimit = Math.min(remaining, limits.maximumFileCharacters);
       const document = readSource.get(characterLimit + 1, generationId, filePath) as
-        { source_text: string; characters: number } | undefined;
+        { source_text: string } | undefined;
       if (document === undefined) continue;
       scannedFiles += 1;
-      const shortened = document.characters > characterLimit || document.source_text.length > characterLimit;
+      // Read one extra SQLite character instead of counting the entire document.
+      // Each returned character occupies at least one JS code unit, so this also
+      // preserves the existing UTF-16 budget check for supplementary characters.
+      const shortened = document.source_text.length > characterLimit;
       let sourceText = document.source_text.slice(0, characterLimit);
       scannedCharacters += sourceText.length;
       if (shortened) {

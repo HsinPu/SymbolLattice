@@ -2,10 +2,11 @@
   "schemaVersion": 1,
   "repository": "https://github.com/nestjs/nest",
   "commit": "35c3ded6dbf3f23f917ae88d0ed966932788cae6",
-  "truthMethod": "Manual reading of pinned on-module-init.hook.ts and transient-instances.ts before changing shared-parameter-type graph expansion. This named-symbol flow task checks hook invocation and the two instance categories. Baseline and candidate outputs stay unopened until the implementation is frozen. This is a new task on an already known repository; unlisted files remain unjudged, and static type compatibility does not establish runtime flow.",
+  "truthMethod": "Manual reading of pinned on-module-init.hook.ts and transient-instances.ts before changing shared-parameter-type graph expansion. This named-symbol flow task checks hook invocation and the two instance categories. Baseline and candidate outputs stayed unopened until the original shared-parameter-type implementation was frozen. In v0.540.1 this task is reused to identify and measure single-concept indexed lookup cost; it is now development rather than untouched validation. The question, file judgments and source facts are unchanged. This is a new task on an already known repository; unlisted files remain unjudged, and static type compatibility does not establish runtime flow.",
   "tasks": [{
     "id": "module-init-hook-instances",
-    "split": "held-out",
+    "split": "development",
+    "originalSplit": "held-out",
     "query": "Trace callModuleInitHook flow",
     "requiredFiles": ["packages/core/hooks/on-module-init.hook.ts", "packages/core/injector/helpers/transient-instances.ts"],
     "supportingFiles": ["packages/core/injector/module.ts", "packages/core/injector/instance-wrapper.ts", "packages/core/nest-application-context.ts"],

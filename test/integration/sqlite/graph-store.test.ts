@@ -2432,6 +2432,9 @@ describe("SqliteGraphStore", () => {
       ...exploreQuerySeedTerms("afterOnly evidence") };
     const selected = () => store.getActiveBoundedGraphBundle(projectPath, request)
       .snapshot.symbols.map((node) => node.id);
+    const singleRequest = { ...boundedRequest("afterOnly"), ...exploreQuerySeedTerms("afterOnly") };
+    const singleIndexed = store.getActiveBoundedGraphBundle(projectPath, singleRequest);
+    expect(singleIndexed.snapshot.symbols.map(node => node.id)).toContain("after");
     expect(selected()).toContain("after");
     expect(readTableCount(projectPath, "symbol_casefolds")).toBe(1);
 
@@ -2445,6 +2448,7 @@ describe("SqliteGraphStore", () => {
       database.close();
     }
     expect(selected()).toContain("after");
+    expect(store.getActiveBoundedGraphBundle(projectPath, singleRequest)).toEqual(singleIndexed);
     store.initialize(projectPath);
     expect(selected()).toContain("after");
     const repaired = new DatabaseSync(databasePathFor(projectPath), { readOnly: true });
@@ -2484,12 +2488,13 @@ describe("SqliteGraphStore", () => {
       missing.close();
     }
     expect(selected()).toContain("after");
+    expect(store.getActiveBoundedGraphBundle(projectPath, singleRequest)).toEqual(singleIndexed);
     store.initialize(projectPath);
     expect(readTableCount(projectPath, "symbol_casefolds")).toBe(1);
     expect(selected()).toContain("after");
   });
 
-  it("keeps name-prefix and qualified-name matches when trigram candidates narrow a multi-concept read", async () => {
+  it("keeps name-prefix and qualified-name matches when trigram candidates narrow single- and multi-concept reads", async () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();
     const template = boundedGraphSnapshot();
@@ -2517,6 +2522,12 @@ describe("SqliteGraphStore", () => {
     expect(indexed.snapshot.symbols.map((node) => node.id))
       .toEqual(expect.arrayContaining(["name-only", "qualified-only"]));
     expect(indexed.snapshot.symbols.map((node) => node.id)).not.toContain("scattered-trigrams");
+    const singleRequests = ["SAVEPOINT", "rollback", "Sa", "OpaqueReference"].map(query => ({
+      ...boundedRequest(query, { maxHops: 0 }), ...exploreQuerySeedTerms(query) }));
+    const singleIndexed = singleRequests.map(request => store.getActiveBoundedGraphBundle(projectPath, request));
+    expect(singleIndexed[0]!.snapshot.symbols.map(node => node.id)).toContain("name-only");
+    expect(singleIndexed[0]!.snapshot.symbols.map(node => node.id)).not.toContain("scattered-trigrams");
+    expect(singleIndexed[1]!.snapshot.symbols.map(node => node.id)).toContain("qualified-only");
     const longQuery = `${"x".repeat(300)} rollback`;
     const longRequest = { ...boundedRequest(longQuery, { maxHops: 0 }), ...exploreQuerySeedTerms(longQuery) };
     expect(store.getActiveBoundedGraphBundle(projectPath, longRequest).snapshot.symbols.map((node) => node.id))
@@ -2533,6 +2544,9 @@ describe("SqliteGraphStore", () => {
       database.close();
     }
     expect(store.getActiveBoundedGraphBundle(projectPath, request)).toEqual(indexed);
+    for (let index = 0; index < singleRequests.length; index++) {
+      expect(store.getActiveBoundedGraphBundle(projectPath, singleRequests[index]!)).toEqual(singleIndexed[index]);
+    }
     store.initialize(projectPath);
     const rebuilt = new DatabaseSync(databasePathFor(projectPath), { readOnly: true });
     try {
@@ -2891,6 +2905,32 @@ describe("SqliteGraphStore", () => {
       boundedRequest("Root", { maxRelationships: 10 }));
     expect(limited.snapshot.edges).toEqual(calls.slice(0, 10));
     expect(limited.diagnostics.truncated).toBe(true);
+    store.close();
+  });
+
+  it.each(["ascii", "supplementary", "exact-limit"])("keeps bounded source receipts at the %s character boundary", async mode => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const template = boundedGraphSnapshot();
+    const prefix = "function run() {\n  refund(payment);\n}\n";
+    const unit = mode === "supplementary" ? "😀" : "x";
+    const sourceText = mode === "exact-limit" ? prefix + "x".repeat(65536 - prefix.length) :
+      prefix + unit.repeat(70000) + "refund(payment);\n";
+    const declaration: SymbolNode = { ...template.symbols[0]!, id: "bounded-source", name: "run", kind: "function",
+      qualifiedName: "src/a.ts#run", range: { start: { line: 1, column: 1 }, end: { line: 3, column: 2 } } };
+    const graphSnapshot: GraphSnapshot = { ...template, files: [template.files[0]!], symbols: [declaration], edges: [], pendingReferences: [] };
+    store.replaceProjectFacts({ projectPath, snapshot: graphSnapshot,
+      indexedAt: "2026-10-01T00:00:00.000Z", artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("source-character-boundary"), resolverVersion: "bounded-resolver-v1",
+      sourceDocuments: [{ filePath: declaration.filePath, language: "typescript", sourceText }], sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION });
+    const query = "payments refunds";
+    const result = store.getActiveBoundedGraphBundle(projectPath, { ...boundedRequest(query, { maxHops: 0 }), ...exploreQuerySeedTerms(query) });
+    expect(result.sourceLexical).toMatchObject({ scannedCharacters: 65536, truncated: mode !== "exact-limit",
+      candidates: [{ symbolId: declaration.id, matches: [
+        { token: "payment", range: { start: { line: 2, column: 10 }, end: { line: 2, column: 17 } } },
+        { token: "refund", range: { start: { line: 2, column: 3 }, end: { line: 2, column: 9 } } }
+      ] }] });
+    expect(result.sourceLexical?.candidates[0]?.matches).toHaveLength(2);
     store.close();
   });
 

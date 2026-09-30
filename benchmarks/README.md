@@ -44,6 +44,7 @@ These tools generate or validate large-project evidence outside the published np
 | `mcp/` | `paired-explore-text.mjs` | manual same-response MCP text comparison across two built products |
 | `mcp/` | `paired-query-planning.mjs` | manual alternating focus-planning latency, complete-plan equality, and separate seed-sort work counts on one fixed bounded graph bundle |
 | `mcp/` | `paired-source-lexical.mjs` | manual alternating frozen source-input replay with complete tokens, receipts, truncation and BM25 score equality; excludes whole-query latency |
+| `mcp/` | `paired-source-prefix-read.mjs` | manual captured source-prefix SQL replay on one read-only transaction; complete bounded-bundle, prefix and truncation equality; excludes whole-query latency |
 | `mcp/` | `paired-index-replace.mjs` | manual alternating full graph-generation replacement on separate disposable index copies |
 | `mcp/` | `edge-lookup.mjs` | manual pinned-corpus paired SQLite edge-read measurement |
 | `mcp/` | `django-restore-constraints-tasks.json` | manual pinned-source development retrieval truth; originally held out for v0.536.2, with a known context-manager source gap |
@@ -53,6 +54,45 @@ These tools generate or validate large-project evidence outside the published np
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## v0.540.1 Bounded source reads and single-concept lookup
+
+Bounded source reads retain the extra SQLite character and the existing UTF-16 budget check, but no longer count every character of the full document. Single-concept symbol queries can reuse a generation-current persisted casefold/trigram projection. Missing or stale projections preserve the direct-table fallback; the existing exact predicates, ordering and limits still filter substring candidates. These internal changes preserve public contracts and warrant a patch release. Index format, ranking policy and extractor/resolver versions are unchanged; no additional sync or rebuild is required.
+
+The retained prefix probe captures actual bounded-reader SQL and arguments from both built products, asserts complete bundle equality, then replays only those SQL reads on one read-only transaction. Four warmups and 100 alternating pairs verify identical returned prefixes and truncation decisions on every pair. Reports include corpus pins, manifest and compiled-product hashes, generation, runtime and raw samples. Build hashes are checked again after measurement. Output must remain outside the corpus and product workspaces.
+
+```sh
+node benchmarks/mcp/paired-source-prefix-read.mjs --project <pinned-indexed-corpus> --manifest <fixed-truth.json> --baseline-root <v5400-built-root> --candidate-root <current-built-root> --output <external-report.json> --pairs 100
+node benchmarks/mcp/paired-explore.mjs --project <pinned-indexed-corpus> --baseline-root <v5400-built-root> --candidate-root <current-built-root> --query <fixed-task-query> --output <external-report.json> --pairs 8 --comparison complete --persistent-reader
+```
+
+On Windows / Node.js 24.19.0, the unchanged indexes use Django `bc833e8883db4a333a6485d91637b78c85e2b13b` (`https://github.com/django/django`), Fastify `70b14e92c0b55e8201f5530ba2e6bab4e928c784` (`https://github.com/fastify/fastify`) and Nest `35c3ded6dbf3f23f917ae88d0ed966932788cae6` (`https://github.com/nestjs/nest`). The baseline is built v0.540.0, commit `caf6b4d1540bd7f8689ff5504f2325d0a00ae6cc`. Timing runs had no concurrent tests or builds.
+
+| Fixed task | Prefix reads / returned JS code units / original SQLite characters | Prefix SQL upper median v0.540.0 → v0.540.1 |
+| --- | --- | --- |
+| Django PostgreSQL version | 81 / 1,048,582 / 1,717,749 | 6.79 → 4.41 ms |
+| Django MySQL temporary connection | 56 / 1,048,583 / 1,751,215 | 6.40 → 4.03 ms |
+| Fastify cookie headers | 79 / 1,048,582 / 1,055,465 | 5.21 → 3.76 ms |
+
+These reductions are about 28–37% for the captured SQL stage only, saving roughly 1.4–2.4 ms. They exclude scanning, graph traversal, freshness, planning and assertions. Nest module-init performs no source-prefix SQL reads and is outside this probe's scope, rather than a measured zero-time improvement. Reports are `%TEMP%/SymbolLattice-v5401-<manifest-stem>-prefix-paired-final.json`.
+
+Complete-service measurements use one warmup per product, eight alternating pairs and a persistent read-only reader. All five complete results are equal:
+
+| Fixed task | Total upper median v0.540.0 → v0.540.1 | Seed-read upper median |
+| --- | --- | --- |
+| Django PostgreSQL version | 1404.59 → 1393.55 ms | 502.99 → 513.35 ms |
+| Django MySQL temporary connection | 1506.02 → 1505.29 ms | 635.53 → 620.12 ms |
+| Fastify cookie headers | 502.27 → 504.31 ms | 350.87 → 356.84 ms |
+| Nest module-init | 931.50 → 939.74 ms | 502.55 → 476.12 ms |
+| Nest shutdown | 1150.79 → 1120.84 ms | 680.72 → 663.64 ms |
+
+Reports are `%TEMP%/SymbolLattice-v5401-<manifest-stem>-final-service-paired.json`. Mixed end-to-end changes do not establish a general query speedup or resolve the earlier PostgreSQL regression. Frontier SQL deduplication variants and a freshness scheduling prototype preserved output but showed inconsistent or worse latency and were discarded. Full-content freshness checking and frontier joins remain unchanged. First indexing, incremental sync and Agent completion time were not remeasured; this patch reuses the same index generations.
+
+The module-init task is now development, retaining `originalSplit: held-out`, because it was reused for diagnosing and selecting the single-concept optimization. Its question, file judgments and source facts are unchanged. Nest shutdown remains held out and was used only for final validation.
+
+All 26 fixed manifests / 33 tasks retain complete raw result equality with v0.540.0, including source and relationship receipt checks. Fixed coverage remains 57/57 required files and 140/143 specified facts, with 71 TP, zero judged FP, zero FN and 52 unjudged task/file pairs. Atomic-entry facts remain 2/5; unchanged output is not complete task evidence or a global precision measurement. Reports are `%TEMP%/SymbolLattice-v5401-retrieval-final` and `SymbolLattice-v5401-retrieval-preservation.json`. These CLI validation runs were concurrent with tests and their durations are not used for speed claims.
+
+Type checking, build, all 63 focused graph-store/source-lexical tests and the full suite (3,322 passed / 4 skipped) passed. Coverage includes exact-limit ASCII and supplementary-character source boundaries, exact receipt coordinates, single-concept casefold generation fencing, missing projection fallback, and trigram candidate equality. The full-suite log is `%TEMP%/SymbolLattice-v5401-full-test.log`. Raw reports, corpus checkouts and indexes remain outside the repository.
 
 ## v0.540.0 Bounded direct-base method source
 
