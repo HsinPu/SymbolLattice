@@ -55,6 +55,28 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.541.2 Edge object hydration
+
+Edge hydration constructs one fresh output object directly from the persisted row and its separately loaded evidence JSON. It avoids copying the SQLite row to attach JSON and copying the output again to attach parsed evidence. Evidence is still parsed per return: the generation-bound cache stores JSON, not caller-visible objects. Missing evidence remains an absent property, and parsing errors retain their diagnostics. The private helper preserves existing CLI/MCP contracts, ranking, index format and extractor/resolver versions; this is a patch release with no index rebuild.
+
+Built v0.541.1 (`b513fb2f77c7b273da6d888271f64c8ecb52a167`) and v0.541.2 were compared on Windows / Node.js 24.19.0 using the unchanged pinned corpora described below. `mcp/paired-explore.mjs` used a persistent read-only reader, one warmup per product, alternating order and complete response equality. No tests or builds ran during latency measurements:
+
+| Fixed task | Pairs | Service total upper median v0.541.1 → v0.541.2 | Seed retrieval upper median |
+| --- | --- | --- | --- |
+| Django PostgreSQL version | 8 | 1,317.35 → 1,293.56 ms | 523.81 → 493.75 ms |
+| Django MySQL temporary connection, first run | 8 | 1,412.60 → 1,434.29 ms | 632.64 → 626.76 ms |
+| Django MySQL temporary connection, follow-up | 16 | 1,454.87 → 1,435.78 ms | 630.45 → 614.15 ms |
+| Fastify cookie headers | 8 | 504.53 → 489.78 ms | 345.27 → 333.33 ms |
+| Nest shutdown, not used to tune this change | 8 | 1,142.34 → 1,136.75 ms | 671.72 → 634.21 ms |
+
+All complete responses match the baseline. Both MySQL runs are retained because the first total-time result was slower despite a slightly faster seed stage. These small-sample observations do not establish universal speed gains or resolve the earlier PostgreSQL regression across different index/reader conditions. First indexing and incremental sync were not remeasured because indexing is unchanged. Reports are `%TEMP%/SymbolLattice-v5412-<manifest-stem>-service-paired.json` and `-service-repeat.json`; the baseline build is `%TEMP%/SymbolLattice-v5412-baseline`.
+
+The fixed corpus pins remain Django (`https://github.com/django/django`, `bc833e8883db4a333a6485d91637b78c85e2b13b`), Nest (`https://github.com/nestjs/nest`, `35c3ded6dbf3f23f917ae88d0ed966932788cae6`) and Fastify (`https://github.com/fastify/fastify`, `70b14e92c0b55e8201f5530ba2e6bab4e928c784`). All 26 manifests / 33 tasks preserve complete raw result equality with v0.541.1: 57/57 required files, 143/143 specified facts, 71 TP, zero judged FP/FN and 52 unjudged task/file pairs. This is fixed-truth evidence preservation, not global precision or proof of runtime dispatch. Reports are `%TEMP%/SymbolLattice-v5412-retrieval-final` and `SymbolLattice-v5412-retrieval-preservation.json`; their CLI timings ran concurrently with tests and are not used for speed claims.
+
+Type checking, build, 63 focused tests and the full suite (3,334 passed / 4 skipped) passed. The persistent-reader test additionally verifies distinct edge/evidence/range objects, resistance to caller mutation, absence of missing-evidence properties and generation changes. The full-suite log is `%TEMP%/SymbolLattice-v5412-full-test.log`. Bilingual README versions and 42 local README/guide links were checked.
+
+Two source-scanner trials were not adopted. A concept lookup map produced essentially unchanged scan times on three 60-pair frozen-input replays; an ASCII token fast path improved only PostgreSQL and slowed the other two. Both preserved complete tokens, receipts, truncation and BM25 scores, but did not demonstrate consistent benefit. Their reports remain outside the repository as `SymbolLattice-v5412-<manifest-stem>-concept-map-replay.json` and `-ascii-scan-replay.json`.
+
 ## v0.541.1 Asynchronous native prefix reads
 
 Native shell-shebang candidate discovery reads the same bounded prefix with asynchronous callback-based open/read/close operations under one Promise. It no longer allocates a promise FileHandle for each candidate. Results settle only after close, including read/allocation failures; close errors retain the previous try/finally precedence. Custom filesystem and shebang readers are unchanged. Scope, ignore rules, maximum read bytes, exact shebang matching, concurrency limits, full-content source hashes and configuration checks are unchanged. This internal performance change warrants a patch release; no index format, parser/resolver or public query contract changes, sync or rebuild are required.

@@ -2794,6 +2794,14 @@ describe("SqliteGraphStore", () => {
     const first = reader.getActiveBoundedGraphBundle(projectPath, request);
     expect(first.snapshot.edges[0]?.evidence?.ruleId).toBe("test.calls");
     expect(reader.getActiveBoundedGraphBundle(projectPath, request)).toEqual(first);
+    const preserved = structuredClone(first);
+    const warmed = reader.getActiveBoundedGraphBundle(projectPath, request);
+    expect(warmed.snapshot.edges[0]).not.toBe(first.snapshot.edges[0]);
+    expect(warmed.snapshot.edges[0]?.evidence).not.toBe(first.snapshot.edges[0]?.evidence);
+    expect(warmed.snapshot.edges[0]?.range.start).not.toBe(first.snapshot.edges[0]?.range.start);
+    Object.assign(first.snapshot.edges[0]!.evidence!, { ruleId: "caller mutation" });
+    Object.assign(first.snapshot.edges[0]!.range.start, { line: 99 });
+    expect(reader.getActiveBoundedGraphBundle(projectPath, request)).toEqual(preserved);
 
     const secondSnapshot: GraphSnapshot = { ...firstSnapshot, edges: firstSnapshot.edges.map((edge) => ({
       ...edge, evidence: { ...edge.evidence, ruleId: "test.calls.updated" }
@@ -2816,6 +2824,8 @@ describe("SqliteGraphStore", () => {
       indexInputs: indexInputs("edge-cache-missing"), resolverVersion: "edge-cache-resolver" });
     expect(reader.getActiveBoundedGraphBundle(projectPath, request).snapshot.edges[0]?.evidence)
       .toBeUndefined();
+    expect(reader.getActiveBoundedGraphBundle(projectPath, request).snapshot.edges[0])
+      .not.toHaveProperty("evidence");
     expect(reader.getActiveBoundedGraphBundle(projectPath, request).snapshot.edges[0]?.evidence)
       .toBeUndefined();
     writer.replaceProjectFacts({ projectPath, snapshot: secondSnapshot,

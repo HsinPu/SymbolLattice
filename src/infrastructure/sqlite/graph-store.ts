@@ -974,7 +974,12 @@ function sourceRoleClassification(row: FileRow): SourceRoleClassification | null
 }
 
 function toGraphEdge(row: EdgeRow): GraphEdge {
-  const edge: GraphEdge = {
+  return toGraphEdgeWithEvidence(row, row.evidence_json);
+}
+
+function toGraphEdgeWithEvidence(row: EdgeRow, evidenceJson: string | null | undefined): GraphEdge {
+  // Hydrate a fresh output object without copying the persisted SQLite row.
+  const edge: Omit<GraphEdge, "evidence"> & { evidence?: NonNullable<GraphEdge["evidence"]> } = {
     id: row.id,
     sourceId: row.source_id,
     targetId: row.target_id,
@@ -986,17 +991,13 @@ function toGraphEdge(row: EdgeRow): GraphEdge {
     referenceName: row.reference_name
   };
 
-  if (row.evidence_json === undefined || row.evidence_json === null) {
-    return edge;
-  }
-
-  return {
-    ...edge,
-    evidence: parseJson<NonNullable<GraphEdge["evidence"]>>(
-      row.evidence_json,
+  if (evidenceJson !== undefined && evidenceJson !== null) {
+    edge.evidence = parseJson<NonNullable<GraphEdge["evidence"]>>(
+      evidenceJson,
       `edge evidence for ${row.id}`
-    )
-  };
+    );
+  }
+  return edge;
 }
 
 function extractorVersionFor(artifactFacts: readonly PersistedArtifactFacts[]): string {
@@ -2656,7 +2657,7 @@ function readBoundedEdgeEvidence(
       cache.jsonByEdgeId.set(row.id, json);
     }
   }
-  return rows.map((row) => toGraphEdge({ ...row, evidence_json: evidenceByEdgeId.get(row.id) ?? null }));
+  return rows.map((row) => toGraphEdgeWithEvidence(row, evidenceByEdgeId.get(row.id) ?? null));
 }
 
 function readActiveBoundedGraphBundle(
