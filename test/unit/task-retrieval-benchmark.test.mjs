@@ -26,6 +26,17 @@ describe("task retrieval benchmark judgments", () => {
     ] };
     const source = () => "def constraint_checks_disabled(self):\n";
     expect(verifyOmittedDeclarationLeads(result, source)).toEqual({ verifiedLeads: 1, verifiedOrigins: 1 });
+    const indexed = structuredClone(result);
+    indexed.focuses[2].omittedQueryDeclaration.scope = "selected-files-index";
+    indexed.queryPlan.omittedDeclarationSearch.selectedFileLookup = {
+      state: "available", names: ["constraint_checks_disabled"], filePaths: ["a.py", "b.py"] };
+    expect(verifyOmittedDeclarationLeads(indexed, source)).toEqual({ verifiedLeads: 1, verifiedOrigins: 1 });
+    for (const mutate of [r => { r.queryPlan.omittedDeclarationSearch.selectedFileLookup.state = "truncated"; },
+      r => { r.queryPlan.omittedDeclarationSearch.selectedFileLookup.names = ["wrong"]; },
+      r => { r.queryPlan.omittedDeclarationSearch.selectedFileLookup.filePaths.push("outside.py"); }]) {
+      const forged = structuredClone(indexed); mutate(forged);
+      expect(() => verifyOmittedDeclarationLeads(forged, source)).toThrow();
+    }
     for (const mutate of [
       r => { r.focuses[2].omittedQueryDeclaration.matchedOmittedTerms = ["checking", "invented"]; },
       r => { r.focuses[2].omittedQueryDeclaration.call.targetId = "lead"; },

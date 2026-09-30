@@ -6,7 +6,7 @@ SymbolLattice is a local code search tool for developers and AI agents. Query a 
 
 [繁體中文](README.md) · [Get started](docs/getting-started.en.md) · [Validation and limitations](benchmarks/README.md) · [Report an issue](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.537.1` · Node.js `>=22.13 <25` · MIT
+`v0.538.0` · Node.js `>=22.13 <25` · MIT
 
 ## Start with “Where is this implemented?”
 
@@ -85,7 +85,7 @@ For rejection queries with an exact source reference, lower-priority focuses tha
 
 For longer queries with one source covering every concept retained within the term budget, some secondary focuses matching only shared terms may also be omitted. JSON `queryPlan.coveredContextFiltering` includes the decision evidence, source locations and exact symbol references; MCP text names follow-up paths. This does not establish irrelevance or complete flow resolution.
 
-Concepts omitted from a long question can also corroborate a same-name declaration candidate through a cited unresolved call, supplying source from an already selected file. JSON `queryPlan.omittedDeclarationSearch` and the focus's `omittedQueryDeclaration` cite the concepts, call and candidate-graph truncation; no candidate does not establish that a declaration is absent. The receiver type and target remain unconfirmed. **0.537.0 breaking change (per-file result limit):** a supplement can produce up to three focuses in one file; the overall maximum remains nine. JSON consumers should honor the returned `limits` rather than hard-code two items per file. This change does not require rebuilding the index.
+Concepts omitted from a long question can also corroborate a same-name declaration candidate through a cited unresolved call, supplying source from an already selected file. JSON `queryPlan.omittedDeclarationSearch` and the focus's `omittedQueryDeclaration` cite the concepts, call and candidate-graph truncation; no candidate does not establish that a declaration is absent. A declaration missing from the primary graph can be looked up by exact name in existing result files; `selectedFileLookup` records scope and availability without expanding file or source budgets. The receiver type and target remain unconfirmed. **0.537.0 breaking change (per-file result limit):** a supplement can produce up to three focuses in one file; the overall maximum remains nine. JSON consumers should honor the returned `limits` rather than hard-code two items per file. This change does not require rebuilding the index.
 
 For Python, direct same-class `self.method()` calls can include `async def` methods when the target is unambiguous. Functions with a safely recovered bare-`yield` parser gap also retain written member-call locations; unknown receiver types remain unresolved rather than becoming guessed targets. General queries and exact-symbol follow-ups can cite same-class declaration leads from the returned bounded graph and indexed source for some unresolved `self.method()` calls. These are follow-up candidates, not proof of receiver type or runtime dispatch. When a general query's unresolved-call list is limited, matching call names get priority for inclusion while the selected calls remain in source order; use the returned exact symbol reference to follow up with a larger source-ordered list when needed.
 

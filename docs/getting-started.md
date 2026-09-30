@@ -112,6 +112,12 @@ SymbolLattice serve --mcp --project C:\path\to\project
 
 這是有界的輸出收斂規則，不保證省略的檔案無關，也不證明流程完整。「全部概念」僅指詞數預算內保留的群組；若 `queryPlan.input.identifierTermsTruncated` 為 true，較後面的詞可能未參與判定，應縮短查詢再核對。需要深入核對時，使用其中的精確符號參照或指定檔案查詢。查詢詞較少、沒有完整來源涵蓋或已指定檔案時，不套用此規則。本次不改索引格式或解析版本，無須因此重建索引。
 
+### 升級至 v0.538.0
+
+若長問句的補充宣告搜尋沒有從主圖取得候選，現在可在既有結果的檔案中精確補查。最多查 8 個名稱、8 個檔案、16 個宣告；只有未截斷且索引世代一致的結果可支持候選。多個同名宣告仍不選取，不推定接收者型別或呼叫目標，也不搜尋新的檔案。
+
+JSON 的 `queryPlan.omittedDeclarationSearch.selectedFileLookup` 記錄名稱、檔案、可用性與名稱預算截斷；補查候選的 `omittedQueryDeclaration.scope` 為 `selected-files-index`，同名數量僅適用於該補查範圍。焦點數、每檔上限與總來源字元預算不增加；這項查詢能力不需重建索引。
+
 ### 升級至 v0.537.0
 
 長問句中省略的概念可與來源中的未解析呼叫共同支持同名宣告候選，補上已選到檔案中的來源；不證明接收者型別或呼叫目標。JSON 的 `queryPlan.omittedDeclarationSearch` 與焦點的 `omittedQueryDeclaration` 記錄依據與截斷。

@@ -237,7 +237,8 @@ function renderFocuses(result: UnknownRecord): string[] {
       const call = record(omittedDeclaration.call);
       if (call !== null) output.push(`  Written call \`${text(call.referenceName) ?? "?"}\`${edgeDetails(call)}.`);
       output.push(`  Omitted query concepts: ${Array.isArray(omittedDeclaration.matchedOmittedTerms) ? omittedDeclaration.matchedOmittedTerms.filter(term => typeof term === "string").join(", ") : "unknown"}.`);
-      output.push(`  ${finiteNumber(omittedDeclaration.matchingDeclarationCount) ?? "Unknown number of"} matching declarations in the bounded graph inspection, not repository-wide uniqueness or dispatch.`);
+      const scope = omittedDeclaration.scope === "selected-files-index" ? "selected-file index lookup" : "bounded graph inspection";
+      output.push(`  ${finiteNumber(omittedDeclaration.matchingDeclarationCount) ?? "Unknown number of"} matching declarations in the ${scope}, not repository-wide uniqueness or dispatch.`);
     }
     if (imported !== null) {
       output.push("  Supplementary declaration candidate from imported construction context; receiver and call target remain unconfirmed.");
@@ -435,6 +436,9 @@ function renderLimitations(result: UnknownRecord): string[] {
     "Query terms exceeded the primary retrieval budget; later terms may only appear in bounded follow-up leads. Shorten the query to retain essential qualifiers.");
   const omittedSearch = record(record(result.queryPlan)?.omittedDeclarationSearch);
   if (omittedSearch !== null) {
+    const lookup = record(omittedSearch.selectedFileLookup);
+    if (lookup !== null && lookup.state !== "available") notes.add(
+      `Selected-file declaration lookup ${text(lookup.state) ?? "unavailable"}; no incomplete name match was used to infer a target.`);
     if (omittedSearch.state !== "searched") notes.add(`Omitted-query declaration evidence ${text(omittedSearch.state) ?? "unavailable"}; no call target was inferred.`);
     if (omittedSearch.termsTruncated === true || omittedSearch.callsTruncated === true || omittedSearch.candidatesTruncated === true) notes.add(
       "Omitted-query declaration search reached its term, call, graph, candidate or focus bounds; absence does not establish that a declaration is missing. Query the selected file or a cited declaration directly for more evidence.");

@@ -141,7 +141,7 @@ import {
   type ExploreQueryPlan
 } from "./explore-query.js";
 import { EXPLORE_NAME_FOLLOWUP_LIMITS, supplementExploreNameFollowups } from "./explore-name-followups.js";
-import { supplementOmittedCallDeclarations } from "./explore-omitted-declarations.js";
+import { EXPLORE_SELECTED_DECLARATION_LIMITS, omittedDeclarationLookupNames, supplementOmittedCallDeclarations } from "./explore-omitted-declarations.js";
 import { EXPLORE_IMPORTED_DECLARATION_LIMITS, supplementImportedCallDeclarations } from "./explore-imported-declarations.js";
 import {
   EXPLORE_UNRESOLVED_CALL_CANDIDATE_LIMIT,
@@ -5923,8 +5923,23 @@ export class SymbolLatticeService {
     const withImportedDeclarations = calls.length === 0 ? supplemented : supplementImportedCallDeclarations(bundle.snapshot, supplemented,
       projection, calls.length > EXPLORE_IMPORTED_DECLARATION_LIMITS.maximumCalls ||
         [...candidates.values()].some(evidence => evidence.truncated));
-    const result = supplementOmittedCallDeclarations(bundle.snapshot, withImportedDeclarations, followupCalls,
+    let result = supplementOmittedCallDeclarations(bundle.snapshot, withImportedDeclarations, followupCalls,
       this.isBoundedTraversalTruncated(bundle));
+    const eligibleNames = omittedDeclarationLookupNames(result, followupCalls);
+    const names = eligibleNames.slice(0, EXPLORE_SELECTED_DECLARATION_LIMITS.maximumNames);
+    const selectedPaths = [...new Set(result.selection.map(item => item.symbol.filePath))];
+    if (names.length > 0 && selectedPaths.length <= EXPLORE_SELECTED_DECLARATION_LIMITS.maximumFiles) {
+      const readDeclarations = this.graphStore.getActiveNamedDeclarations;
+      const declarations = readDeclarations === undefined || generationId === null ? undefined :
+        measureQueryTiming(this.queryTimingSink, "selected-declaration-read", () =>
+          readDeclarations.call(this.graphStore, projectPath, generationId, names, selectedPaths,
+            EXPLORE_SELECTED_DECLARATION_LIMITS.maximumDeclarations));
+      // The graph pass emitted no candidate. Only the exact-name projection can
+      // add one now; do not rebuild the same 4,096-symbol name map a second time.
+      result = supplementOmittedCallDeclarations({ ...bundle.snapshot, symbols: [] }, withImportedDeclarations, followupCalls,
+        result.omittedDeclarationSearch?.candidatesTruncated === true, { names, namesTruncated: eligibleNames.length > names.length,
+          ...(declarations === undefined ? {} : { projection: declarations }) });
+    }
     this.exploreCallEvidence.set(result, candidates);
     return result;
   }

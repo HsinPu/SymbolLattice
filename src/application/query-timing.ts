@@ -11,6 +11,7 @@ export const QUERY_TIMING_STAGES = [
   "seed-retrieval",
   "planning",
   "imported-declaration-read",
+  "selected-declaration-read",
   "path-spine",
   "context",
   "source",

@@ -114,6 +114,13 @@ export interface ActiveImportedCallDeclarationsProjection {
   readonly truncated: boolean;
 }
 
+/** Exact written-name candidates in requested files, never resolved call targets. */
+export interface ActiveNamedDeclarationsProjection {
+  readonly generationMatched: boolean;
+  readonly declarations: readonly GraphSnapshot["symbols"][number][];
+  readonly truncated: boolean;
+}
+
 /**
  * Bounded query input for the SQLite-backed explore read projection. The
  * limits are deliberately carried by the request so the application can keep
@@ -276,6 +283,11 @@ export interface GraphStore {
     callIds: readonly string[],
     limit: number
   ): ActiveImportedCallDeclarationsProjection;
+  /** At most eight names and eight selected files; capped at sixteen declarations. */
+  getActiveNamedDeclarations?(
+    projectPath: string, expectedGenerationId: string, names: readonly string[],
+    filePaths: readonly string[], limit: number
+  ): ActiveNamedDeclarationsProjection;
   /** Optional SQLite-driven bounded graph projection for explore queries; status omits lastIndexWork. */
   getActiveBoundedGraphBundle?(
     projectPath: string,

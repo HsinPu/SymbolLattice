@@ -26,6 +26,28 @@ function fixture(tail = "checking constraints") {
 }
 
 describe("declaration leads for omitted query concepts", () => {
+  it("supplements a missing graph declaration only from a complete matching-generation selected-file projection", () => {
+    const f = fixture();
+    const graph = { ...f.graph, symbols: [f.owner, f.context] };
+    const names = [f.declaration.name];
+    const projection = { generationMatched: true, declarations: [f.declaration], truncated: false };
+    const next = supplementOmittedCallDeclarations(graph, f.plan, f.calls, true, { names, projection });
+    expect(next.selection.at(-1)?.omittedQueryDeclaration?.scope).toBe("selected-files-index");
+    expect(next.selection.at(-1)?.symbol).toEqual(f.declaration);
+    expect(supplementOmittedCallDeclarations({ ...graph, symbols: [] }, f.plan, f.calls, true,
+      { names, projection }).selection).toEqual(next.selection);
+    expect(next.omittedDeclarationSearch?.selectedFileLookup).toMatchObject({ state: "available", names,
+      filePaths: expect.arrayContaining([f.owner.filePath, f.context.filePath]) });
+    expect(next.omittedDeclarationSearch?.selectedFileLookup?.filePaths).toHaveLength(2);
+    for (const changed of [{ ...projection, generationMatched: false }, { ...projection, truncated: true },
+      { ...projection, declarations: [f.declaration, { ...f.declaration, id: "ambiguous" }] },
+      { ...projection, declarations: [{ ...f.declaration, filePath: "src/outside.py" }] }]) {
+      expect(supplementOmittedCallDeclarations(graph, f.plan, f.calls, true,
+        { names, projection: changed }).selection).toEqual(f.plan.selection);
+    }
+    expect(supplementOmittedCallDeclarations(graph, f.plan, f.calls, true, { names }).selection).toEqual(f.plan.selection);
+  });
+
   it("preserves upstream graph truncation even below the local declaration limit and with no candidate", () => {
     const f = fixture();
     const incomplete = { ...f.graph, symbols: [f.owner, f.context] };

@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/django/django",
+  "commit": "bc833e8883db4a333a6485d91637b78c85e2b13b",
+  "truthMethod": "Manually checked against pinned mysql/base.py and base/base.py. The original question omitted MySQL although the required caller and SELECT VERSION facts were MySQL-specific; independent source review shows that several backends perform version checks, so that question did not uniquely require this caller. Initial baseline and candidate reports each found one of the two declared files and none of eight specified facts; these are retained as scope-mismatch observations, not definitive necessary-file recall. The corrected question explicitly names the backend as a user-facing platform constraint, without adding code symbols or paths. The original required files and facts remain unchanged. Because the question was corrected after observing output, this task is now development rather than untouched held-out validation. No product rule was adjusted using its output. mysql_server_data issues SELECT VERSION through a cursor obtained from temporary_connection. The base context manager records whether it must close, yields a cursor, and closes only a connection it opened. These source facts do not prove runtime dispatch for third-party wrappers. Other backends, version thresholds and third-party overrides are outside this scope; other returned files are unjudged.",
+  "tasks": [
+    {
+      "id": "database-version-cursor-temporary-connection",
+      "split": "development",
+      "query": "How does MySQL database version checking acquire and manage its cursor using a temporary connection?",
+      "requiredFiles": [
+        "django/db/backends/mysql/base.py",
+        "django/db/backends/base/base.py"
+      ],
+      "supportingFiles": [],
+      "irrelevantFiles": [],
+      "evidence": [
+        {
+          "file": "django/db/backends/mysql/base.py",
+          "line": 404,
+          "text": "with self.temporary_connection() as cursor:"
+        },
+        {
+          "file": "django/db/backends/mysql/base.py",
+          "line": 410,
+          "text": "SELECT VERSION(),"
+        },
+        {
+          "file": "django/db/backends/mysql/base.py",
+          "line": 418,
+          "text": "row = cursor.fetchone()"
+        },
+        {
+          "file": "django/db/backends/base/base.py",
+          "line": 693,
+          "text": "must_close = self.connection is None"
+        },
+        {
+          "file": "django/db/backends/base/base.py",
+          "line": 695,
+          "text": "with self.cursor() as cursor:"
+        },
+        {
+          "file": "django/db/backends/base/base.py",
+          "line": 696,
+          "text": "yield cursor"
+        },
+        {
+          "file": "django/db/backends/base/base.py",
+          "line": 698,
+          "text": "if must_close:"
+        },
+        {
+          "file": "django/db/backends/base/base.py",
+          "line": 699,
+          "text": "self.close()"
+        }
+      ]
+    }
+  ],
+  "originalQuestion": "How does a database version check acquire and manage its cursor using a temporary connection?"
+}

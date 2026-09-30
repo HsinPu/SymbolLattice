@@ -49,6 +49,7 @@ import type {
   ActiveSourceDocumentsProjection,
   ActiveUnresolvedCallsProjection,
   ActiveImportedCallDeclarationsProjection,
+  ActiveNamedDeclarationsProjection,
   ActiveSourceSearchBundle,
   BoundedGraphQueryRequest,
   BoundedGraphQueryDiagnostics,
@@ -3202,6 +3203,29 @@ export class SqliteGraphStore implements GraphStore {
           return { sourceId, items: rows.slice(0, limitPerSymbol).map(toGraphEdge), truncated: rows.length > limitPerSymbol };
         })
       };
+    });
+  }
+
+  public getActiveNamedDeclarations(
+    projectPath: string, expectedGenerationId: string, names: readonly string[],
+    filePaths: readonly string[], limit: number
+  ): ActiveNamedDeclarationsProjection {
+    if (names.length > 8 || filePaths.length > 8 || !Number.isInteger(limit) || limit < 0 || limit > 16) {
+      throw new RangeError("Named declarations allow eight names, eight files and 0–16 declarations.");
+    }
+    const normalizedProjectPath = resolve(projectPath);
+    if (!this.isInitialized(normalizedProjectPath)) return { generationMatched: false, declarations: [], truncated: false };
+    return this.withReadDatabase(normalizedProjectPath, database => {
+      if (getActiveGenerationId(database) !== expectedGenerationId) return { generationMatched: false, declarations: [], truncated: false };
+      const uniqueNames = [...new Set(names)], paths = [...new Set(filePaths)];
+      if (uniqueNames.length === 0 || paths.length === 0) return { generationMatched: true, declarations: [], truncated: false };
+      const rows = database.prepare(`SELECT * FROM symbols
+        WHERE name IN (${uniqueNames.map(() => "?").join(",")})
+          AND file_path IN (${paths.map(() => "?").join(",")})
+          AND kind IN ('function', 'method', 'entrypoint')
+        ORDER BY file_path, start_line, start_column, id LIMIT ?`)
+        .all(...uniqueNames, ...paths, limit + 1) as unknown as SymbolRow[];
+      return { generationMatched: true, declarations: rows.slice(0, limit).map(toSymbolNode), truncated: rows.length > limit };
     });
   }
 

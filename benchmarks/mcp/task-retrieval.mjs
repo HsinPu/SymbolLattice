@@ -53,7 +53,15 @@ export function verifyOmittedDeclarationLeads(result, readSource) {
     const receipt = focus.omittedQueryDeclaration;
     if (!receipt) continue;
     assert.equal(receipt.state, "unresolved-name-candidate");
-    assert.equal(receipt.scope, "inspected-bounded-graph");
+    assert.ok(["inspected-bounded-graph", "selected-files-index"].includes(receipt.scope));
+    if (receipt.scope === "selected-files-index") {
+      const lookup = search?.selectedFileLookup;
+      assert.equal(lookup?.state, "available");
+      assert.ok(lookup.names.length <= 8 && lookup.filePaths.length <= 8);
+      assert.ok(lookup.names.includes(focus.symbol.name));
+      assert.ok(lookup.filePaths.includes(focus.symbol.filePath));
+      assert.ok(lookup.filePaths.every(path => focuses.some(item => !item.omittedQueryDeclaration && item.symbol.filePath === path)));
+    }
     assert.equal(receipt.matchingDeclarationCount, 1);
     assert.equal(search?.policy, "omitted-query-call-declarations-v1");
     assert.equal(search.state, "searched");
@@ -133,8 +141,11 @@ export function verifyNameFollowups(result) {
   }
   assert.ok(verifiedFollowups <= 1);
   if (verifiedFollowups > 0) {
-    assert.ok(focuses.length <= 8);
-    assert.ok(new Set(focuses.map(f => f.symbol.filePath)).size <= 5);
+    const primary = focuses.filter(focus => !focus.importedCallDeclaration && !focus.omittedQueryDeclaration);
+    assert.ok(primary.length <= 8);
+    assert.ok(focuses.length <= 9);
+    assert.ok(new Set(primary.map(f => f.symbol.filePath)).size <= 5);
+    assert.ok(new Set(focuses.map(f => f.symbol.filePath)).size <= 6);
     assert.equal(result.queryPlan.nameFollowupSearch.emittedCount, verifiedFollowups);
   }
   return { verifiedFollowups, verifiedOrigins };
