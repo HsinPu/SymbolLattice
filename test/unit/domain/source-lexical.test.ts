@@ -9,6 +9,38 @@ const callable = (start: number, end: number, kind: SymbolNode["kind"] = "functi
 });
 
 describe("callable source lexical evidence", () => {
+  it("matches an irregular send form at the written member without matching sent-prefix words", () => {
+    const groups = identifierTermGroups(["response", "sent"]);
+    const source = "function run() {\n  return res.send(body);\n}";
+    const result = matchCallableSource(source, [callable(1, 3)], groups);
+    expect(result.documents[0]!.frequencies).toEqual([1, 1]);
+    expect(result.candidates[0]!.matches).toContainEqual({
+      term: "sent", token: "send", filePath: "src/work.ts",
+      range: { start: { line: 2, column: 14 }, end: { line: 2, column: 18 } }
+    });
+    expect(matchCallableSource("function run() {\n  return res.sentinel;\n}", [callable(1, 3)], groups).candidates).toEqual([]);
+  });
+
+  it("cites information abbreviations at their written ranges without borrowing receipts across files", () => {
+    const groups = identifierTermGroups(["connection", "info", "information"]);
+    const first = matchCallableSource("function run() {\n  return connection.info;\n}", [callable(1, 3)], groups);
+    expect(first.documents[0]!.frequencies).toEqual([1, 1]);
+    expect(first.candidates[0]!.matches).toContainEqual({
+      term: "information", token: "info", filePath: "src/work.ts",
+      range: { start: { line: 2, column: 21 }, end: { line: 2, column: 25 } }
+    });
+    const secondNode = { ...callable(1, 4), id: "second", filePath: "src/other.ts" };
+    const second = matchCallableSource("function run() {\n  // information connection\n  return connection.info + connection.info;\n}", [secondNode], groups);
+    expect(second.documents[0]!.frequencies).toEqual([3, 3]);
+    expect(second.candidates[0]!.matches).toContainEqual({
+      term: "information", token: "info", filePath: "src/other.ts",
+      range: { start: { line: 3, column: 21 }, end: { line: 3, column: 25 } }
+    });
+    expect(second.candidates[0]!.nonCommentMatches).toEqual(second.candidates[0]!.matches);
+    const unrelated = matchCallableSource("function run() { return connection.informational;\n}", [callable(1, 2)], groups);
+    expect(unrelated.candidates).toEqual([]);
+  });
+
   it("preserves ASCII and normalized fallback occurrences with their original spelling and frequency", () => {
     const source = "response response Response responseSerializer response_serializer ｒｅｓｐｏｎｓｅ\n}";
     const result = matchCallableSource(source, [callable(1, 2)], [["response"], ["serializer"]]);

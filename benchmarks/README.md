@@ -60,6 +60,53 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.546.1 Information and send query evidence
+
+This patch corrects existing lexical retrieval for information/info and sent/send, and bounds pure word-splitting and variant-expansion caches. It changes no tool, parameter, structured output, parser policy or index format. Extractor v435, resolver v210 and the v0.546.0 runtime requirements remain. [The source audit](mcp/information-abbreviation-audit.md) records the independent CPython/TypeScript observations, retained Fastify failure, isolated alternatives and cache ownership limits.
+
+The final comparison uses the same four pinned repositories and read-only indexes recorded under v0.546.0 below. All 34 manifests / 45 tasks retain 70/70 required files and 198/198 specified source facts. Of the 42 previous tasks, 39 preserve deeply equal complete responses and identical compiled MCP text. The three changed previous tasks are PostgreSQL server-version reporting, Fastify `error-response-status`, and Fastify `oversized-headers-http-431`; the latter two retain their previous primary focus, selected files and specified facts while lexical receipts change. The displayed-citation/source audit verifies 977 term facts across 876 location groups.
+
+Partial task/file judgments are 87 TP (including accepted supporting files), 2 FP, 0 FN and 76 unjudged. The judged-result precision is 87/89 (97.75%); required-file recall is 70/70 (100%). A file returned for two different tasks is two task/file judgments. The 76 unjudged entries among 165 returned judgments are outside the fixed positive/negative truth, so these figures do not establish complete result precision or all-language relation quality. PostgreSQL's creation file is replaced by an unjudged debug file, and two specified negatives remain. That swap does not prove an overall precision improvement.
+
+The two new [Django information questions](mcp/django-information-tasks.json) were fixed before product output and remain verification samples on a known repository. The new [Fastify logging question](mcp/fastify-error-log-information-tasks.json) initially missed its required file and all four facts in both builds. It became a development sample when used to investigate sent/send; its question, required file and facts remain unchanged. The final result finds the required file and all four facts. PostgreSQL's primary focus becomes the actual version reader and SQLite's becomes the version getter. The diagnostic dictionary question retains its debug file and all four facts, but its primary focus moves to the less direct error handler. That ranking limitation and unrelated-file noise remain unresolved. Lexical alternatives do not prove receiver types, runtime dispatch or information flow.
+
+### Three-build timing comparison
+
+The final Windows / Node.js 24.19.0 comparison measures v0.546.0, the final v0.546.1 with only its two cache-wrapper calls disabled, and the actual cached v0.546.1. Each query has one warmup per build and nine rounds in balanced build order; each build occupies the first, middle and last position three times. The table gives median milliseconds for the complete service call plus compiled MCP text rendering, using persistent read-only stores and fixed indexes. No tests, builds, other validation or indexing ran during timing.
+
+Every timed response and text matches its accepted source-verified QA result. Cached and uncached v0.546.1 outputs, directional SQL batches and row counts match in every round. The nine queries with unchanged v0.546.0 outputs also retain identical SQL read counts. The four changed-output queries compare separately verified answers; their old/new differences cannot be attributed solely to caching. In particular, the old Fastify logging answer lacks the required file and facts.
+
+| Fixed query | v0.546.0 | v0.546.1 uncached | v0.546.1 cached | Cache reduction | Old/new complete output equal |
+| --- | ---: | ---: | ---: | ---: | --- |
+| PostgreSQL server version | 1069.609 | 1130.782 | 1143.771 | -1.15% | No |
+| MySQL temporary version connection | 1200.900 | 1191.222 | 1213.035 | -1.83% | Yes |
+| Fastify cookie parsing | 372.506 | 378.798 | 376.605 | 0.58% | Yes |
+| NestJS shutdown | 837.317 | 833.461 | 823.906 | 1.15% | Yes |
+| Fastify plugin lifecycle | 352.207 | 349.052 | 335.250 | 3.95% | Yes |
+| Fastify serializer selection | 405.645 | 393.777 | 376.877 | 4.29% | Yes |
+| Express request/response links | 190.527 | 184.737 | 180.546 | 2.27% | Yes |
+| Fastify request prototypes | 417.623 | 415.813 | 401.833 | 3.36% | Yes |
+| Fastify response prototypes | 410.679 | 407.034 | 386.807 | 4.97% | Yes |
+| Django password hash upgrade | 1154.033 | 1156.686 | 1175.497 | -1.63% | Yes |
+| SQLite version information | 1217.850 | 1202.041 | 1221.251 | -1.60% | No |
+| Django traceback information | 1208.836 | 1175.148 | 1194.839 | -1.68% | No |
+| Fastify client-error logging | 403.236 | 415.222 | 399.921 | 3.69% | No |
+
+Positive cache reduction means faster than the same-policy uncached control. Eight samples are faster by 0.58–4.97%; the five Django samples are slower by 1.15–1.83%. These single-run sample medians do not establish a universal cache benefit or a statistically significant regression. Relative to the released baseline, PostgreSQL is 6.93% slower and reads 13,162 bounded-edge rows instead of 9,287 after candidate selection changes; its three required facts are retained in both builds. The extra context has a measurable cost. Initial service-only probes are retained in the audit, but do not override this broader final result. First indexing, incremental synchronization, process startup and total Agent task time/query count were not measured in this batch.
+
+### Checks and replay
+
+`npm run check`, `npm run build`, 185 focused tests, the full suite (3,420 passed, four existing skips), and `npm pack --dry-run` passed. The pack precheck also passed language-depth verification. The frozen final product matches the post-prepack build byte-for-byte except external fixed database routing; its identifier helper SHA-256 is `a2e339140812051d788460cd4c0d7023b744078b3aabe30a17e3112ccac60791`. The uncached control changes only the two wrapper calls and has helper SHA-256 `c6d879b99a78c979d227a70d70a32d020306e649af708fe93e16276996976f3e`.
+
+External `%TEMP%/SymbolLattice-v5461-final-retrieval/` retains all accepted results, text audits and `summary.json`; `SymbolLattice-v5461-final-paired.json` retains every timed sample, build order and SQL count. The sibling final-build and uncached-control identity reports preserve fingerprints. The frozen roots are `SymbolLattice-v5460-runtime-candidate`, `SymbolLattice-v5461-final-candidate` and `SymbolLattice-v5461-final-uncached`. They and the retained initial failed run remain outside product sources. Replay using the archived runners after restoring the pinned corpora and those builds:
+
+```powershell
+node "$env:TEMP/SymbolLattice-v5461-final-retrieval.mjs"
+node "$env:TEMP/SymbolLattice-v5461-final-paired.mjs"
+```
+
+The audit also provides per-manifest `task-retrieval.mjs` commands for newly built products. Run correctness and other checks to completion before timing. The archived three-build driver uses native SQLite `all()` instrumentation only to record bounded-edge row counts/shapes and asserts accepted output equality in every round.
+
 ## v0.546.0 Read bounded graph rows without repeated named objects
 
 Bounded edge retrieval now uses native SQLite array rows when the runtime exposes `StatementSync.setReturnArrays`. Only candidates not already retained or seen in this read receive named edge objects. A feature-detected object-row path remains available. The twelve scalar columns, both directional SQL predicates and endpoint joins, 900-parameter batches, stable ordering, hop/node/relationship limits, retained-only hop accounting, generation fencing and late evidence hydration are unchanged. Every matching SQL row is still read; this does not cache graph results or suppress database reads. Extractor v435, resolver v210 and index compatibility are unchanged.

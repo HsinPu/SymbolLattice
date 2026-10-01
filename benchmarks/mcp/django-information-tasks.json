@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/django/django",
+  "commit": "bc833e8883db4a333a6485d91637b78c85e2b13b",
+  "truthMethod": "Fixed from independently read pinned source and CPython AST after the information/info abbreviation and bounded spelling-cache prototype were frozen, and before running either question against baseline or candidate. These are verification questions on a known repository, not an unseen project. They must not be used to tune the frozen rule without reclassifying their split. The SQLite question concerns the literal version getter, not runtime resolution of self.Database or external driver behavior. The diagnostic question concerns assembling the report's frames/type/value dictionary, not the implementation of frame walking, template rendering or production error middleware. Member calls and properties remain written source evidence, not proof of Python receiver or descriptor dispatch. Other returned files are unjudged; a zero known FP count is not complete precision. Source findings and prototype conditions are recorded in information-abbreviation-audit.md.",
+  "tasks": [
+    {
+      "id": "sqlite-database-version-information",
+      "split": "verification",
+      "query": "What value does the SQLite backend return when reporting database version information?",
+      "requiredFiles": ["django/db/backends/sqlite3/base.py"],
+      "supportingFiles": [],
+      "irrelevantFiles": [],
+      "evidence": [
+        { "file": "django/db/backends/sqlite3/base.py", "line": 201, "text": "def get_database_version(self):" },
+        { "file": "django/db/backends/sqlite3/base.py", "line": 202, "text": "return self.Database.sqlite_version_info" }
+      ]
+    },
+    {
+      "id": "technical-error-traceback-information",
+      "split": "verification",
+      "query": "How does the technical error page gather traceback and exception information?",
+      "requiredFiles": ["django/views/debug.py"],
+      "supportingFiles": [],
+      "irrelevantFiles": [],
+      "evidence": [
+        { "file": "django/views/debug.py", "line": 350, "text": "frames = self.get_traceback_frames()" },
+        { "file": "django/views/debug.py", "line": 415, "text": "c[\"exception_type\"] = self.exc_type.__name__" },
+        { "file": "django/views/debug.py", "line": 417, "text": "c[\"exception_value\"] = str(self.exc_value)" },
+        { "file": "django/views/debug.py", "line": 422, "text": "return c" }
+      ]
+    }
+  ]
+}

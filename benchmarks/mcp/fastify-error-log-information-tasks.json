@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/fastify/fastify",
+  "commit": "70b14e92c0b55e8201f5530ba2e6bab4e928c784",
+  "truthMethod": "Initially fixed from independently read pinned lib/error-handler.js and the TypeScript compiler's JavaScript AST after the information/info abbreviation and bounded spelling-cache prototype were frozen, before inspecting baseline or candidate output for this question. The first verification run missed the required file and all four facts in both v0.546.0 and the initial candidate. The unchanged question was then used to investigate sent/send inflection, so it is now a development case on a known repository, not held-out validation. Questions, required files and source facts were not adjusted to fit product output. Scope is the default handler's less-than-500 logging branch, written response/error fields and subsequent send; request-log disabling, logger implementation and the internals of reply.send are outside scope. info here is a logging level, so the lexical abbreviation must not be claimed to prove returned metadata, information flow or an exact runtime target. Other returned files are unjudged. The source anchors and retained failure reports are documented in information-abbreviation-audit.md.",
+  "tasks": [
+    {
+      "id": "client-error-response-information-log",
+      "split": "development",
+      "query": "How are client errors logged with response information before they are sent?",
+      "requiredFiles": ["lib/error-handler.js"],
+      "supportingFiles": [],
+      "irrelevantFiles": [],
+      "evidence": [
+        { "file": "lib/error-handler.js", "line": 88, "text": "if (reply.statusCode < 500)" },
+        { "file": "lib/error-handler.js", "line": 90, "text": "reply.log.info(" },
+        { "file": "lib/error-handler.js", "line": 91, "text": "{ res: reply, err: error }," },
+        { "file": "lib/error-handler.js", "line": 103, "text": "reply.send(error)" }
+      ]
+    }
+  ]
+}
