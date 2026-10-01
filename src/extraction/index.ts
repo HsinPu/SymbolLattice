@@ -1,5 +1,6 @@
 import ts from "typescript";
 import { extractCommonJsFacts } from "./javascript-commonjs.js";
+import { javascriptMemberCallReceipts } from "./javascript-member-calls.js";
 import { anonymousMemberAssignment } from "./assigned-callables.js";
 
 import { extractCFileFacts } from "./c.js";
@@ -9708,6 +9709,9 @@ export function extractFileFacts(
     }
   }) : undefined;
   const commonJsExportIds = new Set(commonJsFacts?.exports.map((entry) => entry.symbolId) ?? []);
+  if (input.language === "javascript") {
+    edges.push(...javascriptMemberCallReceipts(sourceFile, input.filePath, symbolsByDeclaration, edges, pendingReferences));
+  }
   return {
     symbols: commonJsExportIds.size === 0 ? symbols :
       symbols.map((symbol) => commonJsExportIds.has(symbol.id) ? { ...symbol, isExported: true } : symbol),

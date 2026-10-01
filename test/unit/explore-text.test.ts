@@ -4,6 +4,15 @@ import { sourceDeliveryIdentityFromText } from "../../src/application/source-del
 import { McpSourceSession } from "../../src/mcp/source-session.js";
 
 describe("MCP explore text rendering", () => {
+  it("labels JavaScript written member names without claiming Function.prototype behavior", () => {
+    const output = renderExploreText({ match: { symbol: { name: "run" } }, unresolvedCalls: {
+      state: "available", truncated: false, items: [{ referenceName: "ns.registerPlugin.call", kind: "calls",
+        targetId: null, resolution: "unresolved", filePath: "calls.js", range: { start: { line: 2, column: 3 } },
+        evidence: { ruleId: "syntax.javascript.member-call.unknown-receiver" } }]
+    } });
+    expect(output).toContain("ns.registerPlugin.call");
+    expect(output).toContain("do not establish receiver types, Function.prototype behavior, or execution");
+  });
   it("labels non-call member occurrences and candidates without calling them reads or invocations", () => {
     const output = renderExploreText({ match: { symbol: { name: "version" } }, unresolvedReferences: {
       state: "available", truncated: true, items: [{ id: "reference", referenceName: "self.pg_version",

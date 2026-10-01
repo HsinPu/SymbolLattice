@@ -3199,6 +3199,24 @@ export class SqliteGraphStore implements GraphStore {
       // This projection needs only generation identity, not table counts or
       // the previous indexing work log. Keep the guard inside this snapshot.
       if (getActiveGenerationId(database) !== expectedGenerationId) return { generationMatched: false, calls: [] };
+      const owners = ids.length === 0 ? [] : database.prepare(`SELECT id, file_path FROM symbols
+        WHERE id IN (${ids.map(() => "?").join(",")})`).all(...ids) as unknown as { id: string; file_path: string }[];
+      const ownerFiles = new Map(owners.filter(owner => /\.(?:js|jsx|cjs|mjs)$/iu.test(owner.file_path))
+        .map(owner => [owner.id, owner.file_path]));
+      const files = [...new Set(ownerFiles.values())];
+      const syntaxRows = files.length === 0 ? [] : database.prepare(`SELECT file_path,
+        json_extract(facts_json, '$.edges') AS edges_json FROM artifact_facts
+        WHERE generation_id = ? AND file_path IN (${files.map(() => "?").join(",")})`)
+        .all(expectedGenerationId, ...files) as unknown as { file_path: string; edges_json: string }[];
+      const syntaxByOwner = new Map<string, GraphEdge[]>();
+      for (const row of syntaxRows) for (const edge of JSON.parse(row.edges_json) as GraphEdge[]) {
+        if (ownerFiles.get(edge.sourceId) !== row.file_path || edge.filePath !== row.file_path ||
+          edge.kind !== "calls" || edge.targetId !== null || edge.resolution !== "unresolved" || edge.confidence !== 0 ||
+          edge.evidence?.ruleId !== "syntax.javascript.member-call.unknown-receiver") continue;
+        const items = syntaxByOwner.get(edge.sourceId) ?? [];
+        items.push(edge);
+        syntaxByOwner.set(edge.sourceId, items);
+      }
       const statement = database.prepare(`SELECT e.*, ee.evidence_json FROM edges AS e
         LEFT JOIN edge_evidence AS ee ON ee.generation_id = ? AND ee.edge_id = e.id
         WHERE e.source_id = ? AND e.kind = 'calls' AND e.resolution = 'unresolved' AND e.target_id IS NULL
@@ -3207,7 +3225,12 @@ export class SqliteGraphStore implements GraphStore {
         generationMatched: true,
         calls: ids.map((sourceId) => {
           const rows = statement.all(expectedGenerationId, sourceId, limitPerSymbol + 1) as unknown as EdgeRow[];
-          return { sourceId, items: rows.slice(0, limitPerSymbol).map(toGraphEdge), truncated: rows.length > limitPerSymbol };
+          const items = [...rows.map(toGraphEdge), ...(syntaxByOwner.get(sourceId) ?? [])];
+          const binaryCompare = (a: string, b: string): number => a === b ? 0 : Buffer.compare(Buffer.from(a), Buffer.from(b));
+          items.sort((a, b) => binaryCompare(a.filePath, b.filePath) ||
+            a.range.start.line - b.range.start.line || a.range.start.column - b.range.start.column ||
+            binaryCompare(a.id, b.id));
+          return { sourceId, items: items.slice(0, limitPerSymbol), truncated: items.length > limitPerSymbol };
         })
       };
     });

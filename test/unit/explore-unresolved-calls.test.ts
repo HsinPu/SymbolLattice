@@ -6,6 +6,18 @@ import {
 import type { GraphEdge, SymbolNode } from "../../src/domain/types.js";
 
 describe("query-selected unresolved call evidence", () => {
+  it("uses a written property before call/apply/bind as a lexical hint without changing targets", () => {
+    const calls: GraphEdge[] = ["ns.noise0", "ns.noise1", "ns.rejectDependency.call"].map((referenceName, index) => ({
+      id: `js:${index}`, sourceId: "owner", targetId: null, kind: "calls", filePath: "calls.js",
+      referenceName, resolution: "unresolved", confidence: 0,
+      range: { start: { line: index + 1, column: 1 }, end: { line: index + 1, column: 30 } },
+      evidence: { ruleId: "syntax.javascript.member-call.unknown-receiver", stage: "syntax", candidateSymbolIds: [] }
+    }));
+    const actual = selectQueryUnresolvedCalls({ state: "available", items: calls, truncated: false }, ["reject"], 2);
+    expect(actual.items).toEqual([calls[0], calls[2]]);
+    expect(actual.items[1]?.targetId).toBeNull();
+    expect(calls[2]?.referenceName).toBe("ns.rejectDependency.call");
+  });
   it("keeps a name-followup origin even when later names have stronger query overlap", () => {
     const calls: GraphEdge[] = ["resolver.resolve_error_handler",
       ...Array<string>(8).fill("resolver.default_error_view")].map((referenceName, index) => ({

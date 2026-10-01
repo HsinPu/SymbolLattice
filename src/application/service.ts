@@ -5922,11 +5922,16 @@ export class SymbolLatticeService {
     if (plan.selection.length === 0 || plan.fileHints.length > 0 || plan.identifierTerms.length < 2) return plan;
     const candidates = this.exploreUnresolvedCalls(projectPath, bundle,
       plan.selection.map(item => item.symbol.id), EXPLORE_UNRESOLVED_CALL_CANDIDATE_LIMIT);
-    const followupCalls = new Map([...candidates].map(([sourceId, evidence]) => [sourceId, {
-      ...evidence,
-      items: evidence.items.slice(0, EXPLORE_NAME_FOLLOWUP_LIMITS.maximumCallsPerFocus),
-      truncated: evidence.truncated || evidence.items.length > EXPLORE_NAME_FOLLOWUP_LIMITS.maximumCallsPerFocus
-    }] as const));
+    const followupCalls = new Map([...candidates].map(([sourceId, evidence]) => {
+      // These new JavaScript receipts supply written source evidence only.
+      // Feeding them into older declaration/name supplementation can reintroduce
+      // files already replaced by property-use selection, without a target link.
+      const calls = evidence.items.filter(edge => edge.evidence?.ruleId !== "syntax.javascript.member-call.unknown-receiver");
+      return [sourceId, { ...evidence,
+        items: calls.slice(0, EXPLORE_NAME_FOLLOWUP_LIMITS.maximumCallsPerFocus),
+        truncated: evidence.truncated || calls.length > EXPLORE_NAME_FOLLOWUP_LIMITS.maximumCallsPerFocus
+      }] as const;
+    }));
     const supplemented = plan.selection.length >= EXPLORE_QUERY_LIMITS.maximumSymbols ? plan :
       supplementExploreNameFollowups(bundle.snapshot, plan, followupCalls, bundle.sourceLexical);
     const optionalCalls = [...candidates.values()].filter(evidence => evidence.state === "available")
@@ -5998,7 +6003,10 @@ export class SymbolLatticeService {
     return new Map<string, NonNullable<ExploreResult["unresolvedCalls"]>>(sourceIds.map((sourceId) => {
       // A legacy full snapshot can expose its recorded calls. A bounded graph
       // intentionally omits them, so absence there cannot establish completeness.
-      if ("diagnostics" in bundle) return [sourceId, { state: "unavailable", items: [], truncated: false }];
+      if ("diagnostics" in bundle || bundle.snapshot.symbols.some(symbol => symbol.id === sourceId &&
+          /\.(?:js|jsx|cjs|mjs)$/iu.test(symbol.filePath))) {
+        return [sourceId, { state: "unavailable", items: [], truncated: false }];
+      }
       const calls = bundle.snapshot.edges.filter((edge) => edge.sourceId === sourceId &&
         edge.kind === "calls" && edge.resolution === "unresolved" && edge.targetId === null)
         .sort((a, b) => a.range.start.line - b.range.start.line || a.range.start.column - b.range.start.column || compareText(a.id, b.id));

@@ -1026,6 +1026,34 @@ describe("SymbolLatticeService", () => {
     expect(updated.callees).toEqual([]);
   });
 
+  it("projects JavaScript member syntax from raw facts alongside legacy calls, with generation and sync fencing", async () => {
+    const projectPath = await createInlineProject({ "calls.js":
+      "function register_plugin() {\n  ns.registerPlugin.call(this);\n  legacy();\n  ns.late();\n}\n" });
+    const store = new SqliteGraphStore();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    const rule = "syntax.javascript.member-call.unknown-receiver";
+    expect(store.getSnapshot(projectPath).edges.some(edge => edge.evidence?.ruleId === rule)).toBe(false);
+    expect(store.getArtifactFacts(projectPath).flatMap(facts => facts.edges).filter(edge => edge.evidence?.ruleId === rule))
+      .toHaveLength(2);
+    const exact = await service.explore(projectPath, "calls.js#register_plugin");
+    expect(exact.unresolvedCalls?.items.map(edge => edge.referenceName)).toEqual(["ns.registerPlugin.call", "legacy", "ns.late"]);
+    const owner = exact.match.symbol.id, generation = store.getStatus(projectPath).generationId!;
+    expect(store.getActiveUnresolvedCalls(projectPath, generation, [owner, owner], 1).calls)
+      .toEqual([{ sourceId: owner, items: [exact.unresolvedCalls!.items[0]], truncated: true }]);
+    expect(store.getActiveUnresolvedCalls(projectPath, generation, [owner], 0).calls)
+      .toEqual([{ sourceId: owner, items: [], truncated: true }]);
+    expect(store.getActiveUnresolvedCalls(projectPath, "old", [owner], 8).generationMatched).toBe(false);
+    await writeFile(join(projectPath, "calls.js"), "function register_plugin() { ns.changed(); }\n", "utf8");
+    await service.sync({ projectPath });
+    expect((await service.explore(projectPath, "calls.js#register_plugin")).unresolvedCalls?.items.map(edge => edge.referenceName))
+      .toEqual(["ns.changed"]);
+    Object.defineProperty(store, "getActiveUnresolvedCalls", { value: undefined });
+    expect((await service.explore(projectPath, "calls.js#register_plugin")).unresolvedCalls)
+      .toEqual({ state: "unavailable", items: [], truncated: false });
+    store.close();
+  });
+
   it("delivers non-call references in exact/query output and refreshes them after source sync", async () => {
     const projectPath = await createInlineProject({ "versions.py": [
       "class Backend:", "    def get_database_version(self):", "        return self.pg_version",

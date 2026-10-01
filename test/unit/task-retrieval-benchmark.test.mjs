@@ -8,6 +8,25 @@ import { verifyDirectoryContexts } from "../../benchmarks/mcp/task-retrieval.mjs
 import { verifyUnresolvedReferences } from "../../benchmarks/mcp/task-retrieval.mjs";
 
 describe("task retrieval benchmark judgments", () => {
+  it("checks and scores exact-symbol JavaScript written callees without guessing a target", () => {
+    const text = "function run(){ ns.registerPlugin.call(this); }";
+    const owner = { id: "owner", filePath: "a.js", qualifiedName: "a.js#run",
+      range: { start: { line: 1, column: 1 }, end: { line: 1, column: text.length + 1 } } };
+    const edge = { sourceId: "owner", targetId: null, kind: "calls", resolution: "unresolved", confidence: 0,
+      filePath: "a.js", referenceName: "ns.registerPlugin.call",
+      range: { start: { line: 1, column: 17 }, end: { line: 1, column: 39 } },
+      evidence: { ruleId: "syntax.javascript.member-call.unknown-receiver", candidateSymbolIds: [] } };
+    const result = { match: { symbol: owner }, unresolvedCalls: { state: "available", items: [edge], truncated: false } };
+    expect(verifyUnresolvedCalls(result, () => text)).toEqual({ verifiedCalls: 1, verifiedPythonCallees: 0, verifiedJavaScriptCallees: 1 });
+    const task = { requiredFiles: ["a.js"], supportingFiles: [], irrelevantFiles: [], evidence: [],
+      unresolvedCallEvidence: [{ focus: "a.js#run", file: "a.js", line: 1, referenceName: edge.referenceName }] };
+    expect(scoreTask(task, result).unresolvedCallEvidenceRecall).toBe(1);
+    for (const mutate of [e => e.referenceName = "ns.other.call", e => e.confidence = 1,
+      e => e.range.start.column = 18, e => e.evidence.candidateSymbolIds = ["guessed"]]) {
+      const bad = structuredClone(result); mutate(bad.unresolvedCalls.items[0]);
+      expect(() => verifyUnresolvedCalls(bad, () => text)).toThrow();
+    }
+  });
   it("checks non-call source receipts and rejects invented ranges, targets and declaration headers", () => {
     const source = "class Box:\n    def run(self):\n        return self.value\n    def value(self):\n        return 1";
     const range = { start: { line: 2, column: 5 }, end: { line: 3, column: 26 } };
@@ -245,7 +264,7 @@ describe("task retrieval benchmark judgments", () => {
       range: { start: { line: 1, column: 1 }, end: { line: 2, column: 18 } } },
       unresolvedCalls: { state: "available", items: [edge], truncated: false } }] };
     const read = () => "def run(client):\n    client.send()";
-    expect(verifyUnresolvedCalls(result, read)).toEqual({ verifiedCalls: 1, verifiedPythonCallees: 1 });
+    expect(verifyUnresolvedCalls(result, read)).toEqual({ verifiedCalls: 1, verifiedPythonCallees: 1, verifiedJavaScriptCallees: 0 });
     for (const mutate of [e => { e.targetId = 'guessed'; }, e => { e.referenceName = 'client.other'; },
       e => { e.sourceId = 'other'; }, e => { e.range.start.column = 1; }, e => { e.range.end.line = 3; }]) {
       const changed = structuredClone(result); mutate(changed.focuses[0].unresolvedCalls.items[0]);

@@ -6,7 +6,7 @@ SymbolLattice is a local code search tool for developers and AI agents. Query a 
 
 [繁體中文](README.md) · [Get started](docs/getting-started.en.md) · [Validation and limitations](benchmarks/README.md) · [Report an issue](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.542.1` · Node.js `>=22.13 <25` · MIT
+`v0.543.0` · Node.js `>=22.13 <25` · MIT
 
 ## Start with “Where is this implemented?”
 
@@ -91,9 +91,11 @@ Concepts omitted from a long question can corroborate same-name declaration cand
 
 Python resolves a single written base class through absolute named imports at the indexed project root, citing the import, package markers and base location. Import lists and aliases are supported; namespace packages, inferred source roots, multiple inheritance and dynamic dispatch remain outside this scope. Calls to inherited methods can remain unresolved. When concepts omitted from a long question match a direct `self.method()` call, the existing bounded graph can supply one cross-file base-method candidate, citing caller containment, import, direct inheritance and declaration containment. This supports resolved absolute named imports and one source hop; it does not infer runtime dispatch. These candidates use JSON `omittedQueryDeclaration.scope: inspected-inherited-source` with `inheritedSource`; honor returned `limits` for supplementary files and focuses. After upgrading, run `SymbolLattice sync .` to refresh this evidence.
 
+Static JavaScript member calls rooted in an identifier or `this` can also expose their full written callee and source location in `unresolvedCalls`, including `.call`, `.apply` and `.bind`. These are syntax receipts, without receiver types, resolved targets or execution claims. Optional chains, computed members and anonymous callbacks without an indexed symbol are excluded. Run `SymbolLattice sync .` after upgrading to 0.543.0 to refresh the index.
+
 For Python, direct same-class `self.method()` calls can include `async def` methods when the target is unambiguous. Functions with a safely recovered bare-`yield` parser gap also retain written member-call locations; unknown receiver types remain unresolved rather than becoming guessed targets. General queries and exact-symbol follow-ups can cite same-class declaration leads from the returned bounded graph and indexed source for some unresolved `self.method()` calls. These are follow-up candidates, not proof of receiver type or runtime dispatch. When a general query's unresolved-call list is limited, matching call names get priority for inclusion while the selected calls remain in source order; use the returned exact symbol reference to follow up with a larger source-ordered list when needed.
 
-Static non-call Python member occurrences inside functions (such as `self.pg_version`) also retain source locations, separately from calls in `unresolvedReferences`. Each focus shows at most eight; general queries prioritize matching names within at most 64 candidates, with at most two source-cited same-class declaration candidates. Occurrences include assignment and deletion targets and do not infer reads/writes, receiver types or descriptor behavior. Lambda bodies, function headers, class-body execution and other unsupported parser scopes remain excluded. When upgrading from a version before 0.542.0, run `SymbolLattice sync .` to refresh existing indexes; the 0.542.1 read-performance correction requires no extra sync.
+Static non-call Python member occurrences inside functions (such as `self.pg_version`) also retain source locations, separately from calls in `unresolvedReferences`. Each focus shows at most eight; general queries prioritize matching names within at most 64 candidates, with at most two source-cited same-class declaration candidates. Occurrences include assignment and deletion targets and do not infer reads/writes, receiver types or descriptor behavior. Lambda bodies, function headers, class-body execution and other unsupported parser scopes remain excluded.
 
 See [language capabilities and limitations](src/domain/language-depth.ts) and [real-project validation](benchmarks/README.md). Retrieval quality and speed depend on the project and query.
 

@@ -17,6 +17,8 @@ These tools generate or validate large-project evidence outside the published np
 | `javascript/` | `assigned-callables.mjs` | automatic anonymous-assignment/ownership scorer contract; manual pinned-corpus execution |
 | `javascript/` | `commonjs-call-evidence.mjs`, `fastify-commonjs-truth.json` | automatic source-receipt verifier contract; manual pinned-corpus execution |
 | `javascript/` | `commonjs-property-evidence.mjs`, `fastify-commonjs-property-truth.json` | manual pinned-corpus Espree source-receipt and graph-only followup anchor audit |
+| `javascript/` | `member-call-receipts.mjs` | manual Espree emitted callee/nearest-callable/range audit and frozen-baseline raw-fact preservation |
+| `mcp/` | `fastify-member-call-tasks.json` | manual pinned-source development exact-symbol call evidence truth; scorer and negative receipt contracts are automatic |
 | `python/` | `correctness-oracle.mjs`, `PythonOracle.py` | manual CPython stdlib AST oracle |
 | `python/` | `module-bindings.mjs`, `ModuleBindingOracle.py` | manual CPython AST declaration/source-range audit; optional baseline fact comparison |
 | `python/` | `member-calls.mjs`, `MemberCallOracle.py` | manual CPython AST unresolved member-call name, ownership and source-range audit; required baseline fact preservation check |
@@ -55,6 +57,32 @@ These tools generate or validate large-project evidence outside the published np
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## v0.543.0 Written JavaScript member-call evidence
+
+Parser-clean JavaScript function bodies now retain static identifier/`this`-rooted dotted call spellings as raw syntax facts when no existing call receipt ends at that callee site. Full names include `.call`, `.apply` and `.bind`, without assuming Function.prototype behavior, receiver types, resolved targets or execution. Function headers, module/class execution, computed or call-result receivers, optional chains, private members and callbacks without indexed declarations remain excluded. Query projection reads JS/JSX/CJS/MJS artifacts for selected owners once per file, merges existing unknown graph calls in source order, and preserves limits, truncation and generation guards. These facts are not duplicated in the graph or edge evidence tables. General queries show at most eight calls per focus from at most 64 candidates; exact-symbol exploration uses the existing 25-call bound. The property before a written `.call/.apply/.bind` is a lexical selection hint only. New JavaScript receipts are excluded from existing declaration/name supplementation: an initial corpus run showed that feeding them into that older path could reintroduce a file already replaced by property-use selection. The existing unhinted content-type manifest preserves that regression case.
+
+This is a minor addition, not a speed release. Product version is 0.543.0, extractor v435 and resolver v210; run `SymbolLattice sync .` after upgrading. Existing installation and public command contracts are unchanged.
+
+Independent Espree checks on Fastify `https://github.com/fastify/fastify` at `70b14e92c0b55e8201f5530ba2e6bab4e928c784` verified all **1,313 emitted receipts across 248 indexed JavaScript files**, including canonical names, UTF-16 ranges, nearest callable ownership, null targets and zero confidence. No emitted receipt failed this audit (precision denominator: the 1,313 emitted syntax receipts). Every other raw extraction field matched frozen v0.542.1 (`b51291ddfd81e77138aa794dd7db57d05868c579`) for all 248 files. This does not measure all-language recall/FN, runtime dispatch or full relation precision. The earlier 130-site `.call/.apply/.bind` census included broader syntactic function scopes; it is not an admitted-scope recall denominator. A separately defined development exact-symbol task verifies `lib/pluginOverride.js#override` and its written `pluginUtils.registerPlugin.call` at line 29, columns 30–61. It is not a blind task and does not resolve that target. The prior unhinted plugin query is unchanged.
+
+All prior 28 fixed manifests/35 tasks for the pinned Django, NestJS and Fastify repositories retained identical selected files, connections and specified source facts: 73 judged TP, three existing judged FP, zero FN, 52 unjudged files, and 149/149 source facts. Python receipt checks retained 215 references and nine declaration leads. Unjudged output is not treated as FP; the existing PostgreSQL noise remains unresolved. The new exact task adds one required file and one specified unknown-call fact, both found. Task runs overlapping non-timing checks are used only for correctness; paired service timings are reported separately below.
+
+Fresh external candidate indexes retain the prior graph counts: Django 3,366 files/58,495 symbols/156,481 edges at `bc833e8883db4a333a6485d91637b78c85e2b13b`, NestJS 1,738/17,431/44,833 at `35c3ded6dbf3f23f917ae88d0ed966932788cae6`, and Fastify 338/8,672/19,168 at the pin above. Candidate-only first-index observations were 149.00 s, 46.82 s and 9.77 s; some build/test work overlapped, so these are not paired speed estimates. Database sizes before/after were 925,335,552/927,797,248 bytes, 305,524,736/305,528,832 bytes, and 94,552,064/95,326,208 bytes respectively; separate fresh database packing can differ. A comment-only Fastify sync on an independent clone and copied indexes re-extracted only `lib/pluginOverride.js` and reused 337 files for both versions, with unchanged graph counts. The single baseline-first pair took 7.02/4.88 s after source-root normalization; it is a lifecycle observation, not a repeated speed claim. The original pinned sources remain clean. Peak memory and Agent completion time were not measured.
+
+Reproduce the syntax audit with `node benchmarks/javascript/member-call-receipts.mjs --project <clean-pinned-fastify> --database <candidate-index.sqlite> --baseline-root <frozen-v0.542.1> --output <external-report.json>`. Run retrieval with `node benchmarks/mcp/task-retrieval.mjs --project <pinned-corpus> --manifest benchmarks/mcp/<manifest>.json --product-root <frozen-built-product> --repetitions 1 --output <external-report.json>`; the exact case is `fastify-member-call-tasks.json`. External evidence is retained under `%TEMP%/SymbolLattice-v5430-*`: `js-oracle.json`, `indexes.json`, `retrieval/summary.json`, `exact-member.json`, `incremental.json`, and `paired-queries.json`; the index, incremental and paired runner scripts are retained there too. These fixed-product snapshots route database paths to separate external indexes; source corpora and generated evidence are not product files. Typecheck, build, language-depth verification and the complete suite pass (3,351 tests passed, four existing skips).
+
+Windows / Node.js 24.19.0 service comparison used frozen v0.542.1 and final v0.543.0, one warmup and eight alternating-order pairs, persistent read-only readers and separate fixed indexes with identical primary graphs. No tests, builds or indexing ran during this comparison. All five selected symbol ID sequences and connection receipts matched. Whole responses intentionally differ in the new syntax evidence; the independent audits and fixed retrieval checks above validate that addition.
+
+| Fixed query | Whole service v0.542.1 → v0.543.0 (upper median ms) | Unknown-call projection (ms) |
+| --- | ---: | ---: |
+| Django PostgreSQL version | 1297.68 → 1255.74 | 2.43 → 2.65 |
+| Django MySQL temporary connection | 1428.83 → 1448.51 | 3.16 → 3.49 |
+| Fastify cookie | 461.58 → 468.01 | 1.49 → 5.09 |
+| NestJS shutdown | 1057.07 → 1037.82 | 1.50 → 1.69 |
+| Fastify plugin dependencies | 443.04 → 427.84 | 1.26 → 3.76 |
+
+Results are mixed and do not establish a general speedup. The JavaScript receipt projection adds approximately 2.5–3.6 ms in the two sampled Fastify queries; its file facts are parsed once per selected file rather than once per owner. These small samples do not establish a latency guarantee or memory bound for arbitrary large files.
 
 ## v0.542.1 Parse selected artifact references once
 

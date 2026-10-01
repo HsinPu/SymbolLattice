@@ -7,7 +7,12 @@ export const EXPLORE_SAME_CLASS_DECLARATION_LEAD_LIMIT = 2;
 const DECLARATION_LINE_CHARACTER_LIMIT = 256;
 
 function terminalNameTerms(edge: GraphEdge): ReadonlySet<string> {
-  const terminal = edge.referenceName?.split(".").at(-1) ?? "";
+  const parts = edge.referenceName?.split(".") ?? [];
+  const last = parts.at(-1) ?? "";
+  // A written receiver property before .call/.apply/.bind is a lexical hint,
+  // not proof of Function.prototype behavior or an executable target.
+  const terminal = edge.evidence?.ruleId === "syntax.javascript.member-call.unknown-receiver" &&
+    parts.length >= 3 && ["call", "apply", "bind"].includes(last) ? `${parts.at(-2)} ${last}` : last;
   return new Set(terminal.replace(/([\p{Ll}\p{N}])(\p{Lu})/gu, "$1 $2")
     .toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []);
 }

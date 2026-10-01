@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/fastify/fastify",
+  "commit": "70b14e92c0b55e8201f5530ba2e6bab4e928c784",
+  "truthMethod": "Development case defined by manual reading and independent Espree call-site audit before evaluating the candidate. The written member callee is verified; receiver type, Function.prototype dispatch and target are unknown. Existing unhinted plugin tasks remain unchanged.",
+  "tasks": [{
+    "id": "override-written-register-plugin-call",
+    "split": "development",
+    "query": "lib/pluginOverride.js#override",
+    "requiredFiles": ["lib/pluginOverride.js"],
+    "supportingFiles": [],
+    "irrelevantFiles": [],
+    "evidence": [{ "file": "lib/pluginOverride.js", "line": 29, "text": "pluginUtils.registerPlugin.call(old, fn)" }],
+    "unresolvedCallEvidence": [{ "focus": "lib/pluginOverride.js#override", "file": "lib/pluginOverride.js", "line": 29,
+      "referenceName": "pluginUtils.registerPlugin.call", "text": "pluginUtils.registerPlugin.call(old, fn)" }]
+  }]
+}

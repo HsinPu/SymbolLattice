@@ -575,11 +575,13 @@ function renderUnresolvedCalls(result: UnknownRecord): string[] {
     if (omitted !== null && omitted > 0) otherLines.push(`- ${omitted} additional same-class declaration leads for \`${owner}\` were omitted; inspect its unresolved calls and cited source.`);
   }
   const lines = [...leadLines, ...otherLines];
+  const javascriptSyntaxCalls = contexts.some(context => records(record(context.unresolvedCalls)?.items)
+    .some(edge => record(edge.evidence)?.ruleId === "syntax.javascript.member-call.unknown-receiver"));
   const caveat = leadLines.length > 0
     ? "Declaration leads are bounded candidates, not resolved call targets. These source locations do not prove runtime dispatch. Missing records do not prove that other calls are absent."
     : "These source locations do not prove a target or runtime dispatch. Missing records do not prove that other calls are absent.";
   return lines.length === 0 ? [] : ["**Unresolved Call Sites**", "", ...lines,
-    caveat];
+    caveat, ...(javascriptSyntaxCalls ? ["JavaScript member names are written syntax only, including call/apply/bind spellings; they do not establish receiver types, Function.prototype behavior, or execution."] : [])];
 }
 
 function renderUnresolvedReferences(result: UnknownRecord): string[] {

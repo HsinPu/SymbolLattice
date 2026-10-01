@@ -5,6 +5,7 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 import { performance } from "node:perf_hooks";
+import { parse as parseJavaScript } from "espree";
 import { identifierTermGroups, identifierTermVariants, identifierWords } from "../../dist/domain/identifier-search.js";
 
 /** File judgments are deliberately incomplete; unknown output is never a false positive. */
@@ -25,8 +26,10 @@ export function scoreTask(task, result) {
   const evidence = task.evidence.map((item) => ({ ...item, found: sources.some((source) =>
     source.filePath === item.file && (source.lines ?? []).some((line) =>
       line.line === item.line && typeof line.text === "string" && line.text.includes(item.text))) }));
+  const callContexts = result.focuses?.length ? result.focuses : [{ reference: result.match?.symbol?.qualifiedName,
+    symbol: result.match?.symbol, unresolvedCalls: result.unresolvedCalls }];
   const unresolvedCallEvidence = (task.unresolvedCallEvidence ?? []).map((item) => ({ ...item,
-    found: (result.focuses ?? []).some((focus) => focus.reference === item.focus &&
+    found: callContexts.some((focus) => focus.reference === item.focus &&
       focus.unresolvedCalls?.state === "available" && focus.unresolvedCalls.items.some((edge) =>
         edge.sourceId === focus.symbol.id && edge.filePath === item.file &&
         edge.range.start.line === item.line && edge.referenceName === item.referenceName &&
@@ -348,7 +351,7 @@ export function verifyNumericContainerFiltering(result, readSource) {
 }
 
 export function verifyUnresolvedCalls(result, readSource) {
-  let verifiedCalls = 0, verifiedPythonCallees = 0;
+  let verifiedCalls = 0, verifiedPythonCallees = 0, verifiedJavaScriptCallees = 0;
   const contexts = result.focuses?.length ? result.focuses : [{ symbol: result.match?.symbol, unresolvedCalls: result.unresolvedCalls }];
   const compare = (a, b) => a.line - b.line || a.column - b.column;
   for (const context of contexts) {
@@ -379,10 +382,25 @@ export function verifyUnresolvedCalls(result, readSource) {
         assert.equal(fragment.replace(/\\\n/g, '').replace(/#[^\n]*/g, '').replace(/\s/g, ''), edge.referenceName);
         verifiedPythonCallees++;
       }
+      if (edge.evidence?.ruleId === 'syntax.javascript.member-call.unknown-receiver') {
+        assert.equal(edge.confidence, 0);
+        assert.deepEqual(edge.evidence.candidateSymbolIds, []);
+        const expression = parseJavaScript(`(${fragment}\n)()`, { ecmaVersion: 'latest' }).body[0].expression;
+        const name = node => {
+          if (node.type === 'Identifier') return node.name;
+          if (node.type === 'ThisExpression') return 'this';
+          if (node.type !== 'MemberExpression' || node.computed || node.optional || node.property.type !== 'Identifier') return null;
+          const receiver = name(node.object);
+          return receiver === null ? null : `${receiver}.${node.property.name}`;
+        };
+        assert.equal(expression.type, 'CallExpression');
+        assert.equal(name(expression.callee), edge.referenceName);
+        verifiedJavaScriptCallees++;
+      }
       verifiedCalls++;
     }
   }
-  return { verifiedCalls, verifiedPythonCallees };
+  return { verifiedCalls, verifiedPythonCallees, verifiedJavaScriptCallees };
 }
 
 /** Validate non-call syntax locations and candidate declarations, without access-mode/dispatch claims. */
