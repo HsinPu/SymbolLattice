@@ -60,6 +60,16 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.547.1 Reduce bounded symbol row read cost
+
+The three bounded symbol reads use native SQLite arrays and an eleven-column JavaScript mapping, retaining the object fallback, complete SQL/arguments/order/bounds, source receipts and generation checks. The [symbol row audit](mcp/symbol-row-read-audit.md) records the rejected freshness-scheduling prototype, exact final build identity and reproducible conditions. This compatible performance patch changes no index, parser policy, public query contract or runtime requirement.
+
+All 36 fixed manifests / 51 tasks preserve deeply equal complete responses and identical compiled MCP text, with 79/79 required file-task instances, 222/222 specified facts and 1,114 displayed term facts in 982 citation groups. Partial judgments retain 99 TP / 0 FP / 0 FN / 87 unjudged; overall precision remains unmeasured. Four main read-only indexes retain hashes.
+
+Eighteen whole-call comparisons use three warmups per build and 12 ABBA rounds: all 432 timed results/texts equal accepted QA, and each captured bounded symbol/source-operation/edge read retains identical SQL, bound arguments and row counts. Whole-call medians are 0.67–7.50% lower; seed-retrieval medians are 3.14–10.02% lower in these fixed cases. Every response/text byte count is unchanged. This does not establish universal speedup, significance, peak memory or an SLO. Indexing, sync, startup and total Agent task time/query count were not compared.
+
+Typecheck, build, 53 SQLite tests on both Node.js 24.19.0 and 22.16.0, and the complete Node.js 24 suite pass (3,436 passed, four existing skips). External final products, quality reports, traces, timings and rejected prototypes remain under `%TEMP%/SymbolLattice-v5471-*`.
+
 ## v0.547.0 Cite joint source coverage and reduce repeated context
 
 The optional `queryPlan.coveredFileContextFiltering` cites multiple declarations, omitted symbols and unmatched bounded concepts without inventing a connected flow. A literal directory qualifier, at least six jointly covered observed groups and existing relationship/flow protections restrict compaction. Separate non-comment receipts prevent preferred comment hits from hiding stronger source evidence. Existing single-anchor output, parameters, limits and index/extractor/resolver versions remain. This additive capability is a minor release. [The audit](mcp/joint-source-coverage-audit.md) records independent source truth, the rejected weighting trial and conditions.

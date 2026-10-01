@@ -430,6 +430,14 @@ interface SymbolRow {
   readonly declaration_ordinal: number;
 }
 
+// Ordered exactly like symbolProjectionSelect, including source-rank reads.
+type SymbolValues = readonly [
+  SymbolRow["id"], SymbolRow["name"], SymbolRow["qualified_name"],
+  SymbolRow["kind"], SymbolRow["file_path"], SymbolRow["start_line"],
+  SymbolRow["start_column"], SymbolRow["end_line"], SymbolRow["end_column"],
+  SymbolRow["is_exported"], SymbolRow["declaration_ordinal"]
+];
+
 interface EdgeRow {
   readonly id: string;
   readonly source_id: string;
@@ -2421,9 +2429,9 @@ function readBoundedSymbolRows(
      ORDER BY (${coverageOrder}) DESC, ${exactOrder}, file_path, start_line, start_column, name, id
      LIMIT ?`
   );
-  const readRows = (): readonly SymbolRow[] => statement.all(
+  const readRows = (): readonly SymbolRow[] => readSymbolRows(statement,
     ...trigramParameters, ...parameters, ...coverageParameters, ...exactOrderParameters, limit
-  ) as unknown as SymbolRow[];
+  );
 
   // For medium indexes, keep the ranking sort (and any fallback materialization)
   // in memory. Restore the connection default immediately afterward.
@@ -2495,12 +2503,12 @@ function readBoundedSourceLexical(
       if (batchStart !== symbolBatchStart) {
         const batchPaths = paths.slice(batchStart, batchStart + SOURCE_SYMBOL_READ_BATCH_SIZE);
         const placeholders = batchPaths.map(() => "?").join(", ");
-        const batchRows = database.prepare(`WITH ranked AS (
+        const batchRows = readSymbolRows(database.prepare(`WITH ranked AS (
           SELECT *, row_number() OVER (PARTITION BY file_path ORDER BY ${symbolOrder}) AS source_rank
           FROM symbols WHERE file_path IN (${placeholders}) AND (${symbolKindFilter})
         ) ${symbolProjectionSelect("ranked")}
-          WHERE source_rank <= ? ORDER BY file_path, source_rank`)
-          .all(...batchPaths, limits.maximumSymbolsPerFile + 1) as unknown as SymbolRow[];
+          WHERE source_rank <= ? ORDER BY file_path, source_rank`),
+          ...batchPaths, limits.maximumSymbolsPerFile + 1);
         symbolRowsByPath = new Map();
         for (const row of batchRows) {
           const rowsForPath = symbolRowsByPath.get(row.file_path) ?? [];
@@ -2561,9 +2569,36 @@ function readSymbolRowsByIds(
         WHERE id IN (${batch.map(() => "?").join(", ")})`);
       statements?.set(batch.length, statement);
     }
-    rows.push(...statement.all(...batch) as unknown as SymbolRow[]);
+    rows.push(...readSymbolRows(statement, ...batch));
   }
   return rows.sort(compareSymbolRows);
+}
+
+function readSymbolRows(
+  statement: StatementSync,
+  ...parameters: readonly (string | number)[]
+): readonly SymbolRow[] {
+  // Keep every column and row from the same SQLite statement/snapshot. Native
+  // arrays avoid constructing named objects in the binding before the compact
+  // JS row mapping; runtimes without the API retain the existing object path.
+  if (typeof statement.setReturnArrays !== "function") {
+    return statement.all(...parameters) as unknown as readonly SymbolRow[];
+  }
+  statement.setReturnArrays(true);
+  const rows = statement.all(...parameters) as unknown as readonly SymbolValues[];
+  return rows.map((values) => ({
+    id: values[0],
+    name: values[1],
+    qualified_name: values[2],
+    kind: values[3],
+    file_path: values[4],
+    start_line: values[5],
+    start_column: values[6],
+    end_line: values[7],
+    end_column: values[8],
+    is_exported: values[9],
+    declaration_ordinal: values[10]
+  }));
 }
 
 function compareSymbolRows(left: SymbolRow, right: SymbolRow): number {

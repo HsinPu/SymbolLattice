@@ -2740,6 +2740,53 @@ describe("SqliteGraphStore", () => {
     store.close();
   });
 
+  it("preserves declaration coordinates and source receipts with native and fallback symbol rows", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore({ readOnly: false, persistentReadProjectPath: projectPath });
+    const template = boundedGraphSnapshot();
+    const symbols: SymbolNode[] = Array.from({ length: 17 }, (_, index) => {
+      const startLine = index % 3 + 1;
+      const startColumn = index % 4 + 1;
+      return { ...boundedSymbol(`symbol-${index}`, `run${index}`, `src/f${String(index).padStart(2, "0")}.ts`),
+        qualifiedName: `處理${index}.run${index}`,
+        kind: index % 2 === 0 ? "function" : "method",
+        range: { start: { line: startLine, column: startColumn },
+          end: { line: startLine + 2, column: startColumn + 1 } },
+        isExported: index % 2 === 0,
+        declarationOrdinal: index % 3 };
+    });
+    const graphSnapshot: GraphSnapshot = { ...template, symbols, edges: [], pendingReferences: [],
+      files: symbols.map((node) => ({ ...template.files[0]!, path: node.filePath })) };
+    store.replaceProjectFacts({ projectPath, snapshot: graphSnapshot,
+      indexedAt: "2026-10-02T00:00:00.000Z", artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("symbol-row-values"), resolverVersion: "bounded-resolver-v1",
+      sourceDocuments: symbols.map((node) => ({ filePath: node.filePath, language: "typescript",
+        sourceText: `${"\n".repeat(node.range.start.line - 1)}${" ".repeat(node.range.start.column - 1)}function ${node.name}() {\n  refund(payment);\n}` })),
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION });
+    const query = "payments refunds";
+    const request = { ...boundedRequest(query), ...exploreQuerySeedTerms(query) };
+    const descriptor = Object.getOwnPropertyDescriptor(StatementSync.prototype, "setReturnArrays");
+    try {
+      const native = store.getActiveBoundedGraphBundle(projectPath, request);
+      expect(native.snapshot.symbols).toEqual(symbols);
+      expect(native.sourceLexical).toMatchObject({ scannedFiles: 17, scannedSymbols: 17, truncated: false });
+      expect(native.sourceLexical?.candidates).toHaveLength(17);
+      for (const candidate of native.sourceLexical!.candidates) {
+        const declaration = symbols.find((node) => node.id === candidate.symbolId)!;
+        expect(candidate.matches.map((match) => [match.term, match.range.start.line]))
+          .toEqual([["payments", declaration.range.start.line + 1], ["refunds", declaration.range.start.line + 1]]);
+      }
+      Object.defineProperty(StatementSync.prototype, "setReturnArrays", { configurable: true, value: undefined });
+      expect(store.getActiveBoundedGraphBundle(projectPath, request)).toEqual(native);
+      const exact = store.getActiveBoundedGraphBundle(projectPath, boundedRequest(symbols[0]!.qualifiedName));
+      expect(exact.snapshot.symbols).toEqual([symbols[0]]);
+    } finally {
+      if (descriptor === undefined) Reflect.deleteProperty(StatementSync.prototype, "setReturnArrays");
+      else Object.defineProperty(StatementSync.prototype, "setReturnArrays", descriptor);
+      store.close();
+    }
+  });
+
   it("prioritizes requested source roles before the FTS file cap and reports omitted matches", async () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();
