@@ -4,6 +4,58 @@ import { sourceDeliveryIdentityFromText } from "../../src/application/source-del
 import { McpSourceSession } from "../../src/mcp/source-session.js";
 
 describe("MCP explore text rendering", () => {
+  it("shares a complete token citation while retaining every term, source order and structured receipt", () => {
+    const site = { token: "server_version", filePath: "db.py",
+      range: { start: { line: 7, column: 5 }, end: { line: 7, column: 19 } } };
+    const result = { focuses: [{ symbol: { name: "inspect" }, sourceMatches: [
+      { ...site, term: "version" }, { ...site, term: "server" }, { ...site, term: "version" }
+    ] }] };
+    const before = structuredClone(result), output = renderExploreText(result);
+    expect(output).toContain("`version`, `server` → `server_version` at `db.py:7:5-19`");
+    expect(output.match(/at `db\.py:7:5-19`/gu)).toHaveLength(1);
+    expect(result).toEqual(before);
+  });
+
+  it("never merges different occurrences, spellings, comment provenance or incomplete source coordinates", () => {
+    const site = { term: "server", token: "server_version", filePath: "db.py",
+      range: { start: { line: 7, column: 5 }, end: { line: 7, column: 19 } } };
+    const variants = [
+      { ...site, filePath: "other.py" },
+      { ...site, range: { start: { line: 8, column: 5 }, end: { line: 8, column: 19 } } },
+      { ...site, range: { start: { line: 7, column: 25 }, end: { line: 7, column: 39 } } },
+      { ...site, token: "server_versions" },
+      { ...site, lineContext: "comment-prefixed" },
+      { ...site, lineContext: "unknown-context" },
+      { ...site, range: { start: { line: 7, column: 5 } } },
+      { ...site, range: { start: { line: 7, column: 0 }, end: { line: 7, column: 14 } } },
+      { ...site, range: { start: { line: 7, column: 5 }, end: { line: 8, column: 19 } } },
+      { ...site, range: { start: { line: 7, column: 5.5 }, end: { line: 7, column: 19.5 } } }
+    ];
+    for (const variant of variants) {
+      const output = renderExploreText({ focuses: [{ symbol: { name: "inspect" }, sourceMatches: [
+        { ...site, term: "version" }, variant
+      ] }] });
+      expect(output).toContain("`version` → `server_version`");
+      expect(output).toContain("`server` →");
+      expect(output.match(/ → /gu)).toHaveLength(2);
+      if ("lineContext" in variant && variant.lineContext === "comment-prefixed") {
+        expect(output.match(/\(comment-prefixed line\)/gu)).toHaveLength(1);
+      }
+    }
+  });
+
+  it("groups callee-window receipts separately from each focus and preserves UTF-16 columns", () => {
+    const site = { token: "輸出版本𝒱", filePath: "a.ts",
+      range: { start: { line: 2, column: 7 }, end: { line: 2, column: 13 } } };
+    const first = { ...site, term: "輸出" }, second = { ...site, term: "版本" };
+    const output = renderExploreText({ focuses: [
+      { symbol: { name: "first" }, sourceMatches: [first, second] },
+      { symbol: { name: "second" }, sourceMatches: [first, second] }
+    ], sourceWindows: [{ sourceMatches: [first] }, { sourceMatches: [second] }] });
+    expect(output.match(/`輸出`, `版本` → `輸出版本𝒱` at `a\.ts:2:7-13`/gu)).toHaveLength(3);
+    expect(output).toContain("Related source terms (lexical, not resolved relationships)");
+  });
+
   it("cites written object operations and keeps receiver, targets and execution unknown", () => {
     const output = renderExploreText({ focuses: [{ symbol: { name: "handle" }, sourceOperationLead: {
       calls: [{ referenceName: "Object.setPrototypeOf", filePath: "lib/app.js", kind: "calls",

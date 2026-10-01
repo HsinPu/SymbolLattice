@@ -209,7 +209,7 @@ function renderFocuses(result: UnknownRecord): string[] {
     const location = symbolLocation(focus);
     const rank = finiteNumber(focus.rank);
     output.push(`- ${rank === null ? "" : `#${rank} `}\`${reference}\`${kind === null ? "" : ` (${kind})`}${location.length === 0 ? "" : ` — ${location}`}`);
-    const sourceTerms = records(focus.sourceMatches).map(renderSourceTerm);
+    const sourceTerms = renderSourceTerms(records(focus.sourceMatches));
     if (sourceTerms.length > 0) output.push(`  Source terms (lexical, not resolved relationships): ${sourceTerms.join("; ")}.`);
     const graphConnections = graphConnectionsById.get(text(symbol?.id) ?? "");
     const witnesses = records(graphConnections?.witnesses);
@@ -289,14 +289,49 @@ function renderFocuses(result: UnknownRecord): string[] {
     if (reused.length > 0) output.push(`  Shared source: ${reused.map((segment) =>
       `focus #${(finiteNumber(segment.referenceIndex) ?? -1) + 1} at \`${symbolLocation(segment)}\``).join("; ")}.`);
   }
-  const calleeTerms = records(result.sourceWindows).flatMap((window) => records(window.sourceMatches)).map(renderSourceTerm);
+  const calleeTerms = renderSourceTerms(records(result.sourceWindows).flatMap((window) => records(window.sourceMatches)));
   if (calleeTerms.length > 0) output.push("", `Related source terms (lexical, not resolved relationships): ${calleeTerms.join("; ")}.`);
   return output;
 }
 
-function renderSourceTerm(match: UnknownRecord): string {
+/** A complete, single-line token span; absent or inconsistent coordinates stay separate. */
+function sourceTokenLocation(match: UnknownRecord): string | null {
+  const filePath = text(match.filePath), token = text(match.token);
+  const range = record(match.range), start = record(range?.start), end = record(range?.end);
+  const line = finiteNumber(start?.line), column = finiteNumber(start?.column);
+  const endLine = finiteNumber(end?.line), endColumn = finiteNumber(end?.column);
+  if (filePath === null || token === null || line === null || column === null ||
+      endLine === null || endColumn === null || !Number.isInteger(line) || !Number.isInteger(column) ||
+      !Number.isInteger(endLine) || !Number.isInteger(endColumn) || line < 1 || column < 1 ||
+      endLine !== line || endColumn - column !== token.length) return null;
+  return `${filePath}:${line}:${column}-${endColumn}`;
+}
+
+function renderSourceTerms(matches: readonly UnknownRecord[]): string[] {
+  const groups: { match: UnknownRecord; terms: Set<string> }[] = [];
+  const bySite = new Map<string, { match: UnknownRecord; terms: Set<string> }>();
+  for (const match of matches) {
+    const location = sourceTokenLocation(match), term = text(match.term);
+    // A shared spelling or line number alone is insufficient to share a cite.
+    // Preserve comment provenance and keep each focus's receipts independent.
+    const key = location === null || term === null ||
+      match.lineContext !== undefined && match.lineContext !== "comment-prefixed"
+      ? null : JSON.stringify([location, text(match.token), match.lineContext ?? null]);
+    const existing = key === null ? undefined : bySite.get(key);
+    if (existing !== undefined) {
+      existing.terms.add(term!);
+    } else {
+      const group = { match, terms: new Set([term ?? "?"]) };
+      groups.push(group);
+      if (key !== null) bySite.set(key, group);
+    }
+  }
+  return groups.map(({ match, terms }) => renderSourceTerm(match, [...terms]));
+}
+
+function renderSourceTerm(match: UnknownRecord, terms: readonly string[]): string {
   const context = match.lineContext === "comment-prefixed" ? " (comment-prefixed line)" : "";
-  return `\`${text(match.term) ?? "?"}\` → \`${text(match.token) ?? "?"}\` at \`${symbolLocation(match)}\`${context}`;
+  return `${terms.map(term => `\`${term}\``).join(", ")} → \`${text(match.token) ?? "?"}\` at \`${sourceTokenLocation(match) ?? symbolLocation(match)}\`${context}`;
 }
 
 function renderMatch(result: UnknownRecord): string[] {

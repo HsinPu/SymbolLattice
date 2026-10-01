@@ -19,6 +19,7 @@ These tools generate or validate large-project evidence outside the published np
 | `javascript/` | `commonjs-property-evidence.mjs`, `fastify-commonjs-property-truth.json` | manual pinned-corpus Espree source-receipt and graph-only followup anchor audit |
 | `javascript/` | `member-call-receipts.mjs` | manual Espree emitted callee/nearest-callable/range audit and frozen-baseline raw-fact preservation |
 | `mcp/` | `fastify-member-call-tasks.json` | manual pinned-source development exact-symbol call evidence truth; scorer and negative receipt contracts are automatic |
+| `mcp/` | `lexical-text-evidence.mjs` | automatic displayed-citation/source contract; manual pinned-corpus text audit |
 | `python/` | `correctness-oracle.mjs`, `PythonOracle.py` | manual CPython stdlib AST oracle |
 | `python/` | `module-bindings.mjs`, `ModuleBindingOracle.py` | manual CPython AST declaration/source-range audit; optional baseline fact comparison |
 | `python/` | `member-calls.mjs`, `MemberCallOracle.py` | manual CPython AST unresolved member-call name, ownership and source-range audit; required baseline fact preservation check |
@@ -58,6 +59,41 @@ These tools generate or validate large-project evidence outside the published np
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## v0.545.2 Share exact lexical token citations
+
+MCP text now gives complete lexical token locations as `path:line:startColumn-endColumn`, using one-based UTF-16 columns and an exclusive end. Query terms at the same physical token, range and comment context share one citation. Different occurrences and focuses retain their own evidence; malformed or incomplete ranges remain separate line-only citations. Structured matches, ranking, source excerpts, unresolved calls/references, limits and index behavior are unchanged. This compatible presentation fix is a patch; extractor v435 and resolver v210 are unchanged.
+
+`npm run check`, `npm run build`, 38 focused renderer/auditor tests and the complete suite passed: 3,405 tests with four existing skips. [`mcp/lexical-text-evidence.mjs`](mcp/lexical-text-evidence.mjs) independently parses displayed citations, checks every term and comment marker against structured receipts, and reads the actual source at the displayed UTF-16 coordinates. Negative contracts cover missing/invented terms, moved coordinates, wrong token/path, lost provenance and supplementary Unicode letters. It verifies literal source positions, without establishing runtime behavior or resolved relationships.
+
+### Fixed truth and displayed evidence
+
+One new question about checking a user's password while upgrading a stored hash was manually fixed before either product query in [`mcp/django-password-upgrade-tasks.json`](mcp/django-password-upgrade-tasks.json). Django remains pinned to `https://github.com/django/django` at `bc833e8883db4a333a6485d91637b78c85e2b13b`. Required files are auth/hashers.py and auth/base_user.py; nine source anchors cover algorithm comparison, verification, the conditional setter and model persistence. Independent CPython AST spans locate the checker/helper/setter scopes. The original manifest SHA-256 is `d940ce1b51ef8c27321ce1ae5c77a4074b8ae204c9a2bca49f755379f82e6b9e`. Both versions find both files and 9/9 facts. This held-out question uses a known repository; other returned files remain unjudged, and truth was not adjusted after output.
+
+All 42 tasks across 32 manifests on the four previously pinned corpora retain deeply equal complete structured responses between v0.545.1 and v0.545.2. All 188/188 specified source facts remain, with partial file-task judgments of 84 TP, 3 FP, 0 FN and 66 unjudged. Judged precision is 84/87 (96.55%), excluding unjudged results; required-file recall is 67/67 (100%), excluding optional supporting files from that denominator. The known PostgreSQL noise files remain. The independent displayed-source audit verifies 877 query-term facts in 785 citations. The ungrouped complete-coordinate control has 877 citations with the same terms. Combined text sizes are 1,427,127 bytes before, 1,432,192 for that control and 1,425,737 after grouping: grouping saves 6,455 bytes at equal coordinate detail, while the net decrease from the previous line-only format is 1,390 bytes (about 0.10%). Twenty answers shrink, fifteen grow with more precise positions, and seven are unchanged. These sums count file-task instances and cover the fixed questions, not repository-wide precision or token-budget guarantees.
+
+Three unreleased ranking experiments exposed required-file or source-fact regressions. Their unchanged failure cases and source-chain observations are retained in [`mcp/coincident-token-ranking-audit.md`](mcp/coincident-token-ranking-audit.md). They demonstrate why lexical concentration alone is insufficient to replace flow evidence. The new password task was not used to tune those rules.
+
+### Paired query and rendering cost
+
+Windows/Node.js 24.19.0 measurements use the same four fixed read-only indexes, persistent readers, one warmup per implementation and eight alternating measured pairs per question. No parallel tests, builds, retrieval audits or indexing ran during timing. The statistic is the upper median. Each timed call includes the service query and the compiled MCP text renderer. Each question's final complete structured response is deeply equal, and raw call/reference read counts are equal for all measured calls. Text-render median differences range from +0.0116 to +0.0976 ms for the added coordinate validation and grouping. Complete-call medians vary in both directions; this batch does not demonstrate generally faster queries.
+
+| Fixed question | v0.545.1 service + text ms | v0.545.2 service + text ms |
+| --- | ---: | ---: |
+| PostgreSQL server version | 1,124.27 | 1,126.23 |
+| MySQL temporary-connection version | 1,261.30 | 1,252.31 |
+| Fastify cookie hook | 435.01 | 448.99 |
+| Nest shutdown | 953.55 | 941.46 |
+| Fastify plugin | 406.07 | 401.20 |
+| Fastify serializer | 463.70 | 443.26 |
+| Express object links | 205.08 | 206.39 |
+| Fastify request prototypes | 470.95 | 454.62 |
+| Fastify response prototypes | 469.62 | 453.32 |
+| Django password-hash upgrade | 1,194.91 | 1,205.49 |
+
+CLI startup, transport latency, indexing, incremental synchronization, peak memory and total agent investigation time are not compared. Timing variance in the unchanged service path is not attributed to the text formatting change. The batch adds no query/source I/O and requires no index rebuild.
+
+Artifacts remain outside the repository: `%TEMP%/SymbolLattice-v5452-candidate` is the actual built candidate with only the previously verified external database routing override; `SymbolLattice-v5452-retrieval/summary.json`, per-task reports and `*-text.md` retain the complete-response comparison and displayed evidence audits; `SymbolLattice-v5452-password-truth.json` records independent AST spans; `SymbolLattice-v5452-final-paired.json` retains all samples. External orchestration scripts are `SymbolLattice-v5452-retrieval.mjs` and `SymbolLattice-v5452-final-paired.mjs`. Reproduction requires the pinned checkouts/indexes documented below, built implementation roots and separate external outputs. Use `task-retrieval.mjs` with `--product-root` for live results, then import `verifyLexicalTextEvidence(result, renderExploreText(result), readSource)` to audit the candidate's compiled MCP text against the pinned checkout. `renderExploreText` comes from that candidate's `dist/mcp/explore-text.js`; the auditor comes from `mcp/lexical-text-evidence.mjs`.
 
 ## v0.545.1 Reduce full-content freshness read overhead
 
