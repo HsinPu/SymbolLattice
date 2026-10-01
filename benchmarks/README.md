@@ -59,6 +59,40 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.544.3 Reduce symbol batch preparation and equal-field sorting
+
+`readSymbolRowsByIds` now reuses a prepared statement for equal-sized batches within one invocation. Each execution binds its own IDs and reads SQLite; no result rows or statements are retained between calls or generations. The 900-parameter ceiling and short-tail handling remain unchanged. Sorting skips locale collation only for exactly equal file paths or names; distinct strings retain the original `localeCompare` and tie-break rules. This compatible internal optimization is a patch; extractor/resolver versions and index compatibility are unchanged.
+
+`npm run check`, `npm run build`, 50 SQLite integration tests and the full suite passed (3,379 tests, four existing skips). All 29 fixed manifests / 36 tasks on the Django, NestJS and Fastify commits and read-only indexes documented under v0.544.0 retain deeply identical complete CLI responses. Independent fixed source checks remain 150/150; partial manually judged file truth remains 74 TP, 3 FP, 0 FN and 52 unjudged. The three PostgreSQL noise files remain; reused regression corpora do not establish held-out or repository-wide precision.
+
+Final built functions were separately exported in external copies and replayed against eight captured 4,096-ID reads, using two warmups and sixteen alternating pairs. Every returned row and its order are deeply identical. No tests, builds or indexing ran during timing. Upper medians, milliseconds:
+
+| Captured symbol read | v0.544.2 | v0.544.3 |
+| --- | ---: | ---: |
+| postgresql-server-version-tuple | 41.889 | 36.840 |
+| database-version-cursor-temporary-connection | 48.420 | 40.067 |
+| preserve-multiple-cookie-headers | 34.268 | 28.335 |
+| close-application-signal-listeners | 47.961 | 43.242 |
+| plugin-dependency-rejection | 34.274 | 29.117 |
+| response-serializer-selection | 33.057 | 27.321 |
+| error-response-status | 34.047 | 28.423 |
+| outgoing-hook-errors | 34.027 | 28.613 |
+
+These are symbol-read stage measurements, not whole-query latency. The same six whole-service queries used one warmup, eight alternating pairs, persistent readers and the unchanged fixed indexes. Complete responses remain identical; upper medians are mixed:
+
+| Query | v0.544.2 (ms) | v0.544.3 (ms) |
+| --- | ---: | ---: |
+| postgresql | 1250.822 | 1247.222 |
+| mysql | 1395.537 | 1398.742 |
+| fastify-cookie | 468.598 | 455.575 |
+| nest-shutdown | 1022.469 | 1024.806 |
+| fastify-plugin | 420.034 | 426.665 |
+| fastify-serializer | 465.280 | 465.302 |
+
+The isolated symbol reads improved about 10–17%; whole-query changes range from about 2.8% faster to 1.6% slower. This sample does not establish universal speedup, an SLO or a no-regression guarantee. First indexing, incremental sync, peak memory and total agent completion time/query counts were not measured. The separate edge statement-reuse prototype had mixed results and was not adopted.
+
+Reproduce source-verified retrieval with `node benchmarks/mcp/task-retrieval.mjs --project <fixed-corpus> --manifest <unchanged-manifest> --product-root <built-root> --repetitions 1 --output <external-report>`. For whole queries use `benchmarks/mcp/paired-explore.mjs` with baseline/candidate built roots, `--pairs 8 --persistent-reader --comparison complete`. Archived runners `%TEMP%/SymbolLattice-v5443-retrieval.mjs`, `SymbolLattice-v5443-final-paired.mjs` and `SymbolLattice-v5443-symbol-final.mjs` retain the exact queries, order and inputs. Raw reports reside in `SymbolLattice-v5443-retrieval/`, `SymbolLattice-v5443-final-paired.json` and `SymbolLattice-v5443-symbol-final.json`; captured IDs are in `SymbolLattice-v5443-batch-inputs.json`. Frozen roots are `SymbolLattice-v5442-candidate-v2` and `SymbolLattice-v5443-candidate`; only external copies route corpus paths to the existing v0.543.0 read-only indexes. Product sources do not contain this routing or replay export.
+
 ## v0.544.2 Avoid redundant normalization for plain source tokens
 
 On a source-token membership-cache miss, `matchCallableSource` now recognizes tokens containing only lowercase ASCII letters/digits. They already have normalized lowercase spelling and a single identifier word, so it skips NFKC normalization, case folding and camel-case splitting. The extracted token is nonempty and cannot contain line terminators; the negated character class rejects underscores, dollar signs, uppercase and Unicode, which keep the original fallback. Inflection/abbreviation expansion, query-group matching, raw spelling, source coordinates, token/frequency counts, comment flags, truncation and BM25 scoring are unchanged. The shared `identifierWords` helper remains unchanged. This is patch 0.544.1 → 0.544.2; no extractor/resolver version or index update is needed.

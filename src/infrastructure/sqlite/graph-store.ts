@@ -2536,6 +2536,10 @@ function readSymbolRowsByIds(
   ids: readonly string[]
 ): readonly SymbolRow[] {
   const rows: SymbolRow[] = [];
+  // Reuse compilation for equal-sized batches only within this read. Every
+  // execution still binds its own IDs and reads the current SQLite snapshot.
+  const statements = ids.length > BOUNDED_QUERY_PARAMETER_BATCH_SIZE
+    ? new Map<number, StatementSync>() : undefined;
   for (
     let start = 0;
     start < ids.length;
@@ -2543,24 +2547,23 @@ function readSymbolRowsByIds(
   ) {
     const batch = ids.slice(start, start + BOUNDED_QUERY_PARAMETER_BATCH_SIZE);
     if (batch.length === 0) continue;
-    rows.push(
-      ...(database
-        .prepare(
-          `${symbolProjectionSelect()}
-           WHERE id IN (${batch.map(() => "?").join(", ")})`
-        )
-        .all(...batch) as unknown as SymbolRow[])
-    );
+    let statement = statements?.get(batch.length);
+    if (statement === undefined) {
+      statement = database.prepare(`${symbolProjectionSelect()}
+        WHERE id IN (${batch.map(() => "?").join(", ")})`);
+      statements?.set(batch.length, statement);
+    }
+    rows.push(...statement.all(...batch) as unknown as SymbolRow[]);
   }
   return rows.sort(compareSymbolRows);
 }
 
 function compareSymbolRows(left: SymbolRow, right: SymbolRow): number {
   return (
-    left.file_path.localeCompare(right.file_path) ||
+    (left.file_path === right.file_path ? 0 : left.file_path.localeCompare(right.file_path)) ||
     left.start_line - right.start_line ||
     left.start_column - right.start_column ||
-    left.name.localeCompare(right.name) ||
+    (left.name === right.name ? 0 : left.name.localeCompare(right.name)) ||
     left.id.localeCompare(right.id)
   );
 }
