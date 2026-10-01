@@ -649,6 +649,68 @@ export function verifyCoveredContextFiltering(result, readSource) {
   return { verifiedOmissions: receipt.omitted.length, ...matches };
 }
 
+export function verifyCoveredFileContextFiltering(result, readSource) {
+  const receipt = result.queryPlan?.coveredFileContextFiltering;
+  if (!receipt) return { verifiedOmissions: 0, verifiedMatches: 0 };
+  assert.equal(receipt.policy, "covered-file-context-v1");
+  assert.equal(receipt.evidenceScope, "returned-bounded-graph");
+  const groups = identifierTermGroups(result.queryPlan.identifierTerms);
+  assert.deepEqual(receipt.queryTermGroups, groups);
+  const covered = receipt.coveredTermGroups;
+  assert.ok(covered.length >= 6 && receipt.anchors.length >= 2);
+  assert.equal(new Set(receipt.anchors.map(anchor => anchor.symbol.id)).size, receipt.anchors.length);
+  assert.equal(receipt.anchorFilePath, result.focuses[0].symbol.filePath);
+  const includes = (group, terms) => terms.some(term => identifierTermVariants(term).some(variant => group.includes(variant)));
+  const count = terms => groups.filter(group => includes(group, terms)).length;
+  const anchorTerms = receipt.anchors.flatMap(anchor => anchor.nonCommentSourceMatches.map(match => match.term));
+  assert.deepEqual(covered, groups.filter(group => includes(group, anchorTerms)));
+  assert.deepEqual(receipt.unmatchedTermGroups, groups.filter(group => !includes(group, anchorTerms)));
+  assert.equal(receipt.maximumNonCommentConcepts, Math.floor(covered.length / 2));
+  assert.equal(count([...(result.queryPlan.selection ?? []).flatMap(item => item.matchedTerms),
+    ...receipt.omitted.flatMap(item => item.matchedTerms)]), covered.length);
+  for (const anchor of receipt.anchors) {
+    const focus = result.focuses.find(item => item.symbol.id === anchor.symbol.id);
+    assert.ok(focus, "Joint coverage anchor is not returned");
+    assert.deepEqual(anchor.symbol, focus.symbol);
+    assert.deepEqual(anchor.sourceMatches, focus.sourceMatches);
+    assert.deepEqual(anchor.directoryContext, focus.directoryContext);
+    assert.equal(anchor.symbol.filePath, receipt.anchorFilePath);
+    assert.ok(count(anchor.sourceMatches.map(match => match.term)) >= 2);
+  }
+  const primary = receipt.anchors.find(anchor => anchor.symbol.id === result.focuses[0].symbol.id);
+  assert.ok(primary?.directoryContext, "Joint coverage requires a cited literal directory qualifier");
+  verifyDirectoryContexts(result);
+  const verifyContext = (match, nonComment) => {
+    const line = readSource(match.filePath).split(/\r\n|\r|\n|\u2028|\u2029/u)[match.range.start.line - 1];
+    const comment = /^\s*\/\//u.test(line) || /\.pyi?$/iu.test(match.filePath) && /^\s*#/u.test(line);
+    assert.equal(match.lineContext === "comment-prefixed", comment, "Incorrect comment provenance");
+    if (nonComment) assert.equal(comment, false, "Comment cannot substantiate non-comment coverage");
+    const words = new Set([match.token.normalize("NFKC").toLowerCase(), ...identifierWords(match.token)]
+      .flatMap(word => identifierTermVariants(word)));
+    assert.ok(identifierTermVariants(match.term).some(variant => words.has(variant)), "Token does not substantiate query term");
+  };
+  for (const item of [...receipt.anchors, ...receipt.omitted]) {
+    for (const match of item.sourceMatches) verifyContext(match, false);
+    for (const match of item.nonCommentSourceMatches) verifyContext(match, true);
+  }
+  for (const item of receipt.omitted) {
+    assert.ok(!result.focuses.some(focus => focus.symbol.filePath === item.symbol.filePath));
+    assert.notEqual(item.symbol.filePath, receipt.anchorFilePath);
+    assert.equal(item.matchedConceptCount, count(item.matchedTerms));
+    assert.ok(item.matchedConceptCount < covered.length);
+    const namedTerms = identifierWords(item.symbol.name);
+    assert.equal(item.namedConceptCount, count(namedTerms));
+    assert.ok(item.namedConceptCount < 2);
+    assert.equal(item.nonCommentConceptCount, count([...namedTerms, ...item.nonCommentSourceMatches.map(match => match.term)]));
+    assert.ok(item.nonCommentConceptCount <= receipt.maximumNonCommentConcepts);
+  }
+  const matches = verifyLexicalMatches({ focuses: [...receipt.anchors, ...receipt.omitted].flatMap(item => [
+    { symbol: item.symbol, sourceMatches: item.sourceMatches },
+    { symbol: item.symbol, sourceMatches: item.nonCommentSourceMatches }
+  ]) }, readSource);
+  return { verifiedOmissions: receipt.omitted.length, ...matches };
+}
+
 export function verifyLexicalMatches(result, readSource) {
   let verifiedMatches = 0;
   const verify = (match, symbol) => {
@@ -981,6 +1043,8 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
         (file) => readFileSync(resolve(project, file), "utf8")),
       lexicalVerification: verifyLexicalMatches(response, (file) => readFileSync(resolve(project, file), "utf8")),
       coveredContextVerification: verifyCoveredContextFiltering(response,
+        (file) => readFileSync(resolve(project, file), "utf8")),
+      coveredFileContextVerification: verifyCoveredFileContextFiltering(response,
         (file) => readFileSync(resolve(project, file), "utf8")),
       unresolvedCallVerification: verifyUnresolvedCalls(response, (file) => readFileSync(resolve(project, file), "utf8")),
       unresolvedReferenceVerification: verifyUnresolvedReferences(response, (file) => readFileSync(resolve(project, file), "utf8")),

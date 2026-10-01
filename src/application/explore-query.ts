@@ -17,7 +17,10 @@ import { identifierNumbers, numericIdentifierTerms, identifierTermGroups, identi
 import { SOURCE_LEXICAL_SCORING, type SourceLexicalCandidate, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
 import { downstreamFocusPaths, type ExploreFlowFocus } from "./explore-flow-focus.js";
 
-export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v31" as const;
+export const EXPLORE_QUERY_PLAN_POLICY = "explore-query-plan-v32" as const;
+export const EXPLORE_COVERED_FILE_CONTEXT = {
+  policy: "covered-file-context-v1", minimumObservedConcepts: 6, minimumAnchors: 2
+} as const;
 export const EXPLORE_REJECTION_REFERENCE_PRIORITY_POLICY = "rejection-source-reference-first-v1" as const;
 export const EXPLORE_REJECTION_REFERENCE_FILTER_POLICY = "rejection-source-reference-filter-v1" as const;
 export const EXPLORE_NAMED_METHOD_FOCUS = {
@@ -566,6 +569,31 @@ export interface ExploreQueryPlan {
       readonly matchedTerms: readonly string[];
       readonly sourceMatches: readonly SourceLexicalMatch[];
       readonly matchedConceptCount: number;
+      readonly namedConceptCount: number;
+    }[];
+  };
+  readonly coveredFileContextFiltering?: {
+    readonly policy: typeof EXPLORE_COVERED_FILE_CONTEXT.policy;
+    readonly evidenceScope: "returned-bounded-graph";
+    readonly anchorFilePath: string;
+    readonly anchors: readonly {
+      readonly symbol: SymbolNode;
+      readonly sourceMatches: readonly SourceLexicalMatch[];
+      readonly nonCommentSourceMatches: readonly SourceLexicalMatch[];
+      readonly directoryContext?: ExploreQuerySelection["directoryContext"];
+    }[];
+    readonly queryTermGroups: readonly (readonly string[])[];
+    readonly coveredTermGroups: readonly (readonly string[])[];
+    /** No match in the selected and omitted candidates, not an exhaustive absence claim. */
+    readonly unmatchedTermGroups: readonly (readonly string[])[];
+    readonly maximumNonCommentConcepts: number;
+    readonly omitted: readonly {
+      readonly symbol: SymbolNode;
+      readonly matchedTerms: readonly string[];
+      readonly sourceMatches: readonly SourceLexicalMatch[];
+      readonly nonCommentSourceMatches: readonly SourceLexicalMatch[];
+      readonly matchedConceptCount: number;
+      readonly nonCommentConceptCount: number;
       readonly namedConceptCount: number;
     }[];
   };
@@ -2867,8 +2895,26 @@ function filterCoveredContext(selected: Candidate[], graph: ExploreQueryGraph, q
     (candidate.sourceMatches ?? []).every(match => match.filePath === candidate.symbol.filePath &&
       match.range.start.line >= candidate.symbol.range.start.line && match.range.end.line <= candidate.symbol.range.end.line));
   if (anchor === undefined) return undefined;
+  const { named, protectedFiles } = protectedContextFiles(selected, graph, anchor.symbol.filePath, count, coverage, gaps, properties);
+  const weakFiles = new Set(selected.filter(candidate => !protectedFiles.has(candidate.symbol.filePath) &&
+    count(candidate.matchedTerms) <= groups.length / 2).map(candidate => candidate.symbol.filePath));
+  for (const candidate of selected) if (count(candidate.matchedTerms) > groups.length / 2) weakFiles.delete(candidate.symbol.filePath);
+  const omitted = selected.filter(candidate => weakFiles.has(candidate.symbol.filePath));
+  if (omitted.length === 0) return undefined;
+  selected.splice(0, selected.length, ...selected.filter(candidate => !weakFiles.has(candidate.symbol.filePath)));
+  return { policy: "covered-context-focus-v1", evidenceScope: "returned-bounded-graph", anchor: anchor.symbol,
+    anchorSourceMatches: anchor.sourceMatches ?? [], queryTermGroups: groups,
+    omitted: omitted.map(candidate => ({ symbol: candidate.symbol, matchedTerms: candidate.matchedTerms,
+      sourceMatches: candidate.sourceMatches ?? [], matchedConceptCount: count(candidate.matchedTerms),
+      namedConceptCount: named.get(candidate.symbol.id)! })) };
+}
+
+function protectedContextFiles(selected: readonly Candidate[], graph: ExploreQueryGraph, anchorFilePath: string,
+  count: (terms: readonly string[]) => number, coverage: ReadonlyMap<string, ExploreQueryFocusCoverage>,
+  gaps: ReadonlyMap<string, ExploreQuerySourceGapCoverage>, properties: ReadonlyMap<string, ExploreQueryPropertyUseFollowup>
+): { named: ReadonlyMap<string, number>; protectedFiles: ReadonlySet<string> } {
   const named = new Map(selected.map(candidate => [candidate.symbol.id, count(identifierWords(candidate.symbol.name))]));
-  const protectedIds = new Set(selected.filter(candidate => candidate.symbol.filePath === anchor.symbol.filePath ||
+  const protectedIds = new Set(selected.filter(candidate => candidate.symbol.filePath === anchorFilePath ||
     candidate.explicitFile || candidate.numericQualifier !== undefined || candidate.baseReasons.includes("exact-symbol-term") ||
     named.get(candidate.symbol.id)! >= 2 || candidate.graphExpansion.path.length > 0 ||
     coverage.get(candidate.symbol.id)?.flow !== undefined || gaps.has(candidate.symbol.id) || properties.has(candidate.symbol.id))
@@ -2893,16 +2939,66 @@ function filterCoveredContext(selected: Candidate[], graph: ExploreQueryGraph, q
   for (const candidate of selected) if (unresolvedNames.has(candidate.symbol.name)) directlyLinked.add(candidate.symbol.id);
   const protectedFiles = new Set(selected.filter(candidate => protectedIds.has(candidate.symbol.id) || directlyLinked.has(candidate.symbol.id))
     .map(candidate => candidate.symbol.filePath));
-  const weakFiles = new Set(selected.filter(candidate => !protectedFiles.has(candidate.symbol.filePath) &&
-    count(candidate.matchedTerms) <= groups.length / 2).map(candidate => candidate.symbol.filePath));
-  for (const candidate of selected) if (count(candidate.matchedTerms) > groups.length / 2) weakFiles.delete(candidate.symbol.filePath);
+  return { named, protectedFiles };
+}
+
+/** Same-file lexical coverage is a bounded output heuristic, not a connected execution path. */
+function filterCoveredFileContext(selected: Candidate[], graph: ExploreQueryGraph, queryTerms: readonly string[],
+  sourceById: ReadonlyMap<string, SourceLexicalCandidate>, coverage: ReadonlyMap<string, ExploreQueryFocusCoverage>,
+  gaps: ReadonlyMap<string, ExploreQuerySourceGapCoverage>, properties: ReadonlyMap<string, ExploreQueryPropertyUseFollowup>
+): ExploreQueryPlan["coveredFileContextFiltering"] {
+  const primary = selected[0];
+  if (selected.length < 3 || primary?.directoryContext === undefined) return undefined;
+  const groups = identifierTermGroups(queryTerms);
+  if (groups.length < EXPLORE_COVERED_FILE_CONTEXT.minimumObservedConcepts) return undefined;
+  const count = (terms: readonly string[]) => groups.filter(group =>
+    terms.some(term => identifierTermVariants(term).some(variant => group.includes(variant)))).length;
+  const anchors = selected.filter(candidate => candidate.symbol.filePath === primary.symbol.filePath);
+  if (anchors.length < EXPLORE_COVERED_FILE_CONTEXT.minimumAnchors) return undefined;
+  const nonCommentMatches = (candidate: Candidate): readonly SourceLexicalMatch[] =>
+    sourceById.get(candidate.symbol.id)?.nonCommentMatches ??
+      (candidate.sourceMatches ?? []).filter(match => match.lineContext !== "comment-prefixed");
+  const compare = (left: SymbolNode["range"]["start"], right: SymbolNode["range"]["start"]) =>
+    left.line - right.line || left.column - right.column;
+  const owned = (candidate: Candidate, match: SourceLexicalMatch): boolean =>
+    match.filePath === candidate.symbol.filePath && compare(match.range.start, candidate.symbol.range.start) >= 0 &&
+      compare(match.range.end, candidate.symbol.range.end) <= 0 && compare(match.range.start, match.range.end) < 0;
+  if (anchors.some(candidate => candidate.sourceRole.role !== "production" || candidate.generated.generated ||
+    count((candidate.sourceMatches ?? []).map(match => match.term)) < 2 ||
+    (candidate.sourceMatches ?? []).some(match => !owned(candidate, match)) ||
+    nonCommentMatches(candidate).some(match => match.lineContext === "comment-prefixed" || !owned(candidate, match)))) return undefined;
+  const anchorTerms = anchors.flatMap(candidate => nonCommentMatches(candidate).map(match => match.term));
+  const coveredTermGroups = groups.filter(group =>
+    anchorTerms.some(term => identifierTermVariants(term).some(variant => group.includes(variant))));
+  // Preserve a file introducing a concept outside the anchors, including comment-only evidence.
+  // Missing query terms remain explicit instead of being silently treated as covered.
+  if (coveredTermGroups.length < EXPLORE_COVERED_FILE_CONTEXT.minimumObservedConcepts ||
+    count(selected.flatMap(candidate => candidate.matchedTerms)) !== coveredTermGroups.length) return undefined;
+  const unmatchedTermGroups = groups.filter(group => !coveredTermGroups.includes(group));
+  const maximumNonCommentConcepts = Math.floor(coveredTermGroups.length / 2);
+  const { named, protectedFiles } = protectedContextFiles(selected, graph, primary.symbol.filePath, count, coverage, gaps, properties);
+  const nonCommentCount = (candidate: Candidate) => count([...identifierWords(candidate.symbol.name),
+    ...nonCommentMatches(candidate).map(match => match.term)]);
+  const weakFiles = new Set(selected.filter(candidate => !protectedFiles.has(candidate.symbol.filePath))
+    .map(candidate => candidate.symbol.filePath));
+  for (const candidate of selected) {
+    if (nonCommentCount(candidate) > maximumNonCommentConcepts || count(candidate.matchedTerms) >= coveredTermGroups.length ||
+      (candidate.sourceMatches ?? []).some(match => !owned(candidate, match)) ||
+      nonCommentMatches(candidate).some(match => match.lineContext === "comment-prefixed" || !owned(candidate, match))) {
+      weakFiles.delete(candidate.symbol.filePath);
+    }
+  }
   const omitted = selected.filter(candidate => weakFiles.has(candidate.symbol.filePath));
   if (omitted.length === 0) return undefined;
   selected.splice(0, selected.length, ...selected.filter(candidate => !weakFiles.has(candidate.symbol.filePath)));
-  return { policy: "covered-context-focus-v1", evidenceScope: "returned-bounded-graph", anchor: anchor.symbol,
-    anchorSourceMatches: anchor.sourceMatches ?? [], queryTermGroups: groups,
+  return { policy: EXPLORE_COVERED_FILE_CONTEXT.policy, evidenceScope: "returned-bounded-graph", anchorFilePath: primary.symbol.filePath,
+    anchors: anchors.map(candidate => ({ symbol: candidate.symbol, sourceMatches: candidate.sourceMatches ?? [],
+      nonCommentSourceMatches: nonCommentMatches(candidate),
+      ...(candidate.directoryContext === undefined ? {} : { directoryContext: candidate.directoryContext }) })),
+    queryTermGroups: groups, coveredTermGroups, unmatchedTermGroups, maximumNonCommentConcepts,
     omitted: omitted.map(candidate => ({ symbol: candidate.symbol, matchedTerms: candidate.matchedTerms,
-      sourceMatches: candidate.sourceMatches ?? [], matchedConceptCount: count(candidate.matchedTerms),
+      sourceMatches: candidate.sourceMatches ?? [], nonCommentSourceMatches: nonCommentMatches(candidate),
+      matchedConceptCount: count(candidate.matchedTerms), nonCommentConceptCount: nonCommentCount(candidate),
       namedConceptCount: named.get(candidate.symbol.id)! })) };
 }
 
@@ -3189,6 +3285,10 @@ export function planExploreQuery(
   const coveredContextFiltering = naturalLanguage && parsed.fileHints.length === 0 && numericQueryTerms.size === 0
     ? filterCoveredContext(selected, graph, parsed.identifierTerms, coverageReceipts, sourceGapReceipts, propertyUseReceipts)
     : undefined;
+  const coveredFileContextFiltering = coveredContextFiltering === undefined && naturalLanguage &&
+    parsed.fileHints.length === 0 && numericQueryTerms.size === 0
+    ? filterCoveredFileContext(selected, graph, parsed.identifierTerms, sourceById, coverageReceipts, sourceGapReceipts, propertyUseReceipts)
+    : undefined;
   const graphConnectionEvidence: ExploreQueryGraphConnectionEvidence[] = selected.flatMap((candidate) => {
     if (candidate.connectionScore === 0) return [];
     const relationships = [...(connectedRelationships.get(candidate.symbol.id)?.values() ?? [])]
@@ -3321,6 +3421,7 @@ export function planExploreQuery(
       excludedFiles
     } }),
     ...(coveredContextFiltering === undefined ? {} : { coveredContextFiltering }),
+    ...(coveredFileContextFiltering === undefined ? {} : { coveredFileContextFiltering }),
     sourceLexical: sourceLexical === undefined ? null : {
       policy: sourceLexical.policy, limits: sourceLexical.limits, state: sourceLexical.state,
       scannedFiles: sourceLexical.scannedFiles, scannedSymbols: sourceLexical.scannedSymbols,

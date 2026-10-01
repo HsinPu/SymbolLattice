@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/django/django",
+  "commit": "bc833e8883db4a333a6485d91637b78c85e2b13b",
+  "truthMethod": "Queries and source facts fixed from manually read pinned source and CPython AST before either product answered these questions, after the joint file-coverage rule was frozen. These are verification questions on a known repository, not an unseen project or independent workflows: the PostGIS, diagnostics and schema implementations were already inspected for the PostgreSQL development audit. Scope is each named operation's written source, not runtime dispatch, shared connection lifecycle or rendering. Required facts use original source lines; no product result defines truth. Other returned files remain unjudged. Preserve failures rather than changing questions or truth to match output.",
+  "tasks": [
+    {
+      "id": "postgis-library-version-coverage-verification",
+      "split": "verification",
+      "query": "How does PostGIS retrieve its library version with SQL and convert it into a tuple?",
+      "requiredFiles": ["django/contrib/gis/db/backends/postgis/operations.py"],
+      "supportingFiles": ["django/db/backends/base/base.py"],
+      "irrelevantFiles": ["django/db/backends/postgresql/schema.py", "django/db/backends/postgresql/creation.py"],
+      "evidence": [
+        {"file": "django/contrib/gis/db/backends/postgis/operations.py", "line": 334, "text": "cursor.execute(\"SELECT %s()\" % func)"},
+        {"file": "django/contrib/gis/db/backends/postgis/operations.py", "line": 335, "text": "return cursor.fetchone()[0]"},
+        {"file": "django/contrib/gis/db/backends/postgis/operations.py", "line": 343, "text": "return self._get_postgis_func(\"postgis_lib_version\")"},
+        {"file": "django/contrib/gis/db/backends/postgis/operations.py", "line": 362, "text": "version = self.postgis_lib_version()"},
+        {"file": "django/contrib/gis/db/backends/postgis/operations.py", "line": 363, "text": "return (version,) + get_version_tuple(version)"}
+      ]
+    },
+    {
+      "id": "diagnostic-traceback-coverage-verification",
+      "split": "verification",
+      "query": "How does the error page assemble diagnostic information about traceback frames and the exception?",
+      "requiredFiles": ["django/views/debug.py"],
+      "supportingFiles": [],
+      "irrelevantFiles": [],
+      "evidence": [
+        {"file": "django/views/debug.py", "line": 350, "text": "frames = self.get_traceback_frames()"},
+        {"file": "django/views/debug.py", "line": 415, "text": "c[\"exception_type\"] = self.exc_type.__name__"},
+        {"file": "django/views/debug.py", "line": 417, "text": "c[\"exception_value\"] = str(self.exc_value)"},
+        {"file": "django/views/debug.py", "line": 422, "text": "return c"}
+      ]
+    },
+    {
+      "id": "postgresql-schema-execution-coverage-verification",
+      "split": "verification",
+      "query": "How does the PostgreSQL schema editor pass composed SQL through its connection for execution?",
+      "requiredFiles": ["django/db/backends/postgresql/schema.py"],
+      "supportingFiles": [],
+      "irrelevantFiles": [],
+      "evidence": [
+        {"file": "django/db/backends/postgresql/schema.py", "line": 45, "text": "return super().execute(sql, params)"},
+        {"file": "django/db/backends/postgresql/schema.py", "line": 46, "text": "sql = self.connection.ops.compose_sql(str(sql), params)"},
+        {"file": "django/db/backends/postgresql/schema.py", "line": 48, "text": "return super().execute(sql, None)"}
+      ]
+    }
+  ]
+}

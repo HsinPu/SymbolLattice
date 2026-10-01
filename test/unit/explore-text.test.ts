@@ -4,6 +4,19 @@ import { sourceDeliveryIdentityFromText } from "../../src/application/source-del
 import { McpSourceSession } from "../../src/mcp/source-session.js";
 
 describe("MCP explore text rendering", () => {
+  it("cites joint coverage owners and discloses omitted paths and unmatched bounded concepts", () => {
+    const output = renderExploreText({ queryPlan: { coveredFileContextFiltering: {
+      anchors: [{ symbol: { qualifiedName: "src/alpha/service.ts#read", filePath: "src/alpha/service.ts", range: { start: { line: 4 } } } },
+        { symbol: { qualifiedName: "src/alpha/service.ts#prepare", filePath: "src/alpha/service.ts", range: { start: { line: 20 } } } }],
+      omitted: [{ symbol: { filePath: "src/context.ts" } }], unmatchedTermGroups: [["report", "reports"]]
+    } } });
+    expect(output).toContain("`src/alpha/service.ts#read` at `src/alpha/service.ts:4`");
+    expect(output).toContain("`src/alpha/service.ts#prepare` at `src/alpha/service.ts:20`");
+    expect(output).toContain("`src/context.ts`");
+    expect(output).toContain("not proof of irrelevance or a connected execution path");
+    expect(output).toContain("queryPlan.coveredFileContextFiltering");
+    expect(output).toContain("Query concepts without a match in these bounded candidates: `report`");
+  });
   it("shares a complete token citation while retaining every term, source order and structured receipt", () => {
     const site = { token: "server_version", filePath: "db.py",
       range: { start: { line: 7, column: 5 }, end: { line: 7, column: 19 } } };

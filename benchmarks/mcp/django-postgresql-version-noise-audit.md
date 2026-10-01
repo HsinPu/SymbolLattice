@@ -57,3 +57,28 @@ The next ranking investigation must preserve the required server-version
 source facts, evaluate these now-judged negatives, and check other fixed tasks
 and samples not used for tuning. File-name exclusions specific to these paths
 are not an acceptable general solution.
+
+## Expanded judgments for the joint source-coverage investigation
+
+The 2026-10-02 expansion retains the question, required/supporting files and
+three required facts. Four additional negatives were fixed from manual pinned-source reading before
+the joint source-coverage trial. A separate CPython AST audit subsequently
+confirmed their declaration spans, returns and calls. Inspection
+was motivated by the old result and a failed comment-weighting trial, so this
+is development evidence, not blinded truth. Other files remain unjudged.
+
+| File | Judgment for this question | Independently checked source |
+| --- | --- | --- |
+| `django/views/debug.py` | Irrelevant | `get_traceback_data`, 344–422, constructs diagnostic context. At 399 the value is Python `sys.version_info`, at 400 a timestamp, and at 401 Django's version. The database word at 382 describes a possible request-user error. `technical_500_response`, 62–75, renders a technical error response. Neither supplies the PostgreSQL server value or its tuple conversion. |
+| `django/db/backends/mysql/base.py` | Irrelevant | `get_database_version`, 212–213, returns `mysql_version`. `mysql_server_data`, 403–426, runs SQL `SELECT VERSION()`; `mysql_server_info`, 429–430, selects that string; `mysql_version`, 433–440, parses it. This is another backend's provider, not the requested PostgreSQL connection-information read. |
+| `django/db/backends/postgresql/features.py` | Irrelevant | `minimum_database_version` at 10 is a compatibility floor. `uses_server_side_binding`, 128–130, reads connection options. `is_postgresql_15/16/17`, 149–158, consume version thresholds; they do not retrieve or convert the requested value. |
+| `django/db/backends/sqlite3/features.py` | Irrelevant | `DatabaseFeatures`, 11–161, declares SQLite capability thresholds, including `Database.sqlite_version_info` at 30, 120 and 157. It does not provide the PostgreSQL server version. |
+
+The external `SymbolLattice-v5470-postgresql-source-audit.py` and `.json` retain
+eight file hashes and twenty AST declaration spans/returns/calls. AST receipts
+and manual source reading do not prove dynamic receiver dispatch. The earlier
+comment-weighting trial merely swaps its three old distractors for the three
+now-judged backend/features negatives; it is not a precision improvement.
+Original reports are retained, and comparison products are scored under the
+same expanded manifest. See [joint-source-coverage-audit.md](joint-source-coverage-audit.md)
+for the shipped rule, source checks, regression results and timing scope.

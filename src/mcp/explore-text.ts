@@ -486,6 +486,18 @@ function renderLimitations(result: UnknownRecord): string[] {
     const paths = [...new Set(omittedContext.map(item => text(record(item.symbol)?.filePath)).filter(path => path !== null))];
     notes.add(`${omittedContext.length} lower-priority focuses at ${paths.map(path => `\`${path}\``).join(", ")} were omitted because their query concepts are covered by the cited anchor. This bounded heuristic does not prove irrelevance or complete flow coverage. Inspect \`queryPlan.coveredContextFiltering\` for source receipts and exact symbol references, or query the file directly.`);
   }
+  const fileFiltering = record(plan?.coveredFileContextFiltering);
+  const omittedFileContext = records(fileFiltering?.omitted);
+  if (omittedFileContext.length > 0) {
+    const paths = [...new Set(omittedFileContext.map(item => text(record(item.symbol)?.filePath)).filter(path => path !== null))];
+    const anchors = records(fileFiltering?.anchors).map(item => {
+      const symbol = record(item.symbol);
+      return `\`${text(symbol?.qualifiedName) ?? text(symbol?.name) ?? "unknown"}\` at \`${text(symbol?.filePath) ?? "unknown"}:${finiteNumber(record(record(symbol?.range)?.start)?.line) ?? "?"}\``;
+    });
+    const unmatched = Array.isArray(fileFiltering?.unmatchedTermGroups)
+      ? fileFiltering.unmatchedTermGroups.flatMap(group => Array.isArray(group) && typeof group[0] === "string" ? [group[0]] : []) : [];
+    notes.add(`${omittedFileContext.length} lower-priority focuses at ${paths.map(path => `\`${path}\``).join(", ")} were omitted using joint lexical coverage from ${anchors.join(", ")}. This is a bounded heuristic, not proof of irrelevance or a connected execution path. Inspect \`queryPlan.coveredFileContextFiltering\` for each declaration's source receipts and omitted symbol references, or query a file directly.${unmatched.length ? ` Query concepts without a match in these bounded candidates: ${unmatched.map(term => `\`${term}\``).join(", ")}.` : ""}`);
+  }
   if (record(record(result.sourceWindowPlan)?.summary)?.truncated === true ||
       record(record(result.sourceWindowAllocation)?.summary)?.truncated === true) {
     notes.add("Source windows were limited; additional call-site source may be omitted.");

@@ -60,6 +60,14 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.547.0 Cite joint source coverage and reduce repeated context
+
+The optional `queryPlan.coveredFileContextFiltering` cites multiple declarations, omitted symbols and unmatched bounded concepts without inventing a connected flow. A literal directory qualifier, at least six jointly covered observed groups and existing relationship/flow protections restrict compaction. Separate non-comment receipts prevent preferred comment hits from hiding stronger source evidence. Existing single-anchor output, parameters, limits and index/extractor/resolver versions remain. This additive capability is a minor release. [The audit](mcp/joint-source-coverage-audit.md) records independent source truth, the rejected weighting trial and conditions.
+
+All 36 manifests / 51 tasks preserve 79/79 required files and 222/222 facts; fifty complete responses differ only in policy and retain identical MCP text. The PostgreSQL question drops three source-judged irrelevant files while preserving 3/3 facts. Same-truth judgments move from 99 TP / 3 FP / 0 FN / 87 unjudged to 99 TP / 0 FP / 0 FN / 87 unjudged. These partial judgments do not establish overall precision. Three new verification questions preserve required PostGIS, diagnostic and schema evidence on the known Django corpus.
+
+Eighteen whole-call comparisons use 24 balanced rounds and three warmups per build; all 864 responses/texts match their own verified QA and four main indexes retain hashes. Thirteen medians are 0.06–1.71% faster and five 0.29–0.89% slower, so no universal speed gain is claimed. PostgreSQL text shrinks 43,784 → 11,267 bytes (74.27%) and JSON 361,177 → 113,008 bytes (68.71%). Typecheck, build, 153 focused tests and the complete suite (3,435 passed, four existing skips) pass. Large products, oracle evidence, samples and failure artifacts remain outside the product workspace under `%TEMP%/SymbolLattice-v5470-*`.
+
 ## v0.546.3 Preserve represented upstream call context
 
 This patch retains a validated upstream path's priority when its terminal call is already represented by primary source or a selected window. It protects the current witness during replacement and prevents less relevant paths from promoting higher-ranked branches. Primary source coverage is reused only within a single synchronous plan. Source-window selection advances to v12; allocation v5, existing output limits, ranking, index format, extractor v435 and resolver v210 remain. [The audit](mcp/represented-upstream-call-audit.md) records independent Fastify AST evidence, the rejected comment/rank trials and reproducible conditions.

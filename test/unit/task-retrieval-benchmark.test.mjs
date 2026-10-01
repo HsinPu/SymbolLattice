@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { scoreTask, verifySourceExcerpts, verifyGraphEvidence, verifyLexicalMatches, verifyCoveredContextFiltering, verifySourceReuse, verifyUnresolvedCalls, verifySameClassDeclarationLeads, verifyNameFollowups, verifyOmittedDeclarationLeads, verifyPropertyUseFollowups, verifyNumericQualifiers, verifyNumericContainerFiltering, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
+import { scoreTask, verifySourceExcerpts, verifyGraphEvidence, verifyLexicalMatches, verifyCoveredContextFiltering, verifyCoveredFileContextFiltering, verifySourceReuse, verifyUnresolvedCalls, verifySameClassDeclarationLeads, verifyNameFollowups, verifyOmittedDeclarationLeads, verifyPropertyUseFollowups, verifyNumericQualifiers, verifyNumericContainerFiltering, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
 import { verifyDirectoryContexts } from "../../benchmarks/mcp/task-retrieval.mjs";
 import { verifyUnresolvedReferences } from "../../benchmarks/mcp/task-retrieval.mjs";
 import { verifySourceOperationLeads } from "../../benchmarks/mcp/task-retrieval.mjs";
@@ -187,6 +187,49 @@ describe("task retrieval benchmark judgments", () => {
       expect(() => verifyCoveredContextFiltering(changed, read)).toThrow();
     }
   });
+  it("verifies joint coverage against each owner and rejects fabricated missing terms and comment provenance", () => {
+    const terms = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"];
+    const filePath = "src/alpha/service.ts", contextPath = "src/context.py";
+    const source = { [filePath]: "alpha beta gamma delta\nalpha delta epsilon zeta\n", [contextPath]: "alpha beta gamma\n# delta\n" };
+    const node = (id, path, line, name) => ({ id, name, filePath: path,
+      range: { start: { line, column: 1 }, end: { line, column: source[path].split("\n")[line-1].length+1 } } });
+    const matches = (path, line, values, comment = false) => values.map(term => {
+      const column = source[path].split("\n")[line-1].indexOf(term)+1;
+      return { term, token: term, filePath: path,
+        range: { start: { line, column }, end: { line, column: column+term.length } },
+        ...(comment ? { lineContext: "comment-prefixed" } : {}) };
+    });
+    const first = { symbol: node("first", filePath, 1, "read"), sourceMatches: matches(filePath, 1, terms.slice(0, 4)),
+      directoryContext: { policy: "literal-query-directory-v1", filePath, terms: ["alpha"], score: 500 } };
+    const second = { symbol: node("second", filePath, 2, "prepare"), sourceMatches: matches(filePath, 2, ["alpha", "delta", "epsilon", "zeta"]) };
+    const anchors = [first, second].map(item => ({ ...item, nonCommentSourceMatches: item.sourceMatches }));
+    const context = { symbol: { ...node("context", contextPath, 1, "inspect"), range: { start: { line: 1, column: 1 }, end: { line: 2, column: 8 } } },
+      matchedTerms: terms.slice(0, 4), sourceMatches: [...matches(contextPath, 1, terms.slice(0, 3)), ...matches(contextPath, 2, ["delta"], true)],
+      nonCommentSourceMatches: matches(contextPath, 1, terms.slice(0, 3)), matchedConceptCount: 4, nonCommentConceptCount: 3, namedConceptCount: 0 };
+    const result = { focuses: [{ ...first, reasons: ["query-directory-context"] }, second], queryPlan: {
+      identifierTerms: [...terms, "theta"], selection: [first, second].map(item => ({ matchedTerms: item.sourceMatches.map(match => match.term) })),
+      coveredFileContextFiltering: { policy: "covered-file-context-v1", evidenceScope: "returned-bounded-graph", anchorFilePath: filePath,
+        anchors, queryTermGroups: [...terms, "theta"].map(term => [term]), coveredTermGroups: terms.map(term => [term]),
+        unmatchedTermGroups: [["theta"]], maximumNonCommentConcepts: 3, omitted: [context] }
+    } };
+    expect(verifyCoveredFileContextFiltering(result, file => source[file])).toEqual({ verifiedOmissions: 1, verifiedMatches: 23 });
+    for (const mutate of [
+      r => { r.queryPlan.coveredFileContextFiltering.anchors.pop(); },
+      r => { r.queryPlan.coveredFileContextFiltering.anchors[1].symbol = r.queryPlan.coveredFileContextFiltering.anchors[0].symbol; },
+      r => { r.queryPlan.coveredFileContextFiltering.unmatchedTermGroups = []; },
+      r => { r.queryPlan.coveredFileContextFiltering.maximumNonCommentConcepts = 4; },
+      r => { r.queryPlan.coveredFileContextFiltering.omitted[0].nonCommentConceptCount = 2; },
+      r => { r.queryPlan.coveredFileContextFiltering.omitted[0].nonCommentSourceMatches.push(r.queryPlan.coveredFileContextFiltering.omitted[0].sourceMatches[3]); },
+      r => { delete r.queryPlan.coveredFileContextFiltering.omitted[0].sourceMatches[3].lineContext; },
+      r => { r.queryPlan.coveredFileContextFiltering.anchors[0].nonCommentSourceMatches[0].range.start.line = 2; },
+      r => { r.queryPlan.coveredFileContextFiltering.anchors[0].nonCommentSourceMatches[0].term = "theta"; },
+      r => { r.queryPlan.coveredFileContextFiltering.anchors[0].directoryContext.terms = ["unwritten"]; }
+    ]) {
+      const changed = structuredClone(result); mutate(changed);
+      expect(() => verifyCoveredFileContextFiltering(changed, file => source[file])).toThrow();
+    }
+  });
+
   it("verifies lexical windows against their original owner and rejects invented relationship claims", () => {
     const match = { term: '413', token: '413', filePath: 'a.ts', range: { start: { line: 2, column: 3 }, end: { line: 2, column: 6 } } };
     const result = { focuses: [{ rank: 1, symbol: { id: 'codes', filePath: 'a.ts',

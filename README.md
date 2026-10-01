@@ -6,7 +6,7 @@ SymbolLattice 是提供給開發者與 AI Agent 的本機程式碼搜尋工具�
 
 [English](README.en.md) · [開始使用](docs/getting-started.md) · [驗證與限制](benchmarks/README.md) · [回報問題](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.546.3` · Node.js `>=22.16 <23 || >=24 <25` · MIT
+`v0.547.0` · Node.js `>=22.16 <23 || >=24 <25` · MIT
 
 ## 從「這段功能在哪裡？」開始
 
@@ -89,7 +89,7 @@ SymbolLattice 使用靜態分析。文字命中會附上來源位置；同一 to
 
 對有精確來源引用的拒絕查詢，僅重複已涵蓋查詢詞的次要焦點可能被省略；MCP 文字會列出所在路徑，JSON 的 `queryPlan.rejectionReferenceFiltering` 會列出完整省略項。有限範圍內未找到直接關係不代表檔案無關，仍可指定檔案補查。
 
-較長查詢若有一個來源涵蓋詞數預算內保留的全部概念，部分只涵蓋共用詞的次要焦點也可能被省略。JSON 的 `queryPlan.coveredContextFiltering` 提供判定依據、來源位置與精確符號參照，MCP 文字會列出補查路徑；這不證明檔案無關或流程已完整解析。
+較長查詢中，單一來源或有目錄詞支持的同檔多段來源，可能用來收斂僅重複部分概念的次要焦點。JSON 的 `queryPlan.coveredContextFiltering` 或 `coveredFileContextFiltering` 提供各段來源、省略符號與未命中概念，MCP 文字列出補查路徑；共同命中不證明檔案無關，也不代表各段來源構成執行流程。條件與保護範圍見[使用指南](docs/getting-started.md#升級至-v05470)。
 
 長問句中省略的概念可與來源中的未解析呼叫共同支持同名宣告候選。主圖中缺少宣告時，可在已選檔案精確補查；若完整、世代一致的結果恰有兩個同名宣告，會一起提供候選來源及 `matchingDeclarationIds`，不選定呼叫目標。JSON 的 `queryPlan.omittedDeclarationSearch` 記錄範圍、限制與截斷。**0.541.0 破壞性變更（結果上限）**：候選組可使總焦點最多 10 個、每檔最多 4 個；JSON 使用者須依回傳的 `limits` 處理。檔案與總來源字元預算不增加，這項變更不需重建索引。
 

@@ -526,6 +526,88 @@ describe("covered context focus filtering", () => {
   });
 });
 
+describe("joint same-file covered context", () => {
+  const terms = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"];
+  const first = symbol({ id: "first-joint", name: "read", filePath: "src/alpha/service.ts" });
+  const second = symbol({ id: "second-joint", name: "prepare", filePath: first.filePath, line: 4 });
+  const context = symbol({ id: "joint-context", name: "inspect", filePath: "src/context.ts" });
+  const matches = (node: SymbolNode, values: readonly string[], comment = false) => values.map((term, index) => ({
+    term, token: term, filePath: node.filePath,
+    range: { start: { line: node.range.start.line, column: index * 10 + 1 },
+      end: { line: node.range.start.line, column: index * 10 + term.length + 1 } },
+    ...(comment ? { lineContext: "comment-prefixed" as const } : {})
+  }));
+  const lexical = () => ({ policy: SOURCE_LEXICAL_POLICY, limits: SOURCE_LEXICAL_LIMITS,
+    state: "searched" as const, scannedFiles: 2, scannedSymbols: 3, scannedCharacters: 200, truncated: false,
+    candidates: [
+      { symbolId: first.id, score: 100, matches: matches(first, terms.slice(0, 4)) },
+      { symbolId: second.id, score: 100, matches: matches(second, ["alpha", "delta", "epsilon", "zeta"]) },
+      { symbolId: context.id, score: 100, matches: [...matches(context, terms.slice(0, 3)), ...matches(context, ["delta"], true)] }
+    ] });
+  const query = terms.join(" ") + " theta";
+
+  it("cites both declarations, retains comment provenance and discloses unmatched bounded concepts", () => {
+    const plan = planExploreQuery({ symbols: [first, second, context], edges: [] }, query, lexical());
+    expect(plan.selection.map(item => item.symbol.id)).toEqual([first.id, second.id]);
+    expect(plan.coveredContextFiltering).toBeUndefined();
+    expect(plan.coveredFileContextFiltering).toMatchObject({ policy: "covered-file-context-v1",
+      anchorFilePath: first.filePath, anchors: [{ symbol: { id: first.id } }, { symbol: { id: second.id } }],
+      unmatchedTermGroups: [["theta"]], maximumNonCommentConcepts: 3,
+      omitted: [{ symbol: { id: context.id }, matchedConceptCount: 4, nonCommentConceptCount: 3 }] });
+    expect(plan.coveredFileContextFiltering?.omitted[0]?.sourceMatches.at(-1)?.lineContext).toBe("comment-prefixed");
+  });
+
+  it("uses independently retained non-comment hits when the preferred receipt is a comment", () => {
+    const source = lexical();
+    source.candidates[2] = { ...source.candidates[2]!, nonCommentMatches: matches(context, terms.slice(0, 4)) } as typeof source.candidates[2];
+    const plan = planExploreQuery({ symbols: [first, second, context], edges: [] }, query, source);
+    expect(plan.selection.some(item => item.symbol.id === context.id)).toBe(true);
+    expect(plan.coveredFileContextFiltering).toBeUndefined();
+  });
+
+  it("keeps exact and written unresolved call targets without changing graph resolution", () => {
+    for (const unresolved of [false, true]) {
+      const call = { ...edge("joint-call", first.id, context.id), filePath: first.filePath,
+        ...(unresolved ? { targetId: null, resolution: "unresolved" as const, confidence: 0, referenceName: "value.inspect" } : {}) };
+      const graph = { symbols: [first, second, context], edges: [call] };
+      const plan = planExploreQuery(graph, query, lexical());
+      expect(plan.selection.some(item => item.symbol.id === context.id)).toBe(true);
+      expect(plan.coveredFileContextFiltering).toBeUndefined();
+      expect(graph.edges[0]).toEqual(call);
+    }
+  });
+
+  it("keeps a file introducing a new source concept and a compound named operation", () => {
+    const source = lexical();
+    source.candidates[2]!.matches.push(...matches(context, ["theta"]));
+    const plan = planExploreQuery({ symbols: [first, second, context], edges: [] }, query, source);
+    expect(plan.coveredFileContextFiltering).toBeUndefined();
+    const named = { ...context, name: "betaGamma", qualifiedName: "src/context.ts#betaGamma" };
+    expect(planExploreQuery({ symbols: [first, second, named], edges: [] }, query, lexical())
+      .selection.some(item => item.symbol.id === context.id)).toBe(true);
+  });
+
+  it("does not merge another file's hits, incomplete coverage or malformed ownership", () => {
+    for (const change of [
+      (source: ReturnType<typeof lexical>) => { source.candidates[1]!.matches.pop(); },
+      (source: ReturnType<typeof lexical>) => { source.candidates[1]!.matches[0]!.filePath = context.filePath; },
+      (source: ReturnType<typeof lexical>) => { source.candidates[1]!.matches[0]!.range.start.line = 1; }
+    ]) {
+      const source = lexical(); change(source);
+      expect(planExploreQuery({ symbols: [first, second, context], edges: [] }, query, source).coveredFileContextFiltering).toBeUndefined();
+    }
+    const remote = { ...second, filePath: "src/alpha/other.ts" };
+    expect(planExploreQuery({ symbols: [first, remote, context], edges: [] }, query, lexical()).coveredFileContextFiltering).toBeUndefined();
+  });
+
+  it("preserves explicit file, numeric and unqualified queries", () => {
+    const graph = { symbols: [first, second, context], edges: [] };
+    for (const value of [query + " src/context.ts", query + " 500", terms.slice(1).join(" ") + " theta"]) {
+      expect(planExploreQuery(graph, value, lexical()).coveredFileContextFiltering).toBeUndefined();
+    }
+  });
+});
+
 function symbol(input: {
   readonly id: string;
   readonly name: string;
@@ -881,7 +963,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v31",
+      policy: "explore-query-plan-v32",
       queryIntent: {
         tests: false,
         icons: false,
@@ -999,7 +1081,7 @@ describe("explore query planning", () => {
     expect(reversed).toEqual(plan);
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v31",
+      policy: "explore-query-plan-v32",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1231,7 +1313,7 @@ describe("explore query planning", () => {
 
     expect(plan.selection.map((item) => item.symbol.id)).toEqual(["production-a", "production-b"]);
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v31",
+      policy: "explore-query-plan-v32",
       filtering: {
         policy: "explore-query-low-value-filter-v2",
         reason: "sufficient-production-evidence",
@@ -1655,7 +1737,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v31",
+      policy: "explore-query-plan-v32",
       ranking: {
         graphMass: {
           policy: "explore-query-graph-mass-v2",
@@ -2381,7 +2463,7 @@ describe("explore query planning", () => {
     );
 
     expect(plan).toMatchObject({
-      policy: "explore-query-plan-v31",
+      policy: "explore-query-plan-v32",
       ranking: {
         policy: "explore-query-source-worth-v1",
         generatedSourceWorth: 0.3,

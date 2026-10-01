@@ -6,7 +6,7 @@ SymbolLattice is a local code search tool for developers and AI agents. Query a 
 
 [繁體中文](README.md) · [Get started](docs/getting-started.en.md) · [Validation and limitations](benchmarks/README.md) · [Report an issue](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.546.3` · Node.js `>=22.16 <23 || >=24 <25` · MIT
+`v0.547.0` · Node.js `>=22.16 <23 || >=24 <25` · MIT
 
 ## Start with “Where is this implemented?”
 
@@ -89,7 +89,7 @@ SymbolLattice uses static analysis. Text matches include source locations; query
 
 For rejection queries with an exact source reference, lower-priority focuses that only repeat covered query terms may be omitted. MCP text names their file paths; JSON lists the full omissions in `queryPlan.rejectionReferenceFiltering`. The bounded graph cannot prove those files irrelevant; query a file directly when needed.
 
-For longer queries with one source covering every concept retained within the term budget, some secondary focuses matching only shared terms may also be omitted. JSON `queryPlan.coveredContextFiltering` includes the decision evidence, source locations and exact symbol references; MCP text names follow-up paths. This does not establish irrelevance or complete flow resolution.
+For longer queries, one source or several declarations in a file supported by a literal directory term may reduce secondary focuses that only repeat partial concepts. JSON `queryPlan.coveredContextFiltering` or `coveredFileContextFiltering` cites the individual sources, omitted symbols and unmatched concepts; MCP text names follow-up paths. Joint lexical coverage establishes neither irrelevance nor a connected execution flow. See the [usage guide](docs/getting-started.en.md#upgrading-to-v05470) for conditions and protections.
 
 Concepts omitted from a long question can corroborate same-name declaration candidates through cited unresolved calls. Missing declarations can be looked up in selected files; a complete, generation-matched result with exactly two same-name declarations supplies both sources and `matchingDeclarationIds`, without selecting a call target. JSON `queryPlan.omittedDeclarationSearch` records scope, limits and truncation. **0.541.0 breaking change (result limits):** a candidate group can raise the maximum to ten focuses overall and four per file. JSON consumers must honor returned `limits`. File and total source-character budgets do not increase; this change requires no index rebuild.
 

@@ -109,6 +109,14 @@ See the [validation documentation](../benchmarks/README.md) for measured results
 
 Use the installation flow above with a new fixed commit or existing tag. After reinstalling, repeat Codex integration and run `SymbolLattice sync .` in each project. The project is in `0.x` development; check the target version's compatibility and migration notes before upgrading.
 
+### Upgrading to v0.547.0
+
+The optional `queryPlan.coveredFileContextFiltering` receipt is new. When single-focus compaction does not apply, a primary file with a literal directory qualifier and at least two selected declarations may reduce secondary files if its non-comment-prefixed source hits jointly cover all observed concepts in the bounded candidates, with at least six groups. Each omitted symbol's name words and non-comment-prefixed hits must cover at most half of those groups, and its complete literal hits must not cover every group. Strings and docstrings can still match; this is not a syntactic or semantic classification of executable code.
+
+The receipt lists each declaration's source hits, non-comment-prefixed hits, omitted symbols and `unmatchedTermGroups`. The latter means no match in the selected and omitted candidates, not an exhaustive absence claim for the project. Compound named operations, directly cited exact relationships, same-named declarations for written unresolved calls from protected sources, graph expansion and retained flow/gap/property follow-ups are protected; retaining a name does not resolve its target. Explicit-file and numeric-qualifier queries do not apply this rule. Follow exact symbol references or query a file directly, and inspect input, graph and source truncation.
+
+This bounded lexical output heuristic does not prove connections between declarations, irrelevance or complete necessary evidence. The existing single-focus `coveredContextFiltering` contract remains. CLI/MCP parameters, result limits and index format are unchanged; this query capability requires no index rebuild.
+
 ### Upgrading to v0.536.2
 
 For queries with at least 6 concept groups and one primary focus whose indexed source covers every group, some secondary files matching only shared terms and at most half of the groups may no longer be expanded. Named operations, directly cited exact relationships, same-named declarations for written unresolved calls from protected focuses, and retained flow follow-ups are protected; name-based retention does not confirm a call target. `queryPlan.coveredContextFiltering` lists the anchor's hit locations and each omitted symbol's range and source hits; MCP text provides paths and follow-up instructions.
