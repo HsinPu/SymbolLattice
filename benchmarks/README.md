@@ -58,6 +58,38 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.543.1 Preserve edge ordering while avoiding redundant collation
+
+The bounded graph edge comparator now skips `Intl.Collator.compare` only when the two file paths or relationship kinds are exactly equal strings. That sort component is already zero. Different strings still use the original collator, including canonically equivalent Unicode spellings; line, column, kind and ID tie-breaks and stable ordering remain unchanged. No source cache, SQL filtering, graph limits, evidence fields or freshness contract changes. This is a patch performance correction; extractor v435 and resolver v210 remain unchanged, with no additional index sync required.
+
+Windows / Node.js 24.19.0 replay captured the exact four edge-sort input batches produced by each fixed query against the existing pinned Django/NestJS/Fastify indexes from v0.543.0 (`67b4ae88133a8a9e03f504fe25504f0de356da40`). The final compiled baseline and candidate comparator bodies were replayed with two warmups and 20 alternating pairs per case. Every complete ordered row array matched. Table values are upper medians of the sum of batch sort times; they exclude SQL reads, input-array copying, response delivery and whole-query latency. No builds, tests or indexing ran during measurement.
+
+| Fixed query | Captured rows | Edge sorting v0.543.0 → v0.543.1 (ms) |
+| --- | ---: | ---: |
+| Django PostgreSQL version | 5,418 | 11.10 → 8.55 |
+| Django MySQL temporary connection | 7,454 | 20.75 → 13.44 |
+| Fastify cookie | 8,044 | 16.24 → 11.24 |
+| NestJS shutdown | 15,597 | 41.55 → 32.32 |
+| Fastify plugin dependencies | 7,356 | 14.43 → 10.63 |
+
+All 29 current fixed manifests / 36 tasks retained **complete response-object equality**, including file selection, connections, source text/ranges, unknown calls and references, declaration candidates, limits and truncation. The manually judged file counts remain 74 TP, three known FP, zero FN and 52 unjudged outputs; all 150/150 specified source facts and 3/3 specified unknown-call facts remain present. This is regression preservation, not a fix for the three existing PostgreSQL false positives or a new overall precision claim. Sixty deterministic adversarial sort sequences of 2,000 rows each also matched using the actual compiled comparator bodies with default, English and Taiwan Chinese collation: NFC/NFD spellings, case differences, Han, astral/private-use characters and same-line/column/kind/ID-collation ties. These are comparator checks, not new language support claims.
+
+Separate complete-service measurements used one warmup and eight alternating pairs with persistent readers against the **same** read-only indexes. All five complete responses matched; no tests, builds or indexing ran concurrently. Source freshness checks remain enabled.
+
+| Fixed query | Whole service v0.543.0 → v0.543.1 (upper median ms) |
+| --- | ---: |
+| Django PostgreSQL version | 1365.37 → 1344.40 |
+| Django MySQL temporary connection | 1612.64 → 1600.65 |
+| Fastify cookie | 595.46 → 583.58 |
+| NestJS shutdown, initial eight pairs | 1198.05 → 1285.31 |
+| Fastify plugin dependencies | 471.12 → 469.97 |
+
+The initial NestJS result is retained, not omitted: seed-retrieval medians fell from 742.85 to 735.82 ms while status/freshness medians rose from 285.93 to 308.77 ms; medians of individual stages do not add up to the median of whole calls. Because whole-query time was worse, an independent NestJS-only run increased to 16 alternating pairs. Its whole-service medians were 1117.56/1099.86 ms, seed retrieval 655.80/640.75 ms and status 292.61/288.34 ms, again with complete-response equality. Both runs remain available. These mixed whole-query observations and a small number of fixed queries do not establish a universal speedup or latency SLO; the verified improvement is the reduced edge-sort work reported above.
+
+The preceding I/O-pool experiment is not adopted: four alternating fresh-process pairs compared `UV_THREADPOOL_SIZE=4` with `16`, each process warming up once and running two measured complete queries. Outputs matched, but MySQL service/status medians rose from 1705.82/786.74 ms to 1738.70/828.81 ms; NestJS service time rose from 1288.44 to 1382.36 ms. Fastify cookie service time fell slightly, but its status check rose from 78.87 to 81.05 ms. These mixed process-local observations do not justify changing the runtime's thread pool. Reported post-query RSS values are observations, not peak-memory bounds. Prior non-Python-reference filtering and frontier incoming-edge suppression trials are also rejected: the first had no relevant service reads to avoid, and the second transferred fewer duplicate rows while four of five service cases slowed down. Complete evidence equality and lower row counts alone do not prove useful speed improvement.
+
+Reproduce fixed retrieval with `node benchmarks/mcp/task-retrieval.mjs --project <pinned-corpus> --manifest benchmarks/mcp/<manifest>.json --product-root <frozen-built-product> --repetitions 1 --output <external-report.json>`. Whole-service comparisons can use `node benchmarks/mcp/paired-explore.mjs --project <pinned-indexed-corpus> --baseline-root <v0.543.0> --candidate-root <v0.543.1> --query <fixed-query> --output <external-report.json> --pairs 8 --comparison complete --persistent-reader`. External frozen products use the same read-only v0.543.0 indexes via fixed database path routing. `%TEMP%/SymbolLattice-v5431-sort-final.mjs`, `sort-final.json`, `sort-unicode.mjs`, `sort-unicode.json`, `final-paired.mjs`, `final-paired.json`, `nest-recheck.mjs`, `nest-recheck.json`, `retrieval.mjs`, `retrieval/summary.json`, `uv-trial.mjs`, `uv-trial.json` and `full-test.log` retain the replay procedures and evidence; each suffix follows the `SymbolLattice-v5431-` prefix. Indexing, incremental sync and Agent completion time were not remeasured for this read-only comparator change. Typecheck, build and the full suite pass: 3,351 tests passed and four existing tests skipped.
+
 ## v0.543.0 Written JavaScript member-call evidence
 
 Parser-clean JavaScript function bodies now retain static identifier/`this`-rooted dotted call spellings as raw syntax facts when no existing call receipt ends at that callee site. Full names include `.call`, `.apply` and `.bind`, without assuming Function.prototype behavior, receiver types, resolved targets or execution. Function headers, module/class execution, computed or call-result receivers, optional chains, private members and callbacks without indexed declarations remain excluded. Query projection reads JS/JSX/CJS/MJS artifacts for selected owners once per file, merges existing unknown graph calls in source order, and preserves limits, truncation and generation guards. These facts are not duplicated in the graph or edge evidence tables. General queries show at most eight calls per focus from at most 64 candidates; exact-symbol exploration uses the existing 25-call bound. The property before a written `.call/.apply/.bind` is a lexical selection hint only. New JavaScript receipts are excluded from existing declaration/name supplementation: an initial corpus run showed that feeding them into that older path could reintroduce a file already replaced by property-use selection. The existing unhinted content-type manifest preserves that regression case.

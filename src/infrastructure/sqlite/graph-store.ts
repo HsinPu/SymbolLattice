@@ -2569,10 +2569,10 @@ const edgeRowCollator = new Intl.Collator();
 
 function compareEdgeRows(left: EdgeRow, right: EdgeRow): number {
   return (
-    edgeRowCollator.compare(left.file_path, right.file_path) ||
+    (left.file_path === right.file_path ? 0 : edgeRowCollator.compare(left.file_path, right.file_path)) ||
     left.start_line - right.start_line ||
     left.start_column - right.start_column ||
-    edgeRowCollator.compare(left.kind, right.kind) ||
+    (left.kind === right.kind ? 0 : edgeRowCollator.compare(left.kind, right.kind)) ||
     edgeRowCollator.compare(left.id, right.id)
   );
 }
