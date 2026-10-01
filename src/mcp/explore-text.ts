@@ -229,6 +229,13 @@ function renderFocuses(result: UnknownRecord): string[] {
     const numeric = record(focus.numericQualifier);
     if (numeric !== null && Array.isArray(numeric.terms)) output.push(
       `  Numeric qualifier: ${numeric.terms.filter(term => typeof term === "string").map(term => `\`${term}\``).join(", ")} matches the declaration name or cited source token.`);
+    const incoming = record(focus.incomingCallWitness);
+    if (incoming !== null) {
+      output.push("  Supplementary query-relevant caller with exact static cross-file module evidence; runtime dispatch is not proven.");
+      for (const edge of records(incoming.edges)) output.push(`  Static call${edgeDetails(edge)}.`);
+      output.push(`  ${finiteNumber(incoming.candidateCount) ?? "Unknown number of"} ranked eligible callers in the returned bounded graph; not repository-wide uniqueness.`);
+      if (incoming.candidatesTruncated === true || incoming.witnessesTruncated === true) output.push("  Further candidates or call witnesses may be omitted; follow the cited caller and target for more evidence.");
+    }
     const followup = record(focus.nameFollowup);
     const directory = record(focus.directoryContext);
     if (directory !== null) output.push(`  Query directory context: ${Array.isArray(directory.terms) ? directory.terms.join(", ") : "unknown"} matches a directory component of \`${text(directory.filePath) ?? "?"}\`, corroborated by literal source concepts; this is ranking evidence, not a resolved relation.`);

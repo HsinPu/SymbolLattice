@@ -4,6 +4,17 @@ import { sourceDeliveryIdentityFromText } from "../../src/application/source-del
 import { McpSourceSession } from "../../src/mcp/source-session.js";
 
 describe("MCP explore text rendering", () => {
+  it("cites incoming static calls and discloses bounded omissions without proving runtime dispatch", () => {
+    const output = renderExploreText({ focuses: [{ symbol: { name: "serialize" }, incomingCallWitness: {
+      candidateCount: 2, candidatesTruncated: true, witnessesTruncated: false,
+      edges: [{ kind: "calls", filePath: "lib/reply.js", range: { start: { line: 931, column: 23 } } }]
+    } }] });
+    expect(output).toContain("exact static cross-file module evidence");
+    expect(output).toContain("lib/reply.js:931");
+    expect(output).toContain("runtime dispatch is not proven");
+    expect(output).toContain("2 ranked eligible callers");
+    expect(output).toContain("Further candidates or call witnesses may be omitted");
+  });
   it("labels JavaScript written member names without claiming Function.prototype behavior", () => {
     const output = renderExploreText({ match: { symbol: { name: "run" } }, unresolvedCalls: {
       state: "available", truncated: false, items: [{ referenceName: "ns.registerPlugin.call", kind: "calls",

@@ -1,3 +1,4 @@
+import { verifyIncomingCallWitnesses } from "../../benchmarks/mcp/task-retrieval.mjs";
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
@@ -456,5 +457,30 @@ describe("task retrieval benchmark judgments", () => {
     const wrongPath = structuredClone(result);
     wrongPath.pathSpinePlan.spines[0].path.steps[0].to.id = "other";
     expect(() => verifyGraphEvidence(wrongPath, read)).toThrow();
+  });
+});
+
+
+describe("incoming static caller receipt verification", () => {
+  it("checks directed selected endpoints and rejects fabricated evidence", () => {
+    const range = { start: { line: 1, column: 1 }, end: { line: 1, column: 7 } };
+    const owner = { id: "owner", kind: "function", filePath: "a.js", range };
+    const target = { id: "target", kind: "function", filePath: "b.js", range };
+    const edge = { id: "call", sourceId: "owner", targetId: "target", kind: "calls", filePath: "a.js",
+      range, resolution: "exact", confidence: 1, evidence: { stage: "module", ruleId: "module.direct-call",
+        candidateSymbolIds: ["target"], resolutionPath: ["a.js", "b.js"] } };
+    const result = { focuses: [{ symbol: target }, { symbol: owner, reasons: ["exact-module-call-caller"],
+      incomingCallWitness: { policy: "exact-module-call-caller-v1", scope: "returned-bounded-graph", edges: [edge],
+        candidateCount: 1, candidatesTruncated: false, witnessesTruncated: false } }],
+      connections: [{ edge, source: owner, target }] };
+    expect(verifyIncomingCallWitnesses(result, () => "target()")).toEqual({ verifiedCallers: 1, verifiedEdges: 1, omittedConnections: 0 });
+    for (const mutate of [r => r.focuses[1].incomingCallWitness.edges[0].targetId = "missing",
+      r => r.focuses[1].incomingCallWitness.edges[0].evidence.stage = "lexical",
+      r => r.focuses[1].incomingCallWitness.edges[0].range.end.line = 20,
+      r => r.focuses[1].incomingCallWitness.edges[0].evidence.candidateSymbolIds.push("other"),
+      r => r.connections = []]) {
+      const bad = structuredClone(result); mutate(bad);
+      expect(() => verifyIncomingCallWitnesses(bad, () => "target()")).toThrow();
+    }
   });
 });

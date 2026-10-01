@@ -277,6 +277,64 @@ export function verifyPropertyUseFollowups(result) {
   return { verifiedFollowups: uses.length, verifiedEdges, unverifiedEdges };
 }
 
+/** Validate caller receipts against selected endpoints and pinned written source. */
+export function verifyIncomingCallWitnesses(result, readSource) {
+  const focuses = result.focuses ?? [], additions = focuses.filter(f => f.incomingCallWitness);
+  assert.ok(additions.length <= 1);
+  const byId = new Map(focuses.map(f => [f.symbol.id, f]));
+  const connections = new Map((result.connections ?? []).map(c => [c.edge.id, c]));
+  let verifiedEdges = 0, omittedConnections = 0;
+  const source = site => {
+    assert.ok(!isAbsolute(site.filePath) && !site.filePath.split(/[\\/]/u).includes('..'));
+    const lines = readSource(site.filePath).split(/\r\n|\r|\n|\u2028|\u2029/u);
+    const { start, end } = site.range;
+    for (const point of [start, end]) assert.ok(Number.isInteger(point.line) && point.line >= 1 && point.line <= lines.length &&
+      Number.isInteger(point.column) && point.column >= 1 && point.column <= lines[point.line - 1].length + 1);
+    assert.ok(start.line < end.line || start.line === end.line && start.column < end.column);
+    return lines.slice(start.line - 1, end.line).map((line, i) => line.slice(i === 0 ? start.column - 1 : 0,
+      i === end.line - start.line ? end.column - 1 : undefined)).join('\n');
+  };
+  for (const focus of additions) {
+    const receipt = focus.incomingCallWitness;
+    assert.equal(receipt.policy, 'exact-module-call-caller-v1');
+    assert.equal(receipt.scope, 'returned-bounded-graph');
+    assert.ok(focus.reasons.includes('exact-module-call-caller'));
+    assert.ok(Number.isInteger(receipt.candidateCount) && receipt.candidateCount >= 1);
+    assert.equal(typeof receipt.candidatesTruncated, 'boolean');
+    assert.equal(typeof receipt.witnessesTruncated, 'boolean');
+    assert.ok(receipt.edges.length >= 1 && receipt.edges.length <= 8);
+    assert.equal(new Set(receipt.edges.map(e => e.id)).size, receipt.edges.length);
+    for (const edge of receipt.edges) {
+      const target = byId.get(edge.targetId);
+      assert.ok(target && ['function', 'method'].includes(target.symbol.kind));
+      assert.ok(['function', 'method'].includes(focus.symbol.kind));
+      assert.equal(edge.sourceId, focus.symbol.id);
+      assert.equal(edge.filePath, focus.symbol.filePath);
+      assert.notEqual(focus.symbol.filePath, target.symbol.filePath);
+      assert.equal(edge.kind, 'calls'); assert.equal(edge.resolution, 'exact'); assert.equal(edge.confidence, 1);
+      assert.equal(edge.evidence.stage, 'module');
+      assert.deepEqual(edge.evidence.candidateSymbolIds, [target.symbol.id]);
+      assert.deepEqual(edge.evidence.resolutionPath, [focus.symbol.filePath, target.symbol.filePath]);
+      const position = (a, b) => a.line - b.line || a.column - b.column;
+      assert.ok(position(edge.range.start, focus.symbol.range.start) >= 0 && position(edge.range.end, focus.symbol.range.end) <= 0);
+      const written = source(edge);
+      const binding = edge.evidence.commonJsBinding;
+      if (binding) {
+        assert.equal(binding.importSite.filePath, focus.symbol.filePath);
+        assert.equal(binding.exportSite.filePath, target.symbol.filePath);
+        assert.ok(source(binding.importSite).includes(binding.localName));
+        assert.ok(source(binding.exportSite).includes(binding.importedName));
+        assert.ok(written.includes(binding.localName));
+      }
+      const connection = connections.get(edge.id);
+      if (!connection && result.connectionsTruncated) omittedConnections++;
+      else { assert.ok(connection, 'Caller witness requires its selected connection'); assert.deepEqual(connection.edge, edge); }
+      verifiedEdges++;
+    }
+  }
+  return { verifiedCallers: additions.length, verifiedEdges, omittedConnections };
+}
+
 export function verifyNumericQualifiers(result) {
   if (result.queryPlan?.numericCoverage) {
     const coverage = result.queryPlan.numericCoverage;
@@ -865,6 +923,7 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
       directoryContextVerification: verifyDirectoryContexts(response),
       omittedDeclarationVerification: verifyOmittedDeclarationLeads(response,
         (file) => readFileSync(resolve(project, file), "utf8")),
+      incomingCallVerification: verifyIncomingCallWitnesses(response, (file) => readFileSync(resolve(project, file), "utf8")),
       propertyUseFollowupVerification: verifyPropertyUseFollowups(response),
       numericQualifierVerification: verifyNumericQualifiers(response),
       numericContainerVerification: verifyNumericContainerFiltering(response,

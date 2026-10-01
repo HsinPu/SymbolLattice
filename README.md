@@ -6,7 +6,7 @@ SymbolLattice 是提供給開發者與 AI Agent 的本機程式碼搜尋工具�
 
 [English](README.en.md) · [開始使用](docs/getting-started.md) · [驗證與限制](benchmarks/README.md) · [回報問題](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.543.1` · Node.js `>=22.13 <25` · MIT
+`v0.544.0` · Node.js `>=22.13 <25` · MIT
 
 ## 從「這段功能在哪裡？」開始
 
@@ -78,6 +78,8 @@ SymbolLattice doctor codex
 ## 支援範圍
 
 涵蓋 TypeScript／JavaScript、Python、Java、Go、Rust、C／C++、C# 與多種模板、設定格式。**各語言的解析深度不同**，可掃描不代表完整支援其型別、框架或跨檔語意。
+
+一般查詢可補上一個與查詢相關、且有精確跨檔靜態呼叫證據的呼叫者。JSON 的 `incomingCallWitness` 列出來源位置、候選範圍與截斷；只檢查已回傳的有界圖，不保證完整呼叫者清單或執行時派發；補充焦點可能增加一個檔案，請依回傳的 `limits` 處理，不需重建索引。
 
 問句中的詞若精確對應目錄名稱，且來源也涵蓋至少兩個概念，排序會採用這個目錄脈絡。JSON 的 `directoryContext` 會列出目錄詞與加權依據；這是字面相關性線索，不是已解析的程式關係。
 

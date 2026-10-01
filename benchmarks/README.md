@@ -58,6 +58,37 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.544.0 Supplement query-relevant incoming static callers
+
+General exploration can append one production function/method that has its own query-name and at least two source-concept matches, plus an existing exact cross-file `calls` edge to one of the first two query-relevant focuses. It preserves primary focus order and does not create or strengthen graph relationships. `incomingCallWitness` contains the original edges, bounded candidate count and candidate/witness truncation. The scope is only the returned graph: at most 4,096 symbols, 16,384 edges and eight witnesses for the added caller. Existing supplementary focuses share the ceiling; this pass cannot exceed nine total focuses and does not run for explicit-file queries. It can increase the returned file limit by one and the per-file focus limit; total source budgets remain bounded. These are static source witnesses, not proof of runtime dispatch, complete caller recall or repository-wide uniqueness. Extractor v435 and resolver v210 remain unchanged; no new index rebuild is required. The optional public receipt and caller selection are an additive capability, so 0.543.1 → 0.544.0 is a minor release.
+
+The unchanged 29 manifests / 36 tasks ran on the pinned corpora below, Windows / Node.js 24.19.0, one CLI repetition each, using frozen v0.543.1 and v0.544.0 builds against the same read-only v0.543.0 indexes. Original focus prefixes and every previously selected exact connection were retained. File scoring stays 74 TP, 3 FP, 0 FN and 52 unjudged; all 150 specified source facts remain present. Precision among judged returned files is 74/77 (96.10%), required-file recall 74/74 (100%); unjudged results are excluded, not counted as false positives. These known tasks are reused development/regression evidence, not a new held-out sample or repository-wide precision claim. Three existing PostgreSQL-related noise files remain unresolved.
+
+| Corpus | Repository | Fixed commit |
+| --- | --- | --- |
+| Django | https://github.com/django/django | `bc833e8883db4a333a6485d91637b78c85e2b13b` |
+| NestJS | https://github.com/nestjs/nest | `35c3ded6dbf3f23f917ae88d0ed966932788cae6` |
+| Fastify | https://github.com/fastify/fastify | `70b14e92c0b55e8201f5530ba2e6bab4e928c784` |
+
+Three task responses gain a caller: `error-response-status` and `outgoing-hook-errors` now expose `lib/reply.js#onErrorHook` with calls at lines 812/815 to `handleError`; `response-serializer-selection` exposes `lib/reply.js#serialize` and its line-931 call to `getSchemaSerializer`. The existing Espree oracle `parseCommonJsSource` / `verifyCommonJsReceipt` independently checked the call expression and destructured import / object export coordinates for all five emitted occurrences (three distinct sites). This does not resolve the returned `fnSerialize(data)` runtime target at line 933. CLI JSON output grows respectively from 551,849 → 654,493, 539,529 → 603,271 and 644,558 → 692,635 bytes; additional evidence has a measurable delivery cost.
+
+Whole-service comparisons used one warmup, eight alternating pairs per query, persistent readers, the same fixed read-only index and upper medians. No tests, builds or indexing ran concurrently. Five responses remained completely identical; the serializer response gained the above caller while preserving its original focuses and connections.
+
+| Query | Whole service v0.543.1 → v0.544.0 (ms) |
+| --- | --- |
+| postgresql | 1815.01 → 1881.53 |
+| mysql | 2331.85 → 2432.08 |
+| fastify-cookie | 491.42 → 479.17 |
+| nest-shutdown | 1111.52 → 1178.04 |
+| fastify-plugin | 444.16 → 443.46 |
+| fastify-serializer | 482.71 → 475.70 |
+
+Latency is mixed: three queries improved by 0.16–2.49%, while PostgreSQL, MySQL and Nest shutdown were 3.67%, 4.30% and 5.98% slower in this run. The serializer planning median increased 59.34 → 68.57 ms even though its whole-service median decreased. These observations do not establish a speed improvement or zero regression; freshness, seed retrieval and context work remain part of the measured service call. Indexing and Agent end-to-end query counts were not measured for this release. Follow-up performance work must address the added planning/output cost and recheck whole-service latency.
+
+Reproduce retrieval with `node benchmarks/mcp/task-retrieval.mjs --project <pinned-corpus> --manifest benchmarks/mcp/<unchanged-manifest>.json --product-root <frozen-built-product> --repetitions 1 --output <external-report.json>`. The report now checks `incomingCallVerification` against selected endpoints and pinned ranges; use the independent CommonJS Espree verifier for actual JavaScript import/export/call syntax. Compare timings with `node benchmarks/mcp/paired-explore.mjs --project <pinned-indexed-corpus> --baseline-root <v0.543.1> --candidate-root <v0.544.0> --query <fixed-query> --pairs 8 --persistent-reader --comparison timing-only --output <external-report.json>`; timing-only comparisons must separately check original focus order, connections and source facts. External artifacts from this run are `%TEMP%/SymbolLattice-v5440-retrieval/`, `SymbolLattice-v5440-incoming-audit.json` and `SymbolLattice-v5440-final-paired.json`.
+
+A preceding compound-name source scoring experiment was rejected: both uncapped and capped variants lost a required Fastify file and five specified facts (73 TP, 5 FP, 1 FN, 145/150 facts). It is not included in this release; improving one PostgreSQL ranking did not justify losses on other queries. Fixed task truth was not changed to accommodate the experiment.
+
 ## v0.543.1 Preserve edge ordering while avoiding redundant collation
 
 The bounded graph edge comparator now skips `Intl.Collator.compare` only when the two file paths or relationship kinds are exactly equal strings. That sort component is already zero. Different strings still use the original collator, including canonically equivalent Unicode spellings; line, column, kind and ID tie-breaks and stable ordering remain unchanged. No source cache, SQL filtering, graph limits, evidence fields or freshness contract changes. This is a patch performance correction; extractor v435 and resolver v210 remain unchanged, with no additional index sync required.

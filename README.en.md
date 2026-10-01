@@ -6,7 +6,7 @@ SymbolLattice is a local code search tool for developers and AI agents. Query a 
 
 [繁體中文](README.md) · [Get started](docs/getting-started.en.md) · [Validation and limitations](benchmarks/README.md) · [Report an issue](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.543.1` · Node.js `>=22.13 <25` · MIT
+`v0.544.0` · Node.js `>=22.13 <25` · MIT
 
 ## Start with “Where is this implemented?”
 
@@ -78,6 +78,8 @@ Other MCP clients can start the server with `SymbolLattice serve --mcp --project
 ## Supported scope
 
 Covers TypeScript/JavaScript, Python, Java, Go, Rust, C/C++, C#, and various template and configuration formats. **Analysis depth varies by language.** Discovering files does not imply complete type, framework, or cross-file semantic support.
+
+General queries can supplement one query-relevant caller with exact static cross-file call evidence. JSON `incomingCallWitness` cites source locations, bounded candidates and truncation. It inspects only the returned bounded graph and does not guarantee a complete caller list or runtime dispatch. Supplementation may add one file; respect the returned `limits`. No index rebuild is needed.
 
 When a query word exactly matches a directory component and source corroborates at least two concepts, ranking can use that directory context. JSON `directoryContext` lists the terms and score contribution; this is literal relevance evidence, not a resolved code relationship.
 

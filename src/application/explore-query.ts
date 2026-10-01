@@ -171,7 +171,8 @@ export type ExploreQuerySelectionReason =
   | "source-property-use"
   | "imported-call-declaration"
   | "query-directory-context"
-  | "omitted-query-call-declaration";
+  | "omitted-query-call-declaration"
+  | "exact-module-call-caller";
 
 export interface ExploreNumericQualifier {
   readonly policy: typeof EXPLORE_NUMERIC_QUERY.policy;
@@ -409,6 +410,7 @@ export interface ExploreQuerySelection {
   readonly nameFollowup?: import("./explore-name-followups.js").ExploreNameFollowup;
   readonly importedCallDeclaration?: import("./explore-imported-declarations.js").ExploreImportedDeclarationLead;
   readonly omittedQueryDeclaration?: import("./explore-omitted-declarations.js").ExploreOmittedDeclarationLead;
+  readonly incomingCallWitness?: import("./explore-incoming-callers.js").IncomingCallWitness;
   readonly reasons: readonly ExploreQuerySelectionReason[];
 }
 

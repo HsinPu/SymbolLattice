@@ -1,3 +1,4 @@
+import { supplementIncomingCallers } from "./explore-incoming-callers.js";
 import { randomUUID } from "node:crypto";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { isMainThread } from "node:worker_threads";
@@ -5965,6 +5966,7 @@ export class SymbolLatticeService {
         result.omittedDeclarationSearch?.candidatesTruncated === true, { names, namesTruncated: eligibleNames.length > names.length,
           ...(declarations === undefined ? {} : { projection: declarations }) });
     }
+    result = supplementIncomingCallers(bundle.snapshot, result, bundle.sourceLexical, this.isBoundedTraversalTruncated(bundle));
     this.exploreCallEvidence.set(result, candidates);
     return result;
   }
