@@ -235,6 +235,8 @@ describe("source discovery", () => {
       ["empty.ts", Buffer.alloc(0)],
       ["buffered-boundary.ts", Buffer.alloc(262_144, 0x65)],
       ["buffered-streamed.ts", Buffer.alloc(262_145, 0x66)],
+      ["split-utf8.ts", Buffer.concat([Buffer.alloc(262_144, 0x61), Buffer.from("\u{1f642}tail")])],
+      ["split-invalid.ts", Buffer.concat([Buffer.alloc(262_144, 0x61), Buffer.from([0xf0, 0x9f, 0x61])])],
       ["boundary.ts", Buffer.alloc(1024 * 1024, 0x61)],
       ["streamed.ts", Buffer.alloc(1024 * 1024 + 1, 0x62)]
     ] as const;

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/fastify/fastify",
+  "commit": "70b14e92c0b55e8201f5530ba2e6bab4e928c784",
+  "truthMethod": "Manually fixed from pinned lib/request.js lines 66-89 and lib/reply.js lines 867-895 before either product query. Both natural-language questions are new held-out tasks on the already-known Fastify repository after the v0.545.0 object-operation rule was frozen on the Express development case. Queries contain no answer file or private symbol names; request and response are user-visible concepts. Required source facts cover copied property descriptors, assignments in the generated constructor, both written prototype calls, retained props/parent fields and the returned constructor. This scope does not establish builtin identity, actual execution, framework dispatch or external dependency behavior. File judgments are partial; unlisted files are unjudged. Questions and truth will not be adjusted to product output, and this is not an unseen repository or repository-wide precision evaluation.",
+  "tasks": [
+    {
+      "id": "request-parent-prototypes-properties",
+      "split": "held-out",
+      "query": "How are request objects connected to parent prototypes while retaining their inherited properties?",
+      "requiredFiles": ["lib/request.js"],
+      "supportingFiles": [],
+      "irrelevantFiles": [],
+      "evidence": [
+        { "file": "lib/request.js", "line": 67, "text": "const props = R.props.slice()" },
+        { "file": "lib/request.js", "line": 80, "text": "this[prop.key] = prop.value" },
+        { "file": "lib/request.js", "line": 83, "text": "Object.setPrototypeOf(_Request.prototype, R.prototype)" },
+        { "file": "lib/request.js", "line": 84, "text": "Object.setPrototypeOf(_Request, R)" },
+        { "file": "lib/request.js", "line": 85, "text": "_Request.props = props" },
+        { "file": "lib/request.js", "line": 86, "text": "_Request.parent = R" },
+        { "file": "lib/request.js", "line": 88, "text": "return _Request" }
+      ]
+    },
+    {
+      "id": "response-parent-prototypes-properties",
+      "split": "held-out",
+      "query": "How are response objects connected to parent prototypes while keeping copied properties?",
+      "requiredFiles": ["lib/reply.js"],
+      "supportingFiles": [],
+      "irrelevantFiles": [],
+      "evidence": [
+        { "file": "lib/reply.js", "line": 868, "text": "const props = R.props.slice()" },
+        { "file": "lib/reply.js", "line": 887, "text": "this[prop.key] = prop.value" },
+        { "file": "lib/reply.js", "line": 890, "text": "Object.setPrototypeOf(_Reply.prototype, R.prototype)" },
+        { "file": "lib/reply.js", "line": 891, "text": "Object.setPrototypeOf(_Reply, R)" },
+        { "file": "lib/reply.js", "line": 892, "text": "_Reply.parent = R" },
+        { "file": "lib/reply.js", "line": 893, "text": "_Reply.props = props" },
+        { "file": "lib/reply.js", "line": 894, "text": "return _Reply" }
+      ]
+    }
+  ]
+}

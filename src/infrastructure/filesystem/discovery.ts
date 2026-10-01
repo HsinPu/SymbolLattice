@@ -1,8 +1,7 @@
 import { isUtf8 } from "node:buffer";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { open } from "node:fs/promises";
-import { readNativeFilePrefix } from "./native-prefix-read.js";
+import { readNativeFileIntoBuffer, readNativeFilePrefix } from "./native-prefix-read.js";
 import { homedir } from "node:os";
 import { isAbsolute, parse, relative, resolve, sep } from "node:path";
 
@@ -455,23 +454,8 @@ export async function hashUtf8File(filePath: string): Promise<string> {
  * reproduce those exact bytes. Read into one reused bounded buffer per concurrent slot;
  * BOM and invalid UTF-8 retain the decoded-text identity used by indexing.
  */
-async function readBoundedFreshnessBytes(filePath: string, bytes: Buffer): Promise<Uint8Array | null> {
-  const handle = await open(filePath, "r");
-  try {
-    let position = 0;
-    while (position < bytes.byteLength) {
-      const { bytesRead } = await handle.read(bytes, position, bytes.byteLength - position, position);
-      if (bytesRead === 0) break;
-      position += bytesRead;
-    }
-    return position === bytes.byteLength ? null : bytes.subarray(0, position);
-  } finally {
-    await handle.close();
-  }
-}
-
 async function hashFreshnessUtf8File(filePath: string, scratchBytes: Buffer): Promise<string> {
-  const bytes = await readBoundedFreshnessBytes(filePath, scratchBytes);
+  const bytes = await readNativeFileIntoBuffer(filePath, scratchBytes);
   if (bytes === null) return hashUtf8File(filePath);
   const hasBom = bytes.byteLength >= 3 && bytes[0] === 0xef &&
     bytes[1] === 0xbb && bytes[2] === 0xbf;

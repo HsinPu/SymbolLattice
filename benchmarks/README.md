@@ -59,6 +59,49 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.545.1 Reduce full-content freshness read overhead
+
+Native buffered UTF-8 freshness reads now use one Promise around callback-based open/read/close operations, avoiding a FileHandle Promise for each read. Short reads continue through EOF; reaching the 262,145-byte scratch capacity still requests the existing full streaming fallback after closing the descriptor. The same 32 concurrent slots reuse their own bounded buffers within one fingerprint invocation. Full content hashes, UTF-8/BOM/replacement semantics, source and configuration scope, error precedence, generation checks and receipt policies remain unchanged. This is a compatible internal performance patch; extractor v435, resolver v210 and index compatibility are unchanged.
+
+`npm run check`, `npm run build`, 77 focused filesystem/fresh-read tests and the complete suite passed: 3,399 tests, four existing skips. Regressions verify continued reads after short reads, actual-byte boundaries, EOF versus capacity, closing before settlement, later synchronous/asynchronous failures, close-error precedence, and valid/invalid UTF-8 crossing the buffered threshold. Existing tests retain raw Shell/Lua identities, BOM handling, reused-buffer safety, missing and inaccessible paths, nested ignores and strict generation/freshness behavior.
+
+### Source coverage and fixed truth
+
+Two new Fastify questions were manually fixed before either product query, after the v0.545.0 rule was frozen, in [`mcp/fastify-object-prototype-tasks.json`](mcp/fastify-object-prototype-tasks.json). They ask about request/response objects, parent prototypes and copied properties without answer filenames or private symbol names. Truth is pinned to `https://github.com/fastify/fastify`, commit `70b14e92c0b55e8201f5530ba2e6bab4e928c784`, with seven facts each in request.js:67-88 and reply.js:868-894. The original pre-query manifest SHA-256 is `2e28cf49f5a5342bf4a18a27eedeca908594cd0fee1cffbc1b875a2b61d55f0c`; neither questions nor truth were changed after results. Both versions return 14/14 facts and both required files. The necessary builders are already primary focuses, so neither query emits an operation lead; these are held-out questions on the known repository, not evidence of new positive generalization for the supplementary rule or an unseen repository.
+
+All unchanged prior 39 tasks plus these two questions, across 31 manifests, retain deeply equal complete responses between v0.545.0 and v0.545.1. All 179/179 specified source facts remain. Partial file-task judgments are 82 TP, 3 FP, 0 FN and 64 unjudged; the three known PostgreSQL noise files remain. File counts sum unique selected paths within each task, not unique repository files. Source verification checks the pinned text and coordinates independently. This scope does not establish repository-wide precision or exhaust all required evidence for arbitrary tasks. The four corpus URLs/commits and fixed indexes remain those documented under v0.544.0 and v0.545.0.
+
+### Performance
+
+Windows / Node.js 24.19.0 final built products use the same fixed read-only indexes. Full freshness checks run two warmup pairs and eight alternating-order measured pairs per corpus, asserting complete receipt equality on every run, including full verification and file counts. Standard medians, milliseconds:
+
+| Corpus | Indexed files | v0.545.0 total | v0.545.1 total | v0.545.0 source hash | v0.545.1 source hash |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Django | 3,366 | 652.561 | 531.222 | 354.753 | 228.412 |
+| NestJS | 1,738 | 296.229 | 221.457 | 165.702 | 99.990 |
+| Fastify | 338 | 57.358 | 44.943 | 39.566 | 28.258 |
+| Express | 158 | 27.302 | 22.632 | 17.131 | 11.714 |
+
+Freshness totals are 17.1-25.2% lower and source hashing medians are 28.6-39.7% lower in these runs. Discovery and configuration still perform the same work. An earlier external callback prototype also preserved complete receipts and lowered freshness medians on all four corpora; its reports remain separate from the final built product.
+
+Whole-service calls separately use persistent readers, one warmup and eight alternating-order pairs per query. Every complete response is equal; returned JSON sizes and raw-call/reference read counts remain unchanged. Upper medians, milliseconds:
+
+| Query | v0.545.0 | v0.545.1 |
+| --- | ---: | ---: |
+| PostgreSQL version | 1269.411 | 1154.143 |
+| MySQL version/cursor | 1448.913 | 1267.597 |
+| Fastify cookie headers | 495.478 | 458.598 |
+| NestJS shutdown | 1019.359 | 952.835 |
+| Fastify plugin rejection | 419.188 | 407.261 |
+| Fastify serializer | 469.829 | 447.180 |
+| Express request/response links | 213.937 | 207.976 |
+| Fastify request parent/properties | 485.099 | 475.207 |
+| Fastify response parent/properties | 532.562 | 509.303 |
+
+All nine medians are 2.0-12.5% lower in this fixed environment. This does not establish a universal speedup, SLO or no-regression guarantee on other systems. Measurements ran sequentially after tests, builds and quality verification finished; CLI startup/JSON delivery, first indexing, incremental sync, peak memory and total agent time/query count were not compared.
+
+Reproduce freshness with `node benchmarks/filesystem/freshness-verify.mjs --project <pinned-indexed-checkout> --baseline-product-root <v0.545.0-built-root> --candidate-product-root <v0.545.1-built-root> --repetitions 8 --output <external-report.json>`. Retrieval uses `mcp/task-retrieval.mjs` and the unchanged 30 prior manifests plus the new Fastify manifest; paired service timing uses `mcp/paired-explore.mjs --pairs 8 --persistent-reader --comparison timing-only`, with quality verified separately. `%TEMP%/SymbolLattice-v5451-retrieval.mjs`, `SymbolLattice-v5451-freshness-final.mjs` and `SymbolLattice-v5451-final-paired.mjs` preserve exact runners. Reports are in `SymbolLattice-v5451-retrieval/`, `SymbolLattice-v5451-heldout-baseline.json`, `SymbolLattice-v5451-freshness-final-{django,nest,fastify,express}.json`, `SymbolLattice-v5451-freshness-final-summary.json` and `SymbolLattice-v5451-final-paired.json`. The pre-query truth, initial freshness profile and prototype reports are retained separately. Frozen roots are `SymbolLattice-v5450-candidate` and `SymbolLattice-v5451-candidate`; final candidate files match all 761 workspace build files apart from the external read-only database-routing override and that file's line endings. No corpus or routing override is included in product source.
+
 ## v0.545.0 Supplement bounded written object operations
 
 Object/prototype questions can now supplement one independent JavaScript callable in an already selected production file. Admission requires at least two distinct query concepts in that callable's own non-comment source receipts and an existing unresolved syntax receipt written as `Object.setPrototypeOf`. The English query gate checks prototype terms or object terms with linking/connection/inheritance terms. This is a source lead, not a resolved graph relationship: the written `Object` identifier can be shadowed, and receiver identity, target and execution effects remain unknown. Original focus order and scores are preserved; nested callables already covered by selected callable source are excluded.
