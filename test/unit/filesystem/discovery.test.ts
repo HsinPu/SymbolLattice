@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, parse, resolve } from "node:path";
@@ -767,6 +768,33 @@ describe("source discovery", () => {
     expect(() => toProjectRelativePath(projectPath, resolve(projectPath, "..", "other.ts"))).toThrow(
       "outside the project"
     );
+  });
+
+  it("preserves standard SHA-256 and UTF-8 identities around the resident text boundary", () => {
+    expect(hashSource("")).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    expect(hashSource("abc")).toBe("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    const sources = ["繁體中文🙂", "\ufeffleading and embedded \ufeff marks", "lone high \ud800", "lone low \udc00",
+      ...[1_048_575, 1_048_576, 1_048_577].map((length) => "中".repeat(length - 1) + "\ud800")];
+    for (const source of sources) {
+      expect(hashSource(source)).toBe(createHash("sha256").update(source, "utf8").digest("hex"));
+    }
+  });
+
+  it("hashes only the actual raw byte view around buffered and resident byte boundaries", async () => {
+    const projectPath = resolve("resident-hash-byte-view-project");
+    const lengths = [0, 31, 262_144, 262_145, 4_999_999, 5_000_000, 5_000_001];
+    const backing = Buffer.alloc(5_000_033, Buffer.from([0xef, 0xbb, 0xbf, 0xff, 0x61, 0x80]));
+    const paths = lengths.map((_, index) => join(projectPath, `raw-${index}.lua`));
+    const views = lengths.map((length) => backing.subarray(17, 17 + length));
+    const byPath = new Map(paths.map((path, index) => [path, views[index]!]));
+    const reader: ProjectFilesystemReader = { ...nativeProjectFilesystemReader,
+      async readFile(path) { return byPath.get(path)!; } };
+    const fingerprints = await fingerprintSourcePaths(projectPath, paths, reader);
+    expect(fingerprints).toEqual(views.map((view, index) => ({ relativePath: `raw-${index}.lua`, language: "lua",
+      contentHash: createHash("sha256").update(view).digest("hex") })));
+    for (const fingerprint of fingerprints) {
+      expect(fingerprint.contentHash).not.toBe(createHash("sha256").update(backing).digest("hex"));
+    }
   });
 
   it("uses deterministic content hashes and identifies unsafe roots", () => {

@@ -60,6 +60,16 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.547.2 Reduce resident source hashing cost
+
+Bounded resident text and raw byte views use one-shot SHA-256; larger inputs and file streams retain incremental hashing. Full content identities, source evidence, read scheduling, policies, runtime requirements and index compatibility remain unchanged. The [source hash audit](filesystem/source-hash-audit.md) records the compatible patch, exact compiled-function replay, fixed sources and final build identity.
+
+All 36 fixed manifests / 51 tasks retain deeply equal complete responses and identical compiled MCP text, with 79/79 required file-task instances, 222/222 specified facts and 1,114 displayed term facts in 982 citation groups. Partial judgments remain 99 TP / 0 FP / 0 FN / 87 unjudged; overall precision is unmeasured. Four main read-only index hashes remain unchanged.
+
+Resident helper medians fall 2.10–10.63% across four corpora in 24 ABBA rounds; this excludes I/O, decoding and query work. Complete freshness uses 12 alternating pairs: source-hash medians fall on all four corpora, while total medians are lower on two and higher on two. Eighteen whole-call comparisons use 12 ABBA rounds; all 432 responses/texts match accepted QA and captured SQL/arguments/row counts remain equal. Thirteen medians are 0.05–2.92% lower and five 0.02–1.48% higher. These mixed results do not establish a universal speedup; indexing, sync, startup, peak memory and total Agent task time/query count were not compared.
+
+Typecheck, build, 84 focused tests, 71 filesystem tests on Node.js 22.16.0 and the full Node.js 24 suite pass (3,438 passed, four existing skips). Final products, source checks, helper/freshness/whole-call timings and earlier prototypes remain outside the repository under `%TEMP%/SymbolLattice-v5472-*`.
+
 ## v0.547.1 Reduce bounded symbol row read cost
 
 The three bounded symbol reads use native SQLite arrays and an eleven-column JavaScript mapping, retaining the object fallback, complete SQL/arguments/order/bounds, source receipts and generation checks. The [symbol row audit](mcp/symbol-row-read-audit.md) records the rejected freshness-scheduling prototype, exact final build identity and reproducible conditions. This compatible performance patch changes no index, parser policy, public query contract or runtime requirement.

@@ -6,7 +6,7 @@ SymbolLattice is a local code search tool for developers and AI agents. Query a 
 
 [繁體中文](README.md) · [Get started](docs/getting-started.en.md) · [Validation and limitations](benchmarks/README.md) · [Report an issue](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.547.1` · Node.js `>=22.16 <23 || >=24 <25` · MIT
+`v0.547.2` · Node.js `>=22.16 <23 || >=24 <25` · MIT
 
 ## Start with “Where is this implemented?”
 

@@ -1,5 +1,5 @@
 import { isUtf8 } from "node:buffer";
-import { createHash } from "node:crypto";
+import { createHash, hash as hashDigest } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { readNativeFileIntoBuffer, readNativeFilePrefix } from "./native-prefix-read.js";
 import { homedir } from "node:os";
@@ -187,6 +187,11 @@ export const SOURCE_FINGERPRINT_READ_POLICY =
   "streaming-raw-bytes-for-shell-and-lua-with-objective-c-header-classification-v4" as const;
 export const MAXIMUM_FRESHNESS_CONCURRENT_READS = 32 as const;
 const MAXIMUM_BUFFERED_FRESHNESS_BYTES = 262_144;
+// UTF-8 uses at most three bytes per UTF-16 code unit. Keep resident text
+// comfortably below the one-shot API's small-input guidance; large inputs
+// and file streams retain the incremental path.
+const MAXIMUM_ONE_SHOT_TEXT_CODE_UNITS = 1_048_576;
+const MAXIMUM_ONE_SHOT_BYTES = 5_000_000;
 /** Full source reads retain text, so keep descriptor pressure bounded on large repositories. */
 export const MAXIMUM_SOURCE_CONCURRENT_READS = 8 as const;
 
@@ -401,11 +406,15 @@ function isProvenCHeader(sourceText: string): boolean {
 }
 
 export function hashSource(sourceText: string): string {
-  return createHash("sha256").update(sourceText).digest("hex");
+  return sourceText.length <= MAXIMUM_ONE_SHOT_TEXT_CODE_UNITS
+    ? hashDigest("sha256", sourceText, "hex")
+    : createHash("sha256").update(sourceText).digest("hex");
 }
 
 function hashSourceBytes(sourceBytes: Uint8Array): string {
-  return createHash("sha256").update(sourceBytes).digest("hex");
+  return sourceBytes.byteLength <= MAXIMUM_ONE_SHOT_BYTES
+    ? hashDigest("sha256", sourceBytes, "hex")
+    : createHash("sha256").update(sourceBytes).digest("hex");
 }
 
 async function hashRawFile(filePath: string): Promise<string> {
