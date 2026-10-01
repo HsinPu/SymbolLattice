@@ -59,6 +59,61 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.544.4 Prefer concentrated literal identifier receipts
+
+Source matching now chooses the identifier covering the most query-concept groups for each returned term, rather than an incidental earlier occurrence. A non-comment occurrence still takes precedence over a whole-line comment; equal coverage keeps the earliest occurrence. Only the chosen receipt occurrences change. Their raw spellings remain unmodified; token counts, term frequencies, BM25, admission, scope, declaration bounds and scan limits remain unchanged. Two per-declaration coverage arrays replace repeated receipt-map presence checks; no cross-query source data is cached. Sharing an identifier is lexical corroboration, not a resolved relation or proof of runtime behavior. This is a compatible patch with no extractor/resolver version or index migration.
+
+Typecheck, build, 155 focused tests and the complete suite passed: 3,383 tests, four existing skips. Regressions cover body compounds, earliest ties, Unicode spelling/UTF-16 ranges, comment precedence, repeated inflections and many distinct tokens. All unchanged 29 manifests / 36 tasks on the pinned Django, NestJS and Fastify corpora/indexes documented under v0.544.0 preserve focus identity/order/scores and graph connections. Selected files remain 74 TP, 3 FP, 0 FN and 52 unjudged; all 150/150 specified source facts remain. Eighteen tasks change 55 focus lexical receipts. The source verifier independently checks token slices, file/line/column ranges and declaration containment against the pinned checkout. For PostgreSQL, both version and server now cite the actual `server_version` occurrence at base.py:544. This does not fix the three known PostgreSQL noise files or establish repository-wide precision.
+
+### New repository validation and retained evidence gap
+
+Express `https://github.com/expressjs/express` at `7ef98448f8b38099ab1ded55e458538ad47a51e7` was cloned only after freezing the receipt strategy. Two manually fixed source questions and ten required facts were recorded before either product query (original manifest SHA-256 `606115809272f59a6fc167b8b43b9e2bdada0151c394c6a69ff74fc2ca95bc90`). A third JSON question was fixed before its first run, on the now-known repository. `mcp/express-source-tasks.json` preserves all questions and source facts:
+
+| Express task | Required files found, both versions | Source facts, both versions | Evaluation phase |
+| --- | --- | --- | --- |
+| Response ETag/length/transfer encoding | 1/1 | 5/5 | Held out from receipt tuning |
+| Request/response links before routing | 1/1 | 0/5 | Originally held out; now development after diagnosis |
+| JSON replacer/spacing/escape | 1/1 | 5/5 | New held-out question on the known repository |
+
+The request-link query finds application.js but omits `handle` source at lines 165-177. A read-only inspection confirms that the symbol and its three lexical concepts are present in the bounded graph; the selected `use` and `defaultConfiguration` focuses consume that file's slots. Removing the prose phrase `each other` in an external trial did not restore these facts and was rejected. Neither the question nor its truth was weakened. This is an observed product evidence gap, not missing corpus/environment, and the new Express scope has not passed complete evidence acceptance. Other returned files remain partly unjudged; zero judged FP here is not overall precision. The goal still requires improving first-query evidence coverage, including this case. A separate information-to-info abbreviation trial also changed selection to an unjudged debug file and was not shipped; no precision benefit is claimed from its lower judged FP count.
+
+### Performance scope
+
+Final source matching/scoring replay uses eight captured scan inputs, three warmups and sixteen alternating-order pairs, preserving cache identity per original scan. Every document's token/frequency counts, terms, non-comment term availability, scores and truncation match baseline; complete receipts intentionally differ. Upper medians, milliseconds:
+
+| Source replay | v0.544.3 | v0.544.4 |
+| --- | ---: | ---: |
+| postgresql-server-version-tuple | 81.440 | 80.830 |
+| database-version-cursor-temporary-connection | 79.923 | 79.081 |
+| preserve-multiple-cookie-headers | 24.218 | 24.009 |
+| close-application-signal-listeners | 36.612 | 36.027 |
+| plugin-dependency-rejection | 20.672 | 20.486 |
+| response-serializer-selection | 28.005 | 27.686 |
+| error-response-status | 25.336 | 25.454 |
+| outgoing-hook-errors | 26.180 | 26.097 |
+
+Seven source medians are slightly lower and one is higher; differences are below one millisecond and do not establish a general speedup. Whole-service calls on the same fixed read-only indexes use persistent readers, one warmup and eight alternating pairs. Focus decisions/connections remain equal; complete responses intentionally change receipt positions:
+
+| Whole query | v0.544.3 (ms) | v0.544.4 (ms) |
+| --- | ---: | ---: |
+| postgresql | 1250.086 | 1286.879 |
+| mysql | 1442.788 | 1442.293 |
+| fastify-cookie | 447.850 | 446.059 |
+| nest-shutdown | 1074.940 | 1029.855 |
+| fastify-plugin | 433.970 | 428.580 |
+| fastify-serializer | 464.669 | 468.169 |
+
+The first run ranges from about 4.2% faster to 2.9% slower. The two slower medians received a separate sixteen-pair recheck; both runs are retained:
+
+| Recheck | v0.544.3 (ms) | v0.544.4 (ms) |
+| --- | ---: | ---: |
+| postgresql | 1258.729 | 1248.034 |
+| fastify-serializer | 468.512 | 456.052 |
+
+The recheck changes direction, so these observations do not establish universal acceleration, a no-regression guarantee or an SLO. No tests, builds or indexing ran during timing. First indexing, incremental sync, peak memory and total agent task time/query counts were not compared; Express indexing was setup, not an index-performance result.
+
+Reproduce quality with `node benchmarks/mcp/task-retrieval.mjs --project <pinned-indexed-checkout> --manifest benchmarks/mcp/<manifest>.json --product-root <built-root> --repetitions 1 --output <external-report.json>`, including the new Express manifest. Whole timing uses `benchmarks/mcp/paired-explore.mjs --pairs 8 --persistent-reader --comparison timing-only` with baseline/candidate roots and the unchanged manifest query; validate receipt changes separately. `%TEMP%/SymbolLattice-v5444-retrieval.mjs`, `SymbolLattice-v5444-express-final.mjs`, `SymbolLattice-v5444-source-final.mjs` and `SymbolLattice-v5444-final-paired{,-recheck}.mjs` retain the exact runners. Reports are in `SymbolLattice-v5444-retrieval/`, `SymbolLattice-v5444-express-final-{baseline,candidate}.json`, `SymbolLattice-v5444-receipt-audit.json`, `SymbolLattice-v5444-source-final.json` and `SymbolLattice-v5444-final-paired{,-recheck}.json`. Source inputs are `SymbolLattice-v5442-source-inputs-v2.json`; the original Express truth and rejected trials remain archived. Frozen roots are `SymbolLattice-v5443-candidate`, `SymbolLattice-v5444-candidate`, `SymbolLattice-v5444-express-baseline` and `SymbolLattice-v5444-express-final`; only external copies route fixed corpus paths to their read-only indexes. No routing or replay exports are in product sources.
+
 ## v0.544.3 Reduce symbol batch preparation and equal-field sorting
 
 `readSymbolRowsByIds` now reuses a prepared statement for equal-sized batches within one invocation. Each execution binds its own IDs and reads SQLite; no result rows or statements are retained between calls or generations. The 900-parameter ceiling and short-tail handling remain unchanged. Sorting skips locale collation only for exactly equal file paths or names; distinct strings retain the original `localeCompare` and tie-break rules. This compatible internal optimization is a patch; extractor/resolver versions and index compatibility are unchanged.

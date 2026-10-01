@@ -6,7 +6,7 @@ SymbolLattice 是提供給開發者與 AI Agent 的本機程式碼搜尋工具�
 
 [English](README.en.md) · [開始使用](docs/getting-started.md) · [驗證與限制](benchmarks/README.md) · [回報問題](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.544.3` · Node.js `>=22.13 <25` · MIT
+`v0.544.4` · Node.js `>=22.13 <25` · MIT
 
 ## 從「這段功能在哪裡？」開始
 
@@ -19,7 +19,7 @@ SymbolLattice explore "Where are incoming requests validated?" --project . --jso
 查詢結果可包含：
 
 - **相關檔案與符號**：從任務描述找到可能需要閱讀的實作。
-- **可核對的來源**：檔案路徑、行號與原始碼片段，方便確認判斷是否成立。
+- **可核對的來源**：檔案路徑、行號與原始碼片段，方便確認判斷是否成立。 同一識別字命中多個查詢概念時，詞彙證據會優先引用該位置。
 - **程式碼之間的關係**：已解析的呼叫、匯入、來源引用、繼承與框架入口。
 - **排序依據**：若符號因圖關係獲得排序加分，結果會列出一條可核對的候選連結，並標示省略數量。
 - **仍需追查的部分**：未解析呼叫、來源新鮮度與結果截斷資訊。

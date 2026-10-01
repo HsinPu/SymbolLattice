@@ -129,6 +129,8 @@ export function matchCallableSource(
     const found = new Map<number, SourceLexicalMatch>();
     const nonCommentFound = new Map<number, SourceLexicalMatch>();
     const frequencies = groups.map(() => 0);
+    const foundCoverage = groups.map(() => 0);
+    const nonCommentCoverage = groups.map(() => 0);
     let tokens = 0;
     let remaining: number = SOURCE_LEXICAL_LIMITS.maximumDeclarationCharacters;
     const endLine = Math.min(symbol.range.end.line, lines.length);
@@ -172,13 +174,24 @@ export function matchCallableSource(
         }
         for (const index of matchingGroups) {
           frequencies[index]! += 1;
-          if (found.has(index) && (wholeLineComment || nonCommentFound.has(index))) continue;
+          // Prefer one literal identifier covering more query concepts over an
+          // incidental earlier occurrence. Equal coverage keeps source order;
+          // non-comment evidence still takes precedence over comment evidence.
+          if (wholeLineComment
+            ? matchingGroups.length <= foundCoverage[index]!
+            : matchingGroups.length <= nonCommentCoverage[index]!) continue;
           const column = start + match.index + 1;
           const receipt: SourceLexicalMatch = { term: groups[index]![0]!, token, filePath: symbol.filePath,
             range: { start: { line, column }, end: { line, column: column + token.length } },
             ...(wholeLineComment ? { lineContext: "comment-prefixed" as const } : {}) };
-          if (!found.has(index)) found.set(index, receipt);
-          if (!wholeLineComment && !nonCommentFound.has(index)) nonCommentFound.set(index, receipt);
+          if (matchingGroups.length > foundCoverage[index]!) {
+            found.set(index, receipt);
+            foundCoverage[index] = matchingGroups.length;
+          }
+          if (!wholeLineComment && matchingGroups.length > nonCommentCoverage[index]!) {
+            nonCommentFound.set(index, receipt);
+            nonCommentCoverage[index] = matchingGroups.length;
+          }
         }
       }
       remaining -= bounded.length + 1;
@@ -188,7 +201,8 @@ export function matchCallableSource(
       }
     }
     // A lone incidental word is insufficient to introduce a body-only candidate.
-    // Preserve comment-only hits, but cite a non-comment occurrence when one was seen.
+    // Preserve comment-only hits, but cite the strongest non-comment identifier
+    // when one was seen. This is lexical corroboration, not a resolved relation.
     const matches = [...found.entries()].sort(([left], [right]) => left - right)
       .map(([index, match]) => nonCommentFound.get(index) ?? match);
     const nonCommentMatches = [...nonCommentFound.entries()].sort(([left], [right]) => left - right).map(([, match]) => match);

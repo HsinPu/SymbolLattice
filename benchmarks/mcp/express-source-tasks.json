@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/expressjs/express",
+  "commit": "7ef98448f8b38099ab1ded55e458538ad47a51e7",
+  "truthMethod": "Manually fixed from pinned lib/response.js lines 162-191 and lib/application.js lines 152-179 before either product query. Held out from the receipt-selection strategy, which was frozen on Django, Fastify and NestJS before this repository was cloned. Queries contain no answer file or symbol names; ETag is the user-visible protocol term. Scope is the written ETag generation conditions and length/header coordination, and the direct request/response assignments and prototype changes preceding router.handle. External middleware dispatch and dependency implementations are not scored. File judgments are partial; supporting paths are optional context, unlisted output stays unjudged. No truth will be adapted to product output. This is a new repository for this batch, not broad repository precision. The second task was later used to diagnose the already-frozen receipt strategy failure and test a rejected grammatical-phrase prototype; it is now development. Its original held-out reports remain archived. The required facts and question are unchanged. The JSON formatting/escape task was fixed from the same pinned source after the two-task run but before inspecting either response for this third question. The receipt strategy is unchanged; this is a new held-out question on the now-known Express repository, not an unseen repository.",
+  "tasks": [
+    {
+      "id": "response-etag-transfer-length",
+      "split": "held-out",
+      "query": "When is an ETag generated for a response, and how do length and transfer encoding interact?",
+      "requiredFiles": [
+        "lib/response.js"
+      ],
+      "supportingFiles": [
+        "lib/application.js",
+        "lib/utils.js"
+      ],
+      "irrelevantFiles": [],
+      "evidence": [
+        {
+          "file": "lib/response.js",
+          "line": 163,
+          "text": "var generateETag = !this.get('ETag') && typeof etagFn === 'function'"
+        },
+        {
+          "file": "lib/response.js",
+          "line": 182,
+          "text": "if (!this.get('Transfer-Encoding')) {"
+        },
+        {
+          "file": "lib/response.js",
+          "line": 183,
+          "text": "this.set('Content-Length', len);"
+        },
+        {
+          "file": "lib/response.js",
+          "line": 189,
+          "text": "if (generateETag && len !== undefined) {"
+        },
+        {
+          "file": "lib/response.js",
+          "line": 191,
+          "text": "this.set('ETag', etag);"
+        }
+      ]
+    },
+    {
+      "id": "request-response-before-routing",
+      "split": "development",
+      "query": "How are request and response objects linked to each other before routing begins?",
+      "requiredFiles": [
+        "lib/application.js"
+      ],
+      "supportingFiles": [
+        "lib/express.js"
+      ],
+      "irrelevantFiles": [],
+      "evidence": [
+        {
+          "file": "lib/application.js",
+          "line": 165,
+          "text": "req.res = res;"
+        },
+        {
+          "file": "lib/application.js",
+          "line": 166,
+          "text": "res.req = req;"
+        },
+        {
+          "file": "lib/application.js",
+          "line": 169,
+          "text": "Object.setPrototypeOf(req, this.request)"
+        },
+        {
+          "file": "lib/application.js",
+          "line": 170,
+          "text": "Object.setPrototypeOf(res, this.response)"
+        },
+        {
+          "file": "lib/application.js",
+          "line": 177,
+          "text": "this.router.handle(req, res, done);"
+        }
+      ]
+    },
+    {
+      "id": "json-response-format-escape",
+      "split": "held-out",
+      "query": "How is a JSON response formatted with a replacer and spaces, and how is escaping applied?",
+      "requiredFiles": [
+        "lib/response.js"
+      ],
+      "supportingFiles": [
+        "lib/application.js"
+      ],
+      "irrelevantFiles": [],
+      "evidence": [
+        {
+          "file": "lib/response.js",
+          "line": 242,
+          "text": "var body = stringify(obj, replacer, spaces, escape)"
+        },
+        {
+          "file": "lib/response.js",
+          "line": 249,
+          "text": "return this.send(body);"
+        },
+        {
+          "file": "lib/response.js",
+          "line": 1029,
+          "text": "? JSON.stringify(value, replacer, spaces)"
+        },
+        {
+          "file": "lib/response.js",
+          "line": 1032,
+          "text": "if (escape && typeof json === 'string') {"
+        },
+        {
+          "file": "lib/response.js",
+          "line": 1033,
+          "text": "json = json.replace(/[<>&]/g, function (c) {"
+        }
+      ]
+    }
+  ]
+}

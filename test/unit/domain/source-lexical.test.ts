@@ -15,8 +15,8 @@ describe("callable source lexical evidence", () => {
     expect(result.documents[0]!.tokens).toBe(6);
     expect(result.documents[0]!.frequencies).toEqual([6, 2]);
     expect(result.candidates[0]!.matches).toEqual([
-      { term: "response", token: "response", filePath: "src/work.ts", range: {
-        start: { line: 1, column: 1 }, end: { line: 1, column: 9 } } },
+      { term: "response", token: "responseSerializer", filePath: "src/work.ts", range: {
+        start: { line: 1, column: 28 }, end: { line: 1, column: 46 } } },
       { term: "serializer", token: "responseSerializer", filePath: "src/work.ts", range: {
         start: { line: 1, column: 28 }, end: { line: 1, column: 46 } } }
     ]);
@@ -44,6 +44,55 @@ describe("callable source lexical evidence", () => {
     );
     expect(javascript.candidates[0]!.matches.map(match => match.term)).toEqual(["instead", "values"]);
     expect(javascript.candidates[0]!.nonCommentMatches?.map(match => match.term)).toEqual(["values"]);
+  });
+  it("cites a shared body identifier rather than separated earlier concepts, preserving frequencies and bounds", () => {
+    const source = "function run(response) {\n  const server = hint;\n  return response_serializer(server_version);\n}";
+    const result = matchCallableSource(source, [callable(1, 4)], [["response"], ["serializer"], ["server"], ["version"]]);
+    const document = result.documents[0]!;
+    expect(document.tokens).toBe(9);
+    expect(document.frequencies).toEqual([2, 1, 2, 1]);
+    expect(document.matches.map(match => [match.term, match.token, match.range])).toEqual([
+      ["response", "response_serializer", { start: { line: 3, column: 10 }, end: { line: 3, column: 29 } }],
+      ["serializer", "response_serializer", { start: { line: 3, column: 10 }, end: { line: 3, column: 29 } }],
+      ["server", "server_version", { start: { line: 3, column: 30 }, end: { line: 3, column: 44 } }],
+      ["version", "server_version", { start: { line: 3, column: 30 }, end: { line: 3, column: 44 } }]
+    ]);
+    expect(result.candidates[0]!.nonCommentMatches).toEqual(document.matches);
+    expect(result.truncated).toBe(false);
+  });
+
+  it("keeps the first equally strong identifier and its original Unicode spelling and UTF-16 range", () => {
+    const source = "🚀 response ｒｅｓｐｏｎｓｅ_Ｓｅｒｉａｌｉｚｅｒ responseSerializer\n}";
+    const result = matchCallableSource(source, [callable(1, 2)], [["response"], ["serializer"]]);
+    expect(result.documents[0]!.frequencies).toEqual([3, 2]);
+    expect(result.candidates[0]!.matches).toEqual(["response", "serializer"].map(term => ({
+      term, token: "ｒｅｓｐｏｎｓｅ_Ｓｅｒｉａｌｉｚｅｒ", filePath: "src/work.ts", range: {
+        start: { line: 1, column: 13 }, end: { line: 1, column: 32 } }
+    })));
+  });
+
+  it("prefers non-comment evidence over a stronger comment and retains stronger comment-only evidence", () => {
+    const source = "# response_serializer\ndef run(response):\n    return serializer(response)\n# response_serializer";
+    const node = { ...callable(1, 4), filePath: "src/work.py",
+      range: { start: { line: 1, column: 1 }, end: { line: 4, column: 22 } } };
+    const result = matchCallableSource(source, [node], [["response"], ["serializer"]]);
+    expect(result.candidates[0]!.matches.map(match => [match.term, match.range.start.line])).toEqual([
+      ["response", 2], ["serializer", 3]
+    ]);
+    expect(result.candidates[0]!.nonCommentMatches).toEqual(result.candidates[0]!.matches);
+    const comments = matchCallableSource("# response\n# response_serializer", [{ ...node,
+      range: { start: { line: 1, column: 1 }, end: { line: 2, column: 22 } } }], [["response"], ["serializer"]]);
+    expect(comments.candidates[0]!.matches.map(match => [match.term, match.range.start.line, match.lineContext])).toEqual([
+      ["response", 2, "comment-prefixed"], ["serializer", 2, "comment-prefixed"]
+    ]);
+    expect(comments.candidates[0]!.nonCommentMatches).toEqual([]);
+  });
+
+  it("does not inflate identifier coverage with repeated words or overlapping inflections", () => {
+    const result = matchCallableSource("response responses responseResponse serializer\n}", [callable(1, 2)],
+      identifierTermGroups(["response", "responses", "serializer"]));
+    expect(result.documents[0]!.frequencies).toEqual([3, 1]);
+    expect(result.candidates[0]!.matches.map(match => match.token)).toEqual(["response", "serializer"]);
   });
 
   it("cites a non-comment occurrence before an earlier whole-line comment for the same term", () => {
@@ -162,7 +211,7 @@ describe("callable source lexical evidence", () => {
     const last = result.documents.at(-1)!;
     expect(last.frequencies).toEqual([3, 3]);
     expect(last.matches.map(({ token, range }) => [token, range.start.line])).toEqual([
-      ["payment", 4201], ["refund", 4201]
+      ["paymentRefund", 4202], ["paymentRefund", 4202]
     ]);
     expect(result.truncated).toBe(false);
   });
