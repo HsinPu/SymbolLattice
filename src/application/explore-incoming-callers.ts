@@ -29,11 +29,18 @@ export function supplementIncomingCallers(graph: ExploreQueryGraph, plan: Explor
   const anchors = new Set(plan.selection.slice(0, 2).filter(relevant).map(item => item.symbol.id));
   if (anchors.size === 0) return plan;
   const symbols = graph.symbols.slice(0, INCOMING_CALLER_LIMITS.maximumSymbols);
-  const byId = new Map(symbols.map(symbol => [symbol.id, symbol]));
+  // Filter on edge-local facts before allocating a symbol lookup. Preserve the
+  // original bounded edge order and validate ownership/path/ranges below.
+  const eligibleEdges = graph.edges.slice(0, INCOMING_CALLER_LIMITS.maximumEdges).filter(edge =>
+    edge.targetId !== null && anchors.has(edge.targetId) && edge.kind === "calls" &&
+    edge.resolution === "exact" && edge.confidence === 1 && edge.evidence?.stage === "module");
+  if (eligibleEdges.length === 0) return plan;
+  const neededIds = new Set(eligibleEdges.flatMap(edge => [edge.sourceId, edge.targetId]));
+  const byId = new Map(symbols.filter(symbol => neededIds.has(symbol.id)).map(symbol => [symbol.id, symbol]));
   const selected = new Set(plan.selection.map(item => item.symbol.id));
   const byCaller = new Map<string, GraphEdge[]>();
   const seen = new Set<string>();
-  for (const edge of graph.edges.slice(0, INCOMING_CALLER_LIMITS.maximumEdges)) {
+  for (const edge of eligibleEdges) {
     const owner = byId.get(edge.sourceId), target = edge.targetId === null ? undefined : byId.get(edge.targetId);
     if (owner === undefined || target === undefined || selected.has(owner.id) || !anchors.has(target.id) ||
         !["function", "method"].includes(owner.kind) || owner.filePath === target.filePath ||
@@ -49,6 +56,11 @@ export function supplementIncomingCallers(graph: ExploreQueryGraph, plan: Explor
     byCaller.set(owner.id, edges);
   }
   if (byCaller.size === 0) return plan;
+  // The planner uses the last source candidate per ID. With fewer than two
+  // supplied matches no caller can satisfy relevant(), so ranking cannot add
+  // a focus. Otherwise retain every candidate and the original ranking rules.
+  const sourceById = new Map((sourceLexical?.candidates ?? []).map(candidate => [candidate.symbolId, candidate]));
+  if (![...byCaller.keys()].some(id => (sourceById.get(id)?.matches.length ?? 0) >= 2)) return plan;
   const secondary = planExploreQuery({ ...graph, symbols: symbols.filter(symbol => byCaller.has(symbol.id)), edges: [] }, plan.query, sourceLexical);
   const choices = secondary.selection.filter(relevant);
   const item = choices[0];

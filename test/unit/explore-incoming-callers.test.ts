@@ -64,6 +64,21 @@ describe("bounded exact module caller supplementation", () => {
     expect(supplementIncomingCallers(graph, full, lexical)).toBe(full);
   });
 
+  it("uses the last lexical candidate per ID and does not borrow earlier source matches", () => {
+    const { graph, plan, lexical, caller } = fixture();
+    const withoutSource = { ...lexical, candidates: [...lexical.candidates, { symbolId: caller.id, matches: [] }] };
+    expect(supplementIncomingCallers(graph, plan, withoutSource).selection).toEqual(plan.selection);
+    const restored = { ...withoutSource, candidates: [...withoutSource.candidates, lexical.candidates[1]!] };
+    expect(supplementIncomingCallers(graph, plan, restored).selection.at(-1)?.symbol.id).toBe(caller.id);
+  });
+
+  it("does not inspect otherwise eligible endpoints beyond the supplied symbol bound", () => {
+    const { graph, plan, lexical, anchor, caller } = fixture();
+    const bounded = { ...graph, symbols: [anchor,
+      ...Array.from({ length: 4095 }, (_, i) => symbol(`padding${i}`, "unrelated")), caller] };
+    expect(supplementIncomingCallers(bounded, plan, lexical).selection).toEqual(plan.selection);
+  });
+
   it("discloses bounded alternatives, traversal omissions and witness truncation", () => {
     const { graph, plan, lexical, caller, edge } = fixture();
     const other = symbol("other", caller.name);

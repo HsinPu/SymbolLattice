@@ -46,6 +46,7 @@ These tools generate or validate large-project evidence outside the published np
 | `mcp/` | `paired-explore.mjs` | manual alternating service latency; optional `--persistent-reader` mirrors the default-project MCP worker; complete-response equality, scoped unresolved-call comparison, or timing-only mode for separately validated output changes |
 | `mcp/` | `paired-explore-text.mjs` | manual same-response MCP text comparison across two built products |
 | `mcp/` | `paired-query-planning.mjs` | manual alternating focus-planning latency, complete-plan equality, and separate seed-sort work counts on one fixed bounded graph bundle |
+| `mcp/` | `paired-incoming-callers.mjs` | manual alternating replay of captured bounded caller inputs; complete plan equality and frozen product fingerprints; excludes whole-query latency |
 | `mcp/` | `paired-source-lexical.mjs` | manual alternating frozen source-input replay with complete tokens, receipts, truncation and BM25 score equality; excludes whole-query latency |
 | `mcp/` | `paired-source-prefix-read.mjs` | manual captured source-prefix SQL replay on one read-only transaction; complete bounded-bundle, prefix and truncation equality; excludes whole-query latency |
 | `mcp/` | `paired-index-replace.mjs` | manual alternating full graph-generation replacement on separate disposable index copies |
@@ -57,6 +58,44 @@ These tools generate or validate large-project evidence outside the published np
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## v0.544.1 Reduce incoming-caller lookup work without changing evidence
+
+The caller pass first filters the same bounded edges by exact-call/module facts and selected anchors, then builds an ID lookup only for those edges' endpoints. Most measured queries have no eligible edge, so they avoid constructing a 4,096-symbol map. The serializer case needs three symbols; the two error cases need two. All original owner, endpoint, path, candidate-ID, source-range and duplicate-edge checks still run on retained edges in their original order. A secondary query plan is skipped only when every surviving caller has fewer than two supplied source matches; otherwise its candidate population and ranking stay unchanged. Duplicate lexical candidates follow the original planner's last-ID-wins rule. All lookups remain query-local; freshness, output bounds and static/unknown relationship semantics are unchanged. This compatible internal performance correction is patch 0.544.0 → 0.544.1, with no extractor/resolver or index format change.
+
+Final `npm run check`, `npm run build` and `npm test` passed: 3,360 tests and four existing skips. Added regressions cover duplicate lexical candidate identity and endpoints beyond the 4,096-symbol bound. The unchanged 29 manifests / 36 tasks ran on the same pinned Django, NestJS and Fastify corpora and read-only indexes documented under v0.544.0 below, using frozen v0.544.0 and v0.544.1 builds. Every complete CLI response is deeply identical, including focus order, selected connections, source windows, unresolved evidence, limits and truncation. The reused regression truth remains 74 TP, 3 FP, 0 FN, 52 unjudged and 150/150 specified source facts; five incoming call occurrences retain their verified receipts. This is not fresh held-out or repository-wide precision evidence, and the three known PostgreSQL noise files remain.
+
+`paired-incoming-callers.mjs` replayed eight captured helper inputs from those real corpora. The compiled baseline helper was intercepted only in an external capture checkout to record its original graph/plan/source-lexical/traversal arguments; the final timing roots are uninstrumented frozen builds. The replay records input SHA-256, both complete build fingerprints and versions, asserts complete plan equality before and after every pair, and verifies neither build changed. Windows / Node.js 24.19.0, three warmups, 30 alternating pairs, upper medians, no concurrent tests/builds/indexing. It excludes capture, JSON parsing, SQL, source reads, response delivery and whole-query latency.
+
+| Captured task | Caller helper v0.544.0 → v0.544.1 (ms) |
+| --- | --- |
+| postgresql-server-version-tuple | 1.9942 → 0.2957 |
+| database-version-cursor-temporary-connection | 0.0008 → 0.0011 |
+| preserve-multiple-cookie-headers | 1.9548 → 0.3058 |
+| close-application-signal-listeners | 2.6806 → 0.4316 |
+| plugin-dependency-rejection | 1.7314 → 0.3185 |
+| response-serializer-selection | 2.5921 → 1.0925 |
+| error-response-status | 2.3286 → 1.0959 |
+| outgoing-hook-errors | 2.3140 → 1.0485 |
+
+Seven nontrivial helper cases improve by 52.94–85.17%. The MySQL case already exits on the shared focus ceiling and its approximately one-microsecond values are timing noise, not a regression or improvement claim.
+
+Whole-service calls were separately measured with the same read-only index, persistent readers, one warmup and eight alternating pairs; no tests/builds/indexing or helper replay ran concurrently. Complete responses match for every pair. Timing includes normal status/freshness, bounded seed retrieval, planning, context and source work, but excludes CLI process startup and JSON delivery.
+
+| Query | Whole service v0.544.0 → v0.544.1 (ms) |
+| --- | --- |
+| postgresql | 1299.09 → 1293.15 |
+| mysql | 1622.23 → 1600.47 |
+| fastify-cookie | 568.47 → 565.12 |
+| nest-shutdown | 1131.80 → 1082.50 |
+| fastify-plugin | 454.47 → 473.65 |
+| fastify-serializer | 510.40 → 484.39 |
+
+Five whole-query medians are 0.46–5.09% lower; the plugin case is 4.22% higher in the first run. Its individual pairs and stages vary; a separate 16-pair recheck retains complete response equality but still measures 457.00 → 459.52 ms (0.55% higher). Preserve both observations: this establishes lower caller-pass work, not uniform whole-query speed or zero regression. The helper saves about 1.2–2.2 ms in these inputs while larger seed/freshness costs and scheduling variation remain. Agent end-to-end query counts, indexing performance and delivery-size improvement were not measured; output bytes remain unchanged because complete responses match.
+
+Reproduce helper replay with `node benchmarks/mcp/paired-incoming-callers.mjs --inputs <external-captured-inputs.json> --baseline-root <v0.544.0-built-root> --candidate-root <v0.544.1-built-root> --pairs 30 --output <external-report.json>`. Inputs are an array of `{ name, inputs }` cases; `inputs` contains the original argument arrays `[graph, plan, sourceLexical, traversalTruncated]`. Retrieval and whole-service commands follow the v0.544.0 section, using v0.544.0/v0.544.1 roots and `--comparison complete` for the latter. The same fixed task queries and truth were retained, with no answer hints added.
+
+External run artifacts: `%TEMP%/SymbolLattice-v5441-incoming-inputs.json`, `SymbolLattice-v5441-helper-final.json`, `SymbolLattice-v5441-retrieval/`, `SymbolLattice-v5441-final-paired.json` and `SymbolLattice-v5441-plugin-recheck.json`. The caller replay and whole-service reports retain raw samples; the external scripts perform full-response comparisons rather than treating unchanged file scores as sufficient evidence preservation.
 
 ## v0.544.0 Supplement query-relevant incoming static callers
 
