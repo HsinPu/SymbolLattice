@@ -403,7 +403,45 @@ describe("query-relevant upstream call evidence", () => {
     expect(plan.summary.replacedLowerRankedCallWindowCount).toBe(0);
   });
 
-  it.each([165, 190])("continues a higher-ranked path through a lower-ranked focus with caller end %i", endLine => {
+  it.each([false, true])("retains upstream guards through an already selected intermediate call with full envelope %s", fullEnvelope => {
+    const file = "src/body.ts";
+    const handler = symbol("errorHandler", file, 1), hook = symbol("errorHook", file, 40);
+    const body = symbol("processBody", file, 80);
+    const entry = { ...symbol("prepareBody", file, 150), range: {
+      start: { line: 150, column: 1 }, end: { line: 165, column: 2 }
+    } };
+    const first = edge("hook-handler", hook, handler, 41).edge;
+    const second = edge("body-hook", body, hook, 91).edge;
+    const third = edge("entry-body", entry, body, 162).edge;
+    const fillers = fullEnvelope ? [2, 3, 4].map(rank => {
+      const item = focus(rank, symbol(`other-${rank}`, file, rank * 200), rank * 200, rank * 200 + 4);
+      return { ...item, callers: { truncated: false, items: [20, 40].map(offset => {
+        const caller = symbol(`caller-${rank}-${offset}`, file, rank * 200 + offset);
+        return { symbol: caller, edge: edge(caller.id, caller, item.symbol, caller.range.start.line + 1).edge };
+      }) } };
+    }) : [];
+    const unrelatedCaller = symbol("otherCaller", file, 20);
+    const plan = planExploreSourceWindows([
+      { ...focus(1, handler, 1, 5),
+        callers: { items: fullEnvelope ? [{ symbol: unrelatedCaller, edge: edge("other-handler", unrelatedCaller, handler, 21).edge }] : [], truncated: false },
+        impact: { paths: [impactPath([handler, hook, body], [first, second])], truncated: false } },
+      ...fillers,
+      { ...focus(6, hook, 40, 44), callers: { items: [{ symbol: body, edge: second }], truncated: false },
+        impact: { paths: [impactPath([hook, body, entry], [second, third])], truncated: false } }
+    ], [], undefined, ["body", "error", "handler"]);
+    expect(plan.windows).toContainEqual(expect.objectContaining({
+      startLine: 88, endLine: 94, reason: "exact-focus-call", connectionEdgeIds: [second.id]
+    }));
+    expect(plan.windows.filter(window => window.reason === "exact-impact-call")).toEqual([
+      expect.objectContaining({ focusRank: 6, startLine: 150, endLine: 165,
+        connectionEdgeIds: [second.id, third.id] })
+    ]);
+    expect(plan.windows).toHaveLength(fullEnvelope ? 8 : 2);
+    expect(plan.summary.replacedLowerRankedCallWindowCount).toBe(fullEnvelope ? 1 : 0);
+  });
+
+  it.each([165, 190].flatMap(endLine => [false, true].map(lowerRankedProof => ({ endLine, lowerRankedProof }))))(
+    "continues a higher-ranked path with caller end $endLine and lower-ranked proof $lowerRankedProof", ({ endLine, lowerRankedProof }) => {
     const file = "src/body.ts";
     const root = symbol("errorHandler", file, 1), hook = symbol("errorHook", file, 40);
     const body = symbol("processBody", file, 80);
@@ -427,7 +465,12 @@ describe("query-relevant upstream call evidence", () => {
     const plan = planExploreSourceWindows([
       { ...focus(1, root, 1, 5), impact: { paths: [sidePath, impactPath([root, hook, body], [first, second])], truncated: false } },
       ...fillers,
-      { ...focus(6, hook, 40, 44), impact: { paths: [sideContinuation, impactPath([hook, body, entry], [second, third])], truncated: false } }
+      { ...focus(6, hook, 40, 44), impact: { paths: [sideContinuation, impactPath([hook, body, entry], [second, third])], truncated: false } },
+      ...(lowerRankedProof ? [{ ...focus(8, symbol("otherSink", file, 1800), 1800, 1804), impact: {
+        paths: [impactPath([symbol("otherSink", file, 1800), root, hook], [
+          edge("root-sink", root, symbol("otherSink", file, 1800), 2).edge, first
+        ])], truncated: false
+      } }] : [])
     ], [], undefined, ["body", "error", "handler"]);
     expect(plan.windows).toHaveLength(8);
     expect(plan.windows.filter(window => window.reason === "exact-impact-call")).toEqual([
@@ -436,6 +479,62 @@ describe("query-relevant upstream call evidence", () => {
         endLine: 165, connectionEdgeIds: [second.id, third.id] })
     ]);
     expect(plan.summary.replacedLowerRankedCallWindowCount).toBe(2);
+  });
+
+  it("continues through an intermediate call already fully delivered by primary source", () => {
+    const file = "src/body.ts";
+    const handler = symbol("errorHandler", file, 1), hook = symbol("errorHook", file, 40);
+    const body = symbol("processBody", file, 80);
+    const entry = { ...symbol("prepareBody", file, 150), range: {
+      start: { line: 150, column: 1 }, end: { line: 165, column: 2 }
+    } };
+    const first = edge("hook-handler", hook, handler, 41).edge;
+    const second = edge("body-hook", body, hook, 91).edge;
+    const third = edge("entry-body", entry, body, 162).edge;
+    const plan = planExploreSourceWindows([
+      { ...focus(1, handler, 1, 5), impact: { paths: [impactPath([handler, hook, body], [first, second])], truncated: false } },
+      { ...focus(6, hook, 40, 44), impact: { paths: [impactPath([hook, body, entry], [second, third])], truncated: false } },
+      focus(7, body, 88, 94)
+    ], [], undefined, ["body", "error", "handler"]);
+    expect(plan.windows).toEqual([expect.objectContaining({ focusRank: 6, startLine: 150, endLine: 165,
+      reason: "exact-impact-call", connectionEdgeIds: [second.id, third.id] })]);
+  });
+
+  it("does not retain priority from an intermediate call after its window was displaced", () => {
+    const file = "src/body.ts", handler = symbol("errorHandler", file, 1);
+    const branches = [
+      { hook: symbol("bodyErrorHook", file, 40), body: symbol("processBody", file, 200), entry: symbol("prepareBody", file, 800), rank: 6 },
+      { hook: symbol("errorLog", file, 60), body: symbol("errorBuffer", file, 300), entry: symbol("flushErrors", file, 900), rank: 7 }
+    ].map(branch => ({ ...branch,
+      first: edge(`${branch.rank}-handler`, branch.hook, handler, branch.hook.range.start.line + 1).edge,
+      second: edge(`${branch.rank}-hook`, branch.body, branch.hook, branch.body.range.start.line + 1).edge,
+      third: edge(`${branch.rank}-body`, branch.entry, branch.body, branch.entry.range.start.line + 1).edge
+    }));
+    const fillers = [2, 3, 4].map(rank => {
+      const item = focus(rank, symbol(`other-${rank}`, file, rank * 2000), rank * 2000, rank * 2000 + 4);
+      return { ...item, callers: { truncated: false, items: [20, 40].map(offset => {
+        const caller = symbol(`caller-${rank}-${offset}`, file, rank * 2000 + offset);
+        return { symbol: caller, edge: edge(caller.id, caller, item.symbol, caller.range.start.line + 1).edge };
+      }) } };
+    });
+    const plan = planExploreSourceWindows([
+      { ...focus(1, handler, 1, 5), impact: {
+        paths: branches.map(({ hook, body, first, second }) => impactPath([handler, hook, body], [first, second])), truncated: false
+      } },
+      ...fillers,
+      ...branches.map(({ hook, body, entry, rank, second, third }) => ({
+        ...focus(rank, hook, hook.range.start.line, hook.range.end.line),
+        callers: { items: [{ symbol: body, edge: second }], truncated: false },
+        impact: { paths: [impactPath([hook, body, entry], [second, third])], truncated: false }
+      }))
+    ], [], undefined, ["body", "error", "handler"]);
+    expect(plan.windows).toHaveLength(8);
+    expect(plan.windows.filter(window => window.reason === "exact-impact-call")).toEqual([
+      expect.objectContaining({ focusRank: 6, connectionEdgeIds: [branches[0]!.second.id, branches[0]!.third.id] })
+    ]);
+    expect(plan.windows.some(window => window.connectionEdgeIds.includes(branches[0]!.second.id))).toBe(true);
+    expect(plan.windows.some(window => window.connectionEdgeIds.includes(branches[1]!.second.id))).toBe(false);
+    expect(plan.summary.replacedLowerRankedCallWindowCount).toBe(1);
   });
 
   it("prioritizes concept-rich paths and then their proven upstream entry over side branches", () => {
@@ -596,6 +695,19 @@ describe("explore source window planning", () => {
       truncationReason: "character-budget", range: { start: { line: 1, column: 1 }, end: { line: 5, column: 3 } } } };
     expect(planExploreSourceWindows([partial], [edge("partial-line", source, target, 5)]).windows)
       .toHaveLength(1);
+  });
+
+  it("recomputes coverage when source delivery changes between planning calls", () => {
+    const source = symbol("source", "src/source.ts", 1), target = symbol("target", "src/target.ts", 1);
+    const item = focus(1, source, 1, 5), focuses = [item], connections = [edge("last-line", source, target, 5)];
+    expect(planExploreSourceWindows(focuses, connections).windows).toEqual([]);
+    focuses[0] = { ...item, source: { ...item.source!, truncated: true,
+      truncationReason: "character-budget", range: { start: { line: 1, column: 1 }, end: { line: 5, column: 3 } } } };
+    expect(planExploreSourceWindows(focuses, connections).windows).toEqual([
+      expect.objectContaining({ startLine: 2, endLine: 8, connectionEdgeIds: ["last-line"] })
+    ]);
+    focuses[0] = item;
+    expect(planExploreSourceWindows(focuses, connections).windows).toEqual([]);
   });
 
   it("uses exact incoming and outgoing call sites within requested files and discloses others", () => {

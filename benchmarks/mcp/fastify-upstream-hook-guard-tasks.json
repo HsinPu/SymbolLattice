@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/fastify/fastify",
+  "commit": "70b14e92c0b55e8201f5530ba2e6bab4e928c784",
+  "truthMethod": "Manually checked pinned sources before the first experiment. Initially held out; its first-attempt results were inspected before the final selection refinement, so this is now a regression sample on a known repository. Static receipts do not prove runtime ordering. File judgments are incomplete. Three equivalent requests fixed before inspecting baseline/candidate outputs. Independently checked TypeScript AST on the pinned sources confirms the guard at 488, direct calls at 497/503/815, and the handler selection at error-handler.js:51. These are known-repository regressions, not held-out tasks.",
+  "tasks": [
+    {
+      "id": "response-hook-upstream-guard-1",
+      "split": "regression",
+      "query": "Trace errors from response transformation hooks through error handling.",
+      "requiredFiles": [
+        "lib/reply.js",
+        "lib/error-handler.js"
+      ],
+      "supportingFiles": [
+        "lib/hooks.js",
+        "lib/route.js"
+      ],
+      "irrelevantFiles": [
+        "lib/pluginUtils.js",
+        "lib/pluginOverride.js"
+      ],
+      "evidence": [
+        {
+          "file": "lib/reply.js",
+          "line": 488,
+          "text": "if (reply[kRouteContext].preSerialization !== null)"
+        },
+        {
+          "file": "lib/reply.js",
+          "line": 503,
+          "text": "onErrorHook(reply, err)"
+        },
+        {
+          "file": "lib/reply.js",
+          "line": 815,
+          "text": "handleError(reply, error, cb)"
+        },
+        {
+          "file": "lib/error-handler.js",
+          "line": 51,
+          "text": "const errorHandler = reply[kReplyNextErrorHandler] || context.errorHandler"
+        }
+      ]
+    },
+    {
+      "id": "response-hook-upstream-guard-2",
+      "split": "regression",
+      "query": "Which conditions and calls route response transformation hook failures into error handling?",
+      "requiredFiles": [
+        "lib/reply.js",
+        "lib/error-handler.js"
+      ],
+      "supportingFiles": [
+        "lib/hooks.js",
+        "lib/route.js"
+      ],
+      "irrelevantFiles": [
+        "lib/pluginUtils.js",
+        "lib/pluginOverride.js"
+      ],
+      "evidence": [
+        {
+          "file": "lib/reply.js",
+          "line": 488,
+          "text": "if (reply[kRouteContext].preSerialization !== null)"
+        },
+        {
+          "file": "lib/reply.js",
+          "line": 503,
+          "text": "onErrorHook(reply, err)"
+        },
+        {
+          "file": "lib/reply.js",
+          "line": 815,
+          "text": "handleError(reply, error, cb)"
+        },
+        {
+          "file": "lib/error-handler.js",
+          "line": 51,
+          "text": "const errorHandler = reply[kReplyNextErrorHandler] || context.errorHandler"
+        }
+      ]
+    },
+    {
+      "id": "response-hook-upstream-guard-3",
+      "split": "regression",
+      "query": "How are errors in response transformation hooks passed to error handling?",
+      "requiredFiles": [
+        "lib/reply.js",
+        "lib/error-handler.js"
+      ],
+      "supportingFiles": [
+        "lib/hooks.js",
+        "lib/route.js"
+      ],
+      "irrelevantFiles": [
+        "lib/pluginUtils.js",
+        "lib/pluginOverride.js"
+      ],
+      "evidence": [
+        {
+          "file": "lib/reply.js",
+          "line": 488,
+          "text": "if (reply[kRouteContext].preSerialization !== null)"
+        },
+        {
+          "file": "lib/reply.js",
+          "line": 503,
+          "text": "onErrorHook(reply, err)"
+        },
+        {
+          "file": "lib/reply.js",
+          "line": 815,
+          "text": "handleError(reply, error, cb)"
+        },
+        {
+          "file": "lib/error-handler.js",
+          "line": 51,
+          "text": "const errorHandler = reply[kReplyNextErrorHandler] || context.errorHandler"
+        }
+      ]
+    }
+  ]
+}

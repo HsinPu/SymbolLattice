@@ -60,6 +60,18 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.546.3 Preserve represented upstream call context
+
+This patch retains a validated upstream path's priority when its terminal call is already represented by primary source or a selected window. It protects the current witness during replacement and prevents less relevant paths from promoting higher-ranked branches. Primary source coverage is reused only within a single synchronous plan. Source-window selection advances to v12; allocation v5, existing output limits, ranking, index format, extractor v435 and resolver v210 remain. [The audit](mcp/represented-upstream-call-audit.md) records independent Fastify AST evidence, the rejected comment/rank trials and reproducible conditions.
+
+All 35 fixed manifests / 48 tasks retain 76/76 required files and 210/210 source facts. The 45 existing tasks preserve complete MCP text and complete responses apart from the policy identifier. Three equivalent Fastify questions were fixed before comparison; one gains the missing hook condition (3/4 to 4/4 facts), while two preserve their prior text. Coverage reuse keeps the complete repaired JSON/text equal in all 48 cases. Displayed source evidence verifies 1,067 term facts / 947 location groups. Partial task/file judgments are 96 TP, 2 FP, 0 FN and 79 unjudged. The existing-task judgment counts are unchanged; aggregate precision is not evidence of improved ranking, and PostgreSQL noise remains.
+
+On fifteen captured actual planner invocations, 36 balanced rounds measure sequence medians of 10.77810 ms for v0.546.2, 10.73978 ms for the continuity-only control and 9.87344 ms for the final build. The coverage reuse reduces component cost by 8.07% against the control; it does not establish the same whole-query speedup. The audit preserves final whole-call samples and their limitations.
+
+For fifteen whole calls with twelve balanced baseline/control/final rounds, all 540 measured responses and texts match their own verified QA. Nine final medians are 0.17–2.72% faster than v0.546.2; six are 0.21–2.19% slower. Control/final complete output is equal; bounded edge traces match direction, parameter count and row count in every round, and the four main read-only SQLite files retain their hashes. This mixed result does not establish universal latency improvement; the full table and initial comparison are retained in the audit.
+
+Typecheck, build, 155 focused tests and the full suite (3,427 passed, four existing skips) pass. Raw inputs, source oracle, final build identities, accepted retrieval, paired reports and failure artifacts remain outside the product sources under `%TEMP%/SymbolLattice-v5463-*`. First indexing, incremental sync, startup and total Agent task time/query count are not compared.
+
 ## v0.546.2 Bound identifier cache eviction work
 
 Pure spelling caches now retain FIFO insertion keys in bounded circular arrays, replacing a new `Map.keys().next()` lookup on each full-cache miss. The 4,096-entry capacity, 256-code-unit key limit, insertion-only eviction order, independent returned arrays and spelling alternatives are unchanged. No graph, source-position, query-result or generation state is cached. Public helper declarations, index format, extractor v435, resolver v210 and Node runtime requirements remain unchanged; this is an internal performance patch.
