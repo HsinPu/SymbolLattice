@@ -582,6 +582,37 @@ function renderUnresolvedCalls(result: UnknownRecord): string[] {
     caveat];
 }
 
+function renderUnresolvedReferences(result: UnknownRecord): string[] {
+  const lines: string[] = [];
+  const focuses = records(result.focuses);
+  for (const context of focuses.length > 0 ? focuses : [result]) {
+    const evidence = record(context.unresolvedReferences);
+    if (evidence === null) continue;
+    const owner = symbolReference(record(context.symbol) ?? record(record(context.match)?.symbol)) ?? "selected symbol";
+    if (evidence.state !== "available") {
+      lines.push(`- \`${owner}\`: unresolved-reference evidence ${text(evidence.state) ?? "unavailable"}.`);
+      continue;
+    }
+    const leads = record(evidence.sameClassDeclarationLeads);
+    const leadByEdgeId = new Map(records(leads?.items).map((lead) => [text(lead.edgeId), lead]));
+    for (const edge of records(evidence.items)) {
+      const lead = leadByEdgeId.get(text(edge.id));
+      const declaration = record(lead?.declaration);
+      const sourceLine = record(lead?.declarationLine);
+      const sourceText = text(sourceLine?.text)?.trim().replaceAll("`", "\\`");
+      const candidate = declaration !== null && sourceText !== null && sourceText !== undefined
+        ? ` Same-class declaration candidate \`${symbolReference(declaration) ?? "unknown"}\` at \`${symbolLocation(declaration)}\`: \`${sourceText}\`${sourceLine?.truncated === true ? " (line shortened)" : ""}.`
+        : "";
+      lines.push(`- \`${owner}\` contains written member occurrence \`${text(edge.referenceName) ?? "unknown member"}\`${edgeDetails(edge)}; target unknown.${candidate}`);
+    }
+    if (evidence.truncated === true) lines.push(`- Additional recorded member occurrences for \`${owner}\` were truncated; inspect its cited source.`);
+    const omitted = finiteNumber(leads?.omittedCount);
+    if (omitted !== null && omitted > 0) lines.push(`- ${omitted} additional same-class declaration candidates for \`${owner}\` were omitted.`);
+  }
+  return lines.length === 0 ? [] : ["**Unresolved Member References**", "", ...lines,
+    "These are static non-call occurrences, including assignment and deletion targets. They do not establish reads, writes, receiver types, descriptor behavior, or runtime dispatch. Declaration candidates do not resolve targets. Missing records do not prove that other references are absent."];
+}
+
 function renderSourceBackedLead(result: UnknownRecord): string[] {
   const priority = record(record(result.queryPlan)?.rejectionReferencePriority);
   if (priority?.evidenceScope !== "static-property-reference") return [];
@@ -624,6 +655,7 @@ export function renderExploreText(value: Record<string, unknown>): string {
     renderMatch(value),
     renderRelations(value),
     renderUnresolvedCalls(value),
+    renderUnresolvedReferences(value),
     renderEvidencePaths(value),
     renderLimitations(value)
   ].filter((section) => section.length > 0);

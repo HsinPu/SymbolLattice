@@ -97,6 +97,16 @@ export interface ActiveUnresolvedCallsProjection {
   }[];
 }
 
+/** Recorded static member occurrences; neither reads nor targets are inferred. */
+export interface ActiveUnresolvedReferencesProjection {
+  readonly generationMatched: boolean;
+  readonly references: readonly {
+    readonly sourceId: string;
+    readonly items: readonly GraphSnapshot["edges"][number][];
+    readonly truncated: boolean;
+  }[];
+}
+
 /** Declaration leads supported by imported construction context, never inferred dispatch. */
 export interface ImportedCallDeclaration {
   readonly call: GraphSnapshot["edges"][number];
@@ -276,6 +286,13 @@ export interface GraphStore {
     sourceIds: readonly string[],
     limitPerSymbol: number
   ): ActiveUnresolvedCallsProjection;
+  /** Bounded non-call syntax evidence, separate from recorded invocations. */
+  getActiveUnresolvedReferences?(
+    projectPath: string,
+    expectedGenerationId: string,
+    sourceIds: readonly string[],
+    limitPerSymbol: number
+  ): ActiveUnresolvedReferencesProjection;
   /** At most eight recorded optional calls and sixteen declaration-context witnesses. */
   getActiveImportedCallDeclarations?(
     projectPath: string,

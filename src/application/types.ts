@@ -686,6 +686,23 @@ export interface UnresolvedCallEvidence {
   };
 }
 
+export interface UnresolvedReferenceEvidence {
+  readonly state: "available" | "unavailable" | "generation-mismatch";
+  /** Static non-call occurrences include writes/deletes; no target or access mode is inferred. */
+  readonly items: readonly GraphEdge[];
+  readonly truncated: boolean;
+  readonly sameClassDeclarationLeads?: {
+    readonly policy: "bounded-python-member-reference-declarations-v1";
+    readonly scope: "returned-bounded-graph";
+    readonly items: readonly {
+      readonly edgeId: string;
+      readonly declaration: SymbolNode;
+      readonly declarationLine: SourceExcerptLine & { readonly truncated: boolean };
+    }[];
+    readonly omittedCount: number;
+  };
+}
+
 export interface ExploreResult {
   readonly status: IndexStatus;
   readonly match: SymbolMatch;
@@ -698,6 +715,7 @@ export interface ExploreResult {
   readonly callers: readonly GraphRelation[];
   readonly callees: readonly GraphRelation[];
   readonly unresolvedCalls?: UnresolvedCallEvidence;
+  readonly unresolvedReferences?: UnresolvedReferenceEvidence;
   readonly impact: readonly ImpactPath[];
   /** Additive unified-explore mode; omitted only by compatible legacy embeddings. */
   readonly mode?: "exact-symbol" | "query";
@@ -935,6 +953,7 @@ export interface SymbolContext {
   readonly callers: BoundedRelations;
   readonly callees: BoundedRelations;
   readonly unresolvedCalls?: UnresolvedCallEvidence;
+  readonly unresolvedReferences?: UnresolvedReferenceEvidence;
   readonly impact: BoundedImpactPaths;
 }
 

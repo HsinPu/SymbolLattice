@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/django/django",
+  "commit": "bc833e8883db4a333a6485d91637b78c85e2b13b",
+  "truthMethod": "Development exact-symbol source-dependency case from independently inspected CPython AST spans: get_database_version contains the non-call self.pg_version occurrence at base.py:235, and the same-class cached_property declaration starts at 542. This is a declaration candidate, not confirmed receiver or descriptor dispatch. Its explicit qualified-symbol query tests known-symbol followup, not natural-language exploration. The unchanged unhinted PostgreSQL server-information question is evaluated separately; no symbols or paths are added to that question. The oracle and external SQL prototype were inspected during development, so this is not blinded or held-out validation.",
+  "tasks": [
+    {
+      "id": "postgresql-written-version-member",
+      "split": "development",
+      "query": "django/db/backends/postgresql/base.py#DatabaseWrapper.get_database_version",
+      "requiredFiles": ["django/db/backends/postgresql/base.py"],
+      "supportingFiles": [],
+      "irrelevantFiles": [],
+      "evidence": [{ "file": "django/db/backends/postgresql/base.py", "line": 235, "text": "return divmod(self.pg_version, 10000)" }],
+      "unresolvedReferenceEvidence": [{
+        "focus": "django/db/backends/postgresql/base.py#DatabaseWrapper.get_database_version",
+        "file": "django/db/backends/postgresql/base.py",
+        "line": 235,
+        "referenceName": "self.pg_version",
+        "declaration": "django/db/backends/postgresql/base.py#DatabaseWrapper.pg_version"
+      }]
+    }
+  ]
+}

@@ -655,6 +655,34 @@ afterEach(async () => {
 });
 
 describe("SqliteGraphStore", () => {
+  it("bounds Python non-call references and rejects other owners, rules and generations", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const base = snapshot([symbol("caller", "caller"), symbol("other", "other")]);
+    const references: GraphEdge[] = [3, 1, 2].map((line) => ({
+      id: `ref-${line}`, sourceId: "caller", targetId: null, kind: "references", filePath: "src/example.ts",
+      range: { start: { line, column: 1 }, end: { line, column: 9 } }, resolution: "unresolved", confidence: 0,
+      referenceName: `obj.var${line}`, evidence: { ruleId: "syntax.python.member-reference.unknown-receiver",
+        stage: "syntax", candidateSymbolIds: [] }
+    }));
+    const graphSnapshot = { ...base, edges: [...base.edges, ...references,
+      { ...references[0]!, id: "other-rule", evidence: { ruleId: "other", stage: "syntax" as const, candidateSymbolIds: [] } },
+      { ...references[0]!, id: "call", kind: "calls" as const },
+      { ...references[0]!, id: "other-owner", sourceId: "other" }] };
+    store.replaceProjectFacts({ projectPath, snapshot: graphSnapshot, indexedAt: "2026-10-01T00:00:00.000Z",
+      artifactFacts: persistedFacts(graphSnapshot), indexInputs: indexInputs("member-references"), resolverVersion: "test" });
+    const generation = store.getStatus(projectPath).generationId!;
+    expect(store.getActiveUnresolvedReferences(projectPath, generation, ["caller", "caller"], 2))
+      .toEqual({ generationMatched: true, references: [{ sourceId: "caller",
+        items: [references[1], references[2]], truncated: true }] });
+    expect(store.getActiveUnresolvedReferences(projectPath, generation, ["caller"], 0).references)
+      .toEqual([{ sourceId: "caller", items: [], truncated: true }]);
+    expect(store.getActiveUnresolvedReferences(projectPath, "old", ["caller"], 2))
+      .toEqual({ generationMatched: false, references: [] });
+    expect(() => store.getActiveUnresolvedReferences(projectPath, generation, ["caller"], 65)).toThrow(RangeError);
+    store.close();
+  });
+
   it("projects only bounded unresolved call receipts from the requested generation and owners", async () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();

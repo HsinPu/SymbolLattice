@@ -33,6 +33,16 @@ export function scoreTask(task, result) {
         edge.kind === "calls" && edge.resolution === "unresolved" &&
         edge.targetId === null && edge.confidence === 0)) }));
   const judged = truePositives.length + falsePositives.length;
+  const referenceContexts = result.focuses?.length ? result.focuses : [{ reference: result.match?.symbol?.qualifiedName,
+    symbol: result.match?.symbol, unresolvedReferences: result.unresolvedReferences }];
+  const unresolvedReferenceEvidence = (task.unresolvedReferenceEvidence ?? []).map((item) => ({ ...item,
+    found: referenceContexts.some((context) => context.reference === item.focus &&
+      context.unresolvedReferences?.state === "available" && context.unresolvedReferences.items.some((edge) =>
+        edge.sourceId === context.symbol.id && edge.filePath === item.file && edge.range.start.line === item.line &&
+        edge.referenceName === item.referenceName && edge.kind === "references" && edge.resolution === "unresolved" &&
+        edge.targetId === null && edge.confidence === 0 && (item.declaration === undefined ||
+          context.unresolvedReferences.sameClassDeclarationLeads?.items.some((lead) =>
+            lead.edgeId === edge.id && lead.declaration.qualifiedName === item.declaration)))) }));
   return {
     selected, truePositives, falsePositives, falseNegatives, unjudged,
     requiredFileRecall: required.size === 0 ? null : (required.size - falseNegatives.length) / required.size,
@@ -41,7 +51,10 @@ export function scoreTask(task, result) {
     evidence, evidenceRecall: evidence.length === 0 ? null : evidence.filter((item) => item.found).length / evidence.length,
     unresolvedCallEvidence,
     unresolvedCallEvidenceRecall: unresolvedCallEvidence.length === 0 ? null :
-      unresolvedCallEvidence.filter((item) => item.found).length / unresolvedCallEvidence.length
+      unresolvedCallEvidence.filter((item) => item.found).length / unresolvedCallEvidence.length,
+    unresolvedReferenceEvidence,
+    unresolvedReferenceEvidenceRecall: unresolvedReferenceEvidence.length === 0 ? null :
+      unresolvedReferenceEvidence.filter((item) => item.found).length / unresolvedReferenceEvidence.length
   };
 }
 
@@ -370,6 +383,60 @@ export function verifyUnresolvedCalls(result, readSource) {
     }
   }
   return { verifiedCalls, verifiedPythonCallees };
+}
+
+/** Validate non-call syntax locations and candidate declarations, without access-mode/dispatch claims. */
+export function verifyUnresolvedReferences(result, readSource) {
+  let verifiedReferences = 0, verifiedLeads = 0;
+  const contexts = result.focuses?.length ? result.focuses :
+    [{symbol:result.match?.symbol, unresolvedReferences:result.unresolvedReferences}];
+  const compare = (a,b) => a.line-b.line || a.column-b.column;
+  for (const context of contexts) {
+    const evidence = context.unresolvedReferences;
+    if (!evidence) continue;
+    assert.equal(evidence.state, 'available');
+    assert.ok(evidence.items.length <= 8);
+    const owner = context.symbol;
+    for (const edge of evidence.items) {
+      assert.equal(edge.sourceId, owner.id); assert.equal(edge.filePath, owner.filePath);
+      assert.equal(edge.kind, 'references'); assert.equal(edge.targetId, null);
+      assert.equal(edge.resolution, 'unresolved'); assert.equal(edge.confidence, 0);
+      assert.equal(edge.evidence?.ruleId, 'syntax.python.member-reference.unknown-receiver');
+      assert.deepEqual(edge.evidence.candidateSymbolIds, []);
+      assert.ok(compare(edge.range.start, owner.range.start) >= 0 && compare(edge.range.end, owner.range.end) <= 0);
+      assert.ok(compare(edge.range.start, edge.range.end) < 0);
+      const lines = readSource(edge.filePath).split(/\r\n|\r|\n|\u2028|\u2029/u);
+      for (const point of [edge.range.start, edge.range.end]) assert.ok(Number.isInteger(point.line) &&
+        Number.isInteger(point.column) && point.line >= 1 && point.line <= lines.length &&
+        point.column >= 1 && point.column <= lines[point.line-1].length+1);
+      const fragment = lines.slice(edge.range.start.line-1, edge.range.end.line).map((line,index) =>
+        line.slice(index === 0 ? edge.range.start.column-1 : 0,
+          index === edge.range.end.line-edge.range.start.line ? edge.range.end.column-1 : undefined)).join('\n');
+      assert.equal(fragment.replace(/\\\n/g, '').replace(/#[^\n]*/g, '').replace(/\s/g, ''), edge.referenceName);
+      verifiedReferences++;
+    }
+    const leads = evidence.sameClassDeclarationLeads;
+    if (!leads) continue;
+    assert.equal(leads.policy, 'bounded-python-member-reference-declarations-v1');
+    assert.equal(leads.scope, 'returned-bounded-graph');
+    assert.ok(leads.items.length > 0 && leads.items.length <= 2);
+    assert.ok(Number.isSafeInteger(leads.omittedCount) && leads.omittedCount >= 0);
+    assert.equal(owner.kind, 'method');
+    const className = owner.qualifiedName.slice(0, owner.qualifiedName.lastIndexOf('.'));
+    for (const lead of leads.items) {
+      const edge = evidence.items.find(edge => edge.id === lead.edgeId);
+      assert.ok(edge); assert.equal(edge.referenceName, `self.${lead.declaration.name}`);
+      assert.equal(lead.declaration.filePath, owner.filePath); assert.equal(lead.declaration.kind, 'method');
+      assert.equal(lead.declaration.qualifiedName, `${className}.${lead.declaration.name}`);
+      assert.equal(lead.declarationLine.line, lead.declaration.range.start.line);
+      const actual = readSource(owner.filePath).split(/\r\n|\r|\n|\u2028|\u2029/u)[lead.declarationLine.line-1];
+      assert.ok(actual?.includes(lead.declaration.name));
+      if (lead.declarationLine.truncated) assert.ok(actual.startsWith(lead.declarationLine.text) && actual.length > lead.declarationLine.text.length);
+      else assert.equal(lead.declarationLine.text, actual);
+      verifiedLeads++;
+    }
+  }
+  return {verifiedReferences, verifiedLeads};
 }
 
 /** Check each candidate lead against the written call and the pinned declaration line. */
@@ -737,6 +804,11 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
       assert.ok(actual?.includes(item.text) && actual.includes(item.referenceName),
         `Call source truth mismatch: ${task.id} ${item.file}:${item.line}`);
     }
+    for (const item of task.unresolvedReferenceEvidence ?? []) {
+      assert.ok(item.file.endsWith('.py') && Number.isInteger(item.line));
+      assert.ok(readFileSync(resolve(project, item.file), 'utf8').split(/\r\n|\r|\n/u)[item.line-1]?.includes(item.referenceName),
+        `Member reference source truth mismatch: ${task.id} ${item.file}:${item.line}`);
+    }
   }
   const root = productRoot === undefined ? resolve(dirname(fileURLToPath(import.meta.url)), "../..") : resolve(productRoot);
   const productBuild = productFingerprint(root);
@@ -768,6 +840,7 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
       coveredContextVerification: verifyCoveredContextFiltering(response,
         (file) => readFileSync(resolve(project, file), "utf8")),
       unresolvedCallVerification: verifyUnresolvedCalls(response, (file) => readFileSync(resolve(project, file), "utf8")),
+      unresolvedReferenceVerification: verifyUnresolvedReferences(response, (file) => readFileSync(resolve(project, file), "utf8")),
       sameClassDeclarationVerification: verifySameClassDeclarationLeads(response,
         (file) => readFileSync(resolve(project, file), "utf8")),
       nameFollowupVerification: verifyNameFollowups(response),

@@ -1389,7 +1389,13 @@ export function resolveProjectFacts(input: {
   readonly frameworkProjectPlugins?: FrameworkProjectPluginRegistry;
 }): GraphSnapshot {
   const symbols = input.extractedFiles.flatMap((facts) => facts.symbols);
-  const structuralEdges = input.extractedFiles.flatMap((facts) => facts.edges);
+  // Non-call Python occurrences are retained in raw artifact facts and read
+  // through the generation-bound syntax projection. They have no graph target;
+  // duplicating them in every relationship snapshot adds indexing/history work
+  // without supplying a traversable relationship.
+  const structuralEdges = input.extractedFiles.flatMap((facts) => facts.edges.filter((edge) =>
+    !(edge.kind === "references" && edge.targetId === null && edge.resolution === "unresolved" &&
+      edge.evidence?.ruleId === "syntax.python.member-reference.unknown-receiver")));
   const frameworkPluginOutputs = projectFrameworkPluginOutputs({
     sourceDocuments: input.sourceDocuments,
     extractedFiles: input.extractedFiles,

@@ -1026,6 +1026,57 @@ describe("SymbolLatticeService", () => {
     expect(updated.callees).toEqual([]);
   });
 
+  it("delivers non-call references in exact/query output and refreshes them after source sync", async () => {
+    const projectPath = await createInlineProject({ "versions.py": [
+      "class Backend:", "    def get_database_version(self):", "        return self.pg_version",
+      "    @property", "    def pg_version(self):", "        return self.connection.info.server_version"
+    ].join("\n") });
+    const store = new SqliteGraphStore();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    expect(store.getSnapshot(projectPath).edges.some((edge) =>
+      edge.evidence?.ruleId === "syntax.python.member-reference.unknown-receiver")).toBe(false);
+    expect(store.getArtifactFacts(projectPath).some((facts) => facts.edges.some((edge) =>
+      edge.evidence?.ruleId === "syntax.python.member-reference.unknown-receiver"))).toBe(true);
+    const exact = await service.explore(projectPath, "versions.py#Backend.get_database_version");
+    expect(exact.unresolvedReferences).toMatchObject({ state: "available", truncated: false,
+      items: [{ referenceName: "self.pg_version", kind: "references", targetId: null, resolution: "unresolved", confidence: 0 }],
+      sameClassDeclarationLeads: { scope: "returned-bounded-graph", omittedCount: 0,
+        items: [{ declaration: { qualifiedName: "versions.py#Backend.pg_version" },
+          declarationLine: { line: 5, text: "    def pg_version(self):", truncated: false } }] } });
+    expect(exact.callees).toEqual([]);
+    expect(exact.unresolvedCalls?.items).toEqual([]);
+    const query = await service.explore(projectPath, "How is the database version retrieved?");
+    expect(query.focuses?.find((focus) => focus.symbol.name === "get_database_version")?.unresolvedReferences?.items)
+      .toContainEqual(exact.unresolvedReferences?.items[0]);
+    await writeFile(join(projectPath, "versions.py"), "class Backend:\n    def get_database_version(self):\n        return self.changed\n", "utf8");
+    await service.sync({ projectPath });
+    const updated = await service.explore(projectPath, "versions.py#Backend.get_database_version");
+    expect(updated.unresolvedReferences?.items.map((edge) => edge.referenceName)).toEqual(["self.changed"]);
+    expect(updated.unresolvedReferences?.sameClassDeclarationLeads).toBeUndefined();
+    Object.defineProperty(store, "getActiveUnresolvedReferences", { value: undefined });
+    expect((await service.explore(projectPath, "versions.py#Backend.get_database_version")).unresolvedReferences)
+      .toEqual({ state: "unavailable", items: [], truncated: false });
+    store.close();
+  });
+
+  it("prioritizes later query-relevant member references and exposes generation mismatches", async () => {
+    const projectPath = await createInlineProject({ "versions.py": ["def get_database_version(obj):",
+      ...Array.from({ length: 10 }, (_, index) => `    obj.unrelated${index}`), "    return obj.database_version"].join("\n") });
+    const store = new SqliteGraphStore();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog());
+    await service.init({ projectPath });
+    const query = await service.explore(projectPath, "How is the database version retrieved?");
+    const references = query.focuses?.find((focus) => focus.symbol.name === "get_database_version")?.unresolvedReferences;
+    expect(references).toMatchObject({ state: "available", truncated: true });
+    expect(references?.items).toHaveLength(8);
+    expect(references?.items.some((edge) => edge.referenceName === "obj.database_version")).toBe(true);
+    store.getActiveUnresolvedReferences = () => ({ generationMatched: false, references: [] });
+    expect((await service.explore(projectPath, "versions.py#get_database_version")).unresolvedReferences)
+      .toEqual({ state: "generation-mismatch", items: [], truncated: false });
+    store.close();
+  });
+
   it("cites active-generation same-class declaration leads for exact Python method followups", async () => {
     const projectPath = await createInlineProject({ "forms.py": [
       "class BaseForm:",

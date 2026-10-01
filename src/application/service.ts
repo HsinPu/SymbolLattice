@@ -149,6 +149,12 @@ import {
   withSameClassDeclarationLeads
 } from "./explore-unresolved-calls.js";
 import {
+  EXPLORE_UNRESOLVED_REFERENCE_CANDIDATE_LIMIT,
+  EXPLORE_UNRESOLVED_REFERENCE_LIMIT,
+  selectQueryUnresolvedReferences,
+  withMemberReferenceDeclarationLeads
+} from "./explore-unresolved-references.js";
+import {
   ReadQueryGenerationMismatchError,
   type ReadQueryFreshnessReceipt
 } from "./read-query-freshness.js";
@@ -5713,6 +5719,18 @@ export class SymbolLatticeService {
           plan.identifierTerms)
         : selected] as const;
     }));
+    const referenceCandidates = this.exploreUnresolvedReferences(normalizedProjectPath, bundle,
+      plan.selection.filter(({ symbol }) => symbol.filePath.toLowerCase().endsWith(".py"))
+        .map(({ symbol }) => symbol.id), EXPLORE_UNRESOLVED_REFERENCE_CANDIDATE_LIMIT);
+    const unresolvedReferences = new Map(plan.selection.flatMap(({ symbol }) => {
+      const evidence = referenceCandidates.get(symbol.id);
+      if (evidence === undefined) return [];
+      const selected = selectQueryUnresolvedReferences(evidence, plan.identifierTerms,
+        Math.min(bounds.relationLimit, EXPLORE_UNRESOLVED_REFERENCE_LIMIT));
+      return [[symbol.id, selected.state === "available" && selected.items.length > 0 && symbol.kind === "method"
+        ? withMemberReferenceDeclarationLeads(selected, symbol, methodDeclarations(), declarationLineFor)
+        : selected] as const];
+    }));
     const focuses: readonly ExploreFocus[] = plan.selection.map((selection, index) => ({
       ...selection,
       ...(contextPack.contexts[index] ?? this.toSymbolContext(
@@ -5728,7 +5746,9 @@ export class SymbolLatticeService {
         null,
         graphView
       )),
-      unresolvedCalls: unresolvedCalls.get(selection.symbol.id)!
+      unresolvedCalls: unresolvedCalls.get(selection.symbol.id)!,
+      ...(unresolvedReferences.has(selection.symbol.id)
+        ? { unresolvedReferences: unresolvedReferences.get(selection.symbol.id)! } : {})
     }));
     const rankBySymbolId = new Map(
       plan.selection.map((selection) => [selection.symbol.id, selection.rank])
@@ -5986,6 +6006,28 @@ export class SymbolLatticeService {
     }));
   }
 
+  private exploreUnresolvedReferences(
+    projectPath: string, bundle: ActiveGraphBundle, sourceIds: readonly string[], limit: number
+  ): ReadonlyMap<string, NonNullable<ExploreResult["unresolvedReferences"]>> {
+    if (sourceIds.length === 0) return new Map();
+    const read = this.graphStore.getActiveUnresolvedReferences;
+    const generationId = bundle.status.generationId;
+    if (typeof read === "function" && generationId !== null) {
+      const projection = read.call(this.graphStore, projectPath, generationId, sourceIds, Math.min(limit, 64));
+      return new Map(sourceIds.map((sourceId) => {
+        const references = projection.references.find((entry) => entry.sourceId === sourceId);
+        return [sourceId, !projection.generationMatched
+          ? { state: "generation-mismatch", items: [], truncated: false }
+          : references === undefined ? { state: "unavailable", items: [], truncated: false }
+          : { state: "available", items: references.items, truncated: references.truncated }];
+      }));
+    }
+    // Relationship snapshots do not carry these raw syntax receipts. Legacy
+    // adapters without the source projection cannot prove an empty result.
+    return new Map(sourceIds.map((sourceId) =>
+      [sourceId, { state: "unavailable" as const, items: [], truncated: false }]));
+  }
+
   private async exploreResultForBundle(
     normalizedProjectPath: string,
     reference: string,
@@ -6049,6 +6091,23 @@ export class SymbolLatticeService {
       citedUnresolvedCalls = withSameClassDeclarationLeads(unresolvedCalls, match.symbol,
         declarations, (declaration) => lines[declaration.range.start.line - 1] ?? null, []);
     }
+    let unresolvedReferences = match.symbol.filePath.toLowerCase().endsWith(".py")
+      ? this.exploreUnresolvedReferences(normalizedProjectPath, bundle, [match.symbol.id],
+        Math.min(NODE_RELATION_LIMIT, EXPLORE_UNRESOLVED_REFERENCE_LIMIT)).get(match.symbol.id)
+      : undefined;
+    if (unresolvedReferences !== undefined && sourceAvailability === "active-generation" && sourceText !== null &&
+        unresolvedReferences.items.length > 0) {
+      const declarations = new Map<string, SymbolNode[]>();
+      for (const symbol of bundle.snapshot.symbols) {
+        if (symbol.kind !== "method" || symbol.filePath !== match.symbol.filePath) continue;
+        const entries = declarations.get(symbol.qualifiedName) ?? [];
+        entries.push(symbol);
+        declarations.set(symbol.qualifiedName, entries);
+      }
+      const lines = sourceText.split(/\r\n|\r|\n|\u2028|\u2029/u);
+      unresolvedReferences = withMemberReferenceDeclarationLeads(unresolvedReferences, match.symbol,
+        declarations, (declaration) => lines[declaration.range.start.line - 1] ?? null);
+    }
     return {
       status,
       mode: "exact-symbol",
@@ -6058,6 +6117,7 @@ export class SymbolLatticeService {
       callers: relations.callers,
       callees: relations.callees,
       unresolvedCalls: citedUnresolvedCalls,
+      ...(unresolvedReferences === undefined ? {} : { unresolvedReferences }),
       impact: relations.impact,
       queryPlan: null,
       focuses: [],

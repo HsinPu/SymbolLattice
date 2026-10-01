@@ -29,8 +29,8 @@ describe("GraphQL schema relations v0.484", () => {
     const node = snapshot.symbols.find((symbol) => symbol.name === "Node");
 
     expect(indexed).toMatchObject({ initialized: true, stale: false });
-    expect(store.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v433");
-    expect(store.getActiveGraphBundle(projectPath).resolverVersion).toContain("project-resolver-v208");
+    expect(store.getActiveGraphBundle(projectPath).extractorVersion).toContain("multi-language-ast-v434");
+    expect(store.getActiveGraphBundle(projectPath).resolverVersion).toContain("project-resolver-v209");
     expect(snapshot.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({
         sourceId: user?.id,

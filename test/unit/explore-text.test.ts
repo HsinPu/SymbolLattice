@@ -4,6 +4,27 @@ import { sourceDeliveryIdentityFromText } from "../../src/application/source-del
 import { McpSourceSession } from "../../src/mcp/source-session.js";
 
 describe("MCP explore text rendering", () => {
+  it("labels non-call member occurrences and candidates without calling them reads or invocations", () => {
+    const output = renderExploreText({ match: { symbol: { name: "version" } }, unresolvedReferences: {
+      state: "available", truncated: true, items: [{ id: "reference", referenceName: "self.pg_version",
+        kind: "references", targetId: null, resolution: "unresolved", filePath: "base.py",
+        range: { start: { line: 235, column: 23 } } }], sameClassDeclarationLeads: {
+        items: [{ edgeId: "reference", declaration: { name: "pg_version", qualifiedName: "base.py#Backend.pg_version",
+          filePath: "base.py", range: { start: { line: 542, column: 5 } } },
+          declarationLine: { line: 542, text: "    def pg_version(self):", truncated: false } }], omittedCount: 1
+      } } });
+    expect(output).toContain("contains written member occurrence `self.pg_version`");
+    expect(output).toContain("Same-class declaration candidate");
+    expect(output).toContain("base.py:235");
+    expect(output).toContain("base.py:542");
+    expect(output).toContain("assignment and deletion targets");
+    expect(output).toContain("do not establish reads");
+    expect(output).toContain("Additional recorded member occurrences");
+    expect(output).toContain("1 additional same-class declaration candidates");
+    expect(output).not.toContain("invokes `self.pg_version`");
+    expect(renderExploreText({ unresolvedReferences: { state: "generation-mismatch", items: [] } }))
+      .toContain("unresolved-reference evidence generation-mismatch");
+  });
   it("labels the complete selected-file candidate group without choosing a dispatch target", () => {
     const output = renderExploreText({ focuses: [{ symbol: { name: "set_autocommit" },
       omittedQueryDeclaration: { scope: "selected-files-index", matchingDeclarationCount: 2,

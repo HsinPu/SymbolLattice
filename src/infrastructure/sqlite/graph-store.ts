@@ -48,6 +48,7 @@ import type {
   ActiveSourceDocumentsBundle,
   ActiveSourceDocumentsProjection,
   ActiveUnresolvedCallsProjection,
+  ActiveUnresolvedReferencesProjection,
   ActiveImportedCallDeclarationsProjection,
   ActiveNamedDeclarationsProjection,
   ActiveSourceSearchBundle,
@@ -3209,6 +3210,51 @@ export class SqliteGraphStore implements GraphStore {
           return { sourceId, items: rows.slice(0, limitPerSymbol).map(toGraphEdge), truncated: rows.length > limitPerSymbol };
         })
       };
+    });
+  }
+
+  public getActiveUnresolvedReferences(
+    projectPath: string, expectedGenerationId: string,
+    sourceIds: readonly string[], limitPerSymbol: number
+  ): ActiveUnresolvedReferencesProjection {
+    const normalizedProjectPath = resolve(projectPath);
+    if (!this.isInitialized(normalizedProjectPath)) return { generationMatched: false, references: [] };
+    const ids = [...new Set(sourceIds)];
+    if (ids.length > 64 || !Number.isInteger(limitPerSymbol) || limitPerSymbol < 0 || limitPerSymbol > 64) {
+      throw new RangeError("Unresolved-reference projection allows at most 64 symbols and 0–64 references per symbol.");
+    }
+    return this.withReadDatabase(normalizedProjectPath, (database) => {
+      if (getActiveGenerationId(database) !== expectedGenerationId) return { generationMatched: false, references: [] };
+      if (ids.length === 0) return { generationMatched: true, references: [] };
+      // Keep syntax receipts in their authoritative artifact record. This
+      // bounded projection reads only selected files, without duplicating each
+      // occurrence in edges, edge_evidence and retained relationship snapshots.
+      const rows = database.prepare(`WITH selected AS (
+          SELECT id, file_path FROM symbols WHERE id IN (${ids.map(() => "?").join(",")})
+        ), selected_files AS (SELECT DISTINCT file_path FROM selected), sites AS (
+          SELECT json_extract(e.value, '$.sourceId') AS source_id, e.value AS fact_json,
+            row_number() OVER (PARTITION BY json_extract(e.value, '$.sourceId') ORDER BY
+              json_extract(e.value, '$.range.start.line'), json_extract(e.value, '$.range.start.column'),
+              json_extract(e.value, '$.id')) AS ordinal
+          FROM selected_files f JOIN artifact_facts a ON a.generation_id = ? AND a.file_path = f.file_path
+          JOIN json_each(a.facts_json, '$.edges') e
+          JOIN selected s ON s.id = json_extract(e.value, '$.sourceId') AND s.file_path = json_extract(e.value, '$.filePath')
+          WHERE e.type = 'object' AND json_extract(e.value, '$.kind') = 'references'
+            AND json_type(e.value, '$.targetId') = 'null' AND json_extract(e.value, '$.resolution') = 'unresolved'
+            AND json_extract(e.value, '$.confidence') = 0
+            AND json_extract(e.value, '$.evidence.ruleId') = 'syntax.python.member-reference.unknown-receiver'
+        ) SELECT source_id, fact_json FROM sites WHERE ordinal <= ? ORDER BY source_id, ordinal`)
+        .all(...ids, expectedGenerationId, limitPerSymbol + 1) as unknown as { source_id: string; fact_json: string }[];
+      const byOwner = new Map<string, GraphEdge[]>();
+      for (const row of rows) {
+        const items = byOwner.get(row.source_id) ?? [];
+        items.push(JSON.parse(row.fact_json) as GraphEdge);
+        byOwner.set(row.source_id, items);
+      }
+      return { generationMatched: true, references: ids.map((sourceId) => {
+        const items = byOwner.get(sourceId) ?? [];
+        return { sourceId, items: items.slice(0, limitPerSymbol), truncated: items.length > limitPerSymbol };
+      }) };
     });
   }
 

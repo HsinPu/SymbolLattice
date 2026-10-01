@@ -7462,6 +7462,10 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
   if (recoveryCompatibility?.memberCallsSafe === true) {
     const resolvedCalls = new Set(edges.filter((edge) => edge.kind === "calls" && edge.resolution === "exact")
       .map((edge) => `${edge.sourceId}:${edge.range.end.line}:${edge.range.end.column}`));
+    const referenceKey = (sourceId: string, range: SourceRange): string =>
+      `${sourceId}:${range.start.line}:${range.start.column}:${range.end.line}:${range.end.column}`;
+    const recordedReferences = new Set(edges.filter((edge) => edge.kind === "references")
+      .map((edge) => referenceKey(edge.sourceId, edge.range)));
     function staticMemberName(node: PythonSyntaxNode): string | null {
       if (node.name === "VariableName" || node.name === "PropertyName") return nodeText(input, node);
       if (node.name !== "MemberExpression") return null;
@@ -7498,6 +7502,31 @@ export function extractPythonFileFacts(input: PythonExtractFileFactsInput): Arti
               sourceId: owner.id, targetId: null, kind: "calls", filePath: input.filePath, range,
               resolution: "unresolved", confidence: 0, referenceName,
               evidence: { ruleId: "syntax.python.member-call.unknown-receiver", stage: "syntax", candidateSymbolIds: [] }
+            });
+          }
+        }
+      }
+      // Record maximal static non-call member occurrences, including assignment
+      // and deletion targets. This is syntax evidence, not a read/write analysis
+      // or a guessed receiver/descriptor target. Static call chains already have
+      // their own call receipt; computed receivers retain only static segments.
+      if (owner !== null && node.name === "MemberExpression") {
+        const referenceName = staticMemberName(node);
+        const parent = node.parent;
+        const callee = parent?.name === "CallExpression" ? directChildren(parent)[0] : undefined;
+        const isCallee = callee !== undefined && callee.from === node.from && callee.to === node.to;
+        const inStaticChain = parent?.name === "MemberExpression" && staticMemberName(parent) !== null;
+        if (referenceName !== null && !isCallee && !inStaticChain) {
+          const range = rangeFor(lineStarts, node.from, node.to);
+          const key = referenceKey(owner.id, range);
+          if (!recordedReferences.has(key)) {
+            recordedReferences.add(key);
+            edges.push({
+              id: createEdgeId({ sourceId: owner.id, targetId: null, kind: "references",
+                line: range.start.line, column: range.start.column, referenceName }),
+              sourceId: owner.id, targetId: null, kind: "references", filePath: input.filePath, range,
+              resolution: "unresolved", confidence: 0, referenceName,
+              evidence: { ruleId: "syntax.python.member-reference.unknown-receiver", stage: "syntax", candidateSymbolIds: [] }
             });
           }
         }

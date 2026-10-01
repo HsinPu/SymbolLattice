@@ -5,8 +5,35 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { scoreTask, verifySourceExcerpts, verifyGraphEvidence, verifyLexicalMatches, verifyCoveredContextFiltering, verifySourceReuse, verifyUnresolvedCalls, verifySameClassDeclarationLeads, verifyNameFollowups, verifyOmittedDeclarationLeads, verifyPropertyUseFollowups, verifyNumericQualifiers, verifyNumericContainerFiltering, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
 import { verifyDirectoryContexts } from "../../benchmarks/mcp/task-retrieval.mjs";
+import { verifyUnresolvedReferences } from "../../benchmarks/mcp/task-retrieval.mjs";
 
 describe("task retrieval benchmark judgments", () => {
+  it("checks non-call source receipts and rejects invented ranges, targets and declaration headers", () => {
+    const source = "class Box:\n    def run(self):\n        return self.value\n    def value(self):\n        return 1";
+    const range = { start: { line: 2, column: 5 }, end: { line: 3, column: 26 } };
+    const result = { match: { symbol: { id: "owner", kind: "method", filePath: "a.py", qualifiedName: "a.py#Box.run", range } },
+      unresolvedReferences: { state: "available", items: [{ id: "ref", sourceId: "owner", targetId: null,
+        kind: "references", filePath: "a.py", referenceName: "self.value", confidence: 0, resolution: "unresolved",
+        range: { start: { line: 3, column: 16 }, end: { line: 3, column: 26 } },
+        evidence: { ruleId: "syntax.python.member-reference.unknown-receiver", candidateSymbolIds: [] } }],
+        sameClassDeclarationLeads: { policy: "bounded-python-member-reference-declarations-v1", scope: "returned-bounded-graph",
+          omittedCount: 0, items: [{ edgeId: "ref", declaration: { name: "value", kind: "method", filePath: "a.py",
+            qualifiedName: "a.py#Box.value", range: { start: { line: 4, column: 5 } } },
+            declarationLine: { line: 4, text: "    def value(self):", truncated: false } }] } } };
+    expect(verifyUnresolvedReferences(result, () => source)).toEqual({ verifiedReferences: 1, verifiedLeads: 1 });
+    const task = { requiredFiles: ["a.py"], supportingFiles: [], irrelevantFiles: [], evidence: [],
+      unresolvedReferenceEvidence: [{ focus: "a.py#Box.run", file: "a.py", line: 3, referenceName: "self.value",
+        declaration: "a.py#Box.value" }] };
+    expect(scoreTask(task, result).unresolvedReferenceEvidenceRecall).toBe(1);
+    expect(scoreTask(task, { ...result, unresolvedReferences: undefined }).unresolvedReferenceEvidenceRecall).toBe(0);
+    for (const mutate of [r => r.unresolvedReferences.items[0].targetId = "value",
+      r => r.unresolvedReferences.items[0].kind = "calls",
+      r => r.unresolvedReferences.items[0].range.start.column = 17,
+      r => r.unresolvedReferences.sameClassDeclarationLeads.items[0].declarationLine.text = "def invented():"]) {
+      const bad = structuredClone(result); mutate(bad);
+      expect(() => verifyUnresolvedReferences(bad, () => source)).toThrow();
+    }
+  });
   it("checks directory evidence against query terms, complete components and distinct source concepts", () => {
     const result = { queryPlan: { identifierTerms: ["mysql", "version", "cursor"] }, focuses: [{
       symbol: { filePath: "src/mysql/base.py" }, reasons: ["query-directory-context"],
