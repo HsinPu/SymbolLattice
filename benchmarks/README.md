@@ -60,6 +60,56 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.546.0 Read bounded graph rows without repeated named objects
+
+Bounded edge retrieval now uses native SQLite array rows when the runtime exposes `StatementSync.setReturnArrays`. Only candidates not already retained or seen in this read receive named edge objects. A feature-detected object-row path remains available. The twelve scalar columns, both directional SQL predicates and endpoint joins, 900-parameter batches, stable ordering, hop/node/relationship limits, retained-only hop accounting, generation fencing and late evidence hydration are unchanged. Every matching SQL row is still read; this does not cache graph results or suppress database reads. Extractor v435, resolver v210 and index compatibility are unchanged.
+
+### Runtime correction and migration
+
+**Breaking runtime change:** package engines, CLI admission and source installation now require `>=22.16 <23 || >=24 <25`. The earlier `>=22.13 <25` claim allowed official runtimes without the FTS5 modules used by the existing schema. Direct official Windows x64 probes found no FTS5 in 22.13.0 and 23.11.1; the initial 22.13 integration attempt failed 49 of 52 tests before reaching the row optimization. This failure is retained, not waived as missing corpus or environment. The upstream [22.15 build settings](https://github.com/nodejs/node/blob/v22.15.0/deps/sqlite/sqlite.gyp) omit FTS5; [22.16](https://github.com/nodejs/node/blob/v22.16.0/deps/sqlite/sqlite.gyp) and [24.0](https://github.com/nodejs/node/blob/v24.0.0/deps/sqlite/sqlite.gyp) enable it. The [native array API](https://nodejs.org/api/sqlite.html#statementsetreturnarraysenabled) is also available in those supported boundaries.
+
+Upgrade Node.js before reinstalling, retain existing indexes and run the usual `SymbolLattice sync .`; this batch changes no index format or parser policy and requires no rebuild. Unsupported official 22.13.0 and 23.11.1 now return `UNSUPPORTED_NODE_VERSION` before creating the requested project directory. Older fixed source references declaring the wider engine range remain installable on the planner's narrower validated runtime set. The object-row fallback does not extend the declared Node support range. This batch is minor under the project's `0.x` breaking-change rule because it corrects an incompatible runtime contract, despite the graph-read optimization itself being compatible.
+
+Official Node archives were verified against their release SHA-256 checksums. Both 22.16.0 and 24.0.0 passed all 52 SQLite integration tests, FTS5 trigram creation, CLI version smoke, complete baseline/candidate response equality on Django PostgreSQL, NestJS shutdown and Fastify request prototypes, and the real MCP worker generation verifier without fallback or crashes. These are boundary smoke/integration checks, not full-suite runs on both minimum runtimes.
+
+### Fixed evidence and performance
+
+All unchanged 32 manifests / 42 tasks preserve deeply equal complete responses and identical compiled MCP text against v0.545.2. All 67 required files and 188/188 fixed source facts remain. Partial task/file judgments stay 84 TP (including accepted supporting files), 3 FP, 0 FN and 66 unjudged. The three PostgreSQL noise files remain; this release claims no ranking or recall improvement. The independent displayed-citation/source audit retains 877 term facts across 785 location groups. Complete equality preserves existing evidence gaps; it does not prove those gaps absent or establish all-language relation precision.
+
+Pinned tracked sources are unchanged:
+
+- Django `https://github.com/django/django`, `bc833e8883db4a333a6485d91637b78c85e2b13b`.
+- NestJS `https://github.com/nestjs/nest`, `35c3ded6dbf3f23f917ae88d0ed966932788cae6`.
+- Fastify `https://github.com/fastify/fastify`, `70b14e92c0b55e8201f5530ba2e6bab4e928c784`.
+- Express `https://github.com/expressjs/express`, `7ef98448f8b38099ab1ded55e458538ad47a51e7`.
+
+The first three use `%TEMP%/SymbolLattice-v5430-indexes/<project>/index.sqlite`; Express uses its existing external checkout's `.SymbolLattice/index.sqlite`. Untracked `.SymbolLattice/` directories remain in the external checkouts. No tracked corpus sources, questions or truth manifests were changed. The frozen v0.546.0 candidate matches the post-prepack workspace build byte-for-byte except the external fixed database routing function.
+
+Final Windows / Node.js 24.19.0 timings use one warmup and eight alternating-order pairs per query, persistent read-only stores, the same fixed index and upper medians in milliseconds. Whole-call time includes service calls plus compiled MCP text rendering. A timing-driver wrapper around native `all()` records only returned-row counts and shapes; both builds share it. Every pair asserts complete response/text equality and identical directional SQL batches and row counts. Every nonempty bounded-edge row is an object in baseline and an array in candidate. No tests, builds, other validation or indexing ran during this final comparison.
+
+| Fixed query | Whole v0.545.2 | Whole v0.546.0 | Reduction | Seed v0.545.2 | Seed v0.546.0 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Django PostgreSQL version | 1125.867 | 1077.350 | 4.31% | 462.433 | 412.756 |
+| Django MySQL version/cursor | 1277.771 | 1213.550 | 5.03% | 574.136 | 499.591 |
+| Fastify cookie headers | 446.332 | 394.418 | 11.63% | 316.302 | 258.916 |
+| NestJS shutdown | 951.292 | 888.993 | 6.55% | 587.667 | 485.037 |
+| Fastify plugin rejection | 409.658 | 355.877 | 13.13% | 297.930 | 243.314 |
+| Fastify serializer | 500.973 | 425.531 | 15.06% | 338.645 | 277.735 |
+| Express request/response links | 240.756 | 203.866 | 15.32% | 154.062 | 121.167 |
+| Fastify request prototypes | 494.237 | 420.620 | 14.90% | 343.666 | 280.936 |
+| Fastify response prototypes | 468.338 | 408.821 | 12.71% | 322.147 | 269.138 |
+| Django password hash upgrade | 1212.436 | 1145.189 | 5.55% | 551.455 | 491.573 |
+
+The ten sampled whole-call medians fall 4.31-15.32%; seed-retrieval medians fall 10.74-21.35%. The same 6,064-23,528 bounded-edge SQL rows are transferred per measured query; this is a row-materialization optimization, not evidence of fewer database rows. These fixed-case observations do not establish a universal speedup, latency SLO or peak-memory bound. First indexing, incremental sync, CLI startup and total Agent task time/query counts were not compared.
+
+The preceding SQL experiments were rejected. A CTE excluding incoming rows already covered by the same outgoing batch transferred fewer rows but increased all three diagnostic medians (Django 1129.80 to 1202.26 ms; NestJS 992.39 to 1025.58; Fastify 467.64 to 487.10). Merged OR and UNION queries also failed to improve the three whole-call medians. Their complete final responses matched, but lower duplicate transfer alone did not prove useful speed. These trials changed only external built copies; `v5453` path labels identify unreleased experiments based on v0.545.2.
+
+Typecheck, build, 221 focused tests across the repaired installer suites and the remaining CLI/SQLite suites, the full Node 24.19 suite (3,416 passed, four existing skips), and `npm pack --dry-run` pass. The initial script-import test failure was resolved by preserving the repository's existing LF format for `.mjs`; the four affected suites then passed all 33 tests. The minimum-runtime and worker checks described above passed separately. No package, tag or release was published.
+
+Reproduce retrieval with `node benchmarks/mcp/task-retrieval.mjs --project <pinned-indexed-checkout> --manifest benchmarks/mcp/<manifest>.json --product-root <built-product> --repetitions 1 --output <external-report.json>`, selecting the unchanged four-corpus manifests and only `express-source-tasks.json` for this Express commit. For a portable service-only paired comparison use `node benchmarks/mcp/paired-explore.mjs --project <pinned-indexed-checkout> --baseline-root <frozen-v0.545.2> --candidate-root <built-v0.546.0> --query <unchanged-manifest-query> --pairs 8 --persistent-reader --comparison complete --output <external-timing.json>`.
+
+Exact final service-plus-text samples, SQL probes and conditions are retained in `%TEMP%/SymbolLattice-v5460-runtime-final-paired.mjs` and `.json`. Other artifacts use the same `SymbolLattice-v5460-runtime-` prefix: `retrieval.mjs`, `retrieval/summary.json` and per-task reports/text, `minimum.mjs`, `minimum-22.16.0.json`, `minimum-24.0.0.json`, `rejection.mjs`, `rejection.json`, `build-identity.json`, `full-test.log` and `pack-dry-run.log`. Minimum integration/worker logs use `SymbolLattice-v5460-node-<version>-test.log` and `-worker-generation.log`. Earlier diagnostic profiles and SQL/array trials remain in `SymbolLattice-v5453-*`; the original unsupported-runtime failure is `SymbolLattice-v5453-node-minimum-test.log`. Frozen roots are `SymbolLattice-v5452-candidate` and `SymbolLattice-v5460-runtime-candidate`. Their routed graph-store SHA-256 values are respectively `2ab4f68a903ad0fe64f51c0f25347cd5967efeec4ad48b55cc58bcf558ad9f43` and `33d414ec66deafdcfd613050d38e907d50b35a1ef25e37c5f1423d789aae54f5`. No external routing or generated artifact is committed.
+
 ## v0.545.2 Share exact lexical token citations
 
 MCP text now gives complete lexical token locations as `path:line:startColumn-endColumn`, using one-based UTF-16 columns and an exclusive end. Query terms at the same physical token, range and comment context share one citation. Different occurrences and focuses retain their own evidence; malformed or incomplete ranges remain separate line-only citations. Structured matches, ranking, source excerpts, unresolved calls/references, limits and index behavior are unchanged. This compatible presentation fix is a patch; extractor v435 and resolver v210 are unchanged.

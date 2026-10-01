@@ -82,7 +82,7 @@ async function stage3Fixture(options = {}) {
     ref: COMMIT,
     apply: true,
     yes: true,
-    nodeVersion: "22.13.0",
+    nodeVersion: "22.16.0",
     npmPrefix: prefix,
     temporaryRoot: root
   });

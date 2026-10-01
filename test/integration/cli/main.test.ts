@@ -50,6 +50,7 @@ import {
 } from "../../../src/application/index.js";
 import {
   createProgram,
+  run,
   isCliEntrypoint,
   parseAffectedStdin,
   runMcpWithAutoSync,
@@ -67,6 +68,26 @@ import {
 import type { UpgradePreviewResult } from "../../../src/cli/upgrade.js";
 import type { McpServerSession } from "../../../src/mcp/index.js";
 import { SYMBOL_LATTICE_VERSION } from "../../../src/version.js";
+
+describe("CLI runtime admission", () => {
+  it.each(["22.13.0", "22.15.9", "23.11.1", "25.0.0"])("rejects %s before invoking a command", async (nodeVersion) => {
+    const descriptor = Object.getOwnPropertyDescriptor(process.versions, "node")!;
+    const previousExitCode = process.exitCode;
+    const write = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    Object.defineProperty(process.versions, "node", { ...descriptor, value: nodeVersion });
+    try {
+      // A file path cannot become an index workspace even if admission regresses.
+      await run(["node", "SymbolLattice", "init", resolve("package.json"), "--json"]);
+      expect(process.exitCode).toBe(1);
+      expect(write).toHaveBeenCalledWith(expect.stringContaining('"code": "UNSUPPORTED_NODE_VERSION"'));
+      expect(write).toHaveBeenCalledWith(expect.stringContaining("SQLite FTS5"));
+    } finally {
+      Object.defineProperty(process.versions, "node", descriptor);
+      process.exitCode = previousExitCode;
+      write.mockRestore();
+    }
+  });
+});
 
 describe("CLI entrypoint detection", () => {
   it("recognizes npm's Unix bin symlink through its real target", () => {

@@ -144,7 +144,7 @@ async function executionFixture(options = {}) {
     ref: `v${VERSION}`,
     apply: true,
     yes: true,
-    nodeVersion: "22.13.0",
+    nodeVersion: "22.16.0",
     npmPrefix: resolve(temporaryRoot, "unused-global-prefix"),
     temporaryRoot
   });
@@ -152,6 +152,15 @@ async function executionFixture(options = {}) {
 }
 
 describe("GitHub source installation Stage 2 execution", () => {
+  it("installs the narrower FTS5 runtime contract as well as older fixed source references", async () => {
+    const fixture = await executionFixture({ packageOverrides: {
+      engines: { node: ">=22.16 <23 || >=24 <25" }
+    } });
+    const result = await executeSourceInstallStage2(fixture.plan, fixture.dependencies);
+    expect(result.status).toBe("isolated-verified");
+    expect(result.source.commit).toBe(COMMIT);
+  });
+
   it("verifies, builds, packs, and smoke-tests one official source in isolation", async () => {
     const fixture = await executionFixture();
     const result = await executeSourceInstallStage2(fixture.plan, fixture.dependencies);

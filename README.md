@@ -6,7 +6,7 @@ SymbolLattice 是提供給開發者與 AI Agent 的本機程式碼搜尋工具�
 
 [English](README.en.md) · [開始使用](docs/getting-started.md) · [驗證與限制](benchmarks/README.md) · [回報問題](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.545.2` · Node.js `>=22.13 <25` · MIT
+`v0.546.0` · Node.js `>=22.16 <23 || >=24 <25` · MIT
 
 ## 從「這段功能在哪裡？」開始
 
@@ -30,7 +30,9 @@ SymbolLattice explore "Where are incoming requests validated?" --project . --jso
 
 ## 快速開始
 
-需要 Git、npm、Node.js `>=22.13 <25`，以及 Windows PowerShell 5.1 或 PowerShell 7。目前透過 GitHub 原始碼安裝，尚未發布至 npm Registry。
+需要 Git、npm、Node.js `>=22.16 <23 || >=24 <25`，以及 Windows PowerShell 5.1 或 PowerShell 7。目前透過 GitHub 原始碼安裝，尚未發布至 npm Registry。
+
+**0.546.0 破壞性變更（執行環境）：**請使用 Node.js 22.16 以上的 22.x 或 24.x。舊文件允許的官方 22.13–22.15 與 23.x 缺少全文索引需要的 SQLite FTS5；使用這些版本時，先升級 Node.js，再重新安裝。既有索引可保留，安裝後照常執行 `SymbolLattice sync .`。
 
 ### 1. 安裝
 

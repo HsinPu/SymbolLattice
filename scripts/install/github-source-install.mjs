@@ -15,7 +15,8 @@ import { verifyLuaParserAssets } from "../build/copy-lua-parser-assets.mjs";
 const PACKAGE_NAME = "@hsinpu/symbollattice";
 const REPOSITORY = "HsinPu/SymbolLattice";
 const REPOSITORY_URL = "https://github.com/HsinPu/SymbolLattice.git";
-const NODE_RANGE = ">=22.13 <25";
+const NODE_RANGE = ">=22.16 <23 || >=24 <25";
+const LEGACY_NODE_RANGE = ">=22.13 <25";
 const REPOSITORY_PACKAGE_URL = "git+https://github.com/HsinPu/SymbolLattice.git";
 const VERSION_TAG = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u;
 const FULL_COMMIT = /^[0-9a-f]{40}$/u;
@@ -759,8 +760,8 @@ function validateNodeVersion(version) {
   }
   const major = Number(match[1]);
   const minor = Number(match[2]);
-  if (major < 22 || major >= 25 || (major === 22 && minor < 13)) {
-    throw new Error(`Node.js ${NODE_RANGE} is required; received ${version}.`);
+  if (!((major === 22 && minor >= 16) || major === 24)) {
+    throw new Error(`Node.js ${NODE_RANGE} with SQLite FTS5 is required; received ${version}. Upgrade Node before retrying.`);
   }
   return version;
 }
@@ -793,7 +794,9 @@ function validateSourcePackage(packageJson, plan) {
   if (packageJson.repository?.url !== REPOSITORY_PACKAGE_URL) {
     throw new Error("Source package repository identity does not match HsinPu/SymbolLattice.");
   }
-  if (packageJson.engines?.node !== NODE_RANGE) {
+  // Older fixed source references declared a wider range. They remain
+  // installable on this planner's smaller, already validated runtime set.
+  if (packageJson.engines?.node !== NODE_RANGE && packageJson.engines?.node !== LEGACY_NODE_RANGE) {
     throw new Error(`Source package Node.js contract must be ${NODE_RANGE}.`);
   }
   if (typeof packageJson.version !== "string" || VERSION_TAG.exec(`v${packageJson.version}`) === null) {

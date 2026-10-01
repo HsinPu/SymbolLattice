@@ -17,7 +17,7 @@ describe("GitHub source installation contract", () => {
     const plan = createSourceInstallPlan({
       ref: "v0.421.0",
       repository: OFFICIAL_REPOSITORY,
-      nodeVersion: "22.13.0",
+      nodeVersion: "22.16.0",
       npmPrefix: resolve(".test-global-prefix"),
       temporaryRoot: resolve(".test-temporary-root")
     });
@@ -34,7 +34,7 @@ describe("GitHub source installation contract", () => {
         expectedVersion: "0.421.0"
       },
       requirements: {
-        node: { version: "22.13.0", supported: true, range: ">=22.13 <25" },
+        node: { version: "22.16.0", supported: true, range: ">=22.16 <23 || >=24 <25" },
         npmRegistryPublished: false,
         dependencyRegistryRequired: true
       },
@@ -82,7 +82,7 @@ describe("GitHub source installation contract", () => {
     for (const ref of ["main", "master", "HEAD", "refs/heads/main", "feature/install", "ABCDEF".repeat(6) + "ABCD"]) {
       expect(() => createSourceInstallPlan({
         ref,
-        nodeVersion: "22.13.0",
+        nodeVersion: "22.16.0",
         npmPrefix: resolve(".test-global-prefix")
       })).toThrow(/version tag or full lowercase 40-character Git commit/u);
     }
@@ -92,11 +92,11 @@ describe("GitHub source installation contract", () => {
     expect(() => createSourceInstallPlan({
       ref: "v0.421.0",
       repository: "https://github.com/example/SymbolLattice.git",
-      nodeVersion: "22.13.0",
+      nodeVersion: "22.16.0",
       npmPrefix: resolve(".test-global-prefix")
     })).toThrow("official HsinPu/SymbolLattice repository");
 
-    for (const nodeVersion of ["22.12.9", "25.0.0", "v24", "24.0.0-beta.1"]) {
+    for (const nodeVersion of ["22.12.9", "22.13.0", "22.15.9", "23.0.0", "23.11.1", "25.0.0", "v24", "24.0.0-beta.1"]) {
       expect(() => createSourceInstallPlan({
         ref: "v0.421.0",
         nodeVersion,
@@ -105,19 +105,26 @@ describe("GitHub source installation contract", () => {
     }
   });
 
+  it.each(["22.16.0", "22.99.0", "24.0.0", "24.99.0"])("accepts the verified runtime contract at %s", (nodeVersion) => {
+    const plan = createSourceInstallPlan({ ref: COMMIT, nodeVersion,
+      npmPrefix: resolve(".test-global-prefix") });
+    expect(plan.requirements.node).toEqual({ version: nodeVersion, supported: true,
+      range: ">=22.16 <23 || >=24 <25" });
+  });
+
   it("requires explicit apply and confirmation together without performing a mutation", () => {
     expect(() => createSourceInstallPlan({
       ref: "v0.421.0",
       apply: true,
       yes: false,
-      nodeVersion: "22.13.0",
+      nodeVersion: "22.16.0",
       npmPrefix: resolve(".test-global-prefix")
     })).toThrow("--apply requires --yes");
     expect(() => createSourceInstallPlan({
       ref: "v0.421.0",
       apply: false,
       yes: true,
-      nodeVersion: "22.13.0",
+      nodeVersion: "22.16.0",
       npmPrefix: resolve(".test-global-prefix")
     })).toThrow("--yes is only valid with --apply");
 
@@ -125,7 +132,7 @@ describe("GitHub source installation contract", () => {
       ref: "v0.421.0",
       apply: true,
       yes: true,
-      nodeVersion: "22.13.0",
+      nodeVersion: "22.16.0",
       npmPrefix: resolve(".test-global-prefix")
     });
     expect(applyPlan.mode).toBe("apply");
@@ -207,7 +214,7 @@ describe("GitHub source installation contract", () => {
       ref: "v0.421.0",
       apply: true,
       yes: true,
-      nodeVersion: "22.13.0",
+      nodeVersion: "22.16.0",
       npmPrefix: resolve(".test global prefix"),
       temporaryRoot
     });

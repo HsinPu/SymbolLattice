@@ -282,7 +282,7 @@ function releaseFixture() {
     },
     installation: {
       npmRegistryPublished: false,
-      requiresNode: ">=22.13 <25"
+      requiresNode: ">=22.16 <23 || >=24 <25"
     }
   });
   const attestationEndpoint = `https://api.github.com/repos/HsinPu/SymbolLattice/attestations/sha256:${sha256}`;

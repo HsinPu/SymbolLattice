@@ -4,7 +4,9 @@
 
 ## Installation
 
-Requires Git, Node.js `>=22.13 <25`, npm, and Windows PowerShell 5.1 or PowerShell 7.
+Requires Git, Node.js `>=22.16 <23 || >=24 <25`, npm, and Windows PowerShell 5.1 or PowerShell 7.
+
+**0.546.0 breaking change (runtime):** Use an official Node.js 22.16 or later within 22.x, or 24.x, with built-in SQLite FTS5. Official 22.13–22.15 and 23.x builds allowed by earlier documentation lack FTS5 and cannot create the full-text index. Upgrade Node.js before reinstalling. Keep existing indexes and run `SymbolLattice sync .` afterward; this runtime correction requires no index deletion or rebuild.
 
 The package is not published to the npm Registry. Use a full 40-character commit from the official GitHub repository or an existing `vX.Y.Z` tag. The installer rejects floating refs such as `main` and `HEAD`.
 

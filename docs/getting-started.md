@@ -4,7 +4,9 @@
 
 ## 安裝
 
-需要 Git、Node.js `>=22.13 <25`、npm，以及 Windows PowerShell 5.1 或 PowerShell 7。
+需要 Git、Node.js `>=22.16 <23 || >=24 <25`、npm，以及 Windows PowerShell 5.1 或 PowerShell 7。
+
+**0.546.0 破壞性變更（執行環境）：**使用內建 SQLite FTS5 的官方 Node.js 22.16 以上 22.x 或 24.x。舊文件允許的官方 22.13–22.15 與 23.x 缺少 FTS5，無法建立全文索引；請先升級 Node.js，再重新安裝。保留既有索引，安裝後執行 `SymbolLattice sync .`，不需因本項環境修正刪除或重建索引。
 
 目前未發布至 npm Registry。請使用官方 GitHub repository 的完整 40 字元 commit，或已存在的 `vX.Y.Z` tag；安裝器不接受 `main`、`HEAD` 等浮動 ref。
 

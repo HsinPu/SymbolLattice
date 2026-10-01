@@ -1279,13 +1279,11 @@ function assertSupportedNodeVersion(): void {
   if (
     !Number.isSafeInteger(major) ||
     !Number.isSafeInteger(minor) ||
-    major < 22 ||
-    (major === 22 && minor < 13) ||
-    major >= 25
+    !((major === 22 && minor >= 16) || major === 24)
   ) {
     throw new SymbolLatticeError(
       "UNSUPPORTED_NODE_VERSION",
-      `SymbolLattice requires Node >=22.13 and <25; found ${process.versions.node}.`
+      `SymbolLattice requires Node 22.16+ (22.x) or 24.x with SQLite FTS5; found ${process.versions.node}. Upgrade Node before retrying.`
     );
   }
 }

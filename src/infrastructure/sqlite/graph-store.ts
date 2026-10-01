@@ -446,6 +446,14 @@ interface EdgeRow {
   readonly evidence_json?: string | null;
 }
 
+// Ordered exactly like the bounded edge projection, before evidence hydration.
+type BoundedEdgeValues = readonly [
+  EdgeRow["id"], EdgeRow["source_id"], EdgeRow["target_id"], EdgeRow["kind"],
+  EdgeRow["file_path"], EdgeRow["start_line"], EdgeRow["start_column"],
+  EdgeRow["end_line"], EdgeRow["end_column"], EdgeRow["resolution"],
+  EdgeRow["confidence"], EdgeRow["reference_name"]
+];
+
 interface PendingReferenceRow {
   readonly id: string;
   readonly source_id: string;
@@ -2602,22 +2610,44 @@ function readBoundedEdgesByIds(
     // Frontier IDs were read from symbols or admitted through a prior joined
     // edge. Check only the opposite endpoint, while still excluding orphaned
     // edges before they can consume the node and relationship bounds.
-    const outgoing = database
-      .prepare(`${projection}
+    const outgoing = database.prepare(`${projection}
         INNER JOIN symbols AS target ON target.id = e.target_id
-        WHERE e.resolution = 'exact' AND e.source_id IN (${placeholders})`)
-      .all(...batch) as unknown as EdgeRow[];
-    const incoming = database
-      .prepare(`${projection}
+        WHERE e.resolution = 'exact' AND e.source_id IN (${placeholders})`);
+    const incoming = database.prepare(`${projection}
         INNER JOIN symbols AS source ON source.id = e.source_id
-        WHERE e.resolution = 'exact' AND e.target_id IN (${placeholders})`)
-      .all(...batch) as unknown as EdgeRow[];
-    hadEdges ||= outgoing.length > 0 || incoming.length > 0;
-    for (const row of outgoing) {
-      if (!retainedEdges.has(row.id)) rowsById.set(row.id, row);
-    }
-    for (const row of incoming) {
-      if (!retainedEdges.has(row.id)) rowsById.set(row.id, row);
+        WHERE e.resolution = 'exact' AND e.target_id IN (${placeholders})`);
+    for (const statement of [outgoing, incoming]) {
+      // Feature-detect the row API so custom runtimes can retain the object
+      // path. Native arrays need no named object for already retained rows.
+      if (typeof statement.setReturnArrays === "function") {
+        statement.setReturnArrays(true);
+        const rows = statement.all(...batch) as unknown as readonly BoundedEdgeValues[];
+        hadEdges ||= rows.length > 0;
+        for (const values of rows) {
+          const id = values[0];
+          if (retainedEdges.has(id) || rowsById.has(id)) continue;
+          rowsById.set(id, {
+            id,
+            source_id: values[1],
+            target_id: values[2],
+            kind: values[3],
+            file_path: values[4],
+            start_line: values[5],
+            start_column: values[6],
+            end_line: values[7],
+            end_column: values[8],
+            resolution: values[9],
+            confidence: values[10],
+            reference_name: values[11]
+          });
+        }
+      } else {
+        const rows = statement.all(...batch) as unknown as readonly EdgeRow[];
+        hadEdges ||= rows.length > 0;
+        for (const row of rows) {
+          if (!retainedEdges.has(row.id) && !rowsById.has(row.id)) rowsById.set(row.id, row);
+        }
+      }
     }
   }
   return { rows: [...rowsById.values()].sort(compareEdgeRows), hadEdges };

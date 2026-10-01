@@ -31,7 +31,7 @@ if (-not (Test-Path -LiteralPath $plannerPath -PathType Leaf)) {
 $nodeCommand = Get-Command node -CommandType Application -ErrorAction SilentlyContinue |
     Select-Object -First 1
 if ($null -eq $nodeCommand) {
-    throw "Node.js >=22.13 <25 is required and must be available on PATH."
+    throw "Node.js >=22.16 <23 || >=24 <25 is required and must be available on PATH."
 }
 
 $plannerArguments = @(

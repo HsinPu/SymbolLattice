@@ -6,7 +6,7 @@ SymbolLattice is a local code search tool for developers and AI agents. Query a 
 
 [繁體中文](README.md) · [Get started](docs/getting-started.en.md) · [Validation and limitations](benchmarks/README.md) · [Report an issue](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.545.2` · Node.js `>=22.13 <25` · MIT
+`v0.546.0` · Node.js `>=22.16 <23 || >=24 <25` · MIT
 
 ## Start with “Where is this implemented?”
 
@@ -30,7 +30,9 @@ Query from your terminal, or let an MCP-compatible agent use the evidence.
 
 ## Quick start
 
-Requires Git, npm, Node.js `>=22.13 <25`, and Windows PowerShell 5.1 or PowerShell 7. Installation currently uses GitHub source; the package is not published to the npm Registry.
+Requires Git, npm, Node.js `>=22.16 <23 || >=24 <25`, and Windows PowerShell 5.1 or PowerShell 7. Installation currently uses GitHub source; the package is not published to the npm Registry.
+
+**0.546.0 breaking change (runtime):** Use Node.js 22.16 or later within 22.x, or 24.x. The official 22.13–22.15 and 23.x builds allowed by earlier documentation lack SQLite FTS5, which the full-text index requires. Upgrade Node.js before reinstalling. Keep existing indexes and run `SymbolLattice sync .` after installation.
 
 ### 1. Install
 

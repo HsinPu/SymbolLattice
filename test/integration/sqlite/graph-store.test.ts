@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, StatementSync } from "node:sqlite";
 import { Worker } from "node:worker_threads";
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -2919,6 +2919,73 @@ describe("SqliteGraphStore", () => {
     expect(store.getActiveBoundedGraphBundle(projectPath, request)).toEqual(active);
     expect(store.getActiveSourceSearchBundle(projectPath, sourceSearchRequest("newToken")).hits)
       .toEqual(sourceHits);
+  });
+
+  it.each(["native", "object-fallback"])("preserves bidirectional evidence, batch boundaries and traversal bounds with %s rows", async (mode) => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const template = boundedGraphSnapshot();
+    const root = boundedSymbol("seed-root", "OnlyRoot", "src/a.ts");
+    const children = Array.from({ length: 950 }, (_, index) =>
+      boundedSymbol(`child-${index}`, `Child${index}`, "src/a.ts", index + 1));
+    const outside = boundedSymbol("outside", "Outside", "src/b.ts");
+    const tail = boundedSymbol("tail", "Tail", "src/c.ts");
+    const fanout: GraphEdge[] = children.map((child, index) => ({
+      ...boundedEdge(`fan-${index}`, root.id, child.id, root.filePath),
+      kind: index === 0 ? "imports" : "calls",
+      range: { start: { line: index + 1, column: index % 4 + 1 },
+        end: { line: index + 2, column: 2 } },
+      confidence: index % 2 === 0 ? 0.875 : 1,
+      referenceName: index % 3 === 0 ? null : child.name,
+      evidence: { ruleId: `test.site-${index}`, stage: "module",
+        candidateSymbolIds: [child.id] }
+    }));
+    const crossBatch = { ...boundedEdge("cross-batch", children[0]!.id, children[940]!.id, "src/a.ts"),
+      range: { start: { line: 952, column: 3 }, end: { line: 952, column: 17 } } };
+    const selfLoop = { ...boundedEdge("self-loop", children[940]!.id, children[940]!.id, "src/a.ts"),
+      range: { start: { line: 953, column: 2 }, end: { line: 953, column: 12 } } };
+    const nextHop = { ...boundedEdge("next-hop", children[940]!.id, tail.id, "src/a.ts"),
+      range: { start: { line: 954, column: 4 }, end: { line: 954, column: 14 } } };
+    const incoming = boundedEdge("incoming-only", outside.id, children[3]!.id, "src/b.ts");
+    const expectedEdges = [...fanout, crossBatch, selfLoop, nextHop, incoming];
+    const graphSnapshot: GraphSnapshot = { ...template,
+      symbols: [root, ...children, outside, tail],
+      edges: [...expectedEdges].reverse().concat([
+        boundedEdge("missing-target", root.id, "absent-target", "src/a.ts"),
+        boundedEdge("missing-source", "absent-source", children[940]!.id, "src/a.ts"),
+        { ...boundedEdge("unresolved", root.id, tail.id, "src/a.ts"), resolution: "unresolved" },
+        { ...boundedEdge("heuristic", root.id, tail.id, "src/a.ts"), resolution: "heuristic" }
+      ])
+    };
+    store.replaceProjectFacts({ projectPath, snapshot: graphSnapshot,
+      indexedAt: "2026-10-01T00:00:00.000Z", artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs(`edge-row-${mode}`), resolverVersion: "bounded-resolver-v1" });
+    const descriptor = Object.getOwnPropertyDescriptor(StatementSync.prototype, "setReturnArrays");
+    if (mode === "object-fallback") {
+      Object.defineProperty(StatementSync.prototype, "setReturnArrays", { configurable: true, value: undefined });
+    }
+    try {
+      const request = boundedRequest("OnlyRoot", { maxSeedSymbols: 1, maxSymbolsPerFile: 1 });
+      const complete = store.getActiveBoundedGraphBundle(projectPath, request);
+      expect(complete.snapshot.edges).toEqual(expectedEdges);
+      expect(complete.snapshot.symbols).toHaveLength(953);
+      expect(complete.diagnostics).toMatchObject({ returnedRelationships: 954, traversedHops: 3, truncated: false });
+      expect(store.getActiveBoundedGraphBundle(projectPath, request)).toEqual(complete);
+      const relationshipLimited = store.getActiveBoundedGraphBundle(projectPath,
+        { ...request, maxRelationships: 17 });
+      expect(relationshipLimited.snapshot.edges).toEqual(fanout.slice(0, 17));
+      expect(relationshipLimited.diagnostics).toMatchObject({ traversedHops: 1, truncated: true });
+      const nodeLimited = store.getActiveBoundedGraphBundle(projectPath, { ...request, maxNodes: 5 });
+      expect(nodeLimited.snapshot.edges).toEqual(fanout.slice(0, 4));
+      expect(nodeLimited.snapshot.symbols).toHaveLength(5);
+      expect(nodeLimited.diagnostics).toMatchObject({ traversedHops: 2, truncated: true });
+    } finally {
+      if (mode === "object-fallback") {
+        if (descriptor === undefined) Reflect.deleteProperty(StatementSync.prototype, "setReturnArrays");
+        else Object.defineProperty(StatementSync.prototype, "setReturnArrays", descriptor);
+      }
+      store.close();
+    }
   });
 
   it("preserves distinct generation-bound call receipts across evidence lookup batches", async () => {

@@ -124,7 +124,7 @@ export async function createReleaseContract(options) {
     },
     installation: {
       npmRegistryPublished: false,
-      requiresNode: packageJson.engines?.node ?? ">=22.13 <25"
+      requiresNode: packageJson.engines?.node ?? ">=22.16 <23 || >=24 <25"
     }
   };
 

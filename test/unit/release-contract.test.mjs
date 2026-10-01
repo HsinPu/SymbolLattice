@@ -106,7 +106,7 @@ describe("GitHub release artifact contract", () => {
       },
       installation: {
         npmRegistryPublished: false,
-        requiresNode: ">=22.13 <25"
+        requiresNode: ">=22.16 <23 || >=24 <25"
       }
     });
     expect(result.artifact.sha256).toMatch(/^[0-9a-f]{64}$/);
