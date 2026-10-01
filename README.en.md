@@ -6,7 +6,7 @@ SymbolLattice is a local code search tool for developers and AI agents. Query a 
 
 [繁體中文](README.md) · [Get started](docs/getting-started.en.md) · [Validation and limitations](benchmarks/README.md) · [Report an issue](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.542.0` · Node.js `>=22.13 <25` · MIT
+`v0.542.1` · Node.js `>=22.13 <25` · MIT
 
 ## Start with “Where is this implemented?”
 
@@ -93,7 +93,7 @@ Python resolves a single written base class through absolute named imports at th
 
 For Python, direct same-class `self.method()` calls can include `async def` methods when the target is unambiguous. Functions with a safely recovered bare-`yield` parser gap also retain written member-call locations; unknown receiver types remain unresolved rather than becoming guessed targets. General queries and exact-symbol follow-ups can cite same-class declaration leads from the returned bounded graph and indexed source for some unresolved `self.method()` calls. These are follow-up candidates, not proof of receiver type or runtime dispatch. When a general query's unresolved-call list is limited, matching call names get priority for inclusion while the selected calls remain in source order; use the returned exact symbol reference to follow up with a larger source-ordered list when needed.
 
-Static non-call Python member occurrences inside functions (such as `self.pg_version`) also retain source locations, separately from calls in `unresolvedReferences`. Each focus shows at most eight; general queries prioritize matching names within at most 64 candidates, with at most two source-cited same-class declaration candidates. Occurrences include assignment and deletion targets and do not infer reads/writes, receiver types or descriptor behavior. Lambda bodies, function headers, class-body execution and other unsupported parser scopes remain excluded. Run `SymbolLattice sync .` after upgrading to refresh existing indexes.
+Static non-call Python member occurrences inside functions (such as `self.pg_version`) also retain source locations, separately from calls in `unresolvedReferences`. Each focus shows at most eight; general queries prioritize matching names within at most 64 candidates, with at most two source-cited same-class declaration candidates. Occurrences include assignment and deletion targets and do not infer reads/writes, receiver types or descriptor behavior. Lambda bodies, function headers, class-body execution and other unsupported parser scopes remain excluded. When upgrading from a version before 0.542.0, run `SymbolLattice sync .` to refresh existing indexes; the 0.542.1 read-performance correction requires no extra sync.
 
 See [language capabilities and limitations](src/domain/language-depth.ts) and [real-project validation](benchmarks/README.md). Retrieval quality and speed depend on the project and query.
 

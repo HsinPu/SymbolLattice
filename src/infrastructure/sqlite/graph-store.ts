@@ -3229,30 +3229,32 @@ export class SqliteGraphStore implements GraphStore {
       // Keep syntax receipts in their authoritative artifact record. This
       // bounded projection reads only selected files, without duplicating each
       // occurrence in edges, edge_evidence and retained relationship snapshots.
-      const rows = database.prepare(`WITH selected AS (
-          SELECT id, file_path FROM symbols WHERE id IN (${ids.map(() => "?").join(",")})
-        ), selected_files AS (SELECT DISTINCT file_path FROM selected), sites AS (
-          SELECT json_extract(e.value, '$.sourceId') AS source_id, e.value AS fact_json,
-            row_number() OVER (PARTITION BY json_extract(e.value, '$.sourceId') ORDER BY
-              json_extract(e.value, '$.range.start.line'), json_extract(e.value, '$.range.start.column'),
-              json_extract(e.value, '$.id')) AS ordinal
-          FROM selected_files f JOIN artifact_facts a ON a.generation_id = ? AND a.file_path = f.file_path
-          JOIN json_each(a.facts_json, '$.edges') e
-          JOIN selected s ON s.id = json_extract(e.value, '$.sourceId') AND s.file_path = json_extract(e.value, '$.filePath')
-          WHERE e.type = 'object' AND json_extract(e.value, '$.kind') = 'references'
-            AND json_type(e.value, '$.targetId') = 'null' AND json_extract(e.value, '$.resolution') = 'unresolved'
-            AND json_extract(e.value, '$.confidence') = 0
-            AND json_extract(e.value, '$.evidence.ruleId') = 'syntax.python.member-reference.unknown-receiver'
-        ) SELECT source_id, fact_json FROM sites WHERE ordinal <= ? ORDER BY source_id, ordinal`)
-        .all(...ids, expectedGenerationId, limitPerSymbol + 1) as unknown as { source_id: string; fact_json: string }[];
+      const owners = database.prepare(`SELECT id, file_path FROM symbols
+        WHERE id IN (${ids.map(() => "?").join(",")})`).all(...ids) as unknown as
+        { id: string; file_path: string }[];
+      const ownerFiles = new Map(owners.map((owner) => [owner.id, owner.file_path]));
+      const files = [...new Set(ownerFiles.values())];
+      // Parse each selected artifact once. Joining json_each to individual
+      // owners can repeatedly scan the same file's JSON for every focus.
+      const rows = files.length === 0 ? [] : database.prepare(`SELECT file_path,
+          json_extract(facts_json, '$.edges') AS edges_json FROM artifact_facts
+        WHERE generation_id = ? AND file_path IN (${files.map(() => "?").join(",")})`)
+        .all(expectedGenerationId, ...files) as unknown as { file_path: string; edges_json: string }[];
       const byOwner = new Map<string, GraphEdge[]>();
       for (const row of rows) {
-        const items = byOwner.get(row.source_id) ?? [];
-        items.push(JSON.parse(row.fact_json) as GraphEdge);
-        byOwner.set(row.source_id, items);
+        for (const edge of JSON.parse(row.edges_json) as GraphEdge[]) {
+          if (ownerFiles.get(edge.sourceId) !== row.file_path || edge.filePath !== row.file_path ||
+              edge.kind !== "references" || edge.targetId !== null || edge.resolution !== "unresolved" ||
+              edge.confidence !== 0 || edge.evidence?.ruleId !== "syntax.python.member-reference.unknown-receiver") continue;
+          const items = byOwner.get(edge.sourceId) ?? [];
+          items.push(edge);
+          byOwner.set(edge.sourceId, items);
+        }
       }
       return { generationMatched: true, references: ids.map((sourceId) => {
         const items = byOwner.get(sourceId) ?? [];
+        items.sort((a, b) => a.range.start.line - b.range.start.line ||
+          a.range.start.column - b.range.start.column || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
         return { sourceId, items: items.slice(0, limitPerSymbol), truncated: items.length > limitPerSymbol };
       }) };
     });

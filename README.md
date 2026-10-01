@@ -6,7 +6,7 @@ SymbolLattice 是提供給開發者與 AI Agent 的本機程式碼搜尋工具�
 
 [English](README.en.md) · [開始使用](docs/getting-started.md) · [驗證與限制](benchmarks/README.md) · [回報問題](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.542.0` · Node.js `>=22.13 <25` · MIT
+`v0.542.1` · Node.js `>=22.13 <25` · MIT
 
 ## 從「這段功能在哪裡？」開始
 
@@ -93,7 +93,7 @@ Python 以專案根目錄為範圍，解析絕對匯入指向的單一基底類�
 
 Python 同類別中可確認的直接 `self.method()` 呼叫包含 `async def` 方法。對可安全恢復的裸 `yield` 解析缺口，函式內寫出的成員呼叫也會保留來源位置；接收者型別未知時標示為未解析，不猜測目標。一般查詢與精確符號補查，都可從已回傳的有界圖，為部分未解析的 `self.method()` 呼叫附上索引來源中的同類別宣告線索；這只供補查，不證明接收者型別或實際派發。未解析呼叫清單受限時，一般查詢會優先呈現符合查詢詞的呼叫；可用回傳的精確符號參照追查按來源順序排列的較完整清單。
 
-Python 函式內的靜態非呼叫成員參照（例如 `self.pg_version`）也會保留來源位置，並以 `unresolvedReferences` 與呼叫分開呈現。每個焦點最多 8 筆，一般查詢從最多 64 筆候選中優先呈現符合查詢詞的參照；可附上最多 2 個有來源的同類別宣告候選。參照包含賦值與刪除位置，不推論讀寫、接收者型別或 descriptor 行為；lambda、函式標頭、類別本體及其他不支援的解析範圍仍不包含。升級至本版後執行 `SymbolLattice sync .` 更新既有索引。
+Python 函式內的靜態非呼叫成員參照（例如 `self.pg_version`）也會保留來源位置，並以 `unresolvedReferences` 與呼叫分開呈現。每個焦點最多 8 筆，一般查詢從最多 64 筆候選中優先呈現符合查詢詞的參照；可附上最多 2 個有來源的同類別宣告候選。參照包含賦值與刪除位置，不推論讀寫、接收者型別或 descriptor 行為；lambda、函式標頭、類別本體及其他不支援的解析範圍仍不包含。從 0.542.0 之前的版本升級時，執行 `SymbolLattice sync .` 更新既有索引；0.542.1 的讀取效能調整不需額外同步。
 
 詳見[語言能力與限制](src/domain/language-depth.ts)及[真實專案驗證](benchmarks/README.md)。查找品質與速度依專案及查詢而異。
 

@@ -56,6 +56,25 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.542.1 Parse selected artifact references once
+
+The generation-bound Python reference projection now fetches each selected file's edge array once, parses it once, and filters by the selected owners and their exact file paths. Previously, the SQLite JSON expansion could repeat the file scan for individual focuses. Source-order sorting (line, column, edge ID), zero/positive limits, truncation, rule/target/confidence checks and unavailable or mismatched-generation behavior remain unchanged. No source cache, schema change or extra sync is introduced; extractor v434 and resolver v209 remain unchanged. This is a patch performance correction with the existing evidence contract.
+
+Windows / Node.js 24.19.0 comparisons use frozen v0.542.0 (`a10b36871248b82a3d23b6c52b86d1dfbd5bfc6b`) and built v0.542.1 against the same read-only v0.542.0 indexes and pinned Django/NestJS/Fastify corpora recorded below. Each service task uses one warmup, eight alternating-order pairs, persistent readers and upper medians; no tests, builds or indexing run during timing. Complete response equality is asserted for each of these four tasks, including all source evidence, declaration candidates, ordering and truncation.
+
+| Fixed query | Whole service v0.542.0 → v0.542.1 | Reference projection v0.542.0 → v0.542.1 |
+| --- | --- | --- |
+| Django PostgreSQL version | 1,304.62 → 1,276.02 ms | 33.59 → 5.11 ms |
+| Django MySQL temporary connection | 1,602.68 → 1,443.31 ms | 143.79 → 16.42 ms |
+| Fastify cookie | 467.69 → 466.99 ms | No reference read |
+| NestJS shutdown | 1,044.34 → 1,052.93 ms | No reference read |
+
+The selected-artifact projection is approximately 85%/89% faster in the two Python cases; the corresponding whole-query medians improve about 2.2%/9.9%. Non-Python results show small mixed differences and have no new projection work. These are bounded fixed-case observations, not a universal speed claim or SLO. Selected files' edge arrays are still materialized, so work and temporary memory grow with their artifact size; peak memory and unseen-query performance were not measured. Indexing and sync code are unchanged and were not re-timed for this read-only correction.
+
+All 28 fixed manifests (35 tasks) were re-run against v0.542.1 and compared with the preserved v0.542.0 raw responses on these identical indexes. Every complete response was deeply equal. Both retain 149/149 specified source facts, 215 checked member receipts, nine checked declaration headers, and the specified exact-symbol reference. Task/file judgments remain 73 TP, three FP, zero FN and 52 unjudged; the existing PostgreSQL ranking noise remains. `SymbolLattice-v5421-retrieval/summary.json` and the archived runner preserve this comparison; the baseline reports were reused for output equality, not latency estimates.
+
+Typecheck, build and the full suite passed (3,344 tests, four existing skips). The existing storage tests check owner/rule filtering, source ordering, duplicate requested IDs, zero limits, truncation and stale generations; service tests check source-cited leads and removal after sync. Raw timing samples and the frozen candidate/runner are retained under `%TEMP%/SymbolLattice-v5421-*`, outside the repository. Reproduce complete service comparison with `node benchmarks/mcp/paired-explore.mjs --project EXTERNAL_INDEXED_PROJECT --baseline-root BUILT_05420 --candidate-root BUILT_05421 --query FIXED_QUERY --output EXTERNAL_REPORT --pairs 8 --persistent-reader`; isolated copies in this run override only the compiled SQLite database path to share the same fixed read-only index. The instrumented `SymbolLattice-v5421-paired-queries.mjs` additionally records projection component timing.
+
 ## v0.542.0 Python non-call member source evidence
 
 This minor release adds bounded `unresolvedReferences` to query and exact-symbol results. Written static non-call member occurrences in admitted function bodies retain their lexical owner and full source range, including assignment/deletion targets. A method can also cite up to two same-class declaration headers from the returned bounded graph. These are follow-up candidates: receiver type, reads/writes, descriptor behavior, dispatch and repository-wide uniqueness remain unconfirmed. Query selection examines at most 64 occurrences per selected Python focus and returns at most eight. Lambda bodies, headers, module/class execution and unsupported parser scopes are excluded. Upgrade with `SymbolLattice sync .` (extractor v434, resolver v209).
