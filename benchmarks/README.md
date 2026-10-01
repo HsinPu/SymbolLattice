@@ -59,6 +59,60 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.544.2 Avoid redundant normalization for plain source tokens
+
+On a source-token membership-cache miss, `matchCallableSource` now recognizes tokens containing only lowercase ASCII letters/digits. They already have normalized lowercase spelling and a single identifier word, so it skips NFKC normalization, case folding and camel-case splitting. The extracted token is nonempty and cannot contain line terminators; the negated character class rejects underscores, dollar signs, uppercase and Unicode, which keep the original fallback. Inflection/abbreviation expansion, query-group matching, raw spelling, source coordinates, token/frequency counts, comment flags, truncation and BM25 scoring are unchanged. The shared `identifierWords` helper remains unchanged. This is patch 0.544.1 → 0.544.2; no extractor/resolver version or index update is needed.
+
+Final `npm run check`, `npm run build` and `npm test` passed: 3,379 tests, four existing skips. Source regressions explicitly check six plain/uppercase/camel/snake/fullwidth response occurrences, their two serializer occurrences and original source positions. Word-boundary tests retain trailing LF/CRLF/Unicode separators, empty/space strings, acronyms, Unicode letters, digits and fullwidth normalization.
+
+The final frozen source-stage build (`SymbolLattice-v5442-candidate-v2`) and v0.544.1 were evaluated against all unchanged 29 manifests / 36 tasks on the pinned Django, NestJS and Fastify commits/indexes in the v0.544.0 table below. Every complete CLI response is deeply identical: focus order, files, graph connections, source text, unknown calls/references, receipts, limits and truncation. Fixed truth stays 74 task/file TP, 3 FP, 0 FN, 52 unjudged and 150/150 specified source facts. Counts use the same partial manually judged file truth; unjudged files are not FP. The existing PostgreSQL noise remains, and corpus reuse is regression evidence rather than fresh held-out precision.
+
+The retained `paired-source-lexical.mjs` now supports optional numeric `cacheId` values for captures containing separate scans. Each cache ID must use the same query groups; membership and BM25 populations stay separate. Omitted IDs retain the legacy single-cache behavior, verified by an actual legacy-input invocation; a contradictory cache-group invocation correctly rejects its input. Captures preserve original cache object identities across files, fixed repository/commit/query/generation IDs, input SHA-256 and compiled source/identifier hashes. Several independent scans can therefore exceed one scan's file/character cap in the table population without increasing product limits.
+
+Windows / Node.js 24.19.0 replay: four warmups, 30 alternating pairs per captured task, upper medians, complete tokens/frequencies/coordinates/comment flags/truncation/BM25 equality on every pair. It measures source matching and scoring only, excluding SQL, freshness, graph traversal, delivery and capture. No tests, builds or indexing ran during timing.
+
+| Captured task | Source matching/scoring v0.544.1 → v0.544.2 (ms) |
+| --- | --- |
+| close-application-signal-listeners | 37.27 → 35.94 |
+| database-version-cursor-temporary-connection | 85.28 → 80.41 |
+| error-response-status | 26.42 → 25.01 |
+| outgoing-hook-errors | 25.82 → 24.43 |
+| plugin-dependency-rejection | 21.63 → 20.40 |
+| postgresql-server-version-tuple | 85.78 → 80.51 |
+| preserve-multiple-cookie-headers | 24.80 → 22.84 |
+| response-serializer-selection | 27.78 → 28.48 |
+
+Seven initial source cases are 3.57–7.88% faster; serializer is initially 2.53% slower. A separate 60-pair serializer replay preserves complete equality and measures 27.61 → 26.23 ms (5.01% faster). Both runs are retained; do not replace the initial slower observation with the recheck.
+
+Whole-service comparisons use the same read-only index, persistent readers, one warmup and eight alternating pairs, with complete response equality at every pair. They include status/freshness, bounded graph/seed retrieval, planning, contexts and source handling; CLI startup and JSON delivery are excluded. Source replay and service timing ran sequentially, without tests/builds/indexing.
+
+| Query | Whole service v0.544.1 → v0.544.2 (ms) |
+| --- | --- |
+| postgresql | 1291.70 → 1280.90 |
+| mysql | 1433.33 → 1476.67 |
+| fastify-cookie | 478.19 → 480.20 |
+| nest-shutdown | 1051.99 → 1076.20 |
+| fastify-plugin | 425.35 → 429.48 |
+| fastify-serializer | 474.17 → 483.45 |
+
+PostgreSQL is 0.84% faster in this run; the other five medians are 0.42–3.02% higher. Separate 16-pair MySQL/cookie rechecks preserve complete equality and measure:
+
+| Query | Whole service recheck v0.544.1 → v0.544.2 (ms) |
+| --- | --- |
+| mysql | 1452.77 → 1436.83 |
+| fastify-cookie | 467.49 → 464.43 |
+
+The rechecks are 1.10% and 0.65% lower respectively. These measurements establish less source-token work in the supplied inputs, not uniformly faster whole queries or zero performance regression. Seed reads, relationship traversal and fresh source checks remain larger costs; indexing, Agent end-to-end query counts and delivery-size reduction were not measured. Response bytes remain unchanged. Further whole-query performance work remains required.
+
+Investigation/rejection evidence retained outside the repository:
+
+- Cold and warm substage profiling separates source scanning from graph traversal and evidence hydration. A source-only PostgreSQL CPU profile points to regex token iteration, membership lookup and identifier word/variant construction; its sample counts are diagnostic, not whole-query timing.
+- SQL `NOT IN` filtering of retained edges preserves rows/order/`hadEdges` but is much slower in every one of eight captured cases. A two-direction `UNION ALL` prototype has mixed timing; reusing numbered parameters keeps the 900-bind ceiling but is still slower in most cases. None is included.
+- A query-term-to-group reverse map preserves complete source results but has small mixed timing and is rejected. Actual token caches contain at most 6,834 entries in these cases, below 8,192, so cache-capacity/eviction changes have no demonstrated target.
+- An initial shared-identifier ASCII guard preserves observed query/source results but two Django whole-query rechecks remain slower (2.26%/0.79%). It is rejected; the final implementation is confined to the measured source-token normalization work and retains the shared helper.
+
+Reproduce source replay with `node benchmarks/mcp/paired-source-lexical.mjs --inputs <external-fixed-source-inputs.json> --baseline-root <v0.544.1> --candidate-root <v0.544.2> --pairs 30 --output <external-report.json>`; inputs use the existing schemaVersion 1 format with optional `inputs[].cacheId`. Retrieval follows the v0.544.0 command with the unchanged manifests; whole-service timing uses `paired-explore.mjs --pairs 8 --persistent-reader --comparison complete` with these versions. All source/query/index conditions and raw samples are retained in `%TEMP%/SymbolLattice-v5442-source-final-v2/`, `SymbolLattice-v5442-retrieval-v2/`, `SymbolLattice-v5442-final-paired-v2.json`, `SymbolLattice-v5442-source-serializer-recheck-v2.json`, `SymbolLattice-v5442-final-recheck-v2.json` and `SymbolLattice-v5442-investigation-summary.json`. Earlier non-v2 product/timing artifacts are rejected shared-helper trials, not the final release evidence.
+
 ## v0.544.1 Reduce incoming-caller lookup work without changing evidence
 
 The caller pass first filters the same bounded edges by exact-call/module facts and selected anchors, then builds an ID lookup only for those edges' endpoints. Most measured queries have no eligible edge, so they avoid constructing a 4,096-symbol map. The serializer case needs three symbols; the two error cases need two. All original owner, endpoint, path, candidate-ID, source-range and duplicate-edge checks still run on retained edges in their original order. A secondary query plan is skipped only when every surviving caller has fewer than two supplied source matches; otherwise its candidate population and ranking stay unchanged. Duplicate lexical candidates follow the original planner's last-ID-wins rule. All lookups remain query-local; freshness, output bounds and static/unknown relationship semantics are unchanged. This compatible internal performance correction is patch 0.544.0 → 0.544.1, with no extractor/resolver or index format change.

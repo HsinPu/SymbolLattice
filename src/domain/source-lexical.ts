@@ -156,8 +156,11 @@ export function matchCallableSource(
         tokens += 1;
         let matchingGroups = matchingGroupsByToken.get(token);
         if (matchingGroups === undefined) {
-          const variants = new Set([token.normalize("NFKC").toLowerCase(),
-            ...identifierWords(token).flatMap(identifierTermVariants)]);
+          // Token extraction already excludes line terminators. Plain lowercase
+          // ASCII words need neither normalization nor camel-case splitting.
+          const plainAscii = !/[^a-z0-9]/u.test(token);
+          const variants = new Set([plainAscii ? token : token.normalize("NFKC").toLowerCase(),
+            ...(plainAscii ? [token] : identifierWords(token)).flatMap(identifierTermVariants)]);
           const matchedIndexes: number[] = [];
           for (let index = 0; index < groups.length; index += 1) {
             if (groups[index]!.some((term) => variants.has(term))) matchedIndexes.push(index);

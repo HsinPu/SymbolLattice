@@ -9,6 +9,18 @@ const callable = (start: number, end: number, kind: SymbolNode["kind"] = "functi
 });
 
 describe("callable source lexical evidence", () => {
+  it("preserves ASCII and normalized fallback occurrences with their original spelling and frequency", () => {
+    const source = "response response Response responseSerializer response_serializer ｒｅｓｐｏｎｓｅ\n}";
+    const result = matchCallableSource(source, [callable(1, 2)], [["response"], ["serializer"]]);
+    expect(result.documents[0]!.tokens).toBe(6);
+    expect(result.documents[0]!.frequencies).toEqual([6, 2]);
+    expect(result.candidates[0]!.matches).toEqual([
+      { term: "response", token: "response", filePath: "src/work.ts", range: {
+        start: { line: 1, column: 1 }, end: { line: 1, column: 9 } } },
+      { term: "serializer", token: "responseSerializer", filePath: "src/work.ts", range: {
+        start: { line: 1, column: 28 }, end: { line: 1, column: 46 } } }
+    ]);
+  });
   it("keeps comment receipts visible but tracks nearby non-comment occurrences for promotion", () => {
     const python = { ...callable(1, 4), filePath: "src/work.py" };
     const source = [

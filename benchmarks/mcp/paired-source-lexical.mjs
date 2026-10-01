@@ -14,9 +14,14 @@ const inputText = readFileSync(resolve(option("--inputs")), "utf8");
 const fixture = JSON.parse(inputText);
 assert.equal(fixture.schemaVersion, 1);
 assert.ok(Array.isArray(fixture.inputs) && fixture.inputs.length > 0);
+const groupsByCacheId = new Map();
 for (const input of fixture.inputs) {
   assert.equal(typeof input.sourceText, "string");
   assert.ok(Array.isArray(input.symbols) && Array.isArray(input.groups));
+  assert.ok(input.cacheId === undefined || Number.isSafeInteger(input.cacheId) && input.cacheId >= 0);
+  const id = input.cacheId ?? 0;
+  if (groupsByCacheId.has(id)) assert.deepEqual(input.groups, groupsByCacheId.get(id), "Cache group changes query terms");
+  else groupsByCacheId.set(id, input.groups);
 }
 const sha256 = text => createHash("sha256").update(text).digest("hex");
 const roots = { baseline: resolve(option("--baseline-root")), candidate: resolve(option("--candidate-root")) };
@@ -31,10 +36,17 @@ for (const [name, root] of Object.entries(roots))
   products[name] = await import(pathToFileURL(resolve(root, "dist/domain/source-lexical.js")));
 const run = name => {
   // Match production's query-local membership cache across source files.
-  const cache = new Map();
-  const results = fixture.inputs.map(input => products[name].matchCallableSource(
-    input.sourceText, input.symbols, input.groups, cache));
-  return { results, scored: products[name].scoreCallableSource(results.flatMap(result => result.documents)) };
+  // Captures containing several independent scans can cite their cache IDs.
+  const caches = new Map(), documents = new Map();
+  const results = fixture.inputs.map(input => {
+    const id = input.cacheId ?? 0;
+    if (!caches.has(id)) { caches.set(id, new Map()); documents.set(id, []); }
+    const result = products[name].matchCallableSource(input.sourceText, input.symbols, input.groups, caches.get(id));
+    documents.get(id).push(...result.documents);
+    return result;
+  });
+  const scoredGroups = [...documents].map(([id, docs]) => ({ id, scored: products[name].scoreCallableSource(docs) }));
+  return { results, scored: scoredGroups.length === 1 ? scoredGroups[0].scored : scoredGroups };
 };
 for (let warmup = 0; warmup < 4; warmup++) { run("baseline"); run("candidate"); }
 const samples = { baseline: [], candidate: [] };
@@ -55,7 +67,8 @@ const report = { schemaVersion: 1, roots, products: before, inputSha256: sha256(
   conditions: { pairs, warmups: 4, order: "alternating", node: process.version, platform: process.platform,
     scope: "Supplied frozen source-scan inputs and BM25 scoring only; excludes SQL, graph planning, freshness, transport and serialization" },
   population: { files: fixture.inputs.length, characters: fixture.inputs.reduce((sum, input) => sum + input.sourceText.length, 0),
-    symbols: fixture.inputs.reduce((sum, input) => sum + input.symbols.length, 0) },
+    symbols: fixture.inputs.reduce((sum, input) => sum + input.symbols.length, 0),
+    cacheGroups: new Set(fixture.inputs.map(input => input.cacheId ?? 0)).size },
   completeResultsEqual: true, medians, samples };
 writeFileSync(resolve(option("--output")), JSON.stringify(report, null, 2) + "\n");
 console.log(JSON.stringify({ medians, population: report.population, completeResultsEqual: true }));
