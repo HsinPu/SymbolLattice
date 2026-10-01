@@ -1,21 +1,38 @@
 /** Query-time lexical helpers; these broaden candidates, never graph certainty. */
 const MAXIMUM_IDENTIFIER_CACHE_ENTRIES = 4096;
 const MAXIMUM_IDENTIFIER_CACHE_KEY_CHARACTERS = 256;
-const wordCache = new Map<string, readonly string[]>();
-const variantCache = new Map<string, readonly string[]>();
+interface IdentifierValueCache {
+  readonly values: Map<string, readonly string[]>;
+  readonly insertionKeys: string[];
+  nextEvictionIndex: number;
+}
+
+function createIdentifierValueCache(): IdentifierValueCache {
+  return { values: new Map(), insertionKeys: [], nextEvictionIndex: 0 };
+}
+
+const wordCache = createIdentifierValueCache();
+const variantCache = createIdentifierValueCache();
 
 /** Cache pure spelling calculations only; callers still receive independent arrays. */
 function cachedIdentifierValues(
   value: string,
-  cache: Map<string, readonly string[]>,
+  cache: IdentifierValueCache,
   compute: (value: string) => readonly string[]
 ): readonly string[] {
   if (value.length > MAXIMUM_IDENTIFIER_CACHE_KEY_CHARACTERS) return compute(value);
-  const cached = cache.get(value);
+  const cached = cache.values.get(value);
   if (cached !== undefined) return cached.slice();
   const result = compute(value);
-  if (cache.size >= MAXIMUM_IDENTIFIER_CACHE_ENTRIES) cache.delete(cache.keys().next().value!);
-  cache.set(value, result.slice());
+  if (cache.insertionKeys.length < MAXIMUM_IDENTIFIER_CACHE_ENTRIES) {
+    cache.insertionKeys.push(value);
+  } else {
+    // Keep the same FIFO order without starting a new Map iterator on every miss.
+    cache.values.delete(cache.insertionKeys[cache.nextEvictionIndex]!);
+    cache.insertionKeys[cache.nextEvictionIndex] = value;
+    cache.nextEvictionIndex = (cache.nextEvictionIndex + 1) % MAXIMUM_IDENTIFIER_CACHE_ENTRIES;
+  }
+  cache.values.set(value, result.slice());
   return result;
 }
 

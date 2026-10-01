@@ -60,6 +60,18 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.546.2 Bound identifier cache eviction work
+
+Pure spelling caches now retain FIFO insertion keys in bounded circular arrays, replacing a new `Map.keys().next()` lookup on each full-cache miss. The 4,096-entry capacity, 256-code-unit key limit, insertion-only eviction order, independent returned arrays and spelling alternatives are unchanged. No graph, source-position, query-result or generation state is cached. Public helper declarations, index format, extractor v435, resolver v210 and Node runtime requirements remain unchanged; this is an internal performance patch.
+
+[The cache eviction audit](mcp/identifier-cache-eviction-audit.md) records instrumented high-churn queries, independently replayed request sequences, exact FIFO/value equality, final product fingerprints and all timings. The actual final-build replay reduces measured pure-helper cost for three Django sequences by 48.34–50.21%; high-hit NestJS, Fastify and Express sequences are 0.014–0.047 ms slower. This isolated result excludes graph, SQL and MCP work.
+
+All 34 unchanged manifests / 45 tasks preserve deeply equal complete responses and identical compiled MCP text against v0.546.1. All 70 required files, 198 specified source facts and 977 displayed term facts across 876 location groups remain. Partial task/file judgments remain 87 TP, 2 FP, 0 FN and 76 unjudged; judged-result precision is 87/89 (97.75%) and required-file recall is 70/70 (100%), within the existing truth. Unjudged entries do not establish full precision, and the preceding ranking/noise gaps remain.
+
+The final 13-query comparison runs after correctness checks finish, on the same pinned sources and read-only indexes recorded below, with one warmup and nine balanced-order rounds per build. Every timed response/text matches accepted QA; bounded edge-read traces for v0.546.1, v0.546.2 and the same-build uncached control match on direction, parameter count and returned-row count in every round. Eleven whole-call medians are 0.02–2.51% faster than v0.546.1; Fastify response prototypes and client-error logging are 3.25% and 0.85% slower. The full table and retained preliminary trial are in the audit. This batch does not claim universal latency improvement, new recall or complete precision.
+
+`npm run check`, `npm run build`, 185 focused tests, the full suite (3,420 passed, four existing skips), language-depth pack precheck and `npm pack --dry-run` passed. The repeated-churn regression covers multiple cursor wraps. Frozen v0.546.2 builds, request captures, accepted QA, per-file identities and paired reports remain under `%TEMP%/SymbolLattice-v5462-*`; replay commands and unmeasured scopes are in the audit. First indexing, incremental sync, process startup and total Agent task time/query count were not compared.
+
 ## v0.546.1 Information and send query evidence
 
 This patch corrects existing lexical retrieval for information/info and sent/send, and bounds pure word-splitting and variant-expansion caches. It changes no tool, parameter, structured output, parser policy or index format. Extractor v435, resolver v210 and the v0.546.0 runtime requirements remain. [The source audit](mcp/information-abbreviation-audit.md) records the independent CPython/TypeScript observations, retained Fastify failure, isolated alternatives and cache ownership limits.

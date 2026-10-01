@@ -51,8 +51,8 @@ describe("identifier search concepts", () => {
     expect(identifierTermVariants("information")).toEqual(["information", "info"]);
   });
 
-  it("preserves inflections, Unicode and oversized spellings after cache churn", () => {
-    for (let index = 0; index < 4200; index++) {
+  it("preserves inflections, Unicode and oversized spellings after repeated cache churn", () => {
+    for (let index = 0; index < 12300; index++) {
       identifierWords(`HTTPServer${index}.userID`);
       identifierTermVariants(`candidate${index}`);
     }
