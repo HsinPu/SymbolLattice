@@ -12,6 +12,7 @@ export const QUERY_TIMING_STAGES = [
   "planning",
   "imported-declaration-read",
   "selected-declaration-read",
+  "source-operation-read",
   "path-spine",
   "context",
   "source",

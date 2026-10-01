@@ -335,6 +335,73 @@ export function verifyIncomingCallWitnesses(result, readSource) {
   return { verifiedCallers: additions.length, verifiedEdges, omittedConnections };
 }
 
+/** Independent whole-file AST validation of supplemental written operations; no builtin/dispatch inference. */
+export function verifySourceOperationLeads(result, readSource) {
+  const focuses = result.focuses ?? [], additions = focuses.filter(f => f.sourceOperationLead);
+  assert.ok(additions.length <= 1);
+  const compare = (a, b) => a.line - b.line || a.column - b.column;
+  const inside = (range, owner) => compare(range.start, owner.range.start) >= 0 && compare(range.end, owner.range.end) <= 0;
+  let verifiedCalls = 0;
+  for (const focus of additions) {
+    const receipt = focus.sourceOperationLead, owner = focus.symbol;
+    assert.equal(receipt.policy, 'written-object-operation-v1');
+    assert.equal(receipt.scope, 'selected-files-bounded-candidates');
+    assert.equal(receipt.state, 'written-callee-source-lead');
+    assert.ok(focus.reasons.includes('source-object-operation'));
+    assert.ok(['function', 'method'].includes(owner.kind));
+    assert.equal(focus.sourceRole.role, 'production');
+    assert.equal(focus.generated.generated, false);
+    assert.ok(/\.(?:[cm]?js|jsx)$/iu.test(owner.filePath));
+    assert.ok(!isAbsolute(owner.filePath) && !owner.filePath.split(/[\\/]/u).includes('..'));
+    const earlier = focuses.slice(0, focuses.indexOf(focus));
+    assert.ok(earlier.some(f => f.symbol.filePath === owner.filePath && f.sourceRole.role === 'production' && !f.generated.generated));
+    assert.ok(!earlier.some(f => f.symbol.id === owner.id || f.symbol.filePath === owner.filePath &&
+      ['function', 'method'].includes(f.symbol.kind) && inside(owner.range, f.symbol)));
+    assert.ok(Number.isInteger(receipt.candidateCount) && receipt.candidateCount >= 1 && receipt.candidateCount <= 32);
+    for (const flag of ['candidatesTruncated', 'callsTruncated']) assert.equal(typeof receipt[flag], 'boolean');
+    assert.ok(receipt.calls.length >= 1 && receipt.calls.length <= 2);
+    assert.equal(new Set(receipt.calls.map(e => e.id)).size, receipt.calls.length);
+    const concepts = (focus.sourceMatches ?? []).filter(m => m.lineContext !== 'comment-prefixed' &&
+      m.filePath === owner.filePath && inside(m.range, owner) && result.queryPlan.identifierTerms.includes(m.term));
+    assert.ok(identifierTermGroups(concepts.map(m => m.term)).length >= 2);
+    verifyLexicalMatches({ focuses: [focus] }, readSource);
+    const source = readSource(owner.filePath), parsedCalls = [];
+    let ast;
+    try { ast = parseJavaScript(source, { ecmaVersion: 'latest', sourceType: 'module', loc: true, ecmaFeatures: { jsx: true } }); }
+    catch { ast = parseJavaScript(source, { ecmaVersion: 'latest', sourceType: 'commonjs', loc: true, ecmaFeatures: { jsx: true } }); }
+    const visit = (node, callables) => {
+      if (!node || typeof node.type !== 'string') return;
+      if (['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression'].includes(node.type)) callables = [...callables, node];
+      if (node.type === 'CallExpression' && !node.optional && node.callee.type === 'MemberExpression' &&
+          !node.callee.computed && !node.callee.optional && node.callee.object.type === 'Identifier' &&
+          node.callee.object.name === 'Object' && node.callee.property.type === 'Identifier' &&
+          node.callee.property.name === 'setPrototypeOf') parsedCalls.push({ node, callables });
+      for (const value of Object.values(node)) {
+        if (Array.isArray(value)) for (const child of value) visit(child, callables);
+        else if (value && typeof value === 'object') visit(value, callables);
+      }
+    };
+    visit(ast, []);
+    const range = node => ({ start: { line: node.loc.start.line, column: node.loc.start.column + 1 },
+      end: { line: node.loc.end.line, column: node.loc.end.column + 1 } });
+    for (const edge of receipt.calls) {
+      assert.equal(edge.sourceId, owner.id); assert.equal(edge.filePath, owner.filePath);
+      assert.equal(edge.referenceName, 'Object.setPrototypeOf'); assert.equal(edge.kind, 'calls');
+      assert.equal(edge.targetId, null); assert.equal(edge.confidence, 0); assert.equal(edge.resolution, 'unresolved');
+      assert.equal(edge.evidence.stage, 'syntax');
+      assert.equal(edge.evidence.ruleId, 'syntax.javascript.member-call.unknown-receiver');
+      assert.deepEqual(edge.evidence.candidateSymbolIds, []);
+      assert.ok(focus.unresolvedCalls?.state === 'available' && focus.unresolvedCalls.items.some(e =>
+        JSON.stringify(e) === JSON.stringify(edge)), 'Lead must retain the same generation-fenced call receipt');
+      assert.ok(parsedCalls.some(({ node, callables }) => callables.length > 0 && inside(range(callables.at(-1)), owner) &&
+        callables.filter(callable => inside(range(callable), owner)).length === 1 &&
+        JSON.stringify(range(node.callee)) === JSON.stringify(edge.range)), 'Written call requires a whole-file AST callee and owning callable');
+      verifiedCalls++;
+    }
+  }
+  return { verifiedLeads: additions.length, verifiedCalls };
+}
+
 export function verifyNumericQualifiers(result) {
   if (result.queryPlan?.numericCoverage) {
     const coverage = result.queryPlan.numericCoverage;
@@ -924,6 +991,7 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
       omittedDeclarationVerification: verifyOmittedDeclarationLeads(response,
         (file) => readFileSync(resolve(project, file), "utf8")),
       incomingCallVerification: verifyIncomingCallWitnesses(response, (file) => readFileSync(resolve(project, file), "utf8")),
+      sourceOperationVerification: verifySourceOperationLeads(response, (file) => readFileSync(resolve(project, file), "utf8")),
       propertyUseFollowupVerification: verifyPropertyUseFollowups(response),
       numericQualifierVerification: verifyNumericQualifiers(response),
       numericContainerVerification: verifyNumericContainerFiltering(response,

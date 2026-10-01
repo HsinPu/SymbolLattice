@@ -237,6 +237,13 @@ function renderFocuses(result: UnknownRecord): string[] {
       if (incoming.candidatesTruncated === true || incoming.witnessesTruncated === true) output.push("  Further candidates or call witnesses may be omitted; follow the cited caller and target for more evidence.");
     }
     const followup = record(focus.nameFollowup);
+    const operation = record(focus.sourceOperationLead);
+    if (operation !== null) {
+      output.push("  Supplementary source lead for the object/prototype question; written callees are evidence, and receiver identity, targets and execution remain unknown.");
+      for (const edge of records(operation.calls)) output.push(`  Written call \`${text(edge.referenceName) ?? "?"}\`${edgeDetails(edge)}; target unknown.`);
+      if (operation.candidatesTruncated === true || operation.callsTruncated === true) output.push(
+        "  Further candidates or calls may be omitted within the bounded selected-file search; inspect the cited source for more evidence.");
+    }
     const directory = record(focus.directoryContext);
     if (directory !== null) output.push(`  Query directory context: ${Array.isArray(directory.terms) ? directory.terms.join(", ") : "unknown"} matches a directory component of \`${text(directory.filePath) ?? "?"}\`, corroborated by literal source concepts; this is ranking evidence, not a resolved relation.`);
     const imported = record(focus.importedCallDeclaration);

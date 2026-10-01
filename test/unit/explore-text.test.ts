@@ -4,6 +4,17 @@ import { sourceDeliveryIdentityFromText } from "../../src/application/source-del
 import { McpSourceSession } from "../../src/mcp/source-session.js";
 
 describe("MCP explore text rendering", () => {
+  it("cites written object operations and keeps receiver, targets and execution unknown", () => {
+    const output = renderExploreText({ focuses: [{ symbol: { name: "handle" }, sourceOperationLead: {
+      calls: [{ referenceName: "Object.setPrototypeOf", filePath: "lib/app.js", kind: "calls",
+        resolution: "unresolved", targetId: null, range: { start: { line: 22, column: 3 } } }],
+      candidatesTruncated: true, callsTruncated: true
+    } }] });
+    expect(output).toContain("Object.setPrototypeOf");
+    expect(output).toContain("lib/app.js:22");
+    expect(output).toContain("receiver identity, targets and execution remain unknown");
+    expect(output).toContain("bounded selected-file search");
+  });
   it("cites incoming static calls and discloses bounded omissions without proving runtime dispatch", () => {
     const output = renderExploreText({ focuses: [{ symbol: { name: "serialize" }, incomingCallWitness: {
       candidateCount: 2, candidatesTruncated: true, witnessesTruncated: false,

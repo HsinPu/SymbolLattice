@@ -998,6 +998,43 @@ describe("SymbolLatticeService", () => {
     });
   });
 
+  it("supplements independent written operations, fences generations and drops outdated source after sync", async () => {
+    const content = [
+      "function request_response_objects_linked_stage() { return request.response; }",
+      "function request_response_objects_connected_stage() { return response.request; }",
+      "function handle(Object, req, res) {",
+      "  Object.setPrototypeOf(req, request);",
+      "  Object.setPrototypeOf(res, response);",
+      "}"
+    ].join("\n");
+    const projectPath = await createInlineProject({ "app.js": content });
+    const store = new SqliteGraphStore(), sink = new RecordingQueryTimingSink();
+    const service = new SymbolLatticeService(store, new FileSystemSourceCatalog(), { queryTimingSink: sink });
+    await service.init({ projectPath });
+    const query = "How are request and response objects linked before routing?";
+    const before = await service.explore(projectPath, query);
+    const lead = before.focuses?.find(f => f.sourceOperationLead);
+    expect(lead?.symbol.name).toBe("handle");
+    expect(lead?.source?.text).toContain("Object.setPrototypeOf(req, request)");
+    expect(lead?.sourceOperationLead?.calls).toHaveLength(2);
+    expect(lead?.sourceOperationLead?.calls.every(e => e.targetId === null && e.resolution === "unresolved" && e.confidence === 0)).toBe(true);
+    expect(lead?.unresolvedCalls?.items).toEqual(lead?.sourceOperationLead?.calls);
+    expect(sink.events().some(e => e.stage === "source-operation-read")).toBe(true);
+    sink.clear();
+    await service.explore(projectPath, "request response formatting");
+    expect(sink.events().some(e => e.stage === "source-operation-read")).toBe(false);
+    const original = store.getActiveUnresolvedCalls.bind(store);
+    store.getActiveUnresolvedCalls = () => ({ generationMatched: false, calls: [] });
+    expect((await service.explore(projectPath, query)).focuses?.some(f => f.sourceOperationLead)).toBe(false);
+    store.getActiveUnresolvedCalls = original;
+    await writeFile(join(projectPath, "app.js"), content.replaceAll("Object.setPrototypeOf", "unknown.change"), "utf8");
+    await service.sync({ projectPath });
+    const after = await service.explore(projectPath, query);
+    expect(after.status.generationId).not.toBe(before.status.generationId);
+    expect(after.focuses?.some(f => f.sourceOperationLead)).toBe(false);
+    store.close();
+  });
+
   it("exposes bounded unknown call sites in exact and query exploration without guessing same-named targets", async () => {
     const projectPath = await createInlineProject({ "payments.py": [
       "def refund(): pass", "def refund_payment(client):",

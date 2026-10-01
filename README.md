@@ -6,7 +6,7 @@ SymbolLattice 是提供給開發者與 AI Agent 的本機程式碼搜尋工具�
 
 [English](README.en.md) · [開始使用](docs/getting-started.md) · [驗證與限制](benchmarks/README.md) · [回報問題](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.544.4` · Node.js `>=22.13 <25` · MIT
+`v0.545.0` · Node.js `>=22.13 <25` · MIT
 
 ## 從「這段功能在哪裡？」開始
 
@@ -94,6 +94,8 @@ SymbolLattice 使用靜態分析。文字命中也可能來自註解或字串；
 Python 以專案根目錄為範圍，解析絕對匯入指向的單一基底類別，保留匯入、套件標記與繼承位置的證據；支援名稱清單與別名。命名空間套件、來源根目錄推導、多重繼承與動態派發仍不在此範圍。繼承方法的呼叫仍可能未解析。長問句中省略的概念若與直接 `self.method()` 呼叫相符，也可從既有有界圖補上一個跨檔基底方法候選，附上呼叫所屬類別、匯入、直接繼承與宣告歸屬證據；只支援已解析的絕對具名匯入與單層來源鏈，不推論執行時派發。這類候選的 JSON `omittedQueryDeclaration.scope` 為 `inspected-inherited-source`，並附上 `inheritedSource`；請依回傳的 `limits` 處理補充檔案與焦點。升級後請執行 `SymbolLattice sync .` 更新解析證據。
 
 JavaScript 函式內以識別字或 `this` 開頭的靜態成員呼叫，也可在 `unresolvedCalls` 取得完整呼叫名稱與來源位置（包含 `.call`、`.apply`、`.bind`）。這些只表示原始碼中的語法，不確認接收者型別、呼叫目標或執行行為；可選鏈、計算式成員與未建立符號的匿名回呼不在此範圍。升級至 0.543.0 後，執行 `SymbolLattice sync .` 更新索引。
+
+詢問物件連結或原型時，一般查詢可在已選 JavaScript 檔案中補上一個具有查詢詞來源與 `Object.setPrototypeOf` 呼叫位置的函式。JSON 的 `sourceOperationLead` 提供有界候選與截斷資訊；這只補充寫出的語法，不確認 `Object` 的身分、呼叫目標或執行效果。最多檢查 32 個候選、每個候選 8 個呼叫，提供 2 個呼叫位置；請依回傳的 `limits` 處理焦點上限。不需重建索引。
 
 Python 同類別中可確認的直接 `self.method()` 呼叫包含 `async def` 方法。對可安全恢復的裸 `yield` 解析缺口，函式內寫出的成員呼叫也會保留來源位置；接收者型別未知時標示為未解析，不猜測目標。一般查詢與精確符號補查，都可從已回傳的有界圖，為部分未解析的 `self.method()` 呼叫附上索引來源中的同類別宣告線索；這只供補查，不證明接收者型別或實際派發。未解析呼叫清單受限時，一般查詢會優先呈現符合查詢詞的呼叫；可用回傳的精確符號參照追查按來源順序排列的較完整清單。
 

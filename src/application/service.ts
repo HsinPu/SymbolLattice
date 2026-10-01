@@ -1,4 +1,5 @@
 import { supplementIncomingCallers } from "./explore-incoming-callers.js";
+import { SOURCE_OPERATION_LIMITS, sourceOperationCandidates, supplementSourceOperations } from "./explore-source-operations.js";
 import { randomUUID } from "node:crypto";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { isMainThread } from "node:worker_threads";
@@ -5678,6 +5679,7 @@ export class SymbolLatticeService {
     const followupCallIds = new Map<string, Set<string>>();
     for (const selection of plan.selection) {
       for (const edge of [...(selection.nameFollowup?.calls ?? []),
+        ...(selection.sourceOperationLead?.calls ?? []),
         ...(selection.omittedQueryDeclaration === undefined ? [] : [selection.omittedQueryDeclaration.call]),
         ...(selection.importedCallDeclaration === undefined ? [] : [selection.importedCallDeclaration.call])]) {
         const ids = followupCallIds.get(edge.sourceId) ?? new Set<string>();
@@ -5921,7 +5923,7 @@ export class SymbolLatticeService {
   private planExploreWithFollowups(projectPath: string, bundle: ActiveGraphBundle, query: string): ExploreQueryPlan {
     const plan = planExploreQuery(bundle.snapshot, query, bundle.sourceLexical);
     if (plan.selection.length === 0 || plan.fileHints.length > 0 || plan.identifierTerms.length < 2) return plan;
-    const candidates = this.exploreUnresolvedCalls(projectPath, bundle,
+    let candidates = this.exploreUnresolvedCalls(projectPath, bundle,
       plan.selection.map(item => item.symbol.id), EXPLORE_UNRESOLVED_CALL_CANDIDATE_LIMIT);
     const followupCalls = new Map([...candidates].map(([sourceId, evidence]) => {
       // These new JavaScript receipts supply written source evidence only.
@@ -5967,6 +5969,15 @@ export class SymbolLatticeService {
           ...(declarations === undefined ? {} : { projection: declarations }) });
     }
     result = supplementIncomingCallers(bundle.snapshot, result, bundle.sourceLexical, this.isBoundedTraversalTruncated(bundle));
+    const operationCandidates = sourceOperationCandidates(bundle.snapshot, result, bundle.sourceLexical,
+      this.isBoundedTraversalTruncated(bundle));
+    if (operationCandidates !== undefined) {
+      const operationCalls = measureQueryTiming(this.queryTimingSink, "source-operation-read", () =>
+        this.exploreUnresolvedCalls(projectPath, bundle, operationCandidates.symbols.map(symbol => symbol.id),
+          SOURCE_OPERATION_LIMITS.maximumCallsPerCandidate));
+      result = supplementSourceOperations(bundle.snapshot, result, bundle.sourceLexical, operationCandidates, operationCalls);
+      candidates = new Map([...candidates, ...operationCalls]);
+    }
     this.exploreCallEvidence.set(result, candidates);
     return result;
   }

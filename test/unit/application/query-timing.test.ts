@@ -18,6 +18,7 @@ describe("query timing sink", () => {
       "planning",
       "imported-declaration-read",
       "selected-declaration-read",
+      "source-operation-read",
       "path-spine",
       "context",
       "source",

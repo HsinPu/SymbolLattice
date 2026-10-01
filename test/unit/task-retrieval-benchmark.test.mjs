@@ -7,8 +7,44 @@ import { join } from "node:path";
 import { scoreTask, verifySourceExcerpts, verifyGraphEvidence, verifyLexicalMatches, verifyCoveredContextFiltering, verifySourceReuse, verifyUnresolvedCalls, verifySameClassDeclarationLeads, verifyNameFollowups, verifyOmittedDeclarationLeads, verifyPropertyUseFollowups, verifyNumericQualifiers, verifyNumericContainerFiltering, productFingerprint } from "../../benchmarks/mcp/task-retrieval.mjs";
 import { verifyDirectoryContexts } from "../../benchmarks/mcp/task-retrieval.mjs";
 import { verifyUnresolvedReferences } from "../../benchmarks/mcp/task-retrieval.mjs";
+import { verifySourceOperationLeads } from "../../benchmarks/mcp/task-retrieval.mjs";
 
 describe("task retrieval benchmark judgments", () => {
+  it("independently verifies written object operations and rejects strings, borrowed sites and guessed targets", () => {
+    const source = 'function first() {}\nfunction handle(Object) {\n  request.response;\n  Object.setPrototypeOf(request, response);\n}';
+    const owner = { id: 'owner', filePath: 'a.js', kind: 'function',
+      range: { start: { line: 2, column: 1 }, end: { line: 5, column: 2 } } };
+    const edge = { id: 'call', sourceId: 'owner', filePath: 'a.js', referenceName: 'Object.setPrototypeOf',
+      targetId: null, kind: 'calls', resolution: 'unresolved', confidence: 0,
+      range: { start: { line: 4, column: 3 }, end: { line: 4, column: 24 } },
+      evidence: { stage: 'syntax', ruleId: 'syntax.javascript.member-call.unknown-receiver', candidateSymbolIds: [] } };
+    const role = { role: 'production' }, generated = { generated: false };
+    const result = { queryPlan: { identifierTerms: ['request', 'response', 'objects', 'linked'] }, focuses: [
+      { symbol: { id: 'first', filePath: 'a.js', kind: 'function',
+        range: { start: { line: 1, column: 1 }, end: { line: 1, column: 20 } } }, sourceRole: role, generated },
+      { symbol: owner, sourceRole: role, generated, reasons: ['source-object-operation'],
+        sourceMatches: [{ term: 'request', token: 'request', filePath: 'a.js', range: { start: { line: 3, column: 3 }, end: { line: 3, column: 10 } } },
+          { term: 'response', token: 'response', filePath: 'a.js', range: { start: { line: 3, column: 11 }, end: { line: 3, column: 19 } } }],
+        unresolvedCalls: { state: 'available', items: [edge] }, sourceOperationLead: {
+          policy: 'written-object-operation-v1', scope: 'selected-files-bounded-candidates', state: 'written-callee-source-lead',
+          calls: [edge], candidateCount: 1, candidatesTruncated: false, callsTruncated: false } }
+    ] };
+    expect(verifySourceOperationLeads(result, () => source)).toEqual({ verifiedLeads: 1, verifiedCalls: 1 });
+    for (const mutate of [r => r.focuses[1].sourceOperationLead.calls[0].targetId = 'guessed',
+      r => r.focuses[1].sourceOperationLead.calls[0].range.start.column++,
+      r => r.focuses[1].unresolvedCalls.state = 'generation-mismatch',
+      r => r.focuses[0].symbol.filePath = 'other.js', r => r.focuses[1].sourceOperationLead.candidateCount = 33]) {
+      const bad = structuredClone(result); mutate(bad);
+      expect(() => verifySourceOperationLeads(bad, () => source)).toThrow();
+    }
+    expect(() => verifySourceOperationLeads(result, () => source.replace('  Object.setPrototypeOf(request, response);',
+      '/*Object.setPrototypeOf(request, response);*/'))).toThrow();
+    const nestedSource = source.replace('  Object.setPrototypeOf(request, response);',
+      '  function inner(){ Object.setPrototypeOf(request, response); }');
+    const nested = structuredClone(result), column = nestedSource.split('\n')[3].indexOf('Object.setPrototypeOf') + 1;
+    nested.focuses[1].sourceOperationLead.calls[0].range = { start: { line: 4, column }, end: { line: 4, column: column + 21 } };
+    expect(() => verifySourceOperationLeads(nested, () => nestedSource)).toThrow();
+  });
   it("checks and scores exact-symbol JavaScript written callees without guessing a target", () => {
     const text = "function run(){ ns.registerPlugin.call(this); }";
     const owner = { id: "owner", filePath: "a.js", qualifiedName: "a.js#run",
