@@ -178,9 +178,16 @@ export async function walkScopedProject(
       }
     }
 
+    // Native entries are basenames under an already normalized absolute parent.
+    // Custom readers retain resolution because their names need not have that guarantee.
+    const nativeDirectoryPrefix = reader === nativeProjectFilesystemReader
+      ? directoryPath.endsWith(sep) ? directoryPath : directoryPath + sep
+      : null;
     for (const entry of sortedEntries) {
       if (entry.name === ".gitignore" && entry.isFile()) continue;
-      const entryPath = resolve(directoryPath, entry.name);
+      const entryPath = nativeDirectoryPrefix === null
+        ? resolve(directoryPath, entry.name)
+        : nativeDirectoryPrefix + entry.name;
       const entryRelativePath = joinProjectRelativePath(directoryRelativePath, entry.name);
 
       if (entry.isDirectory()) {

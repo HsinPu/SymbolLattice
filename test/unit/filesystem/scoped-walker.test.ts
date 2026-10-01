@@ -77,6 +77,44 @@ describe("shared scoped project walker", () => {
     expect(active).toBe(0);
   });
 
+  it("preserves native and custom resolved paths for Unicode names, scopes and nested configuration", async () => {
+    const projectPath = await createProject();
+    const expectedPaths = [
+      "src space/資料🙂/A.ts",
+      "src space/資料🙂/utility café.ts",
+      "src space/.keep-hidden/keep.ts"
+    ];
+    await Promise.all([...expectedPaths, "src space/ignored.ts", "outside/out.ts",
+      "outside/tsconfig.json", "src space/資料🙂/tsconfig.worker.json"]
+      .map((path) => writeProjectFile(projectPath, path)));
+    await writeProjectFile(projectPath, ".gitignore", "src space/ignored.ts\n!src space/.keep-hidden/\n");
+    const candidateCalls: { relativePath: string; absolutePath: string }[][] = [];
+    const results = [];
+    for (const reader of [nativeProjectFilesystemReader, { ...nativeProjectFilesystemReader }]) {
+      const calls: { relativePath: string; absolutePath: string }[] = [];
+      results.push(await walkScopedProject(`${projectPath}/./`, {
+        reader,
+        scopeRoots: ["src space/./"],
+        isConfigurationCandidateFileName: (name) => name === ".gitignore" || name.startsWith("tsconfig"),
+        isSourceCandidate: (relativePath, absolutePath) => {
+          calls.push({ relativePath, absolutePath });
+          return typescriptSource(relativePath);
+        }
+      }));
+      candidateCalls.push(calls.sort((left, right) => left.relativePath < right.relativePath ? -1 : 1));
+    }
+    expect(results[0]).toEqual(results[1]);
+    expect(relativeSourcePaths(projectPath, results[0]!.sourcePaths)).toEqual(expectedPaths.sort());
+    expect(results[0]!.scopeRoots).toEqual(["src space"]);
+    expect(results[0]!.configurationPaths).toEqual([
+      ".gitignore", "outside/tsconfig.json", "src space/資料🙂/tsconfig.worker.json"
+    ]);
+    expect(candidateCalls[0]).toEqual(candidateCalls[1]);
+    for (const call of candidateCalls[0]!) {
+      expect(call.absolutePath).toBe(resolve(projectPath, call.relativePath));
+    }
+  });
+
   it("bounds content-based candidate reads after ignore filtering and preserves sorted paths", async () => {
     const projectPath = await createProject();
     const files = Array.from({ length: 80 }, (_, index) => `src/tool-${String(index).padStart(2, "0")}.tool`);

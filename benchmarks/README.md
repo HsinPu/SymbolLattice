@@ -60,6 +60,16 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.547.3 Reduce native directory path resolution cost
+
+Native directory entries reuse an already normalized parent prefix; custom readers retain resolution. Full traversal, source/configuration coverage, ignore/scope rules, ordering, concurrency, error receipts and content hashes remain unchanged. The [native entry path audit](filesystem/native-entry-path-audit.md) records the compatible patch, fixed source truth, final build identity and the slower-case follow-up.
+
+All four complete ordered discovery path lists and twelve-pair full-content freshness receipts retain equality. Discovery medians are 5.00–7.73% lower; verification totals are lower on three corpora and approximately 0.1450 ms higher on Express. All 36 manifests / 51 tasks retain complete response/text equality, 79/79 required file-task instances, 222/222 facts and 1,114 displayed term facts in 982 citation groups. Partial judgments remain 99 TP / 0 FP / 0 FN / 87 unjudged; overall precision remains unmeasured.
+
+Eighteen whole-call comparisons use 12 ABBA rounds: 14 medians are 0.43–10.41% lower and four 0.78–4.22% higher. A separate 24-round follow-up on the four initially slower cases and one control has four lower medians and one 0.44% higher. Both runs are retained; all 672 complete responses/texts and captured SQL/arguments/row counts retain equality, with unchanged main index hashes and response/text sizes. Whole-query gains remain mixed; no universal speedup, significance, SLO or peak-memory claim is made. Indexing, sync, startup and total Agent task time/query count were not compared.
+
+Typecheck, build, 118 focused tests, 105 filesystem tests on Node.js 22.16.0 and the full Node.js 24 suite pass (3,439 passed, four existing skips). Final products, source checks, timing samples and the prototype remain outside the repository under `%TEMP%/SymbolLattice-v5473-*`.
+
 ## v0.547.2 Reduce resident source hashing cost
 
 Bounded resident text and raw byte views use one-shot SHA-256; larger inputs and file streams retain incremental hashing. Full content identities, source evidence, read scheduling, policies, runtime requirements and index compatibility remain unchanged. The [source hash audit](filesystem/source-hash-audit.md) records the compatible patch, exact compiled-function replay, fixed sources and final build identity.
