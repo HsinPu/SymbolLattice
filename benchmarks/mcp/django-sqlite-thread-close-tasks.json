@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/django/django",
+  "commit": "bc833e8883db4a333a6485d91637b78c85e2b13b",
+  "truthMethod": "Defined from CPython 3.12 AST and manual pinned-source reading before either product query. This task asks where the two guards are checked, not how all SQLite memory modes are classified or whether runtime dispatch reaches these methods. Required-file and positive-source judgments are incomplete; all other output remains unjudged. This is a new held-out task for the first v0.549.0 implementation; preserve its first result even if it fails.",
+  "tasks": [
+    {
+      "id": "sqlite-close-thread-and-memory-guards",
+      "split": "held-out",
+      "query": "When closing a SQLite connection, where are thread ownership and the guard against closing an in-memory database checked?",
+      "requiredFiles": [
+        "django/db/backends/sqlite3/base.py",
+        "django/db/backends/base/base.py"
+      ],
+      "supportingFiles": [],
+      "irrelevantFiles": [],
+      "evidence": [
+        { "file": "django/db/backends/sqlite3/base.py", "line": 223, "text": "self.validate_thread_sharing()" },
+        { "file": "django/db/backends/sqlite3/base.py", "line": 227, "text": "if not self.is_in_memory_db():" },
+        { "file": "django/db/backends/sqlite3/base.py", "line": 228, "text": "BaseDatabaseWrapper.close(self)" },
+        { "file": "django/db/backends/base/base.py", "line": 644, "text": "if not (self.allow_thread_sharing or self._thread_ident == _thread.get_ident()):" },
+        { "file": "django/db/backends/base/base.py", "line": 645, "text": "raise DatabaseError(" },
+        { "file": "django/db/backends/base/base.py", "line": 649, "text": "thread id %s.\" % (self.alias, self._thread_ident, _thread.get_ident())" }
+      ]
+    }
+  ]
+}

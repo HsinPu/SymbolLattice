@@ -293,6 +293,30 @@ function renderFocuses(result: UnknownRecord): string[] {
     if (reused.length > 0) output.push(`  Shared source: ${reused.map((segment) =>
       `focus #${(finiteNumber(segment.referenceIndex) ?? -1) + 1} at \`${symbolLocation(segment)}\``).join("; ")}.`);
   }
+  for (const window of records(result.sourceWindows)) {
+    const context = record(window.callSourceContext);
+    if (context === null) continue;
+    const declaration = record(context.declaration);
+    output.push("", `Supplementary source at \`${text(declaration?.qualifiedName) ?? "unknown declaration"}\` (${symbolLocation(declaration ?? {})}):`);
+    if (context.reason === "inherited-call-source") {
+      output.push("Written direct-base source steps; self calls remain unresolved. This is not receiver-type, runtime MRO or dispatch proof.");
+      for (const step of records(context.steps)) {
+        const call = record(step.call), witness = record(step.inheritedSource);
+        if (call !== null) output.push(`- Written call \`${text(call.referenceName) ?? "?"}\`${edgeDetails(call)}; target unknown.`);
+        for (const [label, key] of [["Caller containment", "callerContainment"], ["Base import", "importEdge"],
+          ["Written inheritance", "inheritance"], ["Declaration containment", "declarationContainment"]]) {
+          const edge = record(witness?.[key!]);
+          if (edge !== null) output.push(`  ${label}${edgeDetails(edge)}.`);
+        }
+        const evidence = record(record(witness?.inheritance)?.evidence);
+        if (Array.isArray(evidence?.configurationPaths)) output.push(`  Package anchors: ${evidence.configurationPaths.filter(path => typeof path === "string").map(path => `\`${path}\``).join(", ")}.`);
+        if (Array.isArray(evidence?.unmarkedPackagePaths)) output.push(`  Directories without package markers: ${evidence.unmarkedPackagePaths.filter(path => typeof path === "string").map(path => `\`${path}\``).join(", ")}; package loading remains unconfirmed.`);
+      }
+    } else {
+      const edge = record(context.callerEdge);
+      output.push(`Exact static incoming call${edge === null ? "" : edgeDetails(edge)}; the surrounding caller source does not prove runtime execution.`);
+    }
+  }
   const calleeTerms = renderSourceTerms(records(result.sourceWindows).flatMap((window) => records(window.sourceMatches)));
   if (calleeTerms.length > 0) output.push("", `Related source terms (lexical, not resolved relationships): ${calleeTerms.join("; ")}.`);
   return output;
@@ -512,6 +536,14 @@ function renderLimitations(result: UnknownRecord): string[] {
   if ((finiteNumber(lexicalSearch?.rejectedMatches) ?? 0) > 0) notes.add("Some lexical receipts did not match the available source or owning declaration and were excluded.");
   if (Array.isArray(lexicalSearch?.unavailableFiles) && lexicalSearch.unavailableFiles.length > 0) notes.add("Source for some lexical hits was unavailable in this read.");
   const calleeSearch = record(record(result.sourceWindowPlan)?.calleeSourceSearch);
+  const callContextSearch = record(record(result.sourceWindowPlan)?.callSourceContextSearch);
+  if (callContextSearch !== null) {
+    notes.add("Python call-source context inspects a bounded graph and at most two written direct-base steps. It does not establish repository-wide completeness or resolve self calls.");
+    if (callContextSearch.truncated === true) notes.add("Further Python call-source context may be omitted by graph, call, declaration, source or window bounds; query a cited method or file directly for more evidence.");
+    if (callContextSearch.generationMismatch === true) notes.add("Nested call-source evidence changed generation; no mismatched call was used.");
+    if ((Array.isArray(callContextSearch.unavailableFiles) && callContextSearch.unavailableFiles.length > 0) ||
+        (Array.isArray(callContextSearch.unavailableSourceIds) && callContextSearch.unavailableSourceIds.length > 0)) notes.add("Some Python declaration source or nested call evidence was unavailable in this read.");
+  }
   if (record(record(result.queryPlan)?.input)?.identifierTermsTruncated === true) notes.add(
     "Query terms exceeded the primary retrieval budget; later terms may only appear in bounded follow-up leads. Shorten the query to retain essential qualifiers.");
   const omittedSearch = record(record(result.queryPlan)?.omittedDeclarationSearch);

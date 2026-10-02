@@ -140,8 +140,10 @@ import {
   planExploreQuery,
   hasExploreExecutionIntent,
   exploreQuerySeedTerms,
+  exploreQueryOmittedTerms,
   type ExploreQueryPlan
 } from "./explore-query.js";
+import { callSourceContextPlanner, matchCallSourceContexts, CALL_SOURCE_CONTEXT_LIMITS, type CallSourceContextPlan } from "./explore-call-source-context.js";
 import { EXPLORE_NAME_FOLLOWUP_LIMITS, supplementExploreNameFollowups } from "./explore-name-followups.js";
 import { EXPLORE_SELECTED_DECLARATION_LIMITS, omittedDeclarationLookupNames, supplementOmittedCallDeclarations } from "./explore-omitted-declarations.js";
 import { EXPLORE_IMPORTED_DECLARATION_LIMITS, supplementImportedCallDeclarations } from "./explore-imported-declarations.js";
@@ -1582,6 +1584,7 @@ export class SymbolLatticeService {
   // Per-plan evidence is generation-fenced when read; never reused by another query.
   private readonly exploreCallEvidence = new WeakMap<ExploreQueryPlan,
     ReadonlyMap<string, NonNullable<ExploreResult["unresolvedCalls"]>>>();
+  private readonly exploreCallSourceContexts = new WeakMap<ExploreQueryPlan, CallSourceContextPlan>();
   private readonly graphStore: GraphStore;
   private readonly sourceCatalog: SourceCatalog;
   private readonly artifactFactsExtractor: ArtifactFactsExtractor;
@@ -5635,6 +5638,11 @@ export class SymbolLatticeService {
         filePaths.push(bridge.filePath);
       }
     }
+    for (const candidate of this.exploreCallSourceContexts.get(plan)?.candidates ?? []) {
+      if (seen.has(candidate.declaration.filePath)) continue;
+      seen.add(candidate.declaration.filePath);
+      filePaths.push(candidate.declaration.filePath);
+    }
     return filePaths;
   }
 
@@ -5653,12 +5661,21 @@ export class SymbolLatticeService {
       symbol,
       candidates: [symbol]
     }));
+    const callSourceContextPlan = this.exploreCallSourceContexts.get(plan);
+    const callSourceContexts = callSourceContextPlan === undefined ? undefined :
+      matchCallSourceContexts(callSourceContextPlan, documentsByFilePath);
+    const selectedIds = new Set(plan.selection.map(item => item.symbol.id));
+    const contextRequests = (callSourceContexts?.candidates ?? []).filter(candidate => !selectedIds.has(candidate.declaration.id))
+      .slice(0, CALL_SOURCE_CONTEXT_LIMITS.maximumWindows).map(candidate => candidate.maximumRequestedCharacters);
+    const callContextBudget = Math.min(CALL_SOURCE_CONTEXT_LIMITS.maximumReservedCharacters,
+      Math.max(contextRequests.reduce((sum, size) => sum + size, 0),
+        Math.ceil(Math.max(0, ...contextRequests) / EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.maximumShareFraction)));
     const bounds = this.contextBounds({
       // Keep room for call sites outside the selected declarations even when
       // several large functions exhaust their primary source allocation.
       sourceCharacterBudget: DEFAULT_CONTEXT_SOURCE_CHARACTER_BUDGET -
         EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows *
-        EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.minimumPerWindow
+        EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS.minimumPerWindow - callContextBudget
     });
     const read: ContextRead = { bundle, matches, documentsByFilePath };
     const contextPack = measureQueryTiming(
@@ -5786,7 +5803,7 @@ export class SymbolLatticeService {
       });
 
     const sourceWindowPlan = planExploreSourceWindows(focuses, connections, pathSpinePlan, plan.identifierTerms,
-      documentsByFilePath, hasExploreExecutionIntent(plan.query));
+      documentsByFilePath, hasExploreExecutionIntent(plan.query), callSourceContexts);
     const sourceWindowDrafts = new Map<number, ContextSourceDraft>();
     const sourceWindowWholeFileDrafts = new Map<number, ContextSourceDraft>();
     const focusFilePaths = new Set(focuses.map((focus) => focus.symbol.filePath));
@@ -5819,6 +5836,7 @@ export class SymbolLatticeService {
     const sourceWindowReservation = allocateExploreSourceWindowCharacters({
       totalCharacterBudget: DEFAULT_CONTEXT_SOURCE_CHARACTER_BUDGET,
       primaryEmittedCharacters: contextPack.allocation.summary.emittedCharacters,
+      priorityContextCharacterBudget: callContextBudget,
       candidates: sourceWindowPlan.windows.flatMap((window) => {
         const draft = sourceWindowDrafts.get(window.index);
         const generated = generatedClassificationFor(
@@ -5837,7 +5855,8 @@ export class SymbolLatticeService {
           generatedClassifierVersion: generated.classifierVersion,
           generatedEvidenceRuleIds: generated.evidence.map((evidence) => evidence.ruleId),
           cliffExempt: window.reason === "exact-path-spine",
-          spareOnly: window.reason === "exact-flow-callee"
+          spareOnly: window.reason === "exact-flow-callee",
+          priorityContext: window.callSourceContext !== undefined
         }];
       })
     });
@@ -5977,6 +5996,20 @@ export class SymbolLatticeService {
           SOURCE_OPERATION_LIMITS.maximumCallsPerCandidate));
       result = supplementSourceOperations(bundle.snapshot, result, bundle.sourceLexical, operationCandidates, operationCalls);
       candidates = new Map([...candidates, ...operationCalls]);
+    }
+    const contextPlanner = callSourceContextPlanner(bundle.snapshot, result.selection,
+      [...result.identifierTerms, ...exploreQueryOmittedTerms(result.query).terms], this.isBoundedTraversalTruncated(bundle));
+    if (contextPlanner !== undefined) {
+      let contexts = contextPlanner(candidates);
+      const nestedIds = contexts.pendingSourceIds.slice(0, CALL_SOURCE_CONTEXT_LIMITS.maximumNestedSources);
+      if (nestedIds.length > 0) {
+        const nestedCalls = measureQueryTiming(this.queryTimingSink, "call-source-context-read", () =>
+          this.exploreUnresolvedCalls(projectPath, bundle, nestedIds, CALL_SOURCE_CONTEXT_LIMITS.maximumCallsPerSource));
+        contexts = contextPlanner(new Map([...candidates, ...nestedCalls]));
+      }
+      if (contexts.candidates.length > 0 || contexts.generationMismatch || contexts.unavailableSourceIds.length > 0) {
+        this.exploreCallSourceContexts.set(result, contexts);
+      }
     }
     this.exploreCallEvidence.set(result, candidates);
     return result;

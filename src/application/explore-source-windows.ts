@@ -6,8 +6,10 @@ import { EXPLORE_CALLEE_SOURCE_LIMITS, matchExploreCalleeSource, type ExploreCal
 import type { SourceLexicalMatch } from "../domain/source-lexical.js";
 import type { SymbolNode } from "../domain/types.js";
 import { exploreLexicalWindows, EXPLORE_LEXICAL_WINDOW_LIMITS, type ExploreLexicalWindowSearch } from "./explore-lexical-windows.js";
+import { CALL_SOURCE_CONTEXT_LIMITS, type CallSourceContextCandidate,
+  type MatchedCallSourceContexts, type CallSourceContextSearch } from "./explore-call-source-context.js";
 
-export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v12" as const;
+export const EXPLORE_SOURCE_WINDOW_POLICY = "explore-source-windows-v13" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_POLICY =
   "explore-source-window-allocation-v5" as const;
 export const EXPLORE_SOURCE_WINDOW_ALLOCATION_LIMITS = {
@@ -44,8 +46,9 @@ export interface ExploreSourceWindowPlanItem {
   readonly relatedSymbolIds: readonly string[];
   readonly pathSpineIndexes: readonly number[];
   readonly relevanceWeight: number;
-  readonly reason: "exact-connection-site" | "exact-focus-call" | "exact-focus-callee" | "exact-path-spine" | "exact-impact-call" | "exact-callee-source" | "exact-flow-callee" | "focus-source-match";
+  readonly reason: "exact-connection-site" | "exact-focus-call" | "exact-focus-callee" | "exact-path-spine" | "exact-impact-call" | "exact-callee-source" | "exact-flow-callee" | "focus-source-match" | "inherited-call-source" | "exact-caller-source";
   readonly sourceMatches?: readonly SourceLexicalMatch[];
+  readonly callSourceContext?: CallSourceContextCandidate;
 }
 
 export interface ExploreSourceWindowPlan {
@@ -53,6 +56,7 @@ export interface ExploreSourceWindowPlan {
   readonly limits: typeof EXPLORE_SOURCE_WINDOW_LIMITS;
   readonly calleeSourceSearch?: ExploreCalleeSourceSearch;
   readonly lexicalWindowSearch?: ExploreLexicalWindowSearch;
+  readonly callSourceContextSearch?: CallSourceContextSearch;
   readonly summary: {
     readonly candidateCount: number;
     readonly selectedCount: number;
@@ -84,6 +88,11 @@ export interface ExploreSourceWindowCharacterAllocation {
     readonly wholeFileBuyOvershootSpentCharacters: number;
     readonly remainingPhase?: {
       readonly availableCharacters: number;
+      readonly relativeCliffThreshold: number;
+    };
+    readonly priorityContextPhase?: {
+      readonly characterBudget: number;
+      readonly allocatedCharacters: number;
       readonly relativeCliffThreshold: number;
     };
   };
@@ -131,7 +140,7 @@ export interface ExploreSourceWindowCharacterAllocation {
       | "buy";
     readonly truncated: boolean;
     readonly reason: "score-spine-and-source-worth";
-    readonly allocationPhase?: "remaining-budget";
+    readonly allocationPhase?: "remaining-budget" | "call-source-context";
   }[];
 }
 
@@ -147,6 +156,7 @@ export interface ExploreSourceWindowAllocationCandidate {
   readonly generatedEvidenceRuleIds?: readonly string[];
   readonly cliffExempt?: boolean;
   readonly spareOnly?: boolean;
+  readonly priorityContext?: boolean;
 }
 
 interface MutableWindow {
@@ -160,6 +170,7 @@ interface MutableWindow {
   relevanceWeight: number;
   reason: ExploreSourceWindowPlanItem["reason"];
   readonly sourceMatches?: readonly SourceLexicalMatch[];
+  readonly callSourceContext?: CallSourceContextCandidate;
 }
 
 interface WindowSite {
@@ -188,6 +199,7 @@ function roundedWeight(value: number): number {
 export function allocateExploreSourceWindowCharacters(input: {
   readonly totalCharacterBudget: number;
   readonly primaryEmittedCharacters: number;
+  readonly priorityContextCharacterBudget?: number;
   readonly candidates: readonly ExploreSourceWindowAllocationCandidate[];
 }): ExploreSourceWindowCharacterAllocation {
   if (
@@ -195,7 +207,9 @@ export function allocateExploreSourceWindowCharacters(input: {
     input.totalCharacterBudget < 0 ||
     !Number.isSafeInteger(input.primaryEmittedCharacters) ||
     input.primaryEmittedCharacters < 0 ||
-    input.primaryEmittedCharacters > input.totalCharacterBudget
+    input.primaryEmittedCharacters > input.totalCharacterBudget ||
+    (input.priorityContextCharacterBudget !== undefined && (!Number.isSafeInteger(input.priorityContextCharacterBudget) ||
+      input.priorityContextCharacterBudget < 0 || input.priorityContextCharacterBudget > CALL_SOURCE_CONTEXT_LIMITS.maximumReservedCharacters))
   ) {
     throw new RangeError("Explore source window budget must contain valid whole-number totals.");
   }
@@ -229,7 +243,8 @@ export function allocateExploreSourceWindowCharacters(input: {
           ))) ||
       (candidate.cliffExempt !== undefined && typeof candidate.cliffExempt !== "boolean") ||
       (candidate.spareOnly !== undefined && typeof candidate.spareOnly !== "boolean") ||
-      (candidate.spareOnly === true && candidate.wholeFileEligible)
+      (candidate.priorityContext !== undefined && typeof candidate.priorityContext !== "boolean") ||
+      ((candidate.spareOnly === true || candidate.priorityContext === true) && candidate.wholeFileEligible)
     ) {
       throw new RangeError("Explore source window candidates require unique indexes and positive sizes.");
     }
@@ -238,35 +253,49 @@ export function allocateExploreSourceWindowCharacters(input: {
 
   // Preserve every existing reservation, including whole-file promotions.
   // Structural flow supplements may use only what that complete plan leaves.
-  if (candidates.some(candidate => candidate.spareOnly === true)) {
+  const priorityContext = candidates.some(candidate => candidate.priorityContext === true);
+  const deferred = (candidate: ExploreSourceWindowAllocationCandidate) => priorityContext
+    ? candidate.priorityContext !== true : candidate.spareOnly === true;
+  if (priorityContext || candidates.some(candidate => candidate.spareOnly === true)) {
+    const contextBudget = Math.min(input.totalCharacterBudget - input.primaryEmittedCharacters,
+      input.priorityContextCharacterBudget ?? CALL_SOURCE_CONTEXT_LIMITS.maximumReservedCharacters);
     const primary = allocateExploreSourceWindowCharacters({ ...input,
-      candidates: candidates.filter(candidate => candidate.spareOnly !== true) });
+      ...(priorityContext ? { totalCharacterBudget: input.primaryEmittedCharacters + contextBudget } : {}),
+      candidates: candidates.filter(candidate => !deferred(candidate))
+        .map(candidate => ({ ...candidate, priorityContext: false })) });
     const remaining = allocateExploreSourceWindowCharacters({
       totalCharacterBudget: input.totalCharacterBudget,
       primaryEmittedCharacters: input.primaryEmittedCharacters + primary.summary.allocatedCharacters,
-      candidates: candidates.filter(candidate => candidate.spareOnly === true)
-        .map(candidate => ({ ...candidate, spareOnly: false }))
+      candidates: candidates.filter(deferred)
+        .map(candidate => ({ ...candidate, ...(priorityContext ? {} : { spareOnly: false }), priorityContext: false }))
     });
+    const base = priorityContext ? remaining : primary;
     return {
-      ...primary,
-      budget: { ...primary.budget, remainingPhase: {
+      ...base,
+      budget: { ...base.budget,
+        totalCharacterBudget: input.totalCharacterBudget, primaryEmittedCharacters: input.primaryEmittedCharacters,
+        availableCharacters: input.totalCharacterBudget - input.primaryEmittedCharacters,
+        ...(priorityContext ? { priorityContextPhase: { characterBudget: contextBudget,
+          allocatedCharacters: primary.summary.allocatedCharacters, relativeCliffThreshold: primary.budget.relativeCliffThreshold } }
+        : { remainingPhase: {
         availableCharacters: remaining.budget.availableCharacters,
         relativeCliffThreshold: remaining.budget.relativeCliffThreshold
-      } },
+      } }) },
       summary: {
         candidateCount: candidates.length,
         generatedCandidates: primary.summary.generatedCandidates + remaining.summary.generatedCandidates,
         cliffedWindows: primary.summary.cliffedWindows + remaining.summary.cliffedWindows,
-        wholeFileEligibleCandidates: primary.summary.wholeFileEligibleCandidates,
-        wholeFilePromotedWindows: primary.summary.wholeFilePromotedWindows,
+        wholeFileEligibleCandidates: primary.summary.wholeFileEligibleCandidates + remaining.summary.wholeFileEligibleCandidates,
+        wholeFilePromotedWindows: primary.summary.wholeFilePromotedWindows + remaining.summary.wholeFilePromotedWindows,
         requestedCharacters: primary.summary.requestedCharacters + remaining.summary.requestedCharacters,
         baseAllocatedCharacters: primary.summary.baseAllocatedCharacters + remaining.summary.baseAllocatedCharacters,
         allocatedCharacters: primary.summary.allocatedCharacters + remaining.summary.allocatedCharacters,
         unusedCharacters: remaining.summary.unusedCharacters,
         truncated: primary.summary.truncated || remaining.summary.truncated
       },
-      windows: [...primary.windows, ...remaining.windows.map(window => ({ ...window,
-        allocationPhase: "remaining-budget" as const }))].sort((left, right) => left.index - right.index)
+      windows: [...primary.windows.map(window => priorityContext ? { ...window, allocationPhase: "call-source-context" as const } : window),
+        ...remaining.windows.map(window => priorityContext ? window : { ...window,
+          allocationPhase: "remaining-budget" as const })].sort((left, right) => left.index - right.index)
     };
   }
 
@@ -553,7 +582,8 @@ export function planExploreSourceWindows(
   pathSpinePlan?: ExplorePathSpinePlan,
   queryTerms: readonly string[] = [],
   sourceDocuments?: ReadonlyMap<string, { readonly sourceText: string }>,
-  executionIntent = false
+  executionIntent = false,
+  callSourceContexts?: MatchedCallSourceContexts
 ): ExploreSourceWindowPlan {
   // Coverage is stable within this synchronous plan, never across requests.
   const sourceCoverage: PrimarySourceCoverage = new Map();
@@ -967,20 +997,49 @@ export function planExploreSourceWindows(
     selectedPerFocus.set(window.focusRank, (selectedPerFocus.get(window.focusRank) ?? 0) + 1);
   }
 
+  const callContext = callSourceContexts;
+  const contextCandidates = (callContext?.candidates ?? []).filter(candidate => {
+    const declaration = candidate.declaration;
+    const site = { filePath: declaration.filePath,
+      evidenceStartLine: declaration.range.start.line, evidenceEndLine: declaration.range.end.line };
+    return !coveredByPrimarySource(site, focuses, sourceCoverage) && !selected.some(window =>
+      window.filePath === site.filePath && window.startLine <= site.evidenceStartLine && window.endLine >= site.evidenceEndLine);
+  });
+  let contextSelected = 0;
+  for (const candidate of contextCandidates) {
+    const owner = focusBySymbolId.get(candidate.root.id), declaration = candidate.declaration;
+    if (owner === undefined || owner.rank !== candidate.focusRank || owner.score <= 0) continue;
+    const site = { filePath: declaration.filePath,
+      evidenceStartLine: declaration.range.start.line, evidenceEndLine: declaration.range.end.line };
+    if (coveredByPrimarySource(site, focuses, sourceCoverage) || selected.some(window =>
+        window.filePath === site.filePath && window.startLine <= site.evidenceStartLine && window.endLine >= site.evidenceEndLine)) continue;
+    if (contextSelected >= CALL_SOURCE_CONTEXT_LIMITS.maximumWindows || selected.length >= EXPLORE_SOURCE_WINDOW_LIMITS.maximumWindows) break;
+    const { sourceMatches, maximumRequestedCharacters: _maximumRequestedCharacters, ...witness } = candidate;
+    selected.push({ focusRank: owner.rank, filePath: declaration.filePath,
+      startLine: declaration.range.start.line, endLine: declaration.range.end.line,
+      connectionEdgeIds: candidate.callerEdge === undefined ? [] : [candidate.callerEdge.id],
+      relatedSymbolIds: [declaration.id], pathSpineIndexes: [], relevanceWeight: owner.score,
+      reason: candidate.reason, sourceMatches, callSourceContext: witness });
+    selectedPerFocus.set(owner.rank, (selectedPerFocus.get(owner.rank) ?? 0) + 1);
+    contextSelected++;
+  }
+
   return {
     policy: EXPLORE_SOURCE_WINDOW_POLICY,
     limits: EXPLORE_SOURCE_WINDOW_LIMITS,
     ...(calleeSearch === undefined ? {} : { calleeSourceSearch: calleeSearch.receipt }),
+    ...(callContext === undefined ? {} : { callSourceContextSearch: { ...callContext.receipt, selectedCount: contextSelected,
+      truncated: callContext.receipt.truncated || contextSelected < contextCandidates.length } }),
     ...(lexical.receipt.verifiedMatches === 0 && lexical.receipt.rejectedMatches === 0 && lexical.receipt.unavailableFiles.length === 0 && !lexical.receipt.truncated
       ? {} : { lexicalWindowSearch: { ...lexical.receipt, selectedCount: lexicalSelected, replacedCallWindowCount: lexicalReplacements,
         truncated: lexical.receipt.truncated || lexicalSelected < lexical.candidates.length } }),
     summary: {
-      candidateCount: candidates.length + impactCandidates.length + sourceCandidates.length + flowCandidates.length + lexical.candidates.length,
+      candidateCount: candidates.length + impactCandidates.length + sourceCandidates.length + flowCandidates.length + lexical.candidates.length + (callContext?.candidates.length ?? 0),
       selectedCount: selected.length,
       selectedFocusCount: selectedPerFocus.size,
       unavailableFileSiteCount: unavailableEdges.size,
       replacedLowerRankedCallWindowCount,
-      truncated: selected.length < candidates.length + impactCandidates.length + sourceCandidates.length + flowCandidates.length + lexical.candidates.length || calleeSearch?.receipt.truncated === true || lexical.receipt.truncated
+      truncated: selected.length < candidates.length + impactCandidates.length + sourceCandidates.length + flowCandidates.length + lexical.candidates.length + (callContext?.candidates.length ?? 0) || calleeSearch?.receipt.truncated === true || lexical.receipt.truncated || callContext?.receipt.truncated === true
     },
     windows: selected.map((window, index) => ({
       index,
@@ -993,7 +1052,8 @@ export function planExploreSourceWindows(
       pathSpineIndexes: [...window.pathSpineIndexes],
       relevanceWeight: window.relevanceWeight,
       reason: window.reason,
-      ...(window.sourceMatches === undefined ? {} : { sourceMatches: window.sourceMatches })
+      ...(window.sourceMatches === undefined ? {} : { sourceMatches: window.sourceMatches }),
+      ...(window.callSourceContext === undefined ? {} : { callSourceContext: window.callSourceContext })
     }))
   };
 }

@@ -717,7 +717,96 @@ export function verifyCoveredFileContextFiltering(result, readSource) {
   return { verifiedOmissions: receipt.omitted.length, ...matches };
 }
 
+export function verifyCallSourceContexts(result, readSource) {
+  const windows = (result.sourceWindows ?? []).filter(window => window.callSourceContext);
+  const search = result.sourceWindowPlan?.callSourceContextSearch;
+  if (!search) { assert.equal(windows.length, 0); return { verifiedWindows: 0, verifiedBaseSteps: 0, verifiedCallers: 0 }; }
+  assert.equal(search.policy, "written-python-call-source-context-v1");
+  assert.equal(search.scope, "inspected-bounded-graph");
+  assert.ok(search.queryTerms.length <= 16 && search.candidateCount <= 16 && search.sourceCharacters <= 65536);
+  assert.ok(windows.length <= 3 && windows.length <= search.selectedCount);
+  const normalize = term => term.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}_$]/gu, "");
+  const queryWords = new Set([...result.queryPlan.query.trim().slice(0, 512).replace(/\broll\s+back\b/giu, "rollback")
+    .matchAll(/[\p{L}\p{N}_$][\p{L}\p{N}_$.-]*/gu)].map(match => normalize(match[0])));
+  assert.ok(search.queryTerms.every(term => queryWords.has(term)), "Source context invented a query term");
+  const position = (a, b) => a.line - b.line || a.column - b.column;
+  const inside = (edge, symbol) => edge.filePath === symbol.filePath &&
+    position(edge.range.start, symbol.range.start) >= 0 && position(edge.range.end, symbol.range.end) <= 0 &&
+    position(edge.range.end, edge.range.start) > 0;
+  const source = edge => readSource(edge.filePath).split(/\r\n|\r|\n|\u2028|\u2029/u)
+    .slice(edge.range.start.line - 1, edge.range.end.line).join("\n");
+  let verifiedBaseSteps = 0, verifiedCallers = 0;
+  for (const window of windows) {
+    const context = window.callSourceContext, declaration = context.declaration;
+    const root = (result.focuses ?? []).find(focus => focus.symbol.id === context.root.id);
+    assert.ok(root && root.sourceRole.role === "production" && !root.generated.generated);
+    assert.deepEqual(context.root, root.symbol); assert.equal(window.focusRank, root.rank);
+    assert.equal(window.reason, context.reason); assert.equal(window.filePath, declaration.filePath);
+    assert.deepEqual(window.relatedSymbolIds, [declaration.id]); assert.deepEqual(window.pathSpineIndexes, []);
+    assert.equal(window.startLine, declaration.range.start.line); assert.equal(window.endLine, declaration.range.end.line);
+    assert.ok(window.endLine - window.startLine + 1 <= 64);
+    assert.equal(declaration.kind, "method");
+    assert.ok(identifierTermGroups(window.sourceMatches.map(match => match.term)).length >= 2);
+    assert.ok(window.sourceMatches.every(match => search.queryTerms.includes(match.term)));
+    assert.ok(readSource(declaration.filePath).split(/\r\n|\r|\n|\u2028|\u2029/u)
+      .slice(declaration.range.start.line - 1, declaration.range.end.line).join("\n").includes(`def ${declaration.name}(`));
+    if (context.reason === "inherited-call-source") {
+      assert.deepEqual(window.connectionEdgeIds, [], "Unresolved source steps are not resolved connections");
+      assert.ok(context.steps.length >= 1 && context.steps.length <= 2); assert.equal(context.callerEdge, undefined);
+      const visited = new Set([root.symbol.id]);
+      for (const [index, step] of context.steps.entries()) {
+        assert.deepEqual(step.caller, index === 0 ? root.symbol : context.steps[index - 1].declaration);
+        assert.ok(!visited.has(step.declaration.id)); visited.add(step.declaration.id);
+        const call = step.call, witness = step.inheritedSource;
+        assert.equal(call.kind, "calls"); assert.equal(call.sourceId, step.caller.id);
+        assert.equal(call.targetId, null); assert.equal(call.resolution, "unresolved"); assert.equal(call.confidence, 0);
+        assert.equal(call.evidence?.ruleId, "syntax.python.member-call.unknown-receiver");
+        assert.equal(call.referenceName, `self.${step.declaration.name}`); assert.ok(inside(call, step.caller));
+        assert.ok(source(call).includes(call.referenceName));
+        for (const [edge, kind, from, to] of [[witness.callerContainment, "contains", witness.callerClass, step.caller],
+          [witness.inheritance, "extends", witness.callerClass, witness.declarationClass],
+          [witness.declarationContainment, "contains", witness.declarationClass, step.declaration]]) {
+          assert.equal(edge.kind, kind); assert.equal(edge.sourceId, from.id); assert.equal(edge.targetId, to.id);
+          assert.equal(edge.resolution, "exact"); assert.equal(edge.confidence, 1); assert.ok(inside(edge, from));
+          assert.ok(source(edge).includes(kind === "contains" ? to.name : edge.referenceName));
+          if (kind === "contains") assert.ok(inside(edge, to));
+        }
+        assert.equal(witness.callerClass.kind, "class"); assert.equal(witness.declarationClass.kind, "class");
+        assert.equal(witness.callerClass.filePath, step.caller.filePath);
+        assert.equal(witness.declarationClass.filePath, step.declaration.filePath);
+        const rules = {
+          "module.python.regular-package.absolute-named-import.unique-top-level-class-inheritance": "module.python.regular-package.absolute-named-base-import",
+          "module.python.regular-package.relative-named-import.unique-top-level-class-inheritance": "module.python.regular-package.relative-named-import",
+          "module.python.anchored-relative-named-import.unique-top-level-class-inheritance": "module.python.anchored-relative-named-base-import"
+        };
+        const evidence = witness.inheritance.evidence, importEdge = witness.importEdge;
+        assert.ok(rules[evidence.ruleId]); assert.equal(evidence.stage, "module");
+        assert.deepEqual(evidence.resolutionPath, [step.caller.filePath, step.declaration.filePath]);
+        assert.equal(importEdge.kind, "imports"); assert.equal(importEdge.resolution, "exact"); assert.equal(importEdge.confidence, 1);
+        assert.equal(importEdge.filePath, step.caller.filePath); assert.equal(importEdge.evidence?.ruleId, rules[evidence.ruleId]);
+        assert.equal(importEdge.evidence.stage, "module"); assert.deepEqual(importEdge.evidence.resolutionPath, evidence.resolutionPath);
+        assert.deepEqual(importEdge.evidence.configurationPaths ?? [], evidence.configurationPaths ?? []);
+        assert.deepEqual(importEdge.evidence.unmarkedPackagePaths ?? [], evidence.unmarkedPackagePaths ?? []);
+        assert.ok(source(importEdge).includes(importEdge.referenceName));
+        for (const marker of evidence.configurationPaths ?? []) readSource(marker);
+        if (evidence.ruleId.includes("anchored-relative")) assert.ok(evidence.configurationPaths?.length && evidence.unmarkedPackagePaths?.length);
+        verifiedBaseSteps++;
+      }
+      assert.deepEqual(context.steps.at(-1).declaration, declaration);
+    } else {
+      assert.equal(context.reason, "exact-caller-source"); assert.deepEqual(context.steps, []);
+      const edge = context.callerEdge;
+      assert.equal(edge.kind, "calls"); assert.equal(edge.resolution, "exact"); assert.equal(edge.confidence, 1);
+      assert.equal(edge.sourceId, declaration.id); assert.equal(edge.targetId, root.symbol.id); assert.ok(inside(edge, declaration));
+      assert.equal(declaration.filePath, root.symbol.filePath); assert.ok(source(edge).includes(root.symbol.name));
+      assert.deepEqual(window.connectionEdgeIds, [edge.id]); verifiedCallers++;
+    }
+  }
+  return { verifiedWindows: windows.length, verifiedBaseSteps, verifiedCallers };
+}
+
 export function verifyLexicalMatches(result, readSource) {
+  if ((result.sourceWindows ?? []).some(window => window.callSourceContext)) verifyCallSourceContexts(result, readSource);
   let verifiedMatches = 0;
   const verify = (match, symbol) => {
     assert.equal(match.filePath, symbol.filePath);
@@ -738,6 +827,10 @@ export function verifyLexicalMatches(result, readSource) {
   }
   for (const window of result.sourceWindows ?? []) {
     if (!window.sourceMatches?.length) continue;
+    if (window.callSourceContext) {
+      for (const match of window.sourceMatches) verify(match, window.callSourceContext.declaration);
+      continue;
+    }
     if (window.reason === 'focus-source-match') {
       const owner = (result.focuses ?? []).find(focus => focus.rank === window.focusRank);
       assert.ok(owner, 'Lexical window requires its original focus');
@@ -1048,6 +1141,7 @@ export async function runTaskRetrieval({ project, manifestPath, output, repetiti
       sourceVerification, graphEvidenceVerification: verifyGraphEvidence(response,
         (file) => readFileSync(resolve(project, file), "utf8")),
       lexicalVerification: verifyLexicalMatches(response, (file) => readFileSync(resolve(project, file), "utf8")),
+      callSourceContextVerification: verifyCallSourceContexts(response, (file) => readFileSync(resolve(project, file), "utf8")),
       coveredContextVerification: verifyCoveredContextFiltering(response,
         (file) => readFileSync(resolve(project, file), "utf8")),
       coveredFileContextVerification: verifyCoveredFileContextFiltering(response,

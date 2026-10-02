@@ -27,7 +27,9 @@ These tools generate or validate large-project evidence outside the published np
 | `typescript/` | `optional-member-receipts.mjs` | manual TypeScript compiler AST optional member-token oracle and baseline declaration/relation preservation check |
 | `python/` | `direct-self-call-receipts.py`, `django-async-self-truth.json` | manual pinned-corpus CPython AST target/receipt audit and separately fixed async-call recall observations |
 | `python/` | `inherited-source-gaps.py`, `django-inherited-source-truth.json`, `flask-inherited-source-truth.json` | manual fixed-site CPython AST import/base/declaration coverage observations; no runtime dispatch oracle |
+| `python/` | `call-source-context-audit.py` | manual pinned-corpus CPython AST ownership/import audit of supplementary source routes; no runtime dispatch oracle |
 | `mcp/` | `flask-error-url-tasks.json` | manual fixed-source retrieval observations; handler and URL source gaps retained |
+| `mcp/` | `django-sqlite-thread-close-tasks.json` | manual pinned-source task, first held-out for v0.549.0; formal primary-file recall gap retained |
 | `sfc/` | `correctness-oracle.mjs` | manual Vue/Svelte/Astro component relation oracle |
 | `shell/` | `correctness-oracle.mjs` | manual mvdan ABI v2 direct-call oracle |
 | `solidity/` | `correctness-oracle.mjs` | automatic solc AST private fixed-arity call oracle |
@@ -60,6 +62,14 @@ These tools generate or validate large-project evidence outside the published np
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## v0.549.0 Supplement bounded Python call source context
+
+Some Python queries can return base-method bodies through two written direct-base steps, or a short exact caller. Optional receipts retain the original unresolved calls and source/import witnesses. These routes do not establish runtime receiver type, MRO or dispatch. The [call source context audit](mcp/call-source-context-audit.md) records bounds, frozen products, independent CPython checks and retained failures. The 24,000-character source envelope remains, with at most 6,000 reserved for additional context; older excerpts can become shorter.
+
+The 38 manifests / 55 tasks retain all prior 222 specified facts; Flask's three known regression tasks increase from 20/38 to 38/38 source facts. The newly frozen Django task increases from 3/6 to 6/6 facts, but formal primary-file recall remains 1/2: its second file is supplementary source. The truth and scorer retain this failure. CPython AST verifies 13 observations across eight files, and 1,284 displayed lexical term facts are checked. Partial judgments and these fixed denominators do not establish overall precision or complete retrieval acceptance.
+
+Eight twelve-pair comparisons retain 192 timed service calls: six medians are lower and two higher, including Nest (+2.67%) and Flask URL (+1.46%). Two fixed Flask follow-up recipes reach complete specified facts in 4→1 and 2→1 calls, with sequence service-time medians 35.27% and 18.26% lower; these are neither minimum query counts nor actual Agent completion times. Results remain mixed; no universal speedup is claimed. Final typecheck, build and the full suite pass (3,474 tests, four existing skips); the language-depth fixture gate also passes. Query changes require no new generation or re-extraction from v0.548.1.
 
 ## v0.548.1 Look up source paths through row maps
 

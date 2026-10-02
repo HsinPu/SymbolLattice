@@ -109,6 +109,12 @@ See the [validation documentation](../benchmarks/README.md) for measured results
 
 Use the installation flow above with a new fixed commit or existing tag. After reinstalling, repeat Codex integration and run `SymbolLattice sync .` in each project. The project is in `0.x` development; check the target version's compatibility and migration notes before upgrading.
 
+### Upgrading to v0.549.0
+
+Some Python task queries add method source through at most two checkable direct-base steps, or source for a short caller in the same file. JSON `sourceWindows[].callSourceContext` retains the written calls, declarations and import witnesses; `sourceWindowPlan.callSourceContextSearch` reports scope, gaps and truncation. MCP text also cites these source links. Unresolved `self` calls still have no confirmed target. These excerpts do not establish receiver type, runtime MRO or dispatch.
+
+The total source budget remains 24,000 characters, with at most 6,000 reserved for this additional context; some earlier excerpts may become shorter. At most three windows are added, with each declaration limited to 64 lines and 8,192 characters. Check the delivered source and truncation receipts, then follow a precise symbol or file when needed. This release adds optional evidence fields and the `inherited-call-source` and `exact-caller-source` window reasons. Upgrading from 0.548.1 does not require a new index generation or re-extraction for this query change; run `SymbolLattice sync .` as usual.
+
 ### Upgrading to v0.548.1
 
 This patch retains existing query and evidence formats while adjusting index reads for candidate search. After upgrading from 0.548.0, run `SymbolLattice sync .` to create the auxiliary indexes used by this adjustment. If source and configuration are unchanged, this requires no source re-extraction or new index generation. Existing indexes remain queryable in read-only mode; the adjustment becomes available after synchronization.
