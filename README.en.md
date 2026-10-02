@@ -6,7 +6,7 @@ SymbolLattice is a local code search tool for developers and AI agents. Query a 
 
 [繁體中文](README.md) · [Get started](docs/getting-started.en.md) · [Validation and limitations](benchmarks/README.md) · [Report an issue](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.549.0` · Node.js `>=22.16 <23 || >=24 <25` · MIT
+`v0.549.1` · Node.js `>=22.16 <23 || >=24 <25` · MIT
 
 ## Start with “Where is this implemented?”
 
@@ -115,6 +115,7 @@ Static named TypeScript optional member calls (such as `signal?.isCycle()`) reta
 | Installation, commands, MCP setup, and removal | [Usage guide](docs/getting-started.en.md) |
 | Updating an existing installation | [Upgrade guide](docs/getting-started.en.md#upgrading) |
 | Quality, performance, and known gaps | [Validation documentation](benchmarks/README.md) |
+| Verification scope and query speed by language | [Maintained language report (Traditional Chinese)](docs/language-verification-and-speed.md) |
 | Bug reports or feature requests | [GitHub Issues](https://github.com/HsinPu/SymbolLattice/issues) |
 
 The project is in `0.x` development; check compatibility notes before upgrading. **Package names and indexes from v0.420.0 or earlier are not migrated automatically.** Follow the upgrade guide.

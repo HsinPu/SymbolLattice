@@ -2,6 +2,10 @@
 
 These tools generate or validate large-project evidence outside the published npm package. They may require fixed external corpora, built `dist/` files, disposable indexed copies, language runtimes, or explicit output paths.
 
+The [maintained language verification and speed report](../docs/language-verification-and-speed.md) summarizes every registered language, separates historical scope from measured results, and retains missing measurements and retrieval failures. Update the same report after each optimization; its generation command and input identities are recorded in the report.
+
+The [v0.549.1 report audit](languages/evidence-speed-report-audit.md) records the first complete 58-language table, the restored pinned sources and exact baseline bytes, source/scorer/sample rechecks, and four rejected misleading inputs. Its numerical measurements retain their v0.549.0 version labels; this documentation/tooling patch adds no new speedup claim.
+
 `automatic` means focused tests import the module and verify its bounded truth, scoring, lifecycle, or negative-matrix contract. It does not mean CI downloads or scans the external corpus. `manual` means the tool is retained for explicit evidence generation and has no direct automated test entry.
 
 | Area | Files | Status |
@@ -10,6 +14,7 @@ These tools generate or validate large-project evidence outside the published np
 | `html/` | `correctness-oracle.mjs` | automatic |
 | `java/` | `correctness-oracle.mjs`, `JavaOracle.java` | automatic helper contract |
 | `languages/` | `depth-matrix.mjs` | manual |
+| `languages/` | `evidence-speed-report.mjs` | manual saved-evidence report generation; rechecks both frozen products, pinned source/receipts, task truth/scoring and individual timing samples without running product queries |
 | `java/` | `lifecycle.mjs` | manual |
 | `groovy/` | `correctness-oracle.mjs`, `GroovyOracle.groovy` | manual compiler oracle |
 | `javascript/` | `correctness-oracle.mjs` | automatic |

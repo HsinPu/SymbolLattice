@@ -6,7 +6,7 @@ SymbolLattice 是提供給開發者與 AI Agent 的本機程式碼搜尋工具�
 
 [English](README.en.md) · [開始使用](docs/getting-started.md) · [驗證與限制](benchmarks/README.md) · [回報問題](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.549.0` · Node.js `>=22.16 <23 || >=24 <25` · MIT
+`v0.549.1` · Node.js `>=22.16 <23 || >=24 <25` · MIT
 
 ## 從「這段功能在哪裡？」開始
 
@@ -115,6 +115,7 @@ TypeScript 的具名 optional member call（例如 `signal?.isCycle()`）會保�
 | 安裝、指令、MCP 設定與移除 | [使用指南](docs/getting-started.md) |
 | 更新既有安裝 | [升級指南](docs/getting-started.md#升級) |
 | 品質、效能與已知缺口 | [驗證文件](benchmarks/README.md) |
+| 各語言的驗證程度與查詢速度 | [持續更新的語言報告](docs/language-verification-and-speed.md) |
 | 回報錯誤或提出需求 | [GitHub Issues](https://github.com/HsinPu/SymbolLattice/issues) |
 
 目前為 `0.x` 開發階段，升級前請確認相容性說明。**v0.420.0 或更早版本的套件名稱與索引不會自動遷移**，請依升級指南處理。
