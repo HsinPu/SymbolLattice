@@ -165,6 +165,15 @@ describe("MCP explore text rendering", () => {
     expect(output).toContain("Some lexical receipts did not match");
     expect(output).toContain("Source for some lexical hits was unavailable");
   });
+  it("discloses unmarked directories in inherited source context without claiming import-path or dispatch proof", () => {
+    const output = renderExploreText({ focuses: [{ symbol: { name: "handle_error" },
+      omittedQueryDeclaration: { scope: "inspected-inherited-source", matchingDeclarationCount: 1,
+        inheritedSource: { inheritance: { evidence: { configurationPaths: ["src/pkg/__init__.py"],
+          unmarkedPackagePaths: ["src/pkg/sansio"] } } } } }] });
+    expect(output).toContain("Source directories without indexed package markers: `src/pkg/sansio`");
+    expect(output).toContain("not runtime import-path proof");
+    expect(output).toContain("runtime inheritance and dispatch remain unconfirmed");
+  });
   it("discloses bounded rejection-focus omissions and how to inspect them", () => {
     const output = renderExploreText({ queryPlan: { rejectionReferenceFiltering: {
       evidenceScope: "returned-bounded-graph", omitted: [

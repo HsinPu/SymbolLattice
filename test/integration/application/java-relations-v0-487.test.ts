@@ -46,8 +46,8 @@ describe("Java modern object creation relations v0.487", () => {
     const target = snapshot.symbols.find((symbol) => symbol.name === "Service");
 
     expect(indexed).toMatchObject({ initialized: true, stale: false });
-    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v435");
-    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v210");
+    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v436");
+    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v212");
     expect(snapshot.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({
         sourceId: run?.id,

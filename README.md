@@ -6,7 +6,7 @@ SymbolLattice 是提供給開發者與 AI Agent 的本機程式碼搜尋工具�
 
 [English](README.en.md) · [開始使用](docs/getting-started.md) · [驗證與限制](benchmarks/README.md) · [回報問題](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.547.3` · Node.js `>=22.16 <23 || >=24 <25` · MIT
+`v0.548.0` · Node.js `>=22.16 <23 || >=24 <25` · MIT
 
 ## 從「這段功能在哪裡？」開始
 
@@ -93,7 +93,7 @@ SymbolLattice 使用靜態分析。文字命中會附上來源位置；同一 to
 
 長問句中省略的概念可與來源中的未解析呼叫共同支持同名宣告候選。主圖中缺少宣告時，可在已選檔案精確補查；若完整、世代一致的結果恰有兩個同名宣告，會一起提供候選來源及 `matchingDeclarationIds`，不選定呼叫目標。JSON 的 `queryPlan.omittedDeclarationSearch` 記錄範圍、限制與截斷。**0.541.0 破壞性變更（結果上限）**：候選組可使總焦點最多 10 個、每檔最多 4 個；JSON 使用者須依回傳的 `limits` 處理。檔案與總來源字元預算不增加，這項變更不需重建索引。
 
-Python 以專案根目錄為範圍，解析絕對匯入指向的單一基底類別，保留匯入、套件標記與繼承位置的證據；支援名稱清單與別名。命名空間套件、來源根目錄推導、多重繼承與動態派發仍不在此範圍。繼承方法的呼叫仍可能未解析。長問句中省略的概念若與直接 `self.method()` 呼叫相符，也可從既有有界圖補上一個跨檔基底方法候選，附上呼叫所屬類別、匯入、直接繼承與宣告歸屬證據；只支援已解析的絕對具名匯入與單層來源鏈，不推論執行時派發。這類候選的 JSON `omittedQueryDeclaration.scope` 為 `inspected-inherited-source`，並附上 `inheritedSource`；請依回傳的 `limits` 處理補充檔案與焦點。升級後請執行 `SymbolLattice sync .` 更新解析證據。
+Python 可解析絕對具名匯入指向的單一基底類別，也支援目前套件內如 `from .sansio.app import App` 的相對具名匯入，保留匯入、沿途套件標記與繼承位置的證據。絕對匯入以專案根目錄為範圍，支援名稱清單與別名；相對匯入支援單一前導點、模組檔案、別名與括號內名稱清單。若子目錄沒有已索引的 `__init__.py`，但上層有已索引的普通套件，只提供唯一模組中的書寫基底來源，並在 JSON `unmarkedPackagePaths` 揭露缺少標記的目錄；不據此解析執行時呼叫或建立物件。無普通套件起點的命名空間、來源根目錄推導、多重繼承與動態派發仍不在此範圍。繼承方法的呼叫仍可能未解析。長問句中省略的概念若與直接 `self.method()` 呼叫相符，也可從既有有界圖補上一個跨檔基底方法候選，附上呼叫所屬類別、匯入、直接繼承與宣告歸屬證據；支援上述已解析匯入與單層來源鏈，不推論執行時派發。這類候選的 JSON `omittedQueryDeclaration.scope` 為 `inspected-inherited-source`，並附上 `inheritedSource`；請依回傳的 `limits` 處理補充檔案與焦點。升級至 0.548.0 後請執行 `SymbolLattice sync .` 更新解析證據。
 
 JavaScript 函式內以識別字或 `this` 開頭的靜態成員呼叫，也可在 `unresolvedCalls` 取得完整呼叫名稱與來源位置（包含 `.call`、`.apply`、`.bind`）。這些只表示原始碼中的語法，不確認接收者型別、呼叫目標或執行行為；可選鏈、計算式成員與未建立符號的匿名回呼不在此範圍。升級至 0.543.0 後，執行 `SymbolLattice sync .` 更新索引。
 

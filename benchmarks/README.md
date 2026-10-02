@@ -26,7 +26,8 @@ These tools generate or validate large-project evidence outside the published np
 | `python/` | `member-references.mjs`, `MemberReferenceOracle.py` | manual CPython AST non-call member occurrence, ownership and UTF-16 range audit; includes Store/Del, excludes dispatch claims; baseline fact preservation check |
 | `typescript/` | `optional-member-receipts.mjs` | manual TypeScript compiler AST optional member-token oracle and baseline declaration/relation preservation check |
 | `python/` | `direct-self-call-receipts.py`, `django-async-self-truth.json` | manual pinned-corpus CPython AST target/receipt audit and separately fixed async-call recall observations |
-| `python/` | `inherited-source-gaps.py`, `django-inherited-source-truth.json` | manual fixed-site CPython AST import/base/declaration coverage observations; no runtime dispatch oracle |
+| `python/` | `inherited-source-gaps.py`, `django-inherited-source-truth.json`, `flask-inherited-source-truth.json` | manual fixed-site CPython AST import/base/declaration coverage observations; no runtime dispatch oracle |
+| `mcp/` | `flask-error-url-tasks.json` | manual fixed-source retrieval observations; handler and URL source gaps retained |
 | `sfc/` | `correctness-oracle.mjs` | manual Vue/Svelte/Astro component relation oracle |
 | `shell/` | `correctness-oracle.mjs` | manual mvdan ABI v2 direct-call oracle |
 | `solidity/` | `correctness-oracle.mjs` | automatic solc AST private fixed-arity call oracle |
@@ -59,6 +60,14 @@ These tools generate or validate large-project evidence outside the published np
 | `filesystem/` | `operation-diagnostics-latency.mjs` | manual |
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
+
+## v0.548.0 Relative Python base-source evidence
+
+One-dot named imports can traverse subdirectories below an indexed regular package. Unmarked directories support written base source only, disclosed as `unmarkedPackagePaths`; they do not resolve runtime calls or construction. The [relative base source audit](python/relative-base-source-audit.md) records the failed first prototype, fixed CPython truth, actual CLI hierarchy result, source witnesses and upgrade conditions. Extractor v436 and resolver v212 require `SymbolLattice sync .`.
+
+Flask's six fixed sites gain independently verified source chains (previously zero); inherited calls retain null targets and zero confidence. Django's two fixed sites remain verified. All prior 51 tasks retain 79/79 required file-task instances and 222/222 facts. New Flask tasks retrieve all six required file-task instances but only 20/38 facts; these general-query source gaps remain open. Partial judgments and source-only probes do not establish overall precision or complete retrieval acceptance.
+
+Seven 12-pair whole-query comparisons have one lower median and six higher medians. A 24-pair follow-up retains slower representative cases and a Flask control: three medians remain higher, one lower. Both runs and all 360 timed calls are retained. Query cost on upgraded indexes remains a performance issue; this release makes no universal speedup claim. Detailed conditions, scope limits and reproduction commands are in the audit.
 
 ## v0.547.3 Reduce native directory path resolution cost
 

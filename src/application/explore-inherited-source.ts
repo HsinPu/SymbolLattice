@@ -17,6 +17,7 @@ export function inheritedSourceLookup(graph: ExploreQueryGraph):
   let symbols: Map<string, SymbolNode> | undefined;
   let incoming: Map<string, GraphEdge[]>;
   let outgoing: Map<string, GraphEdge[]>;
+  let importsByFile: Map<string, GraphEdge[]>;
   const inside = (edge: GraphEdge, symbol: SymbolNode) => {
     const compare = (a: typeof edge.range.start, b: typeof edge.range.start) => a.line - b.line || a.column - b.column;
     return edge.filePath === symbol.filePath && compare(edge.range.start, symbol.range.start) >= 0 &&
@@ -30,11 +31,15 @@ export function inheritedSourceLookup(graph: ExploreQueryGraph):
         call.evidence?.ruleId !== "syntax.python.member-call.unknown-receiver") return undefined;
     if (symbols === undefined) {
       symbols = new Map(graph.symbols.slice(0, 4096).map(symbol => [symbol.id, symbol]));
-      incoming = new Map(); outgoing = new Map();
+      incoming = new Map(); outgoing = new Map(); importsByFile = new Map();
       for (const edge of graph.edges.slice(0, 16384)) {
         if (edge.resolution !== "exact" || edge.confidence !== 1 || edge.targetId === null) continue;
         const targets = incoming.get(edge.targetId) ?? []; targets.push(edge); incoming.set(edge.targetId, targets);
         const sources = outgoing.get(edge.sourceId) ?? []; sources.push(edge); outgoing.set(edge.sourceId, sources);
+        if (edge.kind === "imports" && symbols.get(edge.sourceId)?.kind === "file" &&
+            symbols.get(edge.sourceId)?.filePath === edge.filePath && symbols.get(edge.targetId)?.kind === "file") {
+          const imports = importsByFile.get(edge.filePath) ?? []; imports.push(edge); importsByFile.set(edge.filePath, imports);
+        }
       }
     }
     const callerLinks = (incoming.get(source.id) ?? []).filter(edge => edge.kind === "contains");
@@ -49,17 +54,25 @@ export function inheritedSourceLookup(graph: ExploreQueryGraph):
     const bases = (outgoing.get(callerClass.id) ?? []).filter(edge => edge.kind === "extends");
     if (bases.length !== 1) return undefined;
     const inheritance = bases[0]!;
+    const inheritanceEvidence = inheritance.evidence;
+    const importRule = inheritance.evidence?.ruleId === "module.python.regular-package.absolute-named-import.unique-top-level-class-inheritance"
+      ? "module.python.regular-package.absolute-named-base-import"
+      : inheritance.evidence?.ruleId === "module.python.regular-package.relative-named-import.unique-top-level-class-inheritance"
+        ? "module.python.regular-package.relative-named-import"
+        : inheritance.evidence?.ruleId === "module.python.anchored-relative-named-import.unique-top-level-class-inheritance"
+          ? "module.python.anchored-relative-named-base-import" : undefined;
     if (inheritance.targetId !== declarationClass.id || !inside(inheritance, callerClass) ||
-        inheritance.evidence?.ruleId !== "module.python.regular-package.absolute-named-import.unique-top-level-class-inheritance" ||
-        inheritance.evidence.stage !== "module") return undefined;
-    const path = inheritance.evidence.resolutionPath;
+        importRule === undefined || inheritanceEvidence?.stage !== "module") return undefined;
+    if (importRule === "module.python.anchored-relative-named-base-import" &&
+        (!inheritanceEvidence.configurationPaths?.length || !inheritanceEvidence.unmarkedPackagePaths?.length)) return undefined;
+    const path = inheritanceEvidence.resolutionPath;
     if (path?.length !== 2 || path[0] !== callerClass.filePath || path[1] !== declarationClass.filePath) return undefined;
-    const imports = graph.edges.slice(0, 16384).filter(edge => edge.kind === "imports" && edge.resolution === "exact" &&
-      edge.confidence === 1 && edge.filePath === callerClass.filePath && edge.targetId !== null &&
-      symbols!.get(edge.sourceId)?.kind === "file" && symbols!.get(edge.sourceId)?.filePath === callerClass.filePath &&
-      symbols!.get(edge.targetId)?.kind === "file" && symbols!.get(edge.targetId)?.filePath === declarationClass.filePath &&
-      edge.evidence?.ruleId === "module.python.regular-package.absolute-named-base-import" &&
-      edge.evidence.stage === "module" && edge.evidence.resolutionPath?.join("\n") === path.join("\n"));
+    const imports = (importsByFile.get(callerClass.filePath) ?? []).filter(edge =>
+      symbols!.get(edge.targetId!)?.filePath === declarationClass.filePath &&
+      edge.evidence?.ruleId === importRule &&
+      edge.evidence.stage === "module" && edge.evidence.resolutionPath?.join("\n") === path.join("\n") &&
+      (edge.evidence.configurationPaths ?? []).join("\n") === (inheritanceEvidence.configurationPaths ?? []).join("\n") &&
+      (edge.evidence.unmarkedPackagePaths ?? []).join("\n") === (inheritanceEvidence.unmarkedPackagePaths ?? []).join("\n"));
     if (imports.length !== 1) return undefined;
     return { callerClass, declarationClass, callerContainment, inheritance, declarationContainment, importEdge: imports[0]! };
   };

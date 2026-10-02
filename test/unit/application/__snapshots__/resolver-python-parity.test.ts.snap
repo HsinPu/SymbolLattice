@@ -473,6 +473,9 @@ exports[`Python resolver module-move parity > preserves full import, call, const
         "candidateSymbolIds": [
           "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23Base:class:0",
         ],
+        "configurationPaths": [
+          "pkg/__init__.py",
+        ],
         "resolutionPath": [
           "pkg/entry.py",
           "pkg/helpers.py",
@@ -504,6 +507,9 @@ exports[`Python resolver module-move parity > preserves full import, call, const
         "candidateSymbolIds": [
           "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23Base:class:0",
         ],
+        "configurationPaths": [
+          "pkg/__init__.py",
+        ],
         "resolutionPath": [
           "pkg/entry.py",
           "pkg/helpers.py",
@@ -534,6 +540,9 @@ exports[`Python resolver module-move parity > preserves full import, call, const
       "evidence": {
         "candidateSymbolIds": [
           "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py%23helper:function:0",
+        ],
+        "configurationPaths": [
+          "pkg/__init__.py",
         ],
         "resolutionPath": [
           "pkg/entry.py",
@@ -620,6 +629,9 @@ exports[`Python resolver module-move parity > preserves full import, call, const
         "candidateSymbolIds": [
           "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py:file:0",
         ],
+        "configurationPaths": [
+          "pkg/__init__.py",
+        ],
         "resolutionPath": [
           "pkg/entry.py",
           "pkg/helpers.py",
@@ -650,6 +662,9 @@ exports[`Python resolver module-move parity > preserves full import, call, const
       "evidence": {
         "candidateSymbolIds": [
           "symbol:pkg%2Fhelpers.py:pkg%2Fhelpers.py:file:0",
+        ],
+        "configurationPaths": [
+          "pkg/__init__.py",
         ],
         "resolutionPath": [
           "pkg/entry.py",

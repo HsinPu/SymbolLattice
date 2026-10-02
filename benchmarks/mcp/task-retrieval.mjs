@@ -150,11 +150,17 @@ export function verifyOmittedDeclarationLeads(result, readSource) {
       }
       assert.equal(w.callerClass.filePath, owner.symbol.filePath);
       assert.equal(w.declarationClass.filePath, focus.symbol.filePath);
-      assert.equal(w.inheritance.evidence?.ruleId, "module.python.regular-package.absolute-named-import.unique-top-level-class-inheritance");
+      const importRule = w.inheritance.evidence?.ruleId === "module.python.regular-package.relative-named-import.unique-top-level-class-inheritance"
+        ? "module.python.regular-package.relative-named-import"
+        : w.inheritance.evidence?.ruleId === "module.python.anchored-relative-named-import.unique-top-level-class-inheritance"
+          ? "module.python.anchored-relative-named-base-import" : "module.python.regular-package.absolute-named-base-import";
+      assert.ok(["module.python.regular-package.absolute-named-import.unique-top-level-class-inheritance",
+        "module.python.regular-package.relative-named-import.unique-top-level-class-inheritance",
+        "module.python.anchored-relative-named-import.unique-top-level-class-inheritance"].includes(w.inheritance.evidence?.ruleId));
       assert.deepEqual(w.inheritance.evidence.resolutionPath, [owner.symbol.filePath, focus.symbol.filePath]);
       assert.equal(w.importEdge.kind, "imports"); assert.equal(w.importEdge.resolution, "exact");
       assert.equal(w.importEdge.confidence, 1); assert.equal(w.importEdge.filePath, owner.symbol.filePath);
-      assert.equal(w.importEdge.evidence?.ruleId, "module.python.regular-package.absolute-named-base-import");
+      assert.equal(w.importEdge.evidence?.ruleId, importRule);
       assert.deepEqual(w.importEdge.evidence.resolutionPath, w.inheritance.evidence.resolutionPath);
       const importLines = readSource(w.importEdge.filePath).split(/\r\n|\r|\n|\u2028|\u2029/u);
       assert.ok(importLines[w.importEdge.range.start.line - 1]?.includes(w.importEdge.referenceName));

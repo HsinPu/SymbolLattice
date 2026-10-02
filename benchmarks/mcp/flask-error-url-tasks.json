@@ -1,0 +1,237 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/pallets/flask",
+  "commit": "d73fa1cdcbd8b1465c151db8924ba58b1dd14e35",
+  "truthMethod": "Fixed from CPython 3.12 AST and manual pinned-source reading before any product query. Written imports, bases, calls, lookup order and callback sites are source observations, not receiver type, runtime dispatch or external Werkzeug implementation proof. Required-file and positive source judgments are incomplete; all other files remain unjudged. Development is used for implementation; two held-out queries remain unopened until the first implementation is frozen.",
+  "tasks": [
+    {
+      "id": "request-error-handler-priority",
+      "split": "development",
+      "query": "For a failed request, how are HTTP codes and exception classes used to choose registered handlers, including blueprint and application fallbacks?",
+      "requiredFiles": [
+        "src/flask/app.py",
+        "src/flask/sansio/app.py",
+        "src/flask/sansio/scaffold.py"
+      ],
+      "supportingFiles": [],
+      "irrelevantFiles": [],
+      "evidence": [
+        {
+          "file": "src/flask/app.py",
+          "line": 890,
+          "text": "if isinstance(e, HTTPException) and not self.trap_http_exception(e):"
+        },
+        {
+          "file": "src/flask/app.py",
+          "line": 891,
+          "text": "return self.handle_http_exception(ctx, e)"
+        },
+        {
+          "file": "src/flask/app.py",
+          "line": 893,
+          "text": "handler = self._find_error_handler(e, ctx.request.blueprints)"
+        },
+        {
+          "file": "src/flask/app.py",
+          "line": 896,
+          "text": "raise"
+        },
+        {
+          "file": "src/flask/app.py",
+          "line": 898,
+          "text": "return self.ensure_sync(handler)(e)"
+        },
+        {
+          "file": "src/flask/sansio/app.py",
+          "line": 876,
+          "text": "exc_class, code = self._get_exc_class_and_code(type(e))"
+        },
+        {
+          "file": "src/flask/sansio/app.py",
+          "line": 877,
+          "text": "names = (*blueprints, None)"
+        },
+        {
+          "file": "src/flask/sansio/app.py",
+          "line": 879,
+          "text": "for c in (code, None) if code is not None else (None,):"
+        },
+        {
+          "file": "src/flask/sansio/app.py",
+          "line": 881,
+          "text": "handler_map = self.error_handler_spec[name][c]"
+        },
+        {
+          "file": "src/flask/sansio/app.py",
+          "line": 886,
+          "text": "for cls in exc_class.__mro__:"
+        },
+        {
+          "file": "src/flask/sansio/app.py",
+          "line": 890,
+          "text": "return handler"
+        },
+        {
+          "file": "src/flask/sansio/app.py",
+          "line": 891,
+          "text": "return None"
+        },
+        {
+          "file": "src/flask/sansio/scaffold.py",
+          "line": 679,
+          "text": "exc_class = default_exceptions[exc_class_or_code]"
+        },
+        {
+          "file": "src/flask/sansio/scaffold.py",
+          "line": 703,
+          "text": "if issubclass(exc_class, HTTPException):"
+        },
+        {
+          "file": "src/flask/sansio/scaffold.py",
+          "line": 704,
+          "text": "return exc_class, exc_class.code"
+        },
+        {
+          "file": "src/flask/sansio/scaffold.py",
+          "line": 706,
+          "text": "return exc_class, None"
+        }
+      ]
+    },
+    {
+      "id": "unhandled-server-error-propagation",
+      "split": "held-out",
+      "query": "When an unhandled request failure occurs, when is it re-raised and when is a registered handler called with a server error that retains the original exception?",
+      "requiredFiles": [
+        "src/flask/app.py"
+      ],
+      "supportingFiles": [],
+      "irrelevantFiles": [],
+      "evidence": [
+        {
+          "file": "src/flask/app.py",
+          "line": 930,
+          "text": "propagate = self.config[\"PROPAGATE_EXCEPTIONS\"]"
+        },
+        {
+          "file": "src/flask/app.py",
+          "line": 933,
+          "text": "propagate = self.testing or self.debug"
+        },
+        {
+          "file": "src/flask/app.py",
+          "line": 939,
+          "text": "raise"
+        },
+        {
+          "file": "src/flask/app.py",
+          "line": 941,
+          "text": "raise e"
+        },
+        {
+          "file": "src/flask/app.py",
+          "line": 943,
+          "text": "self.log_exception(ctx, exc_info)"
+        },
+        {
+          "file": "src/flask/app.py",
+          "line": 945,
+          "text": "server_error = InternalServerError(original_exception=e)"
+        },
+        {
+          "file": "src/flask/app.py",
+          "line": 946,
+          "text": "handler = self._find_error_handler(server_error, ctx.request.blueprints)"
+        },
+        {
+          "file": "src/flask/app.py",
+          "line": 949,
+          "text": "server_error = self.ensure_sync(handler)(server_error)"
+        },
+        {
+          "file": "src/flask/app.py",
+          "line": 951,
+          "text": "return self.finalize_request(ctx, server_error, from_error_handler=True)"
+        }
+      ]
+    },
+    {
+      "id": "url-defaults-build-failure",
+      "split": "held-out",
+      "query": "How does URL generation apply shared defaults and handle failures from building the address?",
+      "requiredFiles": [
+        "src/flask/app.py",
+        "src/flask/sansio/app.py"
+      ],
+      "supportingFiles": [],
+      "irrelevantFiles": [],
+      "evidence": [
+        {
+          "file": "src/flask/app.py",
+          "line": 1205,
+          "text": "self.inject_url_defaults(endpoint, values)"
+        },
+        {
+          "file": "src/flask/app.py",
+          "line": 1208,
+          "text": "rv = url_adapter.build("
+        },
+        {
+          "file": "src/flask/app.py",
+          "line": 1215,
+          "text": "except BuildError as error:"
+        },
+        {
+          "file": "src/flask/app.py",
+          "line": 1219,
+          "text": "return self.handle_url_build_error(error, endpoint, values)"
+        },
+        {
+          "file": "src/flask/sansio/app.py",
+          "line": 967,
+          "text": "names: t.Iterable[str | None] = (None,)"
+        },
+        {
+          "file": "src/flask/sansio/app.py",
+          "line": 973,
+          "text": "names, reversed(_split_blueprint_path(endpoint.rpartition(\".\")[0]))"
+        },
+        {
+          "file": "src/flask/sansio/app.py",
+          "line": 978,
+          "text": "for func in self.url_default_functions[name]:"
+        },
+        {
+          "file": "src/flask/sansio/app.py",
+          "line": 979,
+          "text": "func(endpoint, values)"
+        },
+        {
+          "file": "src/flask/sansio/app.py",
+          "line": 998,
+          "text": "for handler in self.url_build_error_handlers:"
+        },
+        {
+          "file": "src/flask/sansio/app.py",
+          "line": 1000,
+          "text": "rv = handler(error, endpoint, values)"
+        },
+        {
+          "file": "src/flask/sansio/app.py",
+          "line": 1005,
+          "text": "if rv is not None:"
+        },
+        {
+          "file": "src/flask/sansio/app.py",
+          "line": 1006,
+          "text": "return rv"
+        },
+        {
+          "file": "src/flask/sansio/app.py",
+          "line": 1013,
+          "text": "raise error"
+        }
+      ]
+    }
+  ]
+}

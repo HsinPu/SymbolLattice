@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/pallets/flask",
+  "commit": "d73fa1cdcbd8b1465c151db8924ba58b1dd14e35",
+  "truthMethod": "Fixed from independent CPython AST and manual pinned-source reading before any product query. Observe one written import/base/declaration hop and the unresolved self call, not runtime dispatch or MRO lookup. Flask source-root-relative imports require no inferred absolute source root.",
+  "observations": [
+    { "file": "src/flask/app.py", "class": "Flask", "owner": "handle_http_exception", "line": 863, "level": 1, "module": "sansio.app", "baseName": "App", "baseFile": "src/flask/sansio/app.py", "baseClass": "App", "method": "_find_error_handler" },
+    { "file": "src/flask/app.py", "class": "Flask", "owner": "handle_user_exception", "line": 893, "level": 1, "module": "sansio.app", "baseName": "App", "baseFile": "src/flask/sansio/app.py", "baseClass": "App", "method": "_find_error_handler" },
+    { "file": "src/flask/app.py", "class": "Flask", "owner": "handle_exception", "line": 946, "level": 1, "module": "sansio.app", "baseName": "App", "baseFile": "src/flask/sansio/app.py", "baseClass": "App", "method": "_find_error_handler" },
+    { "file": "src/flask/app.py", "class": "Flask", "owner": "url_for", "line": 1205, "level": 1, "module": "sansio.app", "baseName": "App", "baseFile": "src/flask/sansio/app.py", "baseClass": "App", "method": "inject_url_defaults" },
+    { "file": "src/flask/app.py", "class": "Flask", "owner": "url_for", "line": 1219, "level": 1, "module": "sansio.app", "baseName": "App", "baseFile": "src/flask/sansio/app.py", "baseClass": "App", "method": "handle_url_build_error" },
+    { "file": "src/flask/sansio/app.py", "class": "App", "owner": "_find_error_handler", "line": 876, "level": 1, "module": "scaffold", "baseName": "Scaffold", "baseFile": "src/flask/sansio/scaffold.py", "baseClass": "Scaffold", "method": "_get_exc_class_and_code" }
+  ]
+}

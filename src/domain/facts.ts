@@ -13,13 +13,13 @@ import type { RouteMethod } from "./graph.js";
  * Bump this value whenever extraction semantics change in a way that makes
  * previously persisted raw facts unsafe to reuse.
  */
-export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v435";
+export const ARTIFACT_FACTS_EXTRACTOR_VERSION = "multi-language-ast-v436";
 
 /**
  * Bump this value whenever cross-file resolution semantics change in a way
  * that requires a fresh graph projection from persisted facts.
  */
-export const PROJECT_RESOLVER_VERSION = "project-resolver-v210";
+export const PROJECT_RESOLVER_VERSION = "project-resolver-v212";
 
 /** Hard cap for one source-proven Java exhaustive if/else-if/else assignment join. */
 export const JAVA_EXHAUSTIVE_ASSIGNMENT_JOIN_MAXIMUM_BRANCHES = 8;
@@ -908,6 +908,8 @@ export interface EdgeEvidence {
   readonly routeDomain?: string;
   /** Project-relative config files that participated in module resolution. */
   readonly configurationPaths?: readonly string[];
+  /** Python source directories below a known regular package without an indexed marker. Not runtime import-path proof. */
+  readonly unmarkedPackagePaths?: readonly string[];
   /** Project-relative file hops used to reach an exact re-export target. */
   readonly resolutionPath?: readonly string[];
   /** Source receipts for one conservative CommonJS object-export call. */

@@ -261,6 +261,10 @@ function renderFocuses(result: UnknownRecord): string[] {
           const edge = record(inheritedSource[key!]);
           if (edge !== null) output.push(`  ${label}${edgeDetails(edge)}.`);
         }
+        const inheritanceEvidence = record(record(inheritedSource.inheritance)?.evidence);
+        if (Array.isArray(inheritanceEvidence?.unmarkedPackagePaths) && inheritanceEvidence.unmarkedPackagePaths.length > 0) {
+          output.push(`  Source directories without indexed package markers: ${inheritanceEvidence.unmarkedPackagePaths.filter(path => typeof path === "string").map(path => `\`${path}\``).join(", ")}; regular ancestor markers are recorded in JSON. This is indexed source context, not runtime import-path proof.`);
+        }
       }
       const scope = omittedDeclaration.scope === "selected-files-index" ? "selected-file index lookup" :
         omittedDeclaration.scope === "inspected-inherited-source" ? "bounded direct-base source inspection" : "bounded graph inspection";

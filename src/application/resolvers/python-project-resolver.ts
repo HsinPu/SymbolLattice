@@ -12,9 +12,12 @@ type ReferenceEvidenceFactory = (
 
 /**
  * Resolves the deliberately narrow Python B2 surface: one named import from a
- * sibling module in a regular package.  Python's broader import machinery is
- * intentionally outside this resolver; every missing, duplicate, decorated,
- * rebound, namespace-package, or unsupported shape simply emits no edge.
+ * module below the current regular package, including dotted subpackages.
+ * Unmarked directories below a known regular ancestor support written base
+ * source only; they never establish runtime calls or construction.
+ * Python's broader import machinery is outside this resolver. Missing targets,
+ * duplicate, decorated or rebound declarations, unanchored namespaces and
+ * unsupported binding shapes emit no edge.
  * Absolute named imports additionally support written single-base inheritance
  * at the indexed project root, including import lists/aliases. They never
  * resolve construction, inherited method dispatch, or inferred source roots.
@@ -32,22 +35,39 @@ export function projectPythonRegularPackageRelativeNamedImports(input: {
     if (pythonFacts === undefined) {
       continue;
     }
+    const packageDirectory = filePath.includes("/") ? filePath.slice(0, filePath.lastIndexOf("/")) : "";
+    const sourceParts = packageDirectory === "" ? [] : packageDirectory.split("/");
+    let anchorDepth: number | undefined;
+    for (let depth = sourceParts.length; depth >= 0; depth--) {
+      const prefix = sourceParts.slice(0, depth).join("/");
+      if (input.knownFilePaths.has(`${prefix === "" ? "" : `${prefix}/`}__init__.py`)) { anchorDepth = depth; break; }
+    }
     for (const imported of pythonFacts.relativeNamedImports) {
-      if (imported.filePath !== filePath) {
+      if (anchorDepth === undefined || imported.filePath !== filePath || pythonFacts.dynamicGlobalHazard === true ||
+          pythonFacts.artifactGlobalTaintedNames?.includes(imported.localName)) {
         continue;
       }
-      const packageDirectory = filePath.includes("/") ? filePath.slice(0, filePath.lastIndexOf("/")) : "";
-      const packageInit = packageDirectory === "" ? "__init__.py" : `${packageDirectory}/__init__.py`;
+      if (!/^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/u.test(imported.moduleName)) continue;
+      const moduleParts = imported.moduleName.split(".");
+      const modulePath = moduleParts.join("/");
+      const directoryParts = [...sourceParts, ...moduleParts.slice(0, -1)];
+      const packageDirectories = Array.from({ length: directoryParts.length - anchorDepth + 1 }, (_, index) =>
+        directoryParts.slice(0, anchorDepth! + index).join("/"));
+      const packageMarkers = packageDirectories.map(directory => `${directory === "" ? "" : `${directory}/`}__init__.py`)
+        .filter(marker => input.knownFilePaths.has(marker));
+      const unmarkedPackagePaths = packageDirectories.filter(directory =>
+        !input.knownFilePaths.has(`${directory === "" ? "" : `${directory}/`}__init__.py`));
+      const anchoredSourceOnly = unmarkedPackagePaths.length > 0;
       const targetFilePath = packageDirectory === ""
-        ? `${imported.moduleName}.py`
-        : `${packageDirectory}/${imported.moduleName}.py`;
+        ? `${modulePath}.py`
+        : `${packageDirectory}/${modulePath}.py`;
       const packageTargetFilePath = packageDirectory === ""
-        ? `${imported.moduleName}/__init__.py`
-        : `${packageDirectory}/${imported.moduleName}/__init__.py`;
+        ? `${modulePath}/__init__.py`
+        : `${packageDirectory}/${modulePath}/__init__.py`;
       if (
-        !input.knownFilePaths.has(packageInit) ||
+        packageDirectories.some(directory => input.knownFilePaths.has(`${directory}.py`)) ||
         !input.knownFilePaths.has(targetFilePath) ||
-        input.knownFilePaths.has(packageTargetFilePath)
+        input.knownFilePaths.has(packageTargetFilePath) || targetFilePath === filePath
       ) {
         continue;
       }
@@ -57,7 +77,7 @@ export function projectPythonRegularPackageRelativeNamedImports(input: {
       if (sourceFile?.id !== imported.sourceId || targetFile === undefined || targetFacts === undefined) {
         continue;
       }
-      const sourceBindings = pythonFacts.relativeNamedImports.filter(
+      const sourceBindings = [...pythonFacts.relativeNamedImports, ...(pythonFacts.absoluteNamedImports ?? [])].filter(
         (candidate) => candidate.localName === imported.localName
       );
       const targetDeclarations = targetFacts.topLevelDeclarations.filter(
@@ -74,6 +94,13 @@ export function projectPythonRegularPackageRelativeNamedImports(input: {
       const targetCallTainted =
         targetFacts.dynamicGlobalHazard === true ||
         (targetFacts.artifactGlobalTaintedNames?.includes(targetDeclaration.name) ?? false);
+      const inheritances = pythonFacts.importedClassInheritances.filter(candidate =>
+        candidate.filePath === filePath && candidate.localName === imported.localName);
+      if (anchoredSourceOnly && (targetDeclaration.kind !== "class" || targetCallTainted || inheritances.length === 0)) continue;
+      const sourceEvidence = (ruleId: string, candidateIds: readonly string[]): EdgeEvidence => ({
+        ...referenceEvidence(ruleId, "module", candidateIds, packageMarkers, [filePath, targetFilePath]),
+        ...(anchoredSourceOnly ? { unmarkedPackagePaths } : {})
+      });
       const fileImportCandidateIds = [targetFile.id];
       edges.push({
         id: createEdgeId({
@@ -92,16 +119,11 @@ export function projectPythonRegularPackageRelativeNamedImports(input: {
         resolution: "exact",
         confidence: 1,
         referenceName: `.${imported.moduleName}`,
-        evidence: referenceEvidence(
-          "module.python.regular-package.relative-named-import",
-          "module",
-          fileImportCandidateIds,
-          [],
-          [filePath, targetFilePath]
-        )
+        evidence: sourceEvidence(anchoredSourceOnly ? "module.python.anchored-relative-named-base-import" :
+          "module.python.regular-package.relative-named-import", fileImportCandidateIds)
       });
       if (
-        targetDeclaration.kind === "function" &&
+        !anchoredSourceOnly && targetDeclaration.kind === "function" &&
         targetDeclaration.runtimeCallEligible === true &&
         !targetCallTainted
       ) {
@@ -130,14 +152,14 @@ export function projectPythonRegularPackageRelativeNamedImports(input: {
               "module.python.regular-package.relative-named-import.unique-top-level-function-call",
               "module",
               declarationCandidateIds,
-              [],
+              packageMarkers,
               [filePath, targetFilePath]
             )
           });
         }
       }
       if (targetDeclaration.kind === "class") {
-        if (targetDeclaration.instantiationEligible === true && !targetCallTainted) {
+        if (!anchoredSourceOnly && targetDeclaration.instantiationEligible === true && !targetCallTainted) {
           for (const instantiation of pythonFacts.importedClassInstantiations ?? []) {
             if (
               instantiation.filePath !== filePath ||
@@ -166,13 +188,13 @@ export function projectPythonRegularPackageRelativeNamedImports(input: {
                 "module.python.regular-package.relative-named-import.unique-top-level-class-instantiation",
                 "module",
                 declarationCandidateIds,
-                [],
+                packageMarkers,
                 [filePath, targetFilePath]
               )
             });
           }
         }
-        for (const inheritance of pythonFacts.importedClassInheritances) {
+        for (const inheritance of targetCallTainted ? [] : inheritances) {
           if (inheritance.filePath !== filePath || inheritance.localName !== imported.localName) {
             continue;
           }
@@ -193,13 +215,8 @@ export function projectPythonRegularPackageRelativeNamedImports(input: {
             resolution: "exact",
             confidence: 1,
             referenceName: inheritance.localName,
-            evidence: referenceEvidence(
-              "module.python.regular-package.relative-named-import.unique-top-level-class-inheritance",
-              "module",
-              declarationCandidateIds,
-              [],
-              [filePath, targetFilePath]
-            )
+            evidence: sourceEvidence(anchoredSourceOnly ? "module.python.anchored-relative-named-import.unique-top-level-class-inheritance" :
+              "module.python.regular-package.relative-named-import.unique-top-level-class-inheritance", declarationCandidateIds)
           });
         }
       }

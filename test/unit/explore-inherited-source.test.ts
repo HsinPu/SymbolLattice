@@ -30,6 +30,28 @@ function fixture() {
 }
 
 describe("bounded direct-base source witnesses", () => {
+  it("accepts a paired relative import and inheritance proof but rejects mixed provenance", () => {
+    const f = fixture();
+    f.graph.edges[2] = { ...f.graph.edges[2]!, evidence: { ...f.graph.edges[2]!.evidence!,
+      ruleId: "module.python.regular-package.relative-named-import.unique-top-level-class-inheritance" } };
+    expect(inheritedSourceLookup(f.graph)(f.source, f.call, f.declaration)).toBeUndefined();
+    f.graph.edges[3] = { ...f.graph.edges[3]!, evidence: { ...f.graph.edges[3]!.evidence!,
+      ruleId: "module.python.regular-package.relative-named-import" }, referenceName: ".base" };
+    expect(inheritedSourceLookup(f.graph)(f.source, f.call, f.declaration)?.importEdge.id).toBe("import");
+    expect(f.call).toMatchObject({ targetId: null, confidence: 0, resolution: "unresolved" });
+  });
+  it("requires matching regular anchors and unmarked paths for anchored source context", () => {
+    const f = fixture();
+    f.graph.edges[2] = { ...f.graph.edges[2]!, evidence: { ...f.graph.edges[2]!.evidence!,
+      ruleId: "module.python.anchored-relative-named-import.unique-top-level-class-inheritance",
+      configurationPaths: ["pkg/__init__.py"], unmarkedPackagePaths: ["pkg/namespace"] } };
+    f.graph.edges[3] = { ...f.graph.edges[3]!, evidence: { ...f.graph.edges[3]!.evidence!,
+      ruleId: "module.python.anchored-relative-named-base-import", configurationPaths: ["pkg/__init__.py"],
+      unmarkedPackagePaths: ["pkg/other"] } };
+    expect(inheritedSourceLookup(f.graph)(f.source, f.call, f.declaration)).toBeUndefined();
+    f.graph.edges[3] = { ...f.graph.edges[3]!, evidence: { ...f.graph.edges[3]!.evidence!, unmarkedPackagePaths: ["pkg/namespace"] } };
+    expect(inheritedSourceLookup(f.graph)(f.source, f.call, f.declaration)?.importEdge.id).toBe("import");
+  });
   it("adds source through a complete chain while retaining the unresolved call and zero ranking contribution", () => {
     const f = fixture();
     const plan = planExploreQuery({ symbols: [f.source], edges: [] }, "alpha bravo charlie delta echo foxtrot golf hotel temporary connection");

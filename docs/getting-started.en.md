@@ -109,6 +109,12 @@ See the [validation documentation](../benchmarks/README.md) for measured results
 
 Use the installation flow above with a new fixed commit or existing tag. After reinstalling, repeat Codex integration and run `SymbolLattice sync .` in each project. The project is in `0.x` development; check the target version's compatibility and migration notes before upgrading.
 
+### Upgrading to v0.548.0
+
+Python relative named imports can traverse subpackages below the current package, such as `from .sansio.app import App`. The target must be a unique module file. Unmarked directories require an indexed regular ancestor and support written base source only, disclosing missing markers as `unmarkedPackagePaths` without resolving runtime calls or construction. Source-root inference, multiple leading dots and unanchored namespaces are excluded. Written single-base inheritance can support cross-file declaration candidates while calls remain unresolved; it does not establish runtime dispatch.
+
+Run `SymbolLattice sync .`. Updated extractor and resolver policies re-extract persisted raw facts and project the graph; index format and CLI/MCP parameters are unchanged.
+
 ### Upgrading to v0.547.0
 
 The optional `queryPlan.coveredFileContextFiltering` receipt is new. When single-focus compaction does not apply, a primary file with a literal directory qualifier and at least two selected declarations may reduce secondary files if its non-comment-prefixed source hits jointly cover all observed concepts in the bounded candidates, with at least six groups. Each omitted symbol's name words and non-comment-prefixed hits must cover at most half of those groups, and its complete literal hits must not cover every group. Strings and docstrings can still match; this is not a syntactic or semantic classification of executable code.

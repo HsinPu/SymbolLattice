@@ -155,8 +155,8 @@ describe("Python B2 regular-package resolution", () => {
         })
       ])
     );
-    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v435");
-    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v210");
+    expect(ARTIFACT_FACTS_EXTRACTOR_VERSION).toBe("multi-language-ast-v436");
+    expect(PROJECT_RESOLVER_VERSION).toBe("project-resolver-v212");
     expect(upgradedStore.getActiveGenerationBundle(projectPath)).toMatchObject({
       extractorVersion: ARTIFACT_FACTS_EXTRACTOR_VERSION,
       resolverVersion: `${PROJECT_RESOLVER_VERSION}+${SOURCE_ROLE_CLASSIFIER_VERSION}`
@@ -573,6 +573,7 @@ describe("Python B2 regular-package resolution", () => {
             "module.python.regular-package.relative-named-import.unique-top-level-class-instantiation",
           stage: "module",
           candidateSymbolIds: [widget?.id],
+          configurationPaths: ["pkg/__init__.py"],
           resolutionPath: ["pkg/consumer.py", "pkg/providers.py"]
         }
       }),

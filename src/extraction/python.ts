@@ -84,22 +84,23 @@ function staticPythonRelativeNamedImport(
     return [];
   }
   const children = directChildren(node);
-  const module = children[2];
+  const importIndex = children.findIndex(child => child.name === "import");
+  const moduleNodes = children.slice(2, importIndex);
   if (
     children[0]?.name !== "from" ||
     children[1]?.name !== "." ||
-    module === undefined ||
-    children[3]?.name !== "import"
+    importIndex < 3 || moduleNodes.length % 2 === 0 ||
+    !moduleNodes.every((child, index) => index % 2 === 0 ? child.name === "VariableName" : child.name === ".")
   ) {
     return [];
   }
-  const moduleName = declarationName(input, module);
-  if (moduleName === null) {
+  const moduleName = input.sourceText.slice(moduleNodes[0]!.from, moduleNodes.at(-1)!.to);
+  if (!/^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/u.test(moduleName)) {
     return [];
   }
   const confirmedModuleName = moduleName;
   const moduleFrom = children[1].from;
-  const moduleTo = module.to;
+  const moduleTo = moduleNodes.at(-1)!.to;
 
   function binding(
     importedNode: PythonSyntaxNode,
@@ -118,7 +119,7 @@ function staticPythonRelativeNamedImport(
         };
   }
 
-  const firstImported = children[4];
+  const firstImported = children[importIndex + 1];
   if (firstImported === undefined) {
     return [];
   }
@@ -126,19 +127,19 @@ function staticPythonRelativeNamedImport(
     if (firstImported.name !== "VariableName") {
       return [];
     }
-    if (children.length === 5) {
+    if (children.length === importIndex + 2) {
       const result = binding(firstImported, firstImported);
       return result === null ? [] : [result];
     }
-    if (children.length === 7 && children[5]?.name === "as" && children[6]?.name === "VariableName") {
-      const result = binding(firstImported, children[6]);
+    if (children.length === importIndex + 4 && children[importIndex + 2]?.name === "as" && children[importIndex + 3]?.name === "VariableName") {
+      const result = binding(firstImported, children[importIndex + 3]!);
       return result === null ? [] : [result];
     }
     return [];
   }
 
   const imports: StaticPythonRelativeNamedImport[] = [];
-  let index = 5;
+  let index = importIndex + 2;
   while (index < children.length) {
     while (children[index]?.name === "Comment") {
       index += 1;

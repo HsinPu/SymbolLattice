@@ -109,6 +109,12 @@ SymbolLattice serve --mcp --project C:\path\to\project
 
 使用上方安裝流程指定新的固定 commit 或既有 tag，重新安裝後執行 Codex 整合，並在各專案執行 `SymbolLattice sync .`。目前為 `0.x` 開發階段，升級前請核對對應版本的相容性與遷移說明。
 
+### 升級至 v0.548.0
+
+Python 相對具名匯入可經過目前套件下的子套件，例如 `from .sansio.app import App`。目標須為唯一模組檔案。若子目錄缺少 `__init__.py`，必須有已索引的普通套件祖先，僅支援書寫基底來源並以 `unmarkedPackagePaths` 揭露未標記目錄，不解析執行時呼叫或建立物件。不推導來源根目錄，也不解析多個前導點或沒有普通套件起點的命名空間。單一基底的繼承證據可供跨檔宣告候選使用，但呼叫仍可未解析，不代表實際派發。
+
+執行 `SymbolLattice sync .`。extractor 與 resolver 策略已更新，既有原始事實會重新擷取並投影；索引格式與 CLI／MCP 參數不變。
+
 ### 升級至 v0.547.0
 
 新增可選的 `queryPlan.coveredFileContextFiltering`。未套用單一焦點收斂時，若首要檔案有字面目錄詞支持、至少兩個已選宣告，且非註解前綴的來源命中共同涵蓋有界候選中全部已命中的至少 6 組概念，部分次要檔案可能不再展開。每個被省略符號的具名詞與非註解前綴命中不得超過共同涵蓋概念的一半，全部字面命中也不得涵蓋全部概念。字串或 docstring 仍可命中；這不是語法或語意上的程式碼分類。
