@@ -109,6 +109,10 @@ See the [validation documentation](../benchmarks/README.md) for measured results
 
 Use the installation flow above with a new fixed commit or existing tag. After reinstalling, repeat Codex integration and run `SymbolLattice sync .` in each project. The project is in `0.x` development; check the target version's compatibility and migration notes before upgrading.
 
+### Upgrading to v0.548.1
+
+This patch retains existing query and evidence formats while adjusting index reads for candidate search. After upgrading from 0.548.0, run `SymbolLattice sync .` to create the auxiliary indexes used by this adjustment. If source and configuration are unchanged, this requires no source re-extraction or new index generation. Existing indexes remain queryable in read-only mode; the adjustment becomes available after synchronization.
+
 ### Upgrading to v0.548.0
 
 Python relative named imports can traverse subpackages below the current package, such as `from .sansio.app import App`. The target must be a unique module file. Unmarked directories require an indexed regular ancestor and support written base source only, disclosing missing markers as `unmarkedPackagePaths` without resolving runtime calls or construction. Source-root inference, multiple leading dots and unanchored namespaces are excluded. Written single-base inheritance can support cross-file declaration candidates while calls remain unresolved; it does not establish runtime dispatch.

@@ -61,6 +61,12 @@ These tools generate or validate large-project evidence outside the published np
 
 Always pass disposable workspaces and explicit output paths. Never write external corpora, `.SymbolLattice` indexes, generated JSON evidence, npm caches, or packed installations inside `benchmarks/`.
 
+## v0.548.1 Look up source paths through row maps
+
+Small row-address tables provide generation and file paths for bounded source seeds while the same FTS table supplies matching and ranking. Writable initialization or `SymbolLattice sync .` adds these tables; older read-only indexes retain their existing lookup. The [source row-map audit](mcp/source-row-map-audit.md) records compatibility, complete mapping checks, frozen builds and retained samples.
+
+All 54 tasks in 37 manifests return complete JSON and MCP text equal to v0.548.0, including Flask's existing 20/38 source-fact coverage. Full tests report 3,463 passing and four existing skips. Seven 12-pair comparisons and five 24-pair follow-ups retain 408 timed calls. Follow-up whole-query medians fall by 9.96% for the fixed Django case, 1.81% for Nest, 4.23% for Fastify and 2.07% for Express. Flask URL's 0.22% difference is too small to claim meaningful acceleration. These warm fixed-query observations do not establish universal speed, first-index/write performance or complete retrieval acceptance.
+
 ## v0.548.0 Relative Python base-source evidence
 
 One-dot named imports can traverse subdirectories below an indexed regular package. Unmarked directories support written base source only, disclosed as `unmarkedPackagePaths`; they do not resolve runtime calls or construction. The [relative base source audit](python/relative-base-source-audit.md) records the failed first prototype, fixed CPython truth, actual CLI hierarchy result, source witnesses and upgrade conditions. Extractor v436 and resolver v212 require `SymbolLattice sync .`.

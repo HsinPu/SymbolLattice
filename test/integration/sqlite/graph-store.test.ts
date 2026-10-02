@@ -3035,6 +3035,77 @@ describe("SqliteGraphStore", () => {
     }
   });
 
+  it.each([1, 2, 3, 6])("preserves FTS rank, source filtering and bounded results across row-map fallback and repair with %i generations", async generations => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const graphSnapshot = boundedGraphSnapshot();
+    for (let index = 0; index < generations; index++) {
+      store.replaceProjectFacts({ projectPath, snapshot: graphSnapshot,
+        indexedAt: `2026-10-02T0${index}:00:00.000Z`, artifactFacts: persistedFacts(graphSnapshot),
+        indexInputs: indexInputs(`row-map-${index}`), resolverVersion: "bounded-resolver-v1",
+        sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION,
+        sourceDocuments: sourceDocuments(graphSnapshot, "").map((document, ordinal) => ({ ...document,
+          sourceText: `function probe() { natural(); ${index === generations - 1 ? "updated" : "oldToken"}(); }\n${"padding ".repeat(ordinal * 5 + index)}` })) });
+    }
+    const requests = ["natural updated", "natural", "oldToken"].map(query =>
+      ({ ...boundedRequest(query), ...exploreQuerySeedTerms(query) }));
+    const mapped = requests.map(request => store.getActiveBoundedGraphBundle(projectPath, request));
+    expect(mapped[0]!.diagnostics.usedSourceSearch).toBe(true);
+    expect(mapped[0]!.snapshot.files.length).toBeGreaterThan(0);
+    const hits = store.getActiveSourceSearchBundle(projectPath, sourceSearchRequest("natural updated"));
+    expect(hits.hits).toHaveLength(3);
+    expect(store.getActiveSourceSearchBundle(projectPath, sourceSearchRequest("oldToken")).hits).toEqual([]);
+    expect(readTableCount(projectPath, "source_search_rows")).toBe(Math.min(generations, 5) * 3);
+    expect(readTableCount(projectPath, "active_source_search_rows")).toBe(generations >= 3 ? 3 : 0);
+    const database = new DatabaseSync(databasePathFor(projectPath));
+    let originalRows: unknown[];
+    try {
+      originalRows = database.prepare("SELECT rowid, * FROM source_search ORDER BY rowid").all();
+      expect(database.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+      database.exec("DROP TABLE source_search_rows; DROP TABLE active_source_search_rows");
+    } finally { database.close(); }
+    expect(requests.map(request => store.getActiveBoundedGraphBundle(projectPath, request))).toEqual(mapped);
+    expect(store.getActiveSourceSearchBundle(projectPath, sourceSearchRequest("natural updated"))).toEqual(hits);
+    store.initialize(projectPath);
+    expect(requests.map(request => store.getActiveBoundedGraphBundle(projectPath, request))).toEqual(mapped);
+    const repaired = new DatabaseSync(databasePathFor(projectPath));
+    try {
+      expect(repaired.prepare("SELECT rowid, * FROM source_search ORDER BY rowid").all()).toEqual(originalRows!);
+      expect(repaired.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+      repaired.exec("DELETE FROM source_search_rows WHERE search_rowid = (SELECT MIN(search_rowid) FROM source_search_rows)");
+    } finally { repaired.close(); }
+    store.initialize(projectPath);
+    expect(readTableCount(projectPath, "source_search_rows")).toBe(Math.min(generations, 5) * 3);
+    expect(requests.map(request => store.getActiveBoundedGraphBundle(projectPath, request))).toEqual(mapped);
+  });
+
+  it("falls back for a stale row-map generation and rolls back a failed map write with its FTS generation", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const graphSnapshot = boundedGraphSnapshot();
+    const input = { projectPath, snapshot: graphSnapshot, indexedAt: "2026-10-02T01:00:00.000Z",
+      artifactFacts: persistedFacts(graphSnapshot), indexInputs: indexInputs("row-map-atomic"),
+      resolverVersion: "bounded-resolver-v1", sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION,
+      sourceDocuments: sourceDocuments(graphSnapshot, "function probe() { natural(); updated(); }") };
+    store.replaceProjectFacts(input);
+    store.replaceProjectFacts(input);
+    const request = { ...boundedRequest("natural updated"), ...exploreQuerySeedTerms("natural updated") };
+    const before = store.getActiveBoundedGraphBundle(projectPath, request);
+    const database = new DatabaseSync(databasePathFor(projectPath));
+    try { database.prepare("UPDATE meta SET value = 'older-generation' WHERE key = 'source_search_rows_generation_id'").run(); }
+    finally { database.close(); }
+    expect(store.getActiveBoundedGraphBundle(projectPath, request)).toEqual(before);
+    store.initialize(projectPath);
+    const failing = new DatabaseSync(databasePathFor(projectPath));
+    try { failing.exec("CREATE TRIGGER reject_search_row BEFORE INSERT ON source_search_rows BEGIN SELECT RAISE(ABORT, 'map insert failure'); END"); }
+    finally { failing.close(); }
+    expect(() => store.replaceProjectFacts(input)).toThrow("map insert failure");
+    expect(store.getActiveBoundedGraphBundle(projectPath, request)).toEqual(before);
+    expect(readTableCount(projectPath, "generation_source_search")).toBe(2);
+    expect(readTableCount(projectPath, "source_search_rows")).toBe(6);
+    expect(readTableCount(projectPath, "active_source_search_rows")).toBe(0);
+  });
+
   it("preserves distinct generation-bound call receipts across evidence lookup batches", async () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();
