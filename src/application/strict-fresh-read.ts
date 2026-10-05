@@ -155,12 +155,17 @@ export class StrictFreshReadCoordinator {
         queryError = error;
       }
 
-      const after = await this.observe(normalizedProjectPath);
+      let after: WatchFreshnessObservation;
+      try {
+        after = await this.observe(normalizedProjectPath);
+      } finally {
+        // Failed verification must discard evidence without retaining writer ownership.
+        admission.lease?.release();
+      }
       lastStatus = after.status;
       const stable = !(queryError instanceof ReadQueryGenerationMismatchError) &&
         this.isFresh(after) &&
         after.expectedGenerationId === admission.receipt.expectedGenerationId;
-      admission.lease?.release();
       if (stable) {
         if (queryError !== undefined) throw queryError;
         return result as Result;
@@ -233,8 +238,13 @@ export class StrictFreshReadCoordinator {
     while (true) {
       const lease = await this.acquireWriterLease(projectPath);
       if (lease.state === "owned") {
-        observation = await this.observe(projectPath);
-        return { lease, observation };
+        try {
+          observation = await this.observe(projectPath);
+          return { lease, observation };
+        } catch (error) {
+          lease.release();
+          throw error;
+        }
       }
       if (this.now().getTime() >= deadline) return { lease: null, observation };
       await this.sleep(this.leasePollMs);

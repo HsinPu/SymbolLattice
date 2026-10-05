@@ -51,6 +51,10 @@ SymbolLattice sync .
 
 Review the returned files and source excerpts, then follow the relationship evidence. If the index is stale, run `sync` before retrying. Live queries may refuse to return results when index freshness cannot be verified.
 
+For `FRESH_INDEX_REQUIRED`, run `SymbolLattice status . --json` in the analyzed project to inspect the reasons, then run `SymbolLattice sync .` and retry. CLI queries and MCP with `--no-auto-sync` do not synchronize automatically; default MCP can update an existing index after acquiring the writer lease. If another host still holds the lease without finishing synchronization, a query waits for a bounded period before refusing; retry later. `PROJECT_NOT_STABLE` means the project kept changing during synchronization or query execution; retry after edits settle.
+
+`v0.549.2` fixes a Windows host contending with its own writer lease when the same project is addressed with different path casing or a directory alias, and temporary writer leases retained after failed verification. Restart the MCP host after updating to load the fix. Existing indexes remain usable; run a normal `sync` when their status requires it.
+
 | Need | Commands |
 | --- | --- |
 | Find symbols, search text, or read file source | `find`, `search`, `file` |

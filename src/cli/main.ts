@@ -1070,6 +1070,17 @@ export async function runForegroundWatch(
   }
 }
 
+function isSameProjectDirectory(left: string, right: string): boolean {
+  if (resolve(left) === resolve(right)) return true;
+  try {
+    // Resolve actual directory identity so Windows casing and directory aliases
+    // cannot make this host contend with its own lifetime writer lease.
+    return realpathSync.native(left) === realpathSync.native(right);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Runs a read-only MCP server beside a separate automatic freshness watcher.
  *
@@ -1197,7 +1208,7 @@ export async function runMcpWithAutoSync(
         acquireWriterLease: (projectPath) => {
           if (
             ownerLease !== null &&
-            resolve(projectPath) === resolve(options.projectPath)
+            isSameProjectDirectory(projectPath, options.projectPath)
           ) {
             return { state: "owned", release: () => undefined };
           }

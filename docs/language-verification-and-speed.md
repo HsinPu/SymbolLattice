@@ -1,6 +1,6 @@
 # 語言驗證程度與搜尋速度報告
 
-文件跟隨版本：`v0.549.1`。更新日期：2026-10-02。本次實際量測產品：`v0.549.0`（`54893be20020208866c5e8daae7863196f7ccaf7`）。
+文件跟隨版本：`v0.549.2`。更新日期：2026-10-05。完整主表量測產品：`v0.549.0`（`54893be20020208866c5e8daae7863196f7ccaf7`）。
 
 本報告集中列出全部 58 種語言／格式的驗證範圍、查找結果與速度，後續優化更新同一份文件。所有數值均保留測量版本；純文件升版不把舊數據改稱新版本實測。
 
@@ -140,5 +140,36 @@ node benchmarks/languages/evidence-speed-report.mjs `
   --identity (Join-Path $env:TEMP 'SymbolLattice-v5490-build-identity.json') `
   --baseline-identity (Join-Path $env:TEMP 'SymbolLattice-v5481-build-identity.json') `
   --audit 'benchmarks/mcp/call-source-context-audit.md' `
-  --updated-on 2026-10-02 --output docs/language-verification-and-speed.md
+  --updated-on 2026-10-05 --output docs/language-verification-and-speed.md
 ```
+
+## v0.549.2：過期索引的同步鎖恢復補驗
+
+本節實際量測 `v0.549.2`，基準為 `v0.549.1`（`29f4ee542c919f64b5af82619be828f1087b8562`），日期 2026-10-05，Windows／Node.js v24.19.0。完整主表仍保留 v0.549.0 的 58 語言資料；本次沒有重新量測其他 55 種語言，也沒有重跑語言解析 oracle。固定 commit、編譯產品 SHA、完整命令、條件與限制見[同步鎖恢復驗證](../benchmarks/mcp/strict-fresh-read-recovery-audit.md)。
+
+修正同一 Windows 專案因大小寫或目錄別名不同而與 MCP host 自己的同步鎖競爭，以及前／後新鮮度檢查失敗後未釋放臨時鎖的問題。三個固定大型專案以獨立撰寫的暫時宣告產生過期狀態，再由持有真實 SQLite 鎖的 host 以大寫路徑查詢；舊版三次皆回傳 `FRESH_INDEX_REQUIRED`、不執行查詢，修正版三次皆同步一次並回傳新來源。此驗證隔離背景 watcher 排程；不證明所有拒絕都有相同原因。
+
+| 語言／固定專案 | 查找任務 | 必要檔案命中 | 指定來源事實 | 1 題 service 查詢上中位數（v0.549.1 → v0.549.2） |
+| --- | --- | --- | --- | --- |
+| TypeScript／Nest | 4 | 6/6 | 8/8 | 874.94 → 917.69 ms（+4.89%） |
+| JavaScript／Fastify | 1 | 2/2 | 4/4 | 382.97 → 383.18 ms（+0.05%） |
+| Python／Flask | 3 | 6/6 | 38/38 | 260.46 → 255.31 ms（-1.98%） |
+
+八題各版本各執行三次新的 CLI process，共 48 次；完整查詢結果皆與基準深度相等。原真值與 scorer 未修改，必要檔案分母為固定任務要求的 distinct task-file instances，未把補充 source windows 當成主要檔案命中。合計必要檔案 14/14、指定來源事實 50/50，另獨立核對 111 份回傳來源片段。部分判定為 TP 17／FP 0／FN 0，15 筆待核對；已判定 precision 為 17/17，判定覆蓋為 17/32，不是完整專案 precision。上方 Django SQLite 任務的歷史必要檔案 1/2 缺口仍保留，本次沒有補驗或改善宣稱。
+
+速度另使用每題每版本一次暖身、八對交替暖查詢及 persistent read-only reader，共 48 次 service 呼叫。這些時間不包含 host 新鮮度准入、MCP transport、sync、首次索引、記憶體峰值或 Agent 完整任務；修正沒有更改 service 查找路徑。保留兩個較慢樣本，不據此宣稱通用速度改善。也未重新驗證 Node.js 22、其他作業系統或別名重新指向的情況。
+
+`npm run check`、`npm run build`、141 項相關測試、全套 3,478 項測試（四項既有略過）及 MCP worker 世代檢查通過。仍維持前後完整新鮮度與 generation 檢查；未啟用同步、其他 host 未能完成、來源讀取失敗或專案持續變動時，仍可能正當拒絕。升級後重新啟動 MCP host；既有索引毋須重建。
+
+原始資料位於 `%TEMP%/SymbolLattice-v5492-validation`；歷史索引與固定 tracked source 未更動。以下摘要皆對應本節實際讀取的資料；`quality.json` 各列再用固定真值、原始結果及實際來源重算，`timing.json` 上中位數再由逐次樣本核對。
+
+| 補驗來源 | SHA-256 |
+| --- | --- |
+| `identity.json` | `e38d98962fe34f7615f6dcd0711535f2574f6034612ce04b7c3f9e6869429241` |
+| `recovery.json` | `c11ba658bf8d140b6e0ccf7fc84513049c6e9ca174c1b1bb74d21a1ac1cd3cd1` |
+| `quality.json` | `b483526b6ecef7d891302a55596a0ad185843672a5d9f3d15476d1b7d8b179d9` |
+| `timing.json` | `04be376857125332f8ca62be22aa481083931dacdfda5ae7f3e22ce79336ee80` |
+| `complete.json` | `e9c30295faf0a81170c038e8d8a070e6ce389b23b797803a7b3c65a5417c9d4a` |
+| `validate.mjs` | `e352888578fa2169e39d308e1d7973afab23efc6f92c10e0e8c953786ef1aaef` |
+
+完整主表由上述生成器更新；局部補驗須另核對原始資料並保留本節與對應 audit，不能用舊的全語言輸入覆寫或重新標記局部新實測。

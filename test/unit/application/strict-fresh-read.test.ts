@@ -237,6 +237,57 @@ describe("StrictFreshReadCoordinator", () => {
     expect(clock).toBe(2_000);
   });
 
+  it("releases an acquired lease when its admission verification fails", async () => {
+    const service = new MutableFreshnessService();
+    service.current = status("generation:stale", true);
+    const lease = ownedLease();
+    const failure = new Error("source temporarily unreadable");
+    const observeFreshness = vi.spyOn(service, "observeFreshness");
+    observeFreshness.mockImplementationOnce(async () => ({
+      status: service.current,
+      expectedGenerationId: service.current.generationId,
+      knownStale: true
+    })).mockRejectedValueOnce(failure);
+    const coordinator = new StrictFreshReadCoordinator({
+      service,
+      writerEnabled: true,
+      acquireWriterLease: async () => lease
+    });
+    const query = vi.fn(async () => "forbidden");
+
+    await expect(coordinator.execute(projectPath, query)).rejects.toBe(failure);
+    expect(query).not.toHaveBeenCalled();
+    expect(lease.release).toHaveBeenCalledOnce();
+    expect(service.syncCalls).toBe(0);
+  });
+
+  it("releases the lease and discards evidence when post-query verification fails", async () => {
+    const service = new MutableFreshnessService();
+    service.current = status("generation:stale", true);
+    const firstLease = ownedLease();
+    const nextLease = ownedLease();
+    const failure = new Error("post-query source temporarily unreadable");
+    const observeFreshness = vi.spyOn(service, "observeFreshness");
+    const coordinator = new StrictFreshReadCoordinator({
+      service,
+      writerEnabled: true,
+      acquireWriterLease: vi.fn()
+        .mockResolvedValueOnce(firstLease)
+        .mockResolvedValueOnce(nextLease)
+    });
+
+    await expect(coordinator.execute(projectPath, async () => {
+      observeFreshness.mockRejectedValueOnce(failure);
+      return "discarded-evidence";
+    })).rejects.toBe(failure);
+    expect(firstLease.release).toHaveBeenCalledOnce();
+
+    service.current = status("generation:synced-1", true);
+    await expect(coordinator.execute(projectPath, async (receipt) => receipt.expectedGenerationId))
+      .resolves.toBe("generation:synced-2");
+    expect(nextLease.release).toHaveBeenCalledOnce();
+  });
+
   it("exports distinct fail-closed error classes", () => {
     expect(FreshIndexRequiredError).toBeTypeOf("function");
     expect(ProjectNotStableError).toBeTypeOf("function");
