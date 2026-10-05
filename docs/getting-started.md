@@ -40,18 +40,20 @@ SymbolLattice init .
 SymbolLattice status .
 
 # 不知道符號名稱時，用任務描述探索
-SymbolLattice explore "Where are incoming requests validated?" --project . --json
+SymbolLattice explore "Where are incoming requests validated?" --project . --sync-if-stale --json
 
 # 已知符號名稱時精確查找；請換成專案中的名稱
-SymbolLattice find createOrder --project . --json
+SymbolLattice find createOrder --project . --sync-if-stale --json
 
 # 修改原始碼或升級 SymbolLattice 後，同步索引
 SymbolLattice sync .
 ```
 
-先查看命中的檔案與來源片段，再依關係證據追查。若結果指出索引過期，先執行 `sync` 再重新查詢；即時查詢無法確認索引新鮮度時，可能拒絕回傳結果。
+先查看命中的檔案與來源片段，再依關係證據追查。即時 CLI 查詢可加上 `--sync-if-stale`：只有既有索引過期時才會取得同步鎖並執行一般 `sync`，保留原索引範圍；索引已新鮮時不會同步。此選項不建立缺少的索引、不呼叫 `index` 強制重建，也不繞過安全路徑與前後新鮮度檢查。
 
-遇到 `FRESH_INDEX_REQUIRED` 時，在被分析的專案執行 `SymbolLattice status . --json` 查看原因，再執行 `SymbolLattice sync .` 並重試。CLI 與 `--no-auto-sync` 的 MCP 不會自行同步；預設 MCP 可在取得同步鎖後更新既有索引。另一個 host 正在持有鎖且尚未完成同步時，查詢會有限等待後拒絕，稍後可重試。`PROJECT_NOT_STABLE` 表示同步或查詢期間專案仍在變動，請等修改穩定後再查。
+此選項使用內建索引器。若索引記錄了明確載入的外掛，會回傳 `CLI_SYNC_REQUIRES_PLUGINS`，保留既有索引；請使用配置原 `--plugin` 選項的 MCP host，不會為恢復查詢而默默移除外掛。
+
+遇到 `FRESH_INDEX_REQUIRED` 時，在被分析的專案執行 `SymbolLattice status . --json` 查看原因。`writerState=disabled` 表示這次查詢未啟用索引更新，不代表 CLI 無法執行；若允許更新索引，以 `--sync-if-stale` 重試同一 CLI 查詢，或先執行 `SymbolLattice sync .`。不加選項的 CLI 與 `--no-auto-sync` 的 MCP 維持唯讀；使用者要求唯讀、只測試或禁止同步時，不得自行啟用更新。預設 MCP 可在取得同步鎖後更新既有索引。`writerState=lease-unavailable` 表示未取得同步權限；等持鎖 host 同步完成或釋放鎖後再重試，不強制奪鎖。`PROJECT_NOT_STABLE` 表示有限重試期間專案仍在變動，請等修改穩定後再查。拒絕時不回傳過期證據。
 
 `v0.549.2` 修正 Windows 同一專案因路徑大小寫或目錄別名不同而與自己的同步鎖競爭，以及檢查失敗後未釋放臨時同步鎖的問題。更新後重新啟動 MCP host，使其載入新程式；既有索引可繼續使用，依狀態執行一般 `sync` 即可。
 
@@ -112,6 +114,10 @@ SymbolLattice serve --mcp --project C:\path\to\project
 ## 升級
 
 使用上方安裝流程指定新的固定 commit 或既有 tag，重新安裝後執行 Codex 整合，並在各專案執行 `SymbolLattice sync .`。目前為 `0.x` 開發階段，升級前請核對對應版本的相容性與遷移說明。
+
+### 升級至 v0.550.0
+
+新增即時 CLI 查詢的可選 `--sync-if-stale`，既有不加選項的唯讀行為與查詢輸出契約保留。安裝後預覽 `SymbolLattice install codex`，再執行 `SymbolLattice install codex --apply --yes` 更新受管理的 Agent 指引，重新啟動 Codex／MCP host。新指引會在允許更新索引的程式碼任務使用此選項，遇到未啟用同步的拒絕時先有限重試；明確唯讀或禁止同步時仍保留拒絕。僅升級 CLI 不會更新既有 Codex 指引，也不會同步另一台電腦的專案。既有索引毋須刪除或手動重建。
 
 ### 升級至 v0.549.0
 

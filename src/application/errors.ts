@@ -3,6 +3,7 @@ export class SymbolLatticeError extends Error {
     public readonly code:
       | "AMBIGUOUS_SYMBOL"
       | "AUTO_SYNC_OWNER_UNAVAILABLE"
+      | "CLI_SYNC_REQUIRES_PLUGINS"
       | "EDGE_NOT_FOUND"
       | "GENERATION_HISTORY_UNAVAILABLE"
       | "GENERATION_NOT_RETAINED"

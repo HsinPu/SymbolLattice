@@ -52,7 +52,11 @@ export class FreshIndexRequiredError extends SymbolLatticeError {
   public constructor(status: IndexStatus, writerState: StrictFreshWriterState) {
     super(
       "FRESH_INDEX_REQUIRED",
-      `The SymbolLattice index is not proven fresh (${status.staleReasons.join(", ") || "unknown reason"}). Run SymbolLattice sync for this project before retrying.`
+      `The SymbolLattice index is not proven fresh (${status.staleReasons.join(", ") || "unknown reason"}). ${
+        writerState === "disabled"
+          ? "Index updates are disabled for this read. If updates are authorized, retry the CLI query with --sync-if-stale or run SymbolLattice sync for this project before retrying. Respect explicit read-only/no-sync instructions."
+          : "Writer ownership is unavailable. Wait for the owning host to synchronize or release its lease, then retry; no stale result was returned."
+      }`
     );
     this.name = "FreshIndexRequiredError";
     this.generationId = status.generationId;

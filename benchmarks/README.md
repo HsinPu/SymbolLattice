@@ -8,6 +8,8 @@ The [v0.549.1 report audit](languages/evidence-speed-report-audit.md) records th
 
 The [v0.549.2 strict freshness recovery audit](mcp/strict-fresh-read-recovery-audit.md) records Windows hosts contending with their own writer lease through path casing, failed-verification lease cleanup, three pinned-project recovery cases, eight unchanged fixed-task results, and the selected service timing samples. The maintained language report keeps this supplement separate from the historical 58-language table.
 
+The [v0.550.0 CLI recovery audit](mcp/cli-sync-recovery-audit.md) covers opt-in stale-index synchronization, retained read-only defaults, scope and plugin protection, three pinned-project recovery transitions and eight unchanged retrieval tasks. Its diagnostic CLI times are separate from historical service timings.
+
 `automatic` means focused tests import the module and verify its bounded truth, scoring, lifecycle, or negative-matrix contract. It does not mean CI downloads or scans the external corpus. `manual` means the tool is retained for explicit evidence generation and has no direct automated test entry.
 
 | Area | Files | Status |

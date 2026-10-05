@@ -40,18 +40,20 @@ SymbolLattice init .
 SymbolLattice status .
 
 # Explore a task without knowing symbol names
-SymbolLattice explore "Where are incoming requests validated?" --project . --json
+SymbolLattice explore "Where are incoming requests validated?" --project . --sync-if-stale --json
 
 # Look up a known symbol; replace this with a name from your project
-SymbolLattice find createOrder --project . --json
+SymbolLattice find createOrder --project . --sync-if-stale --json
 
 # Sync after changing source files or upgrading SymbolLattice
 SymbolLattice sync .
 ```
 
-Review the returned files and source excerpts, then follow the relationship evidence. If the index is stale, run `sync` before retrying. Live queries may refuse to return results when index freshness cannot be verified.
+Review the returned files and source excerpts, then follow the relationship evidence. Add `--sync-if-stale` to a live CLI query to acquire writer ownership and run ordinary `sync` only when an existing index is stale, preserving its scope. A fresh index is not synchronized. The option does not initialize a missing index, invoke a forced `index` rebuild, or bypass safe-path and before/after freshness checks.
 
-For `FRESH_INDEX_REQUIRED`, run `SymbolLattice status . --json` in the analyzed project to inspect the reasons, then run `SymbolLattice sync .` and retry. CLI queries and MCP with `--no-auto-sync` do not synchronize automatically; default MCP can update an existing index after acquiring the writer lease. If another host still holds the lease without finishing synchronization, a query waits for a bounded period before refusing; retry later. `PROJECT_NOT_STABLE` means the project kept changing during synchronization or query execution; retry after edits settle.
+The option uses the built-in indexer. If the index records explicitly loaded plugins, it returns `CLI_SYNC_REQUIRES_PLUGINS` and preserves the index. Use an MCP host configured with the original `--plugin` options; recovery does not silently remove plugins.
+
+For `FRESH_INDEX_REQUIRED`, run `SymbolLattice status . --json` in the analyzed project to inspect the reason. `writerState=disabled` means index updates were disabled for this read, not that the CLI cannot run. If updates are allowed, retry the same CLI query with `--sync-if-stale`, or run `SymbolLattice sync .` separately. CLI without the option and MCP with `--no-auto-sync` remain read-only; do not enable updates when the user requests read-only testing or forbids synchronization. Default MCP can update an existing index after acquiring writer ownership. `writerState=lease-unavailable` means ownership was not acquired; wait for the owning host to synchronize or release its lease instead of taking it forcibly. `PROJECT_NOT_STABLE` means the project kept changing during bounded retries; wait for edits to settle. Refusals return no stale evidence.
 
 `v0.549.2` fixes a Windows host contending with its own writer lease when the same project is addressed with different path casing or a directory alias, and temporary writer leases retained after failed verification. Restart the MCP host after updating to load the fix. Existing indexes remain usable; run a normal `sync` when their status requires it.
 
@@ -112,6 +114,10 @@ See the [validation documentation](../benchmarks/README.md) for measured results
 ## Upgrading
 
 Use the installation flow above with a new fixed commit or existing tag. After reinstalling, repeat Codex integration and run `SymbolLattice sync .` in each project. The project is in `0.x` development; check the target version's compatibility and migration notes before upgrading.
+
+### Upgrading to v0.550.0
+
+Live CLI queries gain the optional `--sync-if-stale`; existing read-only calls and query output contracts remain supported. After installing, preview `SymbolLattice install codex`, then run `SymbolLattice install codex --apply --yes` to refresh the managed Agent instructions and restart Codex/MCP hosts. New guidance uses the option for code tasks that allow index updates and makes a bounded retry after an updates-disabled refusal, while honoring explicit read-only/no-sync instructions. Updating the CLI alone does not refresh installed Codex guidance or synchronize projects on another computer. Existing indexes need no deletion or manual rebuild.
 
 ### Upgrading to v0.549.0
 

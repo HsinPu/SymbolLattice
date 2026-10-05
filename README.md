@@ -6,7 +6,7 @@ SymbolLattice 是提供給開發者與 AI Agent 的本機程式碼搜尋工具�
 
 [English](README.en.md) · [開始使用](docs/getting-started.md) · [驗證與限制](benchmarks/README.md) · [回報問題](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.549.2` · Node.js `>=22.16 <23 || >=24 <25` · MIT
+`v0.550.0` · Node.js `>=22.16 <23 || >=24 <25` · MIT
 
 ## 從「這段功能在哪裡？」開始
 
@@ -59,10 +59,10 @@ if ($LASTEXITCODE -ne 0) { throw "Cannot resolve commit" }
 
 ```powershell
 SymbolLattice init .
-SymbolLattice explore "Where are incoming requests validated?" --project . --json
+SymbolLattice explore "Where are incoming requests validated?" --project . --sync-if-stale --json
 ```
 
-索引保存在該專案的 `.SymbolLattice/`。修改原始碼或升級後，執行 `SymbolLattice sync .` 更新索引；已知符號名稱時，也可使用 `SymbolLattice find <name> --project . --json`。
+索引保存在該專案的 `.SymbolLattice/`。`--sync-if-stale` 會在索引過期時先取得同步鎖，更新既有索引再查詢；也可先執行 `SymbolLattice sync .`。已知符號名稱時，使用 `SymbolLattice find <name> --project . --sync-if-stale --json`。不加此選項的 CLI 查詢保持唯讀。
 
 ### 3. 接上 AI Agent
 
@@ -86,7 +86,7 @@ SymbolLattice doctor codex
 
 問句中的詞若精確對應目錄名稱，且來源也涵蓋至少兩個概念，排序會採用這個目錄脈絡。JSON 的 `directoryContext` 會列出目錄詞與加權依據；這是字面相關性線索，不是已解析的程式關係。
 
-SymbolLattice 使用靜態分析。文字命中會附上來源位置；同一 token 與位置的查詢詞可共用引用。文字命中也可能來自註解或字串；以常見註解標記開頭的命中會標示，仍須查看來源確認語意。動態呼叫、反射與外部依賴可能無法解析，同名宣告也不代表已確認的呼叫目標；已確認的來源引用可協助排序，但單靠引用不能證明執行順序。結果有數量與來源片段上限；未找到關係不能用來保證修改或刪除安全。CLI 索引過期時須先執行 `sync`；預設 MCP 可自動同步既有索引，無法確認新鮮度時仍可能拒絕查詢。升級後請重新啟動 MCP host；處理方式見[使用指南](docs/getting-started.md#快速開始)。
+SymbolLattice 使用靜態分析。文字命中會附上來源位置；同一 token 與位置的查詢詞可共用引用。文字命中也可能來自註解或字串；以常見註解標記開頭的命中會標示，仍須查看來源確認語意。動態呼叫、反射與外部依賴可能無法解析，同名宣告也不代表已確認的呼叫目標；已確認的來源引用可協助排序，但單靠引用不能證明執行順序。結果有數量與來源片段上限；未找到關係不能用來保證修改或刪除安全。CLI 可用 `--sync-if-stale` 同步過期索引；預設 MCP 也可自動同步既有索引。唯讀設定、同步鎖不可用或無法確認新鮮度時仍會拒絕查詢。升級後請重新套用 Codex 整合並重新啟動 MCP host；處理方式見[使用指南](docs/getting-started.md#快速開始)。
 
 對有精確來源引用的拒絕查詢，僅重複已涵蓋查詢詞的次要焦點可能被省略；MCP 文字會列出所在路徑，JSON 的 `queryPlan.rejectionReferenceFiltering` 會列出完整省略項。有限範圍內未找到直接關係不代表檔案無關，仍可指定檔案補查。
 

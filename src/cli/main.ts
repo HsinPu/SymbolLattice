@@ -140,6 +140,7 @@ interface OutputOptions {
 interface ProjectOptions extends OutputOptions {
   readonly project?: string;
   readonly force?: boolean;
+  readonly syncIfStale?: boolean;
 }
 
 interface PluginCommandOptions {
@@ -1303,6 +1304,13 @@ function addProjectOption(command: Command): Command {
   return command.option("-p, --project <path>", "Project directory (defaults to the current directory)");
 }
 
+function addLiveReadProjectOption(command: Command): Command {
+  return addProjectOption(command).option(
+    "--sync-if-stale",
+    "Synchronize an existing stale index under writer ownership before querying"
+  );
+}
+
 function addJsonOption(command: Command): Command {
   return command.option("--json", "Emit the stable JSON contract");
 }
@@ -1397,12 +1405,40 @@ export function createProgram(
   const strictCliFreshness = service === undefined
     ? new StrictFreshReadCoordinator({ service: coreService, writerEnabled: false })
     : null;
+  const syncingCliFreshness = service === undefined
+    ? new StrictFreshReadCoordinator({
+      service: coreService,
+      writerEnabled: true,
+      acquireWriterLease: (projectPath) => {
+        const lease = new SqliteAutoSyncOwnerLease(projectPath).acquire();
+        if (lease.state !== "owned") return lease;
+        try {
+          const bundle = new SqliteGraphStore().getActiveStatusBundle(projectPath);
+          const versions = [bundle.extractorVersion, bundle.resolverVersion];
+          if (versions.some((version) => /\+(?:framework-facts|framework-project|reference-plugins)-/u.test(version ?? ""))) {
+            throw new SymbolLatticeError(
+              "CLI_SYNC_REQUIRES_PLUGINS",
+              "This index records explicit plugins. Use an MCP host configured with the original --plugin options; --sync-if-stale does not silently remove plugin configuration."
+            );
+          }
+          return lease;
+        } catch (error) {
+          lease.release();
+          throw error;
+        }
+      }
+    })
+    : null;
   const runCliLiveRead = <Result>(
     projectPath: string,
+    options: ProjectOptions,
     query: () => Promise<Result>
-  ): Promise<Result> => strictCliFreshness === null
-    ? query()
-    : strictCliFreshness.execute(projectPath, (receipt) => cliReadReceipts.run(receipt, query));
+  ): Promise<Result> => {
+    const coordinator = options.syncIfStale === true ? syncingCliFreshness : strictCliFreshness;
+    return coordinator === null
+      ? query()
+      : coordinator.execute(projectPath, (receipt) => cliReadReceipts.run(receipt, query));
+  };
   const indexingService = async (
     projectPath: string,
     options: PluginCommandOptions
@@ -1730,7 +1766,7 @@ export function createProgram(
       }
     );
 
-  addJsonOption(addProjectOption(program.command("find <query>")))
+  addJsonOption(addLiveReadProjectOption(program.command("find <query>")))
     .option("--kind <kind>", "Restrict results to a symbol kind")
     .option("--limit <count>", "Maximum number of results", parsePositiveInteger)
     .action(async (query: string, options: FindCommandOptions) => {
@@ -1742,10 +1778,10 @@ export function createProgram(
         findOptions.limit = options.limit;
       }
       const projectPath = defaultProjectPath(options);
-      render(await runCliLiveRead(projectPath, () => coreService.find(projectPath, query, findOptions)), options);
+      render(await runCliLiveRead(projectPath, options, () => coreService.find(projectPath, query, findOptions)), options);
     });
 
-  addJsonOption(addProjectOption(program.command("query <query>")))
+  addJsonOption(addLiveReadProjectOption(program.command("query <query>")))
     .option("--kind <kind>", "Restrict results to a symbol kind")
     .option("--limit <count>", "Maximum number of results", parsePositiveInteger)
     .action(async (query: string, options: FindCommandOptions) => {
@@ -1757,17 +1793,17 @@ export function createProgram(
         findOptions.limit = options.limit;
       }
       const projectPath = defaultProjectPath(options);
-      render(await runCliLiveRead(projectPath, () => coreService.find(projectPath, query, findOptions)), options);
+      render(await runCliLiveRead(projectPath, options, () => coreService.find(projectPath, query, findOptions)), options);
     });
 
-  addJsonOption(addProjectOption(program.command("node <reference>"))).action(
+  addJsonOption(addLiveReadProjectOption(program.command("node <reference>"))).action(
     async (reference: string, options: ProjectOptions) => {
       const projectPath = defaultProjectPath(options);
-      render(await runCliLiveRead(projectPath, () => coreService.node(projectPath, reference)), options);
+      render(await runCliLiveRead(projectPath, options, () => coreService.node(projectPath, reference)), options);
     }
   );
 
-  addJsonOption(addProjectOption(program.command("file <path>")))
+  addJsonOption(addLiveReadProjectOption(program.command("file <path>")))
     .description(
       "Read one persisted active-generation source file by exact path or unique suffix"
     )
@@ -1786,12 +1822,12 @@ export function createProgram(
       };
       const projectPath = defaultProjectPath(options);
       renderFileView(
-        await runCliLiveRead(projectPath, () => coreService.fileView(projectPath, filePath, fileViewOptions)),
+        await runCliLiveRead(projectPath, options, () => coreService.fileView(projectPath, filePath, fileViewOptions)),
         options
       );
     });
 
-  addJsonOption(addProjectOption(program.command("search <query>")))
+  addJsonOption(addLiveReadProjectOption(program.command("search <query>")))
     .option(
       "--limit <count>",
       `Maximum number of results (1-${MAX_SOURCE_SEARCH_LIMIT})`,
@@ -1811,12 +1847,12 @@ export function createProgram(
       };
       const projectPath = defaultProjectPath(options);
       render(
-        await runCliLiveRead(projectPath, () => coreService.search(projectPath, normalizeSearchQuery(query), searchOptions)),
+        await runCliLiveRead(projectPath, options, () => coreService.search(projectPath, normalizeSearchQuery(query), searchOptions)),
         options
       );
     });
 
-  addJsonOption(addProjectOption(program.command("investigate <query>")))
+  addJsonOption(addLiveReadProjectOption(program.command("investigate <query>")))
     .option(
       "--search-limit <count>",
       `Maximum indexed source matches to inspect (1-${MAX_SOURCE_SEARCH_LIMIT})`,
@@ -1892,7 +1928,7 @@ export function createProgram(
       };
       const projectPath = defaultProjectPath(options);
       render(
-        await runCliLiveRead(projectPath, () => coreService.investigate(
+        await runCliLiveRead(projectPath, options, () => coreService.investigate(
           projectPath,
           normalizeSearchQuery(query),
           investigateOptions
@@ -1901,7 +1937,7 @@ export function createProgram(
       );
     });
 
-  addJsonOption(addProjectOption(program.command("files [path]")))
+  addJsonOption(addLiveReadProjectOption(program.command("files [path]")))
     .option(
       "--path <project-relative-prefix>",
       "Restrict persisted file records to a project-relative prefix",
@@ -1949,12 +1985,12 @@ export function createProgram(
       };
       const resolvedProjectPath = resolve(projectPath ?? defaultProjectPath(options));
       render(
-        await runCliLiveRead(resolvedProjectPath, () => coreService.files(resolvedProjectPath, fileOptions)),
+        await runCliLiveRead(resolvedProjectPath, options, () => coreService.files(resolvedProjectPath, fileOptions)),
         options
       );
     });
 
-  addJsonOption(addProjectOption(program.command("routes [path]")))
+  addJsonOption(addLiveReadProjectOption(program.command("routes [path]")))
     .option(
       "--method <method>",
       `Restrict results to one uppercase HTTP method or NAVIGATE (${ROUTE_METHODS.join(", ")})`,
@@ -1984,12 +2020,12 @@ export function createProgram(
       };
       const projectPath = resolve(path ?? defaultProjectPath(options));
       render(
-        await runCliLiveRead(projectPath, () => coreService.routes(projectPath, routeOptions)),
+        await runCliLiveRead(projectPath, options, () => coreService.routes(projectPath, routeOptions)),
         options
       );
     });
 
-  addJsonOption(addProjectOption(program.command("entrypoints [path]")))
+  addJsonOption(addLiveReadProjectOption(program.command("entrypoints [path]")))
     .option(
       "--transport <transport>",
       `Restrict results to one transport (${ENTRYPOINT_TRANSPORTS.join(", ")})`,
@@ -2019,12 +2055,12 @@ export function createProgram(
       };
       const projectPath = resolve(path ?? defaultProjectPath(options));
       render(
-        await runCliLiveRead(projectPath, () => coreService.entrypoints(projectPath, entrypointOptions)),
+        await runCliLiveRead(projectPath, options, () => coreService.entrypoints(projectPath, entrypointOptions)),
         options
       );
     });
 
-  addJsonOption(addProjectOption(program.command("hierarchy <reference>")))
+  addJsonOption(addLiveReadProjectOption(program.command("hierarchy <reference>")))
     .option(
       "--limit <count>",
       `Maximum direct parents and children returned independently (1-${MAX_HIERARCHY_LIMIT})`,
@@ -2035,14 +2071,14 @@ export function createProgram(
         ...(options.limit === undefined ? {} : { limit: options.limit })
       };
       const projectPath = defaultProjectPath(options);
-      render(await runCliLiveRead(projectPath, () => coreService.hierarchy(projectPath, reference, hierarchyOptions)), options);
+      render(await runCliLiveRead(projectPath, options, () => coreService.hierarchy(projectPath, reference, hierarchyOptions)), options);
     });
 
   for (const commandName of ["callers", "callees"] as const) {
-    addJsonOption(addProjectOption(program.command(`${commandName} <symbol>`))).action(
+    addJsonOption(addLiveReadProjectOption(program.command(`${commandName} <symbol>`))).action(
       async (reference: string, options: ProjectOptions) => {
         const projectPath = defaultProjectPath(options);
-        const result = await runCliLiveRead(projectPath, () =>
+        const result = await runCliLiveRead(projectPath, options, () =>
           commandName === "callers"
             ? coreService.callers(projectPath, reference)
             : coreService.callees(projectPath, reference)
@@ -2052,7 +2088,7 @@ export function createProgram(
     );
   }
 
-  addJsonOption(addProjectOption(program.command("impact <symbol>")))
+  addJsonOption(addLiveReadProjectOption(program.command("impact <symbol>")))
     .option("--depth <count>", "Maximum reverse dependency depth", parsePositiveInteger)
     .option(
       "--limit <count>",
@@ -2066,12 +2102,12 @@ export function createProgram(
       };
       const projectPath = defaultProjectPath(options);
       render(
-        await runCliLiveRead(projectPath, () => coreService.impact(projectPath, reference, impactOptions)),
+        await runCliLiveRead(projectPath, options, () => coreService.impact(projectPath, reference, impactOptions)),
         options
       );
     });
 
-  addJsonOption(addProjectOption(program.command("affected [filePaths...]")))
+  addJsonOption(addLiveReadProjectOption(program.command("affected [filePaths...]")))
     .option("--stdin", "Read additional changed file paths from standard input (one per line)")
     .option(
       "--working-tree",
@@ -2126,7 +2162,7 @@ export function createProgram(
         };
         const projectPath = defaultProjectPath(options);
         render(
-          await runCliLiveRead(projectPath, () => coreService.affectedTestsFromGit(projectPath, gitOptions)),
+          await runCliLiveRead(projectPath, options, () => coreService.affectedTestsFromGit(projectPath, gitOptions)),
           options
         );
         return;
@@ -2134,12 +2170,12 @@ export function createProgram(
       const stdinPaths = options.stdin ? parseAffectedStdin(readFileSync(0, "utf8")) : [];
       const projectPath = defaultProjectPath(options);
       render(
-        await runCliLiveRead(projectPath, () => coreService.affectedTests(projectPath, [...filePaths, ...stdinPaths], affectedOptions)),
+        await runCliLiveRead(projectPath, options, () => coreService.affectedTests(projectPath, [...filePaths, ...stdinPaths], affectedOptions)),
         options
       );
     });
 
-  addJsonOption(addProjectOption(program.command("git-hunks [path]")))
+  addJsonOption(addLiveReadProjectOption(program.command("git-hunks [path]")))
     .requiredOption(
       "--base <ref>",
       "Compare the local merge-base of <ref> and HEAD through immutable local Git blobs"
@@ -2160,7 +2196,7 @@ export function createProgram(
       };
       const projectPath = resolve(path ?? defaultProjectPath(options));
       render(
-        await runCliLiveRead(projectPath, () => coreService.gitHunks(
+        await runCliLiveRead(projectPath, options, () => coreService.gitHunks(
           projectPath,
           options.base ?? "",
           gitHunksOptions
@@ -2169,7 +2205,7 @@ export function createProgram(
       );
     });
 
-  addJsonOption(addProjectOption(program.command("context <reference...>")))
+  addJsonOption(addLiveReadProjectOption(program.command("context <reference...>")))
     .option(
       "--relation-limit <count>",
       `Maximum callers and callees per exact symbol (1-${MAX_CONTEXT_RELATION_LIMIT})`,
@@ -2210,20 +2246,20 @@ export function createProgram(
           : { sourceCharacterBudget: options.sourceCharacterBudget })
       };
       const projectPath = defaultProjectPath(options);
-      render(await runCliLiveRead(projectPath, () => coreService.context(projectPath, references, contextOptions)), options);
+      render(await runCliLiveRead(projectPath, options, () => coreService.context(projectPath, references, contextOptions)), options);
     });
 
-  addJsonOption(addProjectOption(program.command("explore <query>"))).action(
+  addJsonOption(addLiveReadProjectOption(program.command("explore <query>"))).action(
     async (query: string, options: ProjectOptions) => {
       const projectPath = defaultProjectPath(options);
-      render(await runCliLiveRead(projectPath, () => coreService.explore(projectPath, query)), options);
+      render(await runCliLiveRead(projectPath, options, () => coreService.explore(projectPath, query)), options);
     }
   );
 
-  addJsonOption(addProjectOption(program.command("explain-edge <edge-id>"))).action(
+  addJsonOption(addLiveReadProjectOption(program.command("explain-edge <edge-id>"))).action(
     async (edgeId: string, options: ProjectOptions) => {
       const projectPath = defaultProjectPath(options);
-      render(await runCliLiveRead(projectPath, () => coreService.explainEdge(projectPath, edgeId)), options);
+      render(await runCliLiveRead(projectPath, options, () => coreService.explainEdge(projectPath, edgeId)), options);
     }
   );
 
