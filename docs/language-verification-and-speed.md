@@ -1,6 +1,6 @@
 # 語言驗證程度與搜尋速度報告
 
-文件跟隨版本：`v0.550.0`。更新日期：2026-10-05。完整主表量測產品：`v0.549.0`（`54893be20020208866c5e8daae7863196f7ccaf7`）。
+文件跟隨版本：`v0.550.1`。更新日期：2026-10-06。完整主表量測產品：`v0.549.0`（`54893be20020208866c5e8daae7863196f7ccaf7`）；最新局部查找與速度補驗另列於文末。
 
 本報告集中列出全部 58 種語言／格式的驗證範圍、查找結果與速度，後續優化更新同一份文件。所有數值均保留測量版本；純文件升版不把舊數據改稱新版本實測。
 
@@ -10,9 +10,9 @@
 
 「歷史證據」照錄 [能力與限制來源](../src/domain/language-depth.ts) 的版本、證據類型與最高已登記範圍。本輪沒有重新執行每個歷史外部 oracle；`project` 代表其中有部分跨檔能力。完整型別、動態行為、框架及語法覆蓋須逐項閱讀該來源的 `knownLimitations` 與 [驗證紀錄](../benchmarks/README.md)。表內分類不代表完整跨檔解析或各語言達到相同深度。
 
-「目前固定任務」依真值預先指定的第一個必要檔案語言歸類。查詢仍在整個真實專案執行；跨語言專案及只用數個題目的速度，不能用來比較語言本身的快慢。本輪有 3/58 種語言的實際任務速度；其餘 55 種未測量，後續仍需補驗。
+「目前固定任務」依真值預先指定的第一個必要檔案語言歸類。查詢仍在整個真實專案執行；跨語言專案及只用數個題目的速度，不能用來比較語言本身的快慢。歷史主表有 3/58 種語言的實際任務速度；本次另補驗 Go，最新局部結果見 v0.550.1 節。未重新執行的最小案例、解析 oracle 與主表數值保留原版本。
 
-## 每個語言的範圍與目前結果
+## 每個語言的歷史主表（v0.549.0）
 
 | 語言／格式 | 本輪最小驗證 | 歷史證據／關係範圍／證據版本 | 目前固定任務（v0.549.0） | 查詢上中位數（v0.549.0） |
 | --- | --- | --- | --- | --- |
@@ -201,3 +201,69 @@ node benchmarks/languages/evidence-speed-report.mjs `
 | `quality.json` | `d42d7e7a78b2d465052570805b57d5848b6b23211738b442cda8524e24203dd9` |
 | `complete.json` | `f988426210972b1bea3fc69ff5a14796db2c4862b84273862e4d637e52833445` |
 | `validate.mjs` | `a94047e4ef38dfd4c692124411b100e0f26a524e87281643d53a9cb143e8dcb9` |
+
+## v0.550.1：複合查詢來源證據修正與 Go 補驗
+
+本節實際量測 `v0.550.1`，基準為 `v0.550.0`（`044c7e7ca37bf333586306fd3610dad49bcc974f`），日期 2026-10-06，Windows／Node.js v24.19.0。修正既有複合查詢的連接詞誤命中，維持 CLI／MCP 介面、來源欄位、索引格式與查詢上限，依規則升 patch。固定專案、commit、獨立真值、原始產物與重現命令見 [複合查詢證據驗證](../benchmarks/mcp/compound-query-evidence-audit.md)。其他語言的最小案例、歷史解析 oracle 與上方完整主表保留原量測版本。
+
+### 必要檔案與來源事實
+
+沿用五個固定專案的 38 份真值、55 題回歸任務，另在首次產品查詢前固定 [Gin 三題真值](../benchmarks/mcp/gin-handler-flow-tasks.json)。共 39 份 manifest、58 題，每題每版本執行三次新的 CLI process（348 次）；舊、新產品讀取相同的新鮮驗證索引。原有 55 題的必要檔案為 87/87、指定來源事實 266/266，沒有遺失舊版已找到的正向檔案、事實或指定未解析呼叫／引用。58 題中 57 題完整結果相同；只有 Django 複合詞題改變結果。
+
+| 語言 | 題數 | 必要檔案（v0.550.0 → v0.550.1） | 指定來源事實（v0.550.1） | 獨立核對來源片段 |
+| --- | --- | --- | --- | --- |
+| python | 22 | 34/35 → 35/35 | 128/128 | 255 |
+| javascript | 25 | 39/39 → 39/39 | 113/113 | 310 |
+| typescript | 8 | 13/13 → 13/13 | 25/25 | 87 |
+| go | 3 | 5/5 → 5/5 | 8/18 | 31 |
+
+Django 原題仍為「When closing a SQLite connection, where are thread ownership and the guard against closing an in-memory database checked?」，真值未改。必要主要檔案由 1/2 提升到 2/2，指定事實仍為 6/6；以往只有 supplementary source window 的 `django/db/backends/base/base.py` 現在也成為主要 focus。v0.549.0 的首次 held-out 失敗仍保留，本次將它視為開發／回歸案例。工作程序設定函式仍排在首位，未宣稱排序或無關結果已全面解決。
+
+原因是 `in-memory` 的原始拼法再次被 SQLite 查詢拆成 `in` 與 `memory`，使一般 `in` token 被標成 `inmemory` 證據。修正以既有 tokenizer 提取可用部分並排除既有 stop words，保留完整識別字及真正的文字位置。該題文字命中符號由 147 降到 81；掃描檔案 76 → 73、符號 1,783 → 1,934，字元仍為 1,048,576 且截斷。候選減少不代表所有掃描成本減少，也不表示只出現 `memory` 就能證明程式的 in-memory 語意。
+
+新增 Gin 為固定 commit 的實際函式庫樣本（99 個 Go 原始碼檔案），不是大型 Go 語料或完整語言驗收。三題主要檔案均找到（5/5），但來源事實只有 8/18：已知 `Engine.ServeHTTP` 為 5/5，無提示 middleware 中止題為 3/6，無提示 URL 到 handler 流程為 0/7。中止題缺少 `context.go:199/201/209`；流程題缺少 `gin.go:744/749/751`、`tree.go:418/616`、`context.go:199/201` 的指定來源。這些是實際證據缺口，並非環境問題；兩版結果相同，保留首次結果且本批未依其輸出調整規則。未執行 Go compiler／型別或 runtime dispatch oracle，沒有據此提高歷史解析深度宣告。
+
+合計主要檔案 92/92、指定事實 274/284，另核對 683 份來源片段及 1,318 筆文字位置。部分檔案判定為 TP 112／FP 0／FN 0，101 筆待核對；已判定 precision 為 112/112，判定覆蓋為 112/213。未判定結果不能直接視為 FP，這不是完整專案 precision；來源片段座標正確，也不能替代任務所需事實或主要檔案召回。
+
+### 查詢速度與尚未量測範圍
+
+每題每版本一次暖身，再執行八對交替查詢，使用 persistent read-only SQLite reader；七題共 112 次量測，另有 14 次暖身與 14 次完整結果核對。測試、建置與索引作業未並行。下表為每版本八筆時間的上中位數，改善後的 Django 輸出另以固定檔案／來源真值驗證，其餘六題要求完整輸出相等。
+
+| 語言／任務 | v0.550.0 service ms | v0.550.1 service ms | 變化 | 證據比較 |
+| --- | --- | --- | --- | --- |
+| Python／Django 關閉 SQLite 連線 | 1558.59 | 1227.25 | -21.26% | 輸出改善，固定真值另驗 |
+| TypeScript／Nest 建立 provider | 928.72 | 921.68 | -0.76% | 完整輸出相等 |
+| JavaScript／Fastify 錯誤狀態 | 402.43 | 386.07 | -4.06% | 完整輸出相等 |
+| Python／Flask 選擇錯誤 handler | 269.79 | 251.54 | -6.76% | 完整輸出相等 |
+| Go／Gin 已知請求入口 | 67.55 | 70.21 | +3.93% | 完整輸出相等 |
+| Go／Gin middleware 中止 | 193.63 | 190.20 | -1.77% | 完整輸出相等 |
+| Go／Gin URL 到 handler 流程 | 219.78 | 215.85 | -1.79% | 完整輸出相等 |
+
+Django 此題 service 時間改善約 21.26%，seed retrieval 上中位數 867.89 → 483.34 ms。Gin 已知入口變慢的樣本照錄；未更改輸出的其他題目只有小幅波動，不宣稱全部語言或所有查詢都加速。時間不含 host 新鮮度准入、CLI 啟動、同步、MCP transport 或 Agent 完整任務；Go 的流程題仍欠來源事實，其 215.85 ms 不能稱為完成任務的時間。
+
+目前有 4/58 種語言的實際任務速度樣本：TypeScript、JavaScript、Python、Go，其餘 54 種仍未測量。本次只重測所選七題，不能用不同大小專案、不同任務或歷史版本的範圍比較語言本身的快慢。
+
+Gin 初次索引由 `v0.550.0` 執行，同一 Node／Windows 條件下單次 CLI 為 4,111.34 ms，索引工作 3,586.30 ms，共 111 個已登記格式檔案、1,726 個符號、2,192 條邊。這些保留其實際產品版本，未比較首次索引優劣。本批未量測修改來源的增量同步、記憶體峰值、完整 Agent 補查時間或查詢次數；沒有以 service 時間補值。
+
+### 檢查與可追溯資料
+
+`npm run check`、`npm run build`、174 項相關測試、全套 3,488 項測試（四項既有略過）、版本一致性及 `git diff --check` 通過。Gin 的 8/18 來源事實保留為待改善的驗證結果；本版不宣稱其流程驗收通過。索引器與 worker 世代載入未改，既有索引毋須重建。此處沒有驗證另一台電腦的 CMA122X，也未重測 Node.js 22 或其他作業系統。
+
+凍結產品 dist 指紋為 baseline `45924903d280db54d0218af3fb29f47199f985ccbd584413b0d9e9ef7d07cd14`、candidate `4ce75792e19647aa135b59f6389dda02b9651c30aeecce54fcf4e9b3a2784b12`；原始資料位於 `%TEMP%/SymbolLattice-v5501-validation`。既有全語言生成器重新核對並生成外部的 `historical-overview-regenerated.md`，維持原 v0.549.0 數據；本節另由固定真值、全部原始結果與個別時間樣本重算。所有受保護歷史索引與 pinned tracked source 均未更動。
+
+| 補驗來源 | SHA-256 |
+| --- | --- |
+| `identity.json` | `2e3875c25feb95fa4e421d40ed494d3b136b85bf350e49605c1a7d35a513b9e4` |
+| `gin-prequery-truth.json` | `f2dbba436edf9d6431feb8332e7e1cc8aa5eec175cd22273f67d93ad1fa72067` |
+| `quality.json` | `5c300d0b0c5999ea422cd8d45dae0ac5cb5a15eb7d01c83f748fe4c189e0b3e9` |
+| `timing.json` | `78de9b2bd2d3ecf7d4e946ab3dd4ac31b679eaa363dda689e0973db42cb197f0` |
+| `complete.json` | `b9d0327a869b70b1eed3ce7861ba52d85ba4dde5b130e88a2ad1cc7bed4294b5` |
+| `raw-recheck.json` | `74f07f23055fa78cb90077bd6a6988f086250b745b60f247c687b6a1ebc98e51` |
+| `gin-init.json` | `67fbafcc44caa3dca0188fff670958c49a43ece22805d62ecf02154ff8d5133a` |
+| `gin-init-process.json` | `00da8f23b2f805c4bff4fd69a2e370005bd5f16dbf16518282e72baaa646c779` |
+| `historical-overview-recheck.json` | `540ec2595139a2514d5833f9f4128de18ea8f2eccbb243e1cbf14e5c8b5c822c` |
+| `validate.mjs` | `a1ef272941a71a2a1208bb3db08143ef19542717934c7aa0d1783fd575a24488` |
+| `audit-raw.mjs` | `df4e0e3b27c554f8140781370a4c50f1e694362c6c4b2a97e5be55c53127e49b` |
+| `report-supplement.mjs` | `44ccaa5157c651f302e33ce096eddf28d76b9658bd43dd8cea853b6db80db6a0` |
+
+重跑命令見對應 audit。更新完整主表時保留所有局部補驗與原測量版本；局部數據不得替代或重新標記其餘 54 種未測量語言。

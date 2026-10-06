@@ -14,6 +14,7 @@ import {
 } from "../domain/index.js";
 
 import { identifierNumbers, numericIdentifierTerms, identifierTermGroups, identifierTermVariants, identifierWords } from "../domain/identifier-search.js";
+import { sourceSearchTerms } from "../domain/source-search.js";
 import { SOURCE_LEXICAL_SCORING, type SourceLexicalCandidate, type SourceLexicalMatch, type SourceLexicalRetrieval } from "../domain/source-lexical.js";
 import { downstreamFocusPaths, type ExploreFlowFocus } from "./explore-flow-focus.js";
 
@@ -2418,7 +2419,11 @@ export function exploreQuerySeedTerms(query: string): {
     sourceRoleIntent: { tests: parsed.testIntentTerms.length > 0, icons: parsed.iconIntentTerms.length > 0,
       localization: parsed.localizationIntentTerms.length > 0 },
     lexicalTermGroups: identifierTermGroups(parsed.identifierTerms).map((group) => [
-      ...new Set([...group, ...originalIdentifiers.filter((term) => group.includes(normalizedIdentifier(term)))])
+      // The store splits punctuation again. Keep useful parts without making
+      // connectors such as "in" evidence for the complete "in-memory" concept.
+      ...new Set([...group, ...originalIdentifiers
+        .filter((term) => group.includes(normalizedIdentifier(term)))
+        .flatMap((term) => sourceSearchTerms(term).filter((word) => !STOP_WORDS.has(word)))])
     ])
   };
 }

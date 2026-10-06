@@ -10,6 +10,8 @@ The [v0.549.2 strict freshness recovery audit](mcp/strict-fresh-read-recovery-au
 
 The [v0.550.0 CLI recovery audit](mcp/cli-sync-recovery-audit.md) covers opt-in stale-index synchronization, retained read-only defaults, scope and plugin protection, three pinned-project recovery transitions and eight unchanged retrieval tasks. Its diagnostic CLI times are separate from historical service timings.
 
+The [v0.550.1 compound-query evidence audit](mcp/compound-query-evidence-audit.md) records connector-only false source matches, the unchanged historical task truth, and new Gin Go tasks frozen before product queries. The same language report retains scoped quality, timing and missing evidence rather than relabeling every historical language measurement.
+
 `automatic` means focused tests import the module and verify its bounded truth, scoring, lifecycle, or negative-matrix contract. It does not mean CI downloads or scans the external corpus. `manual` means the tool is retained for explicit evidence generation and has no direct automated test entry.
 
 | Area | Files | Status |
@@ -38,7 +40,8 @@ The [v0.550.0 CLI recovery audit](mcp/cli-sync-recovery-audit.md) covers opt-in 
 | `python/` | `inherited-source-gaps.py`, `django-inherited-source-truth.json`, `flask-inherited-source-truth.json` | manual fixed-site CPython AST import/base/declaration coverage observations; no runtime dispatch oracle |
 | `python/` | `call-source-context-audit.py` | manual pinned-corpus CPython AST ownership/import audit of supplementary source routes; no runtime dispatch oracle |
 | `mcp/` | `flask-error-url-tasks.json` | manual fixed-source retrieval observations; handler and URL source gaps retained |
-| `mcp/` | `django-sqlite-thread-close-tasks.json` | manual pinned-source task, first held-out for v0.549.0; formal primary-file recall gap retained |
+| `mcp/` | `django-sqlite-thread-close-tasks.json` | manual pinned-source task, first held-out for v0.549.0; historical primary-file recall gap and later regression results retained |
+| `mcp/` | `gin-handler-flow-tasks.json` | manual fixed-source Go task truth, first held-out for v0.550.1; exact symbol, unhinted exploration and cross-file flow; no compiler/type or runtime oracle |
 | `sfc/` | `correctness-oracle.mjs` | manual Vue/Svelte/Astro component relation oracle |
 | `shell/` | `correctness-oracle.mjs` | manual mvdan ABI v2 direct-call oracle |
 | `solidity/` | `correctness-oracle.mjs` | automatic solc AST private fixed-arity call oracle |

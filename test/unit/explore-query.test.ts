@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   EXPLORE_QUERY_LIMITS,
   EXPLORE_QUERY_PLAN_POLICY,
+  exploreQuerySeedTerms,
   planExploreQuery
 } from "../../src/application/explore-query.js";
 import {
@@ -15,8 +16,29 @@ import {
 } from "../../src/domain/index.js";
 import { matchCallableSource, scoreCallableSource, SOURCE_LEXICAL_POLICY, SOURCE_LEXICAL_LIMITS } from "../../src/domain/source-lexical.js";
 import { identifierTermGroups } from "../../src/domain/identifier-search.js";
+import { sourceSearchTerms } from "../../src/domain/source-search.js";
 
 describe("source-backed same-file focus coverage", () => {
+  it("does not turn a compound query's connector into independent source evidence", () => {
+    const query = "closing in-memory";
+    const { lexicalTermGroups } = exploreQuerySeedTerms(query);
+    const node = symbol({ id: "operation", name: "finish", filePath: "src/operation.ts",
+      range: { start: { line: 1, column: 1 }, end: { line: 3, column: 2 } } });
+    const unrelated = "function finish() {\n  for (const item in connections) close(item);\n}";
+    const relevant = "function finish() {\n  close(memoryConnection);\n}";
+    // The store also splits query alternatives before matching callable text.
+    const groups = lexicalTermGroups.map(group => [...new Set(group.flatMap(sourceSearchTerms))]);
+    expect(matchCallableSource(unrelated, [node], groups).candidates).toEqual([]);
+    expect(matchCallableSource(relevant, [node], groups).candidates[0]?.matches.map(match => match.term)).toEqual([
+      "closing", "inmemory"
+    ]);
+    const demandGroups = exploreQuerySeedTerms("on-demand response").lexicalTermGroups
+      .map(group => [...new Set(group.flatMap(sourceSearchTerms))]);
+    const event = "function finish() {\n  on(response);\n}";
+    expect(matchCallableSource(event, [node], demandGroups).candidates).toEqual([]);
+    expect(matchCallableSource("function finish() {\n  demand(response);\n}", [node], demandGroups).candidates).toHaveLength(1);
+  });
+
   it("corroborates an exact directory qualifier with two literal source concepts without inventing a relation", () => {
     const mysql = symbol({ id: "mysql", name: "inspect", filePath: "src/mysql/service.ts",
       range: { start: { line: 1, column: 1 }, end: { line: 3, column: 2 } } });

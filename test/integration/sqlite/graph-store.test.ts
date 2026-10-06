@@ -2684,6 +2684,37 @@ describe("SqliteGraphStore", () => {
     expect(result.fallbackRequired).toBe(false);
   });
 
+  it("does not promote a connector-only source match ahead of a compound concept", async () => {
+    const projectPath = await temporaryProject();
+    const store = new SqliteGraphStore();
+    const template = boundedGraphSnapshot();
+    const texts = ["function run() {\n  for (const item in connections) close(item);\n}",
+      "function run() {\n  close(in_memory);\n}"];
+    const symbols: SymbolNode[] = ["a", "z"].map((name) => ({ ...template.symbols[0]!,
+      id: name, name: "run", qualifiedName: `src/${name}.ts#run`, filePath: `src/${name}.ts`, kind: "function",
+      range: { start: { line: 1, column: 1 }, end: { line: 3, column: 2 } } }));
+    const graphSnapshot = { ...template, symbols, edges: [], pendingReferences: [],
+      files: symbols.map((node) => ({ ...template.files[0]!, path: node.filePath })) };
+    store.replaceProjectFacts({ projectPath, snapshot: graphSnapshot,
+      indexedAt: "2026-10-06T00:00:00.000Z", artifactFacts: persistedFacts(graphSnapshot),
+      indexInputs: indexInputs("compound-concept"), resolverVersion: "bounded-resolver-v1",
+      sourceDocuments: symbols.map((node, index) => ({ filePath: node.filePath, language: "typescript", sourceText: texts[index]! })),
+      sourceSearchVersion: SOURCE_SEARCH_INDEX_VERSION });
+    const query = "closing in-memory";
+    const result = store.getActiveBoundedGraphBundle(projectPath, {
+      ...boundedRequest(query, { maxSeedFiles: 1, maxSeedSymbols: 1, maxSymbolsPerFile: 1, maxHops: 0 }),
+      ...exploreQuerySeedTerms(query) });
+    expect(result.snapshot.symbols.map((node) => node.id)).toEqual(["z"]);
+    expect(result.sourceLexical?.candidates.map((candidate) => candidate.symbolId)).toEqual(["z"]);
+    expect(result.sourceLexical?.candidates[0]?.matches).toEqual([
+      { term: "closing", token: "close", filePath: "src/z.ts",
+        range: { start: { line: 2, column: 3 }, end: { line: 2, column: 8 } } },
+      { term: "inmemory", token: "in_memory", filePath: "src/z.ts",
+        range: { start: { line: 2, column: 9 }, end: { line: 2, column: 18 } } }
+    ]);
+    store.close();
+  });
+
   it("retrieves body-only callable candidates without borrowing adjacent source, within the same generation", async () => {
     const projectPath = await temporaryProject();
     const store = new SqliteGraphStore();

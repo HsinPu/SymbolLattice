@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/gin-gonic/gin",
+  "commit": "43fe48e8a0f44af783116cdb010725e6bb50255f",
+  "truthMethod": "Independent manual reading of the pinned Gin source before any product query on this corpus. Three tasks cover a known symbol, an unhinted middleware question and an unhinted cross-file request flow. Required files and positive source facts are fixed before evaluation; other selected files remain unjudged. These are held-out verification tasks for v0.550.1, not a Go compiler, type-resolution, runtime-dispatch or complete framework oracle. Preserve the first results and any missing primary files or evidence; do not retune this batch against them.",
+  "tasks": [
+    {
+      "id": "known-request-entry-context-pool",
+      "split": "held-out",
+      "query": "Engine.ServeHTTP",
+      "requiredFiles": ["gin.go"],
+      "supportingFiles": [],
+      "irrelevantFiles": [],
+      "evidence": [
+        { "file": "gin.go", "line": 691, "text": "func (engine *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {" },
+        { "file": "gin.go", "line": 696, "text": "c := engine.pool.Get().(*Context)" },
+        { "file": "gin.go", "line": 698, "text": "c.Request = req" },
+        { "file": "gin.go", "line": 701, "text": "engine.handleHTTPRequest(c)" },
+        { "file": "gin.go", "line": 703, "text": "engine.pool.Put(c)" }
+      ]
+    },
+    {
+      "id": "unhinted-middleware-aborted-response",
+      "split": "held-out",
+      "query": "How does execution advance through middleware handlers and stop after a response is aborted?",
+      "requiredFiles": ["context.go"],
+      "supportingFiles": [],
+      "irrelevantFiles": [],
+      "evidence": [
+        { "file": "context.go", "line": 199, "text": "for c.index < safeInt8(len(c.handlers)) {" },
+        { "file": "context.go", "line": 201, "text": "c.handlers[c.index](c)" },
+        { "file": "context.go", "line": 209, "text": "return c.index >= abortIndex" },
+        { "file": "context.go", "line": 217, "text": "c.index = abortIndex" },
+        { "file": "context.go", "line": 224, "text": "c.Writer.WriteHeaderNow()" },
+        { "file": "context.go", "line": 225, "text": "c.Abort()" }
+      ]
+    },
+    {
+      "id": "unhinted-url-handler-execution-flow",
+      "split": "held-out",
+      "query": "How does a request's URL path select registered handlers and then advance through them?",
+      "requiredFiles": ["gin.go", "tree.go", "context.go"],
+      "supportingFiles": [],
+      "irrelevantFiles": [],
+      "evidence": [
+        { "file": "gin.go", "line": 744, "text": "value := root.getValue(rPath, c.params, c.skippedNodes, unescape)" },
+        { "file": "gin.go", "line": 749, "text": "c.handlers = value.handlers" },
+        { "file": "gin.go", "line": 751, "text": "c.Next()" },
+        { "file": "tree.go", "line": 418, "text": "func (n *node) getValue(path string, params *Params, skippedNodes *[]skippedNode, unescape bool) (value nodeValue) {" },
+        { "file": "tree.go", "line": 616, "text": "if value.handlers = n.handlers; value.handlers != nil {" },
+        { "file": "context.go", "line": 199, "text": "for c.index < safeInt8(len(c.handlers)) {" },
+        { "file": "context.go", "line": 201, "text": "c.handlers[c.index](c)" }
+      ]
+    }
+  ]
+}
