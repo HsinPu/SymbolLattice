@@ -115,6 +115,10 @@ SymbolLattice serve --mcp --project C:\path\to\project
 
 使用上方安裝流程指定新的固定 commit 或既有 tag，重新安裝後執行 Codex 整合，並在各專案執行 `SymbolLattice sync .`。目前為 `0.x` 開發階段，升級前請核對對應版本的相容性與遷移說明。
 
+### 升級至 v0.550.2
+
+這版修正 Go 宣告在 `true`／`false` 後換行時的漏判。升級後在每個分析專案執行 `SymbolLattice sync .`，或在允許更新時用 `--sync-if-stale` 查詢。擷取版本更新會重新擷取既有檔案，首次同步可能較久；保留 `.SymbolLattice/`，不需手動刪除索引。完整查找仍有已記錄的排序與來源缺口，見[語言驗證與速度報告](language-verification-and-speed.md)。
+
 ### 升級至 v0.550.0
 
 新增即時 CLI 查詢的可選 `--sync-if-stale`，既有不加選項的唯讀行為與查詢輸出契約保留。安裝後預覽 `SymbolLattice install codex`，再執行 `SymbolLattice install codex --apply --yes` 更新受管理的 Agent 指引，重新啟動 Codex／MCP host。新指引會在允許更新索引的程式碼任務使用此選項，遇到未啟用同步的拒絕時先有限重試；明確唯讀或禁止同步時仍保留拒絕。僅升級 CLI 不會更新既有 Codex 指引，也不會同步另一台電腦的專案。既有索引毋須刪除或手動重建。

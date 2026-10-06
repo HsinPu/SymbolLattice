@@ -115,6 +115,10 @@ See the [validation documentation](../benchmarks/README.md) for measured results
 
 Use the installation flow above with a new fixed commit or existing tag. After reinstalling, repeat Codex integration and run `SymbolLattice sync .` in each project. The project is in `0.x` development; check the target version's compatibility and migration notes before upgrading.
 
+### Upgrading to v0.550.2
+
+This patch corrects omitted Go declarations after a line ending in `true` or `false`. After upgrading, run `SymbolLattice sync .` in each analyzed project, or query with `--sync-if-stale` when updates are allowed. The updated extractor re-extracts existing files, so the first sync may take longer. Keep `.SymbolLattice/`; no manual index deletion is needed. Task retrieval still has recorded ranking and source gaps; see the [language verification and speed report](language-verification-and-speed.md).
+
 ### Upgrading to v0.550.0
 
 Live CLI queries gain the optional `--sync-if-stale`; existing read-only calls and query output contracts remain supported. After installing, preview `SymbolLattice install codex`, then run `SymbolLattice install codex --apply --yes` to refresh the managed Agent instructions and restart Codex/MCP hosts. New guidance uses the option for code tasks that allow index updates and makes a bounded retry after an updates-disabled refusal, while honoring explicit read-only/no-sync instructions. Updating the CLI alone does not refresh installed Codex guidance or synchronize projects on another computer. Existing indexes need no deletion or manual rebuild.

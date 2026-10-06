@@ -15,7 +15,8 @@ describe("generated Go grammar preserves source coordinates and existing forms",
     'package demo\nfunc f(xs []int) { for i := range xs { _ = i } }\n',
     'package demo\r\n// 中文 😀\r\nfunc f() { s := `for range x {}`; _ = s }\r\n',
     'package demo\nfunc f(x int) { if x > 0 { x++ }; switch x { case 1: return } }\n',
-    'package demo\nfunc f(xs []int) { var i int; for i = range xs { _ = i } }\n'
+    'package demo\nfunc f(xs []int) { var i int; for i = range xs { _ = i } }\n',
+    'package demo\nfunc f() { flag := true; if flag { flag = false }; _ = flag }\n'
   ])("has identical named nodes and spans for unchanged syntax: %s", source => {
     const old = shape(source, upstream);
     expect(old.some(node => node.error)).toBe(false);

@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/grpc/grpc-go",
+  "commit": "d96c2ef4f3339142d20a47797d8a5a4fae948607",
+  "truthMethod": "Independent manual reading of the pinned grpc-go v1.76.0 source, fixed before the first product query in this corpus. New held-out tasks for v0.550.2; do not tune this batch to their results. Other selections remain unjudged. Source facts are not a runtime-dispatch or complete framework oracle.",
+  "tasks": [
+    {
+      "id": "known-server-listener-entry",
+      "split": "held-out",
+      "query": "Server.Serve",
+      "requiredFiles": [
+        "server.go"
+      ],
+      "supportingFiles": [],
+      "irrelevantFiles": [],
+      "evidence": [
+        {
+          "file": "server.go",
+          "line": 869,
+          "text": "func (s *Server) Serve(lis net.Listener) error {"
+        },
+        {
+          "file": "server.go",
+          "line": 871,
+          "text": "s.printf(\"serving\")"
+        },
+        {
+          "file": "server.go",
+          "line": 872,
+          "text": "s.serve = true"
+        },
+        {
+          "file": "server.go",
+          "line": 874,
+          "text": "// Serve called after Stop or GracefulStop."
+        },
+        {
+          "file": "server.go",
+          "line": 880,
+          "text": "s.serveWG.Add(1)"
+        }
+      ]
+    },
+    {
+      "id": "unhinted-graceful-server-stop",
+      "split": "held-out",
+      "query": "How does shutting down the server stop accepting new connections and wait for active RPCs to finish?",
+      "requiredFiles": [
+        "server.go",
+        "internal/transport/http2_server.go"
+      ],
+      "supportingFiles": [],
+      "irrelevantFiles": [],
+      "evidence": [
+        {
+          "file": "server.go",
+          "line": 1934,
+          "text": "func (s *Server) GracefulStop() {"
+        },
+        {
+          "file": "server.go",
+          "line": 1935,
+          "text": "s.stop(true)"
+        },
+        {
+          "file": "server.go",
+          "line": 1944,
+          "text": "s.closeListenersLocked()"
+        },
+        {
+          "file": "server.go",
+          "line": 1954,
+          "text": "s.drainAllServerTransportsLocked()"
+        },
+        {
+          "file": "server.go",
+          "line": 1973,
+          "text": "s.handlersWG.Wait()"
+        },
+        {
+          "file": "server.go",
+          "line": 1996,
+          "text": "st.Drain(\"graceful_stop\")"
+        },
+        {
+          "file": "internal/transport/http2_server.go",
+          "line": 1370,
+          "text": "func (t *http2Server) Drain(debugData string) {"
+        },
+        {
+          "file": "internal/transport/http2_server.go",
+          "line": 1377,
+          "text": "t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte(debugData), headsUp: true})"
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # 語言驗證程度與搜尋速度報告
 
-文件跟隨版本：`v0.550.1`。更新日期：2026-10-06。完整主表量測產品：`v0.549.0`（`54893be20020208866c5e8daae7863196f7ccaf7`）；最新局部查找與速度補驗另列於文末。
+文件跟隨版本：`v0.550.2`。更新日期：2026-10-06。完整主表量測產品：`v0.549.0`（`54893be20020208866c5e8daae7863196f7ccaf7`）；最新局部查找與速度補驗另列於文末。
 
 本報告集中列出全部 58 種語言／格式的驗證範圍、查找結果與速度，後續優化更新同一份文件。所有數值均保留測量版本；純文件升版不把舊數據改稱新版本實測。
 
@@ -10,7 +10,7 @@
 
 「歷史證據」照錄 [能力與限制來源](../src/domain/language-depth.ts) 的版本、證據類型與最高已登記範圍。本輪沒有重新執行每個歷史外部 oracle；`project` 代表其中有部分跨檔能力。完整型別、動態行為、框架及語法覆蓋須逐項閱讀該來源的 `knownLimitations` 與 [驗證紀錄](../benchmarks/README.md)。表內分類不代表完整跨檔解析或各語言達到相同深度。
 
-「目前固定任務」依真值預先指定的第一個必要檔案語言歸類。查詢仍在整個真實專案執行；跨語言專案及只用數個題目的速度，不能用來比較語言本身的快慢。歷史主表有 3/58 種語言的實際任務速度；本次另補驗 Go，最新局部結果見 v0.550.1 節。未重新執行的最小案例、解析 oracle 與主表數值保留原版本。
+「目前固定任務」依真值預先指定的第一個必要檔案語言歸類。查詢仍在整個真實專案執行；跨語言專案及只用數個題目的速度，不能用來比較語言本身的快慢。歷史主表有 3/58 種語言的實際任務速度；本次另補驗 Go，首次局部結果見 v0.550.1 節，本批 Go 修正見 v0.550.2 節。未重新執行的最小案例、解析 oracle 與主表數值保留原版本。
 
 ## 每個語言的歷史主表（v0.549.0）
 
@@ -267,3 +267,74 @@ Gin 初次索引由 `v0.550.0` 執行，同一 Node／Windows 條件下單次 CL
 | `report-supplement.mjs` | `44ccaa5157c651f302e33ce096eddf28d76b9658bd43dd8cea853b6db80db6a0` |
 
 重跑命令見對應 audit。更新完整主表時保留所有局部補驗與原測量版本；局部數據不得替代或重新標記其餘 54 種未測量語言。
+
+## v0.550.2：Go 布林值換行的宣告漏判修正
+
+本節實際量測 `v0.550.2`，基準為 `v0.550.1`（`cc75b4fb55485d12c9dd900d046d5c057e7b2a51`），日期 2026-10-06，Windows／Node.js v24.19.0。修正既有 Go 宣告擷取遇到布林值換行時的誤判，維持查詢介面、證據欄位與上限，依規則升 patch。固定來源、獨立 oracle、初次失敗、重現命令見 [Go 分號驗證](../benchmarks/go/boolean-semicolon-audit.md)。本批沒有改排序；下列查找退步與較慢樣本均保留，查找驗收仍未通過。
+
+### 獨立宣告與原始座標核對
+
+使用官方 Go `go1.27.1 windows/amd64` 的 `go/parser`／`go/ast`，不執行外部專案、不下載其依賴，也不執行型別檢查。以官方 AST 的頂層 `FuncDecl`、一般具名／指標 receiver、宣告名稱與原始 UTF-16 起訖位置為真值；排除介面成員、其他符號與泛型 receiver。此分母是宣告，不能當作關係解析或任務檔案召回。
+
+| 固定專案 | Go 檔案 | 已評估宣告 | TP／FP／FN：v0.550.1 → v0.550.2 | 產品 parser 有錯誤的檔案 |
+| --- | --- | --- | --- | --- |
+| Gin／`43fe48e8a0f44af783116cdb010725e6bb50255f` | 99 | 1,340 | 1277／0／63 → 1340／0／0 | 18 → 0 |
+| grpc-go／`d96c2ef4f3339142d20a47797d8a5a4fae948607` | 1,003 | 9,792 | 9532／0／260 → 9792／0／0 | 137 → 1 |
+
+兩個固定專案共 1,102 個 Go 檔案皆通過官方語法解析；受評估的 11,132 個宣告中，漏判由 323 降至 0，兩版 FP 均為 0。另排除 grpc-go 的 19 個泛型 receiver 宣告。這個限定宣告樣本的 precision／recall 為 11132/11132；不代表完整 Go 語法、型別、建置條件、跨檔關係或框架覆蓋。candidate 的 `channelz/grpc_channelz_v1/channelz.pb.go` 仍有兩個 parser error，此缺口保留；該檔受評估的函式宣告有正確來源，不據此宣稱整檔完整解析。948/1102 個檔案的完整 raw facts 未改；其餘包含恢復的宣告與既有規則產生的關係，沒有對全部關係執行獨立型別 oracle。
+
+原本 Go lexer 將 `true`／`false` 分成專用 token，分號追蹤卻只保留一般 identifier，遇到換行與後續敘述時產生錯誤，整個方法被擷取器的既有語法安全檢查排除。生成器現在明確匯出布林值 token 並追蹤分號；保留固定 upstream grammar、裸 range 修正、原始 CRLF／UTF-16 位置與錯誤拒絕。Gin 的 `gin.go:719–789 Engine.handleHTTPRequest`、`tree.go:418–673 node.getValue`，以及 grpc-go 的 `server.go:869–961 Server.Serve` 均有獨立 AST 宣告證據。
+
+### 原題回歸與新的 held-out 查找
+
+Gin 三題沿用原 `v0.550.1` 真值及首次結果，本批作為開發／回歸題。[grpc-go 兩題](../benchmarks/mcp/grpc-server-lifecycle-tasks.json) 在首次產品查詢前獨立閱讀來源、固定必要檔案與事實，作為新 held-out 樣本；未依這兩題調整本批規則。每題每版一次新的 CLI process，五題共十次；這些 CLI 時間可與測試並行，只用於正確性核對，不作速度宣稱。
+
+| 任務 | 必要主要檔案：v0.550.1 → v0.550.2 | 指定來源事實：v0.550.1 → v0.550.2 |
+| --- | --- | --- |
+| Gin／`known-request-entry-context-pool` | 1/1 → 1/1 | 5/5 → 5/5 |
+| Gin／`unhinted-middleware-aborted-response` | 1/1 → 1/1 | 3/6 → 3/6 |
+| Gin／`unhinted-url-handler-execution-flow` | 3/3 → 2/3 | 0/7 → 5/7 |
+| grpc-go／`known-server-listener-entry` | 0/1 → 0/1 | 0/5 → 0/5 |
+| grpc-go／`unhinted-graceful-server-stop` | 2/2 → 2/2 | 5/8 → 5/8 |
+
+合計主要檔案 7/8 → 6/8、來源事實 13/31 → 18/31；這不是查找驗收通過。Gin 流程題恢復五個 `gin.go`／`tree.go` 來源事實，但 `context.go` 被新候選擠出主要檔案，`context.go:199/201` 仍缺少。middleware 題仍缺少 `context.go:199/201/209`。grpc-go 的 `Server.Serve` 已恢復宣告，原始查詢仍未找到必要 `server.go`，缺少全部五個事實；關閉服務題仍缺少 `server.go:1934/1935/1973`。排序、查詢候選與來源選取缺口列為後續開發案例，沒有改題、加答案線索或當作環境問題略過。
+
+新結果另核對 52 份來源片段、89 筆文字位置及回傳關係的來源座標；這些核對不能補成未回傳的必要事實，也不證明 runtime dispatch。選取結果在目前真值下為 6 TP／0 FP／2 FN，12 筆待核對；沒有負向檔案真值，不能由 6/6 的已判定 precision 宣稱完整精確率。其他語言與上方歷史主表保留原測量版本，本批沒有重跑其大型語料查找。
+
+### 隔離查詢速度與升級成本
+
+每題每版一次暖身，再執行八對交替查詢，使用 persistent read-only SQLite reader 與分離的舊、新索引；五題共 80 次量測、10 次暖身、10 次最終比較。測試、建置、oracle、索引與其他查找作業均已結束。下表是八筆 service 時間的上中位數；兩版完整輸出不同，品質另以固定真值核對。
+
+| Go 任務 | v0.550.1 service ms | v0.550.2 service ms | 變化 |
+| --- | --- | --- | --- |
+| Gin／已知請求入口 | 68.70 | 68.75 | +0.08% |
+| Gin／middleware 中止 | 200.69 | 223.82 | +11.52% |
+| Gin／URL 到 handler | 227.14 | 244.93 | +7.83% |
+| grpc-go／已知服務入口 | 484.78 | 508.27 | +4.85% |
+| grpc-go／關閉服務流程 | 835.41 | 855.96 | +2.46% |
+
+五題都較慢，不能宣稱此版搜尋加速。恢復的宣告及其關係增加查詢候選與來源輸出，仍須改善查找效率；八對樣本不建立 SLO、統計顯著性或所有查詢的速度。上述時間不含 host 新鮮度准入、CLI 啟動、同步、MCP transport、Agent 完整任務時間或補查次數；欠缺必要檔案／事實的查詢時間不能稱為完成任務的時間。最新批次只實測 Go；累計仍有 4/58 種語言的任務速度樣本，另外 54 種未測量。
+
+擷取版本 `multi-language-ast-v436 → v437` 會使既有索引過期；索引格式與 resolver v212 不變。保留索引，在專案根目錄執行 `SymbolLattice sync .`，或在允許更新時加入 `--sync-if-stale`；首次升級同步會重新擷取既有檔案，可能較久。Gin 舊索引複本確實先回覆 `FRESH_INDEX_REQUIRED / writerState=disabled`，再以 opt-in 查詢完成同步，新 generation 為 fresh，包含新增方法。grpc-go 另以普通 sync 完成升級。原 Gin baseline 與已記錄的保護索引保持原 hash；未刪除或重建原始索引。索引與同步作業曾與正確性測試並行，原始耗時只作診斷，沒有受控的首次索引、修改來源增量同步或記憶體量測。
+
+### 檢查與原始產物
+
+型別檢查、建置、80 項 Go 相關測試、全套 3,497 項測試（四項既有略過）、`verify:language-depth` 的 58 種最小契約、版本一致性與 `git diff --check` 通過。第一次全套測試的 21 個失敗保留在 `full-test-first-failed.log`：20 個舊擷取版本斷言及一個新增 Go 驗證目錄清單，均同步修正後重跑。獨立 oracle 另核對 CRLF／UTF-16 正例及錯誤語法反例。這些通過不替代上述查找題的實際失敗。另一台電腦 CMA122X 的實機狀態仍未驗證。
+
+凍結 dist SHA-256：baseline `4ce75792e19647aa135b59f6389dda02b9651c30aeecce54fcf4e9b3a2784b12`、candidate `443be69a3d097fd95813d6ca2e31d3c842f03c657d6b40c786f96169fd743457`。大型來源、SDK、索引、完整原始結果、個別時間、失敗與核對腳本位於 `%TEMP%/SymbolLattice-v5502-validation` 及對應外部產品／語料目錄。完整歷史生成器與 58 行主表均保留原版；本節由獨立 AST、固定任務真值及個別時間重算。
+
+| 補驗來源 | SHA-256 |
+| --- | --- |
+| `identity.json` | `f1b81c6ac67ab19355a9c149db262178f44bb929733aeca8732c2c26c13fdb7a` |
+| `grpc-prequery-truth.json` | `e2913657cccf3f7dc7d6dbcca69f00aa4417fccf21e5d51772afc52a2e56462a` |
+| `gin-declarations.json` | `9ef39e4564e8b793189bfda3d122fcf1597ded4cfd8fa8dd01fa80030c2b2e82` |
+| `grpc-declarations.json` | `6311641de9d1de544012d92868286f9eb72b3eb34e2f8317b7b66c08cc8650eb` |
+| `oracle-contract.json` | `6ed8c7847cba637a394caf86f92863e430047fb6982543bd42aa9c699f8745e1` |
+| `quality.json` | `250d8a13ddce420a54832f68038649ff2894ce7cf2e30b8773bdd337195d593c` |
+| `quality-summary.json` | `c9882dd9cbce113159211e99a303b46cffef1d6aabce962e32000bd5cc0d784d` |
+| `timing.json` | `edf163cdcb111932ec213580baff75bceaf2c2d76383513c87375f9d7f25857a` |
+| `recovery-recheck.json` | `35a8cd293c1417e4f2f85b4d90f4a764ea2e02055aa36b49afb56be5eac16826` |
+| `quality.mjs` | `983f2a7ebfb8dc30a9a90da52141393a6af286c513595a4edf6224bbe6cff089` |
+| `timing.mjs` | `895e774587289cb0b4a6bbfed9270b232f4c4643412b33e35b7ca8951c566cdb` |
+
+重跑命令見 [Go audit](../benchmarks/go/boolean-semicolon-audit.md)。後續優化更新同一份報告，保留原始失敗、較慢樣本與不同測量版本。

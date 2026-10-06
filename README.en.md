@@ -6,7 +6,7 @@ SymbolLattice is a local code search tool for developers and AI agents. Query a 
 
 [繁體中文](README.md) · [Get started](docs/getting-started.en.md) · [Validation and limitations](benchmarks/README.md) · [Report an issue](https://github.com/HsinPu/SymbolLattice/issues)
 
-`v0.550.1` · Node.js `>=22.16 <23 || >=24 <25` · MIT
+`v0.550.2` · Node.js `>=22.16 <23 || >=24 <25` · MIT
 
 ## Start with “Where is this implemented?”
 
@@ -86,7 +86,7 @@ General queries can supplement one query-relevant caller with exact static cross
 
 When a query word exactly matches a directory component and source corroborates at least two concepts, ranking can use that directory context. JSON `directoryContext` lists the terms and score contribution; this is literal relevance evidence, not a resolved code relationship.
 
-SymbolLattice uses static analysis. Text matches include source locations; query terms at the same token and position can share a citation. Text matches may come from comments or strings; matches on lines beginning with common comment markers are labeled, and you should still inspect the source before drawing a semantic conclusion. Dynamic calls, reflection, and external dependencies may remain unresolved; same-name declarations are not confirmed call targets. A verified source reference can help rank results, but a reference alone does not prove execution order. Results have count and source-excerpt limits. Missing relationships cannot guarantee that a change or deletion is safe. CLI queries can use `--sync-if-stale`; default MCP can also synchronize existing indexes automatically. Read-only settings, unavailable writer ownership or unverified freshness still block queries. Reapply Codex integration and restart the MCP host after upgrading; see the [usage guide](docs/getting-started.en.md#quick-start) for recovery steps.
+SymbolLattice uses static analysis. Text matches include source locations; query terms at the same token and position can share a citation. Text matches may come from comments or strings; matches on lines beginning with common comment markers are labeled, and you should still inspect the source before drawing a semantic conclusion. Dynamic calls, reflection, and external dependencies may remain unresolved; same-name declarations are not confirmed call targets. A verified source reference can help rank results, but a reference alone does not prove execution order. Results have count and source-excerpt limits. Missing relationships cannot guarantee that a change or deletion is safe. CLI queries can use `--sync-if-stale`; default MCP can also synchronize existing indexes automatically. Read-only settings, unavailable writer ownership or unverified freshness still block queries. After upgrading, run `SymbolLattice sync .` to refresh existing indexes, then reapply Codex integration and restart the MCP host; see the [usage guide](docs/getting-started.en.md#quick-start) for recovery steps.
 
 For rejection queries with an exact source reference, lower-priority focuses that only repeat covered query terms may be omitted. MCP text names their file paths; JSON lists the full omissions in `queryPlan.rejectionReferenceFiltering`. The bounded graph cannot prove those files irrelevant; query a file directly when needed.
 

@@ -12,6 +12,8 @@ The [v0.550.0 CLI recovery audit](mcp/cli-sync-recovery-audit.md) covers opt-in 
 
 The [v0.550.1 compound-query evidence audit](mcp/compound-query-evidence-audit.md) records connector-only false source matches, the unchanged historical task truth, and new Gin Go tasks frozen before product queries. The same language report retains scoped quality, timing and missing evidence rather than relabeling every historical language measurement.
 
+The [v0.550.2 Go boolean semicolon audit](go/boolean-semicolon-audit.md) records independently verified declarations, strict stale-index recovery on separate indexed copies, retained retrieval regressions and held-out failures, and isolated service timings. This parser correction does not establish complete Go flow retrieval.
+
 `automatic` means focused tests import the module and verify its bounded truth, scoring, lifecycle, or negative-matrix contract. It does not mean CI downloads or scans the external corpus. `manual` means the tool is retained for explicit evidence generation and has no direct automated test entry.
 
 | Area | Files | Status |
@@ -19,6 +21,7 @@ The [v0.550.1 compound-query evidence audit](mcp/compound-query-evidence-audit.m
 | `css/` | `correctness-oracle.mjs`, `lifecycle.mjs` | automatic |
 | `html/` | `correctness-oracle.mjs` | automatic |
 | `java/` | `correctness-oracle.mjs`, `JavaOracle.java` | automatic helper contract |
+| `go/` | `declarations.mjs`, `DeclarationOracle.go` | manual official Go AST declaration and original-coordinate oracle; fixed-corpus execution and raw-fact equality, no type/call-target oracle |
 | `languages/` | `depth-matrix.mjs` | manual |
 | `languages/` | `evidence-speed-report.mjs` | manual saved-evidence report generation; rechecks both frozen products, pinned source/receipts, task truth/scoring and individual timing samples without running product queries |
 | `java/` | `lifecycle.mjs` | manual |
@@ -42,6 +45,7 @@ The [v0.550.1 compound-query evidence audit](mcp/compound-query-evidence-audit.m
 | `mcp/` | `flask-error-url-tasks.json` | manual fixed-source retrieval observations; handler and URL source gaps retained |
 | `mcp/` | `django-sqlite-thread-close-tasks.json` | manual pinned-source task, first held-out for v0.549.0; historical primary-file recall gap and later regression results retained |
 | `mcp/` | `gin-handler-flow-tasks.json` | manual fixed-source Go task truth, first held-out for v0.550.1; exact symbol, unhinted exploration and cross-file flow; no compiler/type or runtime oracle |
+| `mcp/` | `grpc-server-lifecycle-tasks.json` | manual fixed-source Go task truth, first held-out for v0.550.2; known symbol and unhinted lifecycle flow, first failures retained |
 | `sfc/` | `correctness-oracle.mjs` | manual Vue/Svelte/Astro component relation oracle |
 | `shell/` | `correctness-oracle.mjs` | manual mvdan ABI v2 direct-call oracle |
 | `solidity/` | `correctness-oracle.mjs` | automatic solc AST private fixed-arity call oracle |
