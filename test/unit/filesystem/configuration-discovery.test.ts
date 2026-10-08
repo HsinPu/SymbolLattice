@@ -32,6 +32,22 @@ afterEach(async () => {
 });
 
 describe("configuration discovery identity", () => {
+  it("invalidates legacy Cargo multiline identities in the fast freshness snapshot", async () => {
+    const projectPath = await createProject();
+    const contents = '[package]\nname = "app"\n[[bin]]\ndescription = """\n[dependencies]\nfake = { path = "../api" }\n"""';
+    await writeFile(join(projectPath, "Cargo.toml"), contents, "utf8");
+    const legacyHash = hashSource(JSON.stringify({
+      policy: "configuration-candidates-v3",
+      candidates: [
+        { path: ".gitignore", state: "absent", contentHash: null },
+        { path: "Cargo.toml", state: "present", contentHash: hashSource(contents) }
+      ]
+    }));
+    const current = await discoverConfigurationCandidateInput(projectPath, []);
+    expect(current.contentHash).not.toBe(legacyHash);
+    expect(await discoverConfigurationCandidateInput(projectPath, [])).toEqual(current);
+  });
+
   it("admits bounded TypeScript project config names without collecting arbitrary JSON", () => {
     expect(isConfigurationCandidateFileName("tsconfig.repo-config-files.json")).toBe(true);
     expect(isConfigurationCandidateFileName("jsconfig.web.json")).toBe(true);

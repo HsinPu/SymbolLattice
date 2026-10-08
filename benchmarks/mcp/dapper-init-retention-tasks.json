@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/DapperLib/Dapper.git",
+  "commit": "eb47546a408bbf6c178bda4f04dc205bc51ffbfe",
+  "truthMethod": "Manual reading of this pinned source before the first product query. These bounded file/source tasks check retention during init optimization; they do not establish CLR dispatch or complete C# query-flow retrieval. Other selected files remain unjudged.",
+  "tasks": [
+    {
+      "id": "known-query-implementation",
+      "split": "held-out",
+      "query": "SqlMapper.QueryImpl",
+      "requiredFiles": ["Dapper/SqlMapper.cs"], "supportingFiles": [], "irrelevantFiles": [],
+      "evidence": [
+        { "file": "Dapper/SqlMapper.cs", "line": 1204, "text": "private static IEnumerable<T> QueryImpl<T>" }
+      ]
+    },
+    {
+      "id": "unhinted-database-reader-query",
+      "split": "held-out",
+      "query": "How does a database query prepare its command, read result rows, and yield mapped values?",
+      "requiredFiles": ["Dapper/SqlMapper.cs"], "supportingFiles": [], "irrelevantFiles": [],
+      "evidence": [
+        { "file": "Dapper/SqlMapper.cs", "line": 1216, "text": "cmd = command.SetupCommand(cnn, info.ParamReader);" },
+        { "file": "Dapper/SqlMapper.cs", "line": 1236, "text": "while (reader.Read())" },
+        { "file": "Dapper/SqlMapper.cs", "line": 1239, "text": "yield return GetValue<T>(reader, effectiveType, val);" }
+      ]
+    }
+  ]
+}

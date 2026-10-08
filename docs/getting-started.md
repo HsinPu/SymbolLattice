@@ -117,9 +117,9 @@ SymbolLattice serve --mcp --project C:\path\to\project
 
 使用上方安裝流程指定新的固定 commit 或既有 tag，重新安裝後執行 Codex 整合，並在各專案執行 `SymbolLattice sync .`。目前為 `0.x` 開發階段，升級前請核對對應版本的相容性與遷移說明。
 
-### 升級至 v0.550.3
+### 升級至 v0.550.4
 
-此版減少首次初始化時重複的 AST 走訪及 TypeScript 模組查找。從 v0.550.2 升級時，既有索引可繼續使用，不需為這項效能修正再執行 `init`；日常修改使用 `sync`。固定專案的首次索引時間與尚未量測範圍見[語言驗證與速度報告](language-verification-and-speed.md)。
+v0.550.3 減少重複 AST 走訪及 TypeScript 模組查找；v0.550.4 另重用同一 AST 的詞法作用域、位置與 Java 原生子節點，減少重複走訪與物件配置，並修正 Cargo 多行說明文字阻擋初始化的問題。Cargo 多行文字中的章節與依賴保持為文字；多行名稱或路徑仍不作已確認的解析。從 v0.550.2 或 v0.550.3 升級時，既有索引不需重建；含多行 Cargo 設定的舊索引會標示設定變更，執行一般 `sync` 即可更新，其他索引可繼續使用。日常修改也使用 `sync`。固定專案的首次索引時間與尚未量測範圍見[語言驗證與速度報告](language-verification-and-speed.md)。
 
 ### 升級至 v0.550.2
 

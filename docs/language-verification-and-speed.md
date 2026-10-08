@@ -1,6 +1,6 @@
 # 語言驗證程度與搜尋速度報告
 
-文件跟隨版本：`v0.550.3`。更新日期：2026-10-08。完整主表量測產品：`v0.549.0`（`54893be20020208866c5e8daae7863196f7ccaf7`）；最新局部查找與速度補驗另列於文末。
+文件跟隨版本：`v0.550.4`。更新日期：2026-10-08。完整主表量測產品：`v0.549.0`（`54893be20020208866c5e8daae7863196f7ccaf7`）；最新局部查找與速度補驗另列於文末。
 
 本報告集中列出全部 58 種語言／格式的驗證範圍、查找結果與速度，後續優化更新同一份文件。所有數值均保留測量版本；純文件升版不把舊數據改稱新版本實測。
 
@@ -407,4 +407,169 @@ $validation = Join-Path $env:TEMP "SymbolLattice-init-rerun"
 New-Item -ItemType Directory -Path $validation
 node benchmarks/mcp/paired-init.mjs --source-project <PINNED_NEST_CHECKOUT> --baseline-root <V05502_BUILT_ROOT> --candidate-root <V05503_BUILT_ROOT> --workspace (Join-Path $validation "nest-pairs") --output (Join-Path $validation "nest-init.json") --pairs 4
 node benchmarks/mcp/task-retrieval.mjs --project <FRESH_INDEXED_COPY> --manifest benchmarks/mcp/nest-shutdown-tasks.json --product-root <BUILT_ROOT> --output (Join-Path $validation "quality.json") --repetitions 1
+```
+
+
+## v0.550.4：其他語言專案的首次初始化
+
+更新日期：2026-10-08。本批檢查混合 Python/JavaScript、Java、C#、Rust、C++，並核對 NestJS/Fastify。維持查詢契約的效能改善與有效 Cargo 設定誤拒修正採 patch。58 行總表及未重新量測的歷史結果保留原版本。
+
+Django profile 顯示 JavaScript 詞法作用域及父節點走訪的重複成本；以 WeakMap 在同一 parsed SourceFile 重用 scope ID 與唯讀 enclosing scope list，保留同名遮蔽及具名 function expression 私有 self 環境。JUnit profile 顯示 Java modern declarations/records 取得原生子節點的成本；三個 Java inspector 重用同一原生 AST 的子節點清單。新 AST 不沿用舊樹快取。未更改 grammar、extractor v437、resolver v212、source-search v1 或索引格式。
+
+Tokio 的有效多行 Cargo description 原先觸發 INVALID_PROJECT_CONFIGURATION。Python 3.12 標準函式庫 tomllib 獨立確認 pinned checkout 的 13 份 Cargo.toml 可解析。讀取器現在保持多行 metadata 為不解碼的文字，不把其中的章節、依賴或註解當成設定；語意名稱與路徑的多行文字仍不作已確認解析。未擴張 Rust 巨集或動態解析能力。既有索引不需重建；含多行 Cargo 設定的舊索引透過版本化設定身分偵測 project-inputs-changed，一般 sync 重新解析，其他設定維持原身分。cargo-upgrade-lifecycle.json 核對舊版假依賴解析的移除與快取 facts 重用。日常修改使用 sync。
+
+### 固定來源與執行條件
+
+- django：https://github.com/django/django；commit `bc833e8883db4a333a6485d91637b78c85e2b13b`。
+- junit：https://github.com/junit-team/junit5.git；commit `99a00b9bb82723d5aa573942b15618ec3f3ab396`。
+- dapper：https://github.com/DapperLib/Dapper.git；commit `eb47546a408bbf6c178bda4f04dc205bc51ffbfe`。
+- fmt：https://github.com/fmtlib/fmt.git；commit `10cda465edf19ed0303a0655b762ea752f8a0997`。
+- nest：https://github.com/nestjs/nest；commit `35c3ded6dbf3f23f917ae88d0ed966932788cae6`。
+- fastify：https://github.com/fastify/fastify；commit `70b14e92c0b55e8201f5530ba2e6bab4e928c784`。
+- tokio：https://github.com/tokio-rs/tokio.git；commit `3eb95a40f1b88623470c4e902e2fa90e807fdeed`。
+
+Django、JUnit 各兩對交替執行；Dapper、fmt、NestJS、Fastify 各一對診斷，共 16 次新舊比較初始化。Tokio 舊版失敗另留原始輸出；最終建置以兩個新 checkout 完成初始化及完整結果一致核對，共另 2 次成功。全部使用不存在的索引；clone、完整比較、來源及 SQLite 核對在計時之外。OS 檔案快取未清除，未隔離使用者其他背景程式，16 次比較初始化未同時執行其他 benchmark 或測試。Tokio 最終復原樣本另與最後型別檢查重疊，只作可完成與結果一致的核對，耗時為診斷。
+
+Node.js v24.19.0、Windows x64、OS 10.0.19045、CPU Genuine Intel(R) CPU 0000 @ 2.00GHz、logical CPU 64、availableParallelism 64、RAM 47.88 GiB。計時前後自由記憶體 4.54–10.70 GiB；逐筆時間戳及環境保存於樣本。未固定 CPU affinity，這些條件不代表硬體隔離。
+
+### 首次初始化時間
+
+Django/JUnit 的兩筆取上中位數（較慢的一筆）；其他專案只有單次診斷，不能據此建立加速結論。CLI 含啟動、索引、狀態、diagnostics 與結束；索引階段使用 monotonic operationPerformance。RSS 為階段邊界最大觀測值，不是連續量測的真實峰值。
+
+| 專案 | 每版樣本 | 已索引來源 | 舊版 CLI 秒 | 本批 CLI 秒 | 差異 | 索引秒（舊 → 新） | RSS 邊界 GiB（舊 → 新） |
+| --- | ---: | ---: | ---: | ---: | --- | --- | --- |
+| django | 2 | 3366 | 147.77 | 78.39 | -46.95% | 147.17 → 77.79 | 0.85 → 0.81 |
+| junit | 2 | 2021 | 255.89 | 140.65 | -45.04% | 252.81 → 138.59 | 6.47 → 2.85 |
+| dapper | 1 | 169 | 8.97 | 8.31 | -7.40%（單次） | 8.45 → 7.72 | 0.50 → 0.49 |
+| fmt | 1 | 70 | 3.54 | 3.30 | -6.77%（單次） | 3.03 → 2.78 | 0.26 → 0.20 |
+| nest | 1 | 1738 | 39.32 | 35.81 | -8.92%（單次） | 38.69 → 35.24 | 0.49 → 0.44 |
+| fastify | 1 | 338 | 13.45 | 11.05 | -17.87%（單次） | 12.93 → 10.51 | 0.30 → 0.31 |
+| tokio | 舊版失敗；修正版 2 次 | 833 | 無有效索引 | 11.46、10.43 | 無可比較基準 | 10.97、9.95 | 見原始階段資料 |
+
+這是固定混合語言專案的完整 init，不能比較語言本身快慢，也不是統計顯著性、SLO 或所有專案加速承諾。Django 的改善來自其中的 JavaScript，沒有修改 Python parser。較慢階段及單次樣本均保留。
+
+| 專案 | 實際索引語言／格式與檔案數 |
+| --- | --- |
+| django | python 2817、html 368、javascript 113、css 47、xml 14、markdown 4、yaml 3 |
+| junit | java 1793、kotlin 154、markdown 26、properties 20、xml 16、yaml 5、groovy 4、css 1、html 1、shell 1 |
+| dapper | csharp 157、markdown 7、xml 2、yaml 2、html 1 |
+| fmt | cpp 47、markdown 9、python 4、c 3、properties 2、css 1、javascript 1、shell 1、xml 1、yaml 1 |
+| nest | typescript 1606、javascript 53、markdown 44、proto 12、graphql 8、yaml 7、html 4、shell 4 |
+| fastify | javascript 248、markdown 51、typescript 35、yaml 3、shell 1 |
+
+| 專案 | 階段 | 舊版 ms | 本批 ms |
+| --- | --- | ---: | ---: |
+| django | scan | 21430.18 | 20193.19 |
+| django | extraction | 94205.16 | 26461.04 |
+| django | resolution | 5044.76 | 5509.86 |
+| django | persistence | 25617.82 | 25574.23 |
+| django | status-read | 1028.75 | 1100.80 |
+| junit | scan | 8807.68 | 7055.80 |
+| junit | extraction | 133272.69 | 75774.46 |
+| junit | resolution | 25839.60 | 30781.89 |
+| junit | persistence | 24267.81 | 16345.83 |
+| junit | status-read | 72284.83 | 8627.01 |
+| dapper | scan | 1645.12 | 1157.23 |
+| dapper | extraction | 4844.07 | 4607.98 |
+| dapper | resolution | 247.90 | 253.03 |
+| dapper | persistence | 557.38 | 566.91 |
+| dapper | status-read | 1158.18 | 1132.21 |
+| fmt | scan | 1219.40 | 1008.29 |
+| fmt | extraction | 833.04 | 827.01 |
+| fmt | resolution | 168.86 | 174.45 |
+| fmt | persistence | 468.42 | 430.82 |
+| fmt | status-read | 339.51 | 342.82 |
+| nest | scan | 11506.82 | 8630.01 |
+| nest | extraction | 11405.90 | 10460.54 |
+| nest | resolution | 8007.59 | 8260.15 |
+| nest | persistence | 7488.20 | 7461.60 |
+| nest | status-read | 277.32 | 428.60 |
+| fastify | scan | 3096.78 | 1929.33 |
+| fastify | extraction | 6079.09 | 4893.46 |
+| fastify | resolution | 883.07 | 851.40 |
+| fastify | persistence | 2766.07 | 2735.11 |
+| fastify | status-read | 101.92 | 95.40 |
+
+### 品質、版本與限制
+
+16 次比較的完整 raw facts、graph（符號、關係及來源、pending references）、index inputs、source documents 與 source-search corpus 均與各自基準相同，排除世代及 indexedAt；Tokio 兩次修正版也相同。每份 source document 另讀 pinned checkout 核對 UTF-8，SQLite integrity/FK 通過。這是保留既有結果的證據，不是解析完整性的獨立真值。
+
+建置依修正階段凍結：Django/JUnit/Dapper 使用 scope/Java 快取階段；fmt/NestJS/Fastify 使用修正 Cargo description、尚未加入設定身分升級的階段；Tokio 的本表使用含快速新鮮度升級的最終建置。獨立比較先前 764 個 dist 檔案與最終 767 個檔案，只有 Cargo reader、project-inputs、configuration-discovery 及其 source map 改變，另新增 cargo-manifest-identity 三個產物；所有 extraction/query 資產完全一致。各筆 init JSON 固定並保存實際 fingerprint。沒有把前階段計時冒充最終整包量測；新舊完整查詢回應核對使用最終建置，Tokio 沒有可用舊版回應。
+
+[task-retrieval](../benchmarks/mcp/task-retrieval.mjs) 共 17 題。Django/NestJS/Fastify 使用既有固定真值；Java/C#/Rust/C++ 八題在第一次產品查詢前獨立讀來源固定，涵蓋已知符號與未提示答案符號的探索。新題只驗證有界檔案／來源保留，不是編譯器、型別、巨集或完整跨檔流程 oracle。主要 focuses/match 才計必要檔案；補充 source windows 不補入主要 recall。未判定結果不作 FP，整體 precision 未量測。
+
+| 專案 | 題數 | 必要檔案 | 指定來源 | TP / FP / FN / 待核對 | 完整回應比較 |
+| --- | ---: | --- | --- | --- | --- |
+| django | 2 | 4/4 | 11/11 | 4 / 0 / 0 / 3 | 兩版相同 |
+| nest | 5 | 7/7 | 13/13 | 10 / 0 / 0 / 10 | 兩版相同 |
+| fastify | 2 | 4/4 | 7/7 | 6 / 0 / 0 / 2 | 兩版相同 |
+| junit | 2 | 1/2 | 0/3 | 1 / 0 / 1 / 7 | 兩版相同 |
+| dapper | 2 | 0/2 | 0/4 | 0 / 0 / 2 / 8 | 兩版相同 |
+| tokio | 2 | 1/2 | 2/5 | 1 / 0 / 1 / 5 | 僅修正版，舊版無法初始化 |
+| fmt | 2 | 0/2 | 0/2 | 0 / 0 / 2 / 4 | 兩版相同 |
+
+- dapper / `known-query-implementation`：嚴格來源核對失敗，Source text mismatch: Dapper.Rainbow/Database.cs；片段缺少起始空白行；新舊回應相同，保留 actual/expected，未列為驗證通過。
+- dapper / `unhinted-database-reader-query`：嚴格來源核對失敗，Source text mismatch: Dapper/SqlMapper.Async.cs；片段缺少起始空白行；新舊回應相同，保留 actual/expected，未列為驗證通過。
+- junit / `known-equality-assertion`：必要檔案 recall 1，指定來源 recall 0，已判定 FP 0；首輪缺口保留。
+- junit / `unhinted-integer-assertion-failure`：必要檔案 recall 0，指定來源 recall 0，已判定 FP 0；首輪缺口保留。
+- dapper / `known-query-implementation`：必要檔案 recall 0，指定來源 recall 0，已判定 FP 0；首輪缺口保留。
+- dapper / `unhinted-database-reader-query`：必要檔案 recall 0，指定來源 recall 0，已判定 FP 0；首輪缺口保留。
+- tokio / `unhinted-duration-timer-future`：必要檔案 recall 0，指定來源 recall 0，已判定 FP 0；首輪缺口保留。
+- fmt / `known-formatting-error`：必要檔案 recall 0，指定來源 recall 0，已判定 FP 0；首輪缺口保留。
+- fmt / `unhinted-format-error-exception`：必要檔案 recall 0，指定來源 recall 0，已判定 FP 0；首輪缺口保留。
+
+保留第一次結果，未依產品輸出重寫真值或調整查找規則。完全相同不代表通過完整任務驗收；quality.json 保存實際 taskRetrievalAcceptancePassed。C# 原工具嚴格核對的失敗保留於 quality-first-failure.log；外部觀測副本只攔截該特定錯誤，記錄 failed 及 actual/expected，沒有降低通過標準，也未改產品或已提交的驗證工具。原工具與副本 hash 見 observer-provenance.json。未量測修改來源的增量 sync、service 查詢速度、MCP transport 或完整 Agent 補查成本；單次 CLI 查詢時間只供診斷。歷史 service 速度仍為 4/58，其餘 54 種未量測；本批沒有重跑全部語言大型 oracle，也未直接量測使用者另一台電腦的原專案。
+
+### 檢查與原始產物
+
+兩項具名 callback 編輯／遮蔽回歸測試及九項 Cargo 多行文字反例與兩項舊設定身分回歸已新增；相關測試 126、38 項（有重疊）及 Cargo/input/configuration 的相關測試通過。型別檢查與建置通過；全套 3,511 項通過、4 項略過；58 種最小語言契約及 benchmark 拒絕覆用／保護產品目錄的檢查通過，見以下 log；最小契約不代表全部大型語料驗證。
+
+預備 scope-only 建置的 Django 三對保留於 django-init.json，不併入正式統計。初次 JUnit candidate checkout 因 Windows 檔名過長失敗，還沒開始 init；checkout-failure.json 及該次 baseline 保留。工具以 local core.longpaths=true 建立新 checkout。兩份 CPU profile 只作診斷，不計入時間樣本。Tokio 原始失敗亦保留，沒有當成環境缺失略過。Cargo 修正中途兩組 Tokio 重複 init 另存 tokio-recovery-init.json 與 tokio-upgrade-init.json，均不併入最終初始化統計。
+
+baseline dist SHA-256：`6ae154f8cd69a8d3a835c8f6e75c93ad00320d2dc887f98034ae5045f23b0350`。快取階段 candidate：`294e39236099f2309c7d720d81f9aa0e4d4c295148887f935934ec154e21e923`；含新鮮度處理的最終 candidate：`eb7c393584b3b5ef31078cf8c67be1a299a959d8bc1caf0123aa8426fd2f9d97`。根目錄依序為 `%TEMP%/SymbolLattice-v5503-init-candidate`、`%TEMP%/SymbolLattice-v5504-native-candidate`、`%TEMP%/SymbolLattice-v5504-freshness-candidate`。全部來源、索引、JSON、profile、環境與 log 位於 `%TEMP%/SymbolLattice-v5504-init-validation`。
+
+| 產物 | SHA-256 |
+| --- | --- |
+| `django-final-init.json` | `d1ceda92e59081acf4d03661282ed7fcbb2191ff743a1818f0db9bee85cf31db` |
+| `junit-final-init.json` | `35780ecc36c565d7923ecbc1256ed981c814e903b3e41e881eedf3501dc1260e` |
+| `dapper-final-init.json` | `db017b5773b3699d71620ad1297ffd3a4ebf5142276b115c9e0a28d45c4fd771` |
+| `fmt-final-init.json` | `d27c78e5a13470e5535f891f67f9fe848e78e05608921ed7cb1c925431857994` |
+| `nest-final-init.json` | `3b1f2da56bbd340f68955d64adda790989ac76106f8d3f9f98cb20c994a42433` |
+| `fastify-final-init.json` | `7130a69d40785d205f7d1e8d42ef9c9437af6e303d672ad6514a33d5558af09e` |
+| `quality.json` | `5cef4e799bd28eddb34d3fab49f2369cc8a599e150bc6444d83215b5a008efb8` |
+| `quality.mjs` | `02387b997c91e5c3452e13c167cbec0e1af2eff3a499cb3be2190babfa23ad15` |
+| `profile-summary.mjs` | `644c354d89cc6a3ac2fe5ede8e353198e86dc6fdf8f571bc1891161ae2dd04cb` |
+| `django-baseline-init.json` | `4188aae9759c043220c54cdf339bca9703bc55c7c030e5e6eb105dc67761f90b` |
+| `django-baseline.cpuprofile` | `ef65fd8374d8d4c310d35b95a3abfaa6f80add970acb986c712885d9a8a3b783` |
+| `django-init.json` | `ff8d7ff7cb96137d9931cd5d408a0ba48869880fd87a10ea0f19f2773b315c8c` |
+| `junit-baseline.cpuprofile` | `7c9155aa853d5cb4caf774c8fce5f9214610d3d84c0038e865d3415cb8f8f6bf` |
+| `junit-profile-summary.json` | `84e6153eccde7a306f25c770b9eae72bfe31c01316b344083292f97d457d4588` |
+| `junit-baseline-profile-init.json` | `3f5ebdcf37427004f0bf04f59cb13cb9a805b9c0a547716aa0aa0b7d53da6fa3` |
+| `checkout-failure.json` | `90d60a787840ce35cfaeb2f8e06e901dfde62f965cfbced8f89ed8added7c9bc` |
+| `tokio-final-validation-init.json` | `799dd9f3d970f1ccf318cacc26e0603937ea4b3561c75710ef28e0cfe022f209` |
+| `tokio-baseline-failure.json` | `ee2b3da76938a10909ffe12c3a62fa65318d3d9e45f8e8543c1f265df2bd5684` |
+| `cargo-independent-validation.json` | `a024fabbece5889a9b836d45119933091084f801d8b29c518794bae3071b457a` |
+| `build-stage-bridge.json` | `059f00927e4146db3405d3f8d97905273699d9c1248ed48660d0c5cf8160a39a` |
+| `cargo-upgrade-lifecycle.json` | `a95cacf79d1590bb2a23d33c77ad78dfc517999be0902aa567bfd6c3318f04f6` |
+| `quality-first-failure.log` | `be33d3357c935b45cd2ad8fa641ac5f3d4776841c9c3897f281788dbe68f33d5` |
+| `observer-provenance.json` | `3b2e7b84bac28b40887d47713b3168d9be4cc17d5a7d3f87074bf5742e562764` |
+| `task-retrieval-observed.mjs` | `6f7c677cfb8e9823c547e7e46ce991b5f53af8c18aa9aeb26a47724a0cfc098d` |
+| `final-bridge.py` | `9ba16729b593837081f562e8e16e8b6ea767fe66db016d086b8572064f55d323` |
+| `summary.json` | `b76f0e8c19421f523a01f9e0924a42b7456f8b9a4a69be963d25dbd3ef1dddfc` |
+| `audit.mjs` | `d9e52f2b515a485523c7dcc2fde26a829ba7abc1801359291d6ebb8ae6325f86` |
+| `document-audit.mjs` | `a7e763ca07bc3ebe219fb7d4713a56482fdcb82973c0f7e573472cd694a75fc7` |
+| `check.log` | `6dd53f1eb7a88d261e9a9cddce139862204aa34c454f081cef45f13e783b7417` |
+| `build.log` | `39c96357f3442e84797d1ac299825ab00d9656767434c6abc5dd182625e4d180` |
+| `focused-test.log` | `a821f8a06c6627408516915f9cb639d95a1804d077b422052fafa53a1604544f` |
+| `native-focused-test.log` | `d3ed7d71e9f4d2386962c39d55eea4b0c3497e996fa2e9ce99b3fcf01327f0c8` |
+| `cargo-focused-test.log` | `0bdcba56207ab63ded9983442cf4b59c3e2a419cf0d6db9b4a859b16e7b81390` |
+| `full-test.log` | `8854aab80b252f683d67774f7a262ec7e23c7baa6d9c3c7bae8fd1e5f27aef75` |
+| `language-depth.log` | `9d396426cdb02e6130185a10feb8042b0d0a374f9ec9f0422c9b776b2f44ee44` |
+| `guards.json` | `d7befc6fa791929d046e854cb90a8e826b0465a7b3e4532a48d930193333bd65` |
+
+備妥 pinned checkout 及相應凍結建置，指定尚不存在的外部 workspace。Django/JUnit 用兩對，其餘單次診斷用一對；Tokio 重跑用最終建置同時作 baseline/candidate，只檢查重複結果，不能作新舊速度比較。
+
+```powershell
+node benchmarks/mcp/paired-init.mjs --source-project <PINNED_CHECKOUT> --baseline-root <BASELINE_BUILT_ROOT> --candidate-root <CANDIDATE_BUILT_ROOT> --workspace <NEW_EXTERNAL_WORKSPACE> --output <EXTERNAL_REPORT.json> --pairs 2
+node benchmarks/mcp/task-retrieval.mjs --project <FRESH_INDEXED_COPY> --manifest benchmarks/mcp/dapper-init-retention-tasks.json --product-root <BUILT_ROOT> --output <EXTERNAL_TASK_REPORT.json> --repetitions 1
 ```

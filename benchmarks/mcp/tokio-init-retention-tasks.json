@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/tokio-rs/tokio.git",
+  "commit": "3eb95a40f1b88623470c4e902e2fa90e807fdeed",
+  "truthMethod": "Manual reading of this pinned source before the first product query. These bounded file/source tasks check retention during init optimization; they do not establish Rust macro expansion, timer dispatch or complete runtime flow. Other selected files remain unjudged.",
+  "tasks": [
+    {
+      "id": "known-sleep-construction",
+      "split": "held-out",
+      "query": "sleep",
+      "requiredFiles": ["tokio/src/time/sleep.rs"], "supportingFiles": [], "irrelevantFiles": [],
+      "evidence": [
+        { "file": "tokio/src/time/sleep.rs", "line": 123, "text": "pub fn sleep(duration: Duration) -> Sleep" },
+        { "file": "tokio/src/time/sleep.rs", "line": 125, "text": "Sleep::new_timeout(deadline, trace::caller_location())" }
+      ]
+    },
+    {
+      "id": "unhinted-duration-timer-future",
+      "split": "held-out",
+      "query": "How does waiting for a duration construct a timer deadline and complete its future when polled?",
+      "requiredFiles": ["tokio/src/time/sleep.rs"], "supportingFiles": [], "irrelevantFiles": [],
+      "evidence": [
+        { "file": "tokio/src/time/sleep.rs", "line": 124, "text": "let deadline = Instant::now() + safe_delay(duration);" },
+        { "file": "tokio/src/time/sleep.rs", "line": 470, "text": "match ready!(self.poll_elapsed(cx))" },
+        { "file": "tokio/src/time/sleep.rs", "line": 471, "text": "Ok(()) => Poll::Ready(())" }
+      ]
+    }
+  ]
+}

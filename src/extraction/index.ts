@@ -588,8 +588,30 @@ function isLexicalScope(node: ts.Node): boolean {
   );
 }
 
+// Extraction never changes AST parents or source positions. Keep these caches
+// scoped to one parsed source, so another scan cannot reuse stale scope data.
+const lexicalScopeCaches = new WeakMap<ts.SourceFile, {
+  readonly scopeIds: WeakMap<ts.Node, string>;
+  readonly enclosingIds: WeakMap<ts.Node, readonly string[]>;
+}>();
+
+function lexicalScopeCache(sourceFile: ts.SourceFile) {
+  let cache = lexicalScopeCaches.get(sourceFile);
+  if (cache === undefined) {
+    cache = { scopeIds: new WeakMap(), enclosingIds: new WeakMap() };
+    lexicalScopeCaches.set(sourceFile, cache);
+  }
+  return cache;
+}
+
 function scopeIdFor(sourceFile: ts.SourceFile, node: ts.Node): string {
-  return `${node.kind}:${node.getStart(sourceFile)}:${node.getEnd()}`;
+  const cache = lexicalScopeCache(sourceFile).scopeIds;
+  let id = cache.get(node);
+  if (id === undefined) {
+    id = `${node.kind}:${node.getStart(sourceFile)}:${node.getEnd()}`;
+    cache.set(node, id);
+  }
+  return id;
 }
 
 function enclosingScopeNodes(node: ts.Node): readonly ts.Node[] {
@@ -607,14 +629,34 @@ function enclosingScopeNodes(node: ts.Node): readonly ts.Node[] {
 }
 
 function enclosingScopeIds(sourceFile: ts.SourceFile, node: ts.Node): readonly string[] {
-  return enclosingScopeNodes(node).flatMap((scopeNode) => {
-    const scopeId = scopeIdFor(sourceFile, scopeNode);
-    // Parameters and function-local declarations shadow an expression's
-    // private self name, which lives in a separate enclosing environment.
-    return ts.isFunctionExpression(scopeNode) && scopeNode.name !== undefined
-      ? [scopeId, functionExpressionNameScopeId(sourceFile, scopeNode)]
-      : [scopeId];
-  });
+  const cache = lexicalScopeCache(sourceFile).enclosingIds;
+  const cached = cache.get(node);
+  if (cached !== undefined) {
+    return cached;
+  }
+  // Walk only as far as the first known ancestor, then share its immutable
+  // scope list through non-scope nodes. Unwind iteratively for deep expressions.
+  const pending: ts.Node[] = [];
+  let current: ts.Node | undefined = node;
+  while (current !== undefined && !cache.has(current)) {
+    pending.push(current);
+    current = current.parent;
+  }
+  let ids: readonly string[] = current === undefined ? [] : cache.get(current)!;
+  for (let index = pending.length - 1; index >= 0; index -= 1) {
+    const child = pending[index]!;
+    const parent = child.parent;
+    if (parent !== undefined && isLexicalScope(parent)) {
+      const scopeId = scopeIdFor(sourceFile, parent);
+      // Parameters and local declarations shadow a named expression's private
+      // self name, which lives in a separate enclosing environment.
+      ids = ts.isFunctionExpression(parent) && parent.name !== undefined
+        ? [scopeId, functionExpressionNameScopeId(sourceFile, parent), ...ids]
+        : [scopeId, ...ids];
+    }
+    cache.set(child, ids);
+  }
+  return ids;
 }
 
 function functionExpressionNameScopeId(sourceFile: ts.SourceFile, node: ts.FunctionExpression): string {

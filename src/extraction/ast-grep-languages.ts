@@ -13,4 +13,16 @@ import { parse, registerDynamicLanguage, type SgNode } from "@ast-grep/napi";
  */
 registerDynamicLanguage({ csharp, dart, java, kotlin, ruby, scala, swift });
 
+const childrenCache = new WeakMap<SgNode, readonly SgNode[]>();
+
+/** Parsed native trees are immutable; share child wrappers within one tree. */
+export function cachedChildren(node: SgNode): readonly SgNode[] {
+  let children = childrenCache.get(node);
+  if (children === undefined) {
+    children = node.children();
+    childrenCache.set(node, children);
+  }
+  return children;
+}
+
 export { parse, type SgNode };

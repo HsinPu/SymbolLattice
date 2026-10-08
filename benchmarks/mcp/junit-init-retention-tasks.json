@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/junit-team/junit5.git",
+  "commit": "99a00b9bb82723d5aa573942b15618ec3f3ab396",
+  "truthMethod": "Manual reading of this pinned source before the first product query. These two bounded file/source tasks check output retention during init optimization; they are not a compiler, overload-resolution or complete Java retrieval oracle. Required files and excerpts stay fixed; all other selected files remain unjudged.",
+  "tasks": [
+    {
+      "id": "known-equality-assertion",
+      "split": "held-out",
+      "query": "AssertEquals.assertEquals",
+      "requiredFiles": ["junit-jupiter-api/src/main/java/org/junit/jupiter/api/AssertEquals.java"],
+      "supportingFiles": [], "irrelevantFiles": [],
+      "evidence": [
+        { "file": "junit-jupiter-api/src/main/java/org/junit/jupiter/api/AssertEquals.java", "line": 146, "text": "static void assertEquals(int expected, int actual)" }
+      ]
+    },
+    {
+      "id": "unhinted-integer-assertion-failure",
+      "split": "held-out",
+      "query": "How does an integer equality assertion detect a mismatch and fail with a message?",
+      "requiredFiles": ["junit-jupiter-api/src/main/java/org/junit/jupiter/api/AssertEquals.java"],
+      "supportingFiles": [], "irrelevantFiles": [],
+      "evidence": [
+        { "file": "junit-jupiter-api/src/main/java/org/junit/jupiter/api/AssertEquals.java", "line": 151, "text": "if (expected != actual)" },
+        { "file": "junit-jupiter-api/src/main/java/org/junit/jupiter/api/AssertEquals.java", "line": 152, "text": "failNotEqual(expected, actual, message);" }
+      ]
+    }
+  ]
+}

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
+import { availableParallelism, cpus, freemem, release, totalmem } from "node:os";
 import { spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import { pathToFileURL } from "node:url";
@@ -13,6 +14,9 @@ const argument = name => {
   return index < 0 ? undefined : process.argv[index + 1];
 };
 const digest = value => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+const environment = () => ({ capturedAt: new Date().toISOString(),
+  osRelease: release(), logicalCpus: cpus().length, availableParallelism: availableParallelism(),
+  cpuModel: cpus()[0]?.model, totalMemoryBytes: totalmem(), freeMemoryBytes: freemem() });
 const execute = (command, args, cwd) => {
   const result = spawnSync(command, args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   if (result.error) throw result.error;
@@ -101,13 +105,16 @@ if (argument("--inspect-root")) {
     const order = pair % 2 === 0 ? ["baseline", "candidate"] : ["candidate", "baseline"];
     for (const name of order) {
       const project = join(workspace, `${pair}-${name}`);
-      execute("git", ["clone", "--quiet", "--no-hardlinks", "--", source, project]);
+      execute("git", ["-c", "core.longpaths=true", "clone", "--config", "core.longpaths=true",
+        "--quiet", "--no-hardlinks", "--", source, project]);
       execute("git", ["remote", "set-url", "origin", identity.repository], project);
       assert.equal(execute("git", ["rev-parse", "HEAD"], project), identity.commit);
+      const environmentBefore = environment();
       const started = performance.now();
       const raw = execute(process.execPath, [join(roots[name], "dist/cli/main.js"),
         "init", project, "--json"], roots[name]);
       const processMilliseconds = performance.now() - started;
+      const environmentAfter = environment();
       const status = JSON.parse(raw);
       assert.equal(status.initialized, true);
       assert.equal(status.stale, false);
@@ -119,7 +126,7 @@ if (argument("--inspect-root")) {
       const inspection = JSON.parse(readFileSync(inspectionPath, "utf8"));
       expected ??= inspection;
       assert.deepEqual(inspection, expected, "Complete indexed facts, graph or source projection changed");
-      const sample = { pair, order, project, processMilliseconds,
+      const sample = { pair, order, project, processMilliseconds, environmentBefore, environmentAfter,
         operationPerformance: status.operationPerformance, statusPath, inspectionPath, inspection };
       samples[name].push(sample);
       console.log(JSON.stringify({ pair, name, processMilliseconds,

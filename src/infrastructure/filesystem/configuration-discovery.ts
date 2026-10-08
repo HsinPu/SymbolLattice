@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { cargoManifestIdentitySource } from "./cargo-manifest-identity.js";
 
 import type { ProjectConfigurationInput } from "../../domain/index-inputs.js";
 import {
@@ -88,9 +89,11 @@ async function readCandidateIdentity(
     return {
       path,
       state: "present",
-      contentHash: filesystemReader === nativeProjectFilesystemReader
-        ? await hashUtf8File(absolutePath)
-        : hashSource(await readProjectFilesystemText(filesystemReader, absolutePath))
+      contentHash: path === "Cargo.toml" || path.endsWith("/Cargo.toml")
+        ? hashSource(cargoManifestIdentitySource(await readProjectFilesystemText(filesystemReader, absolutePath)))
+        : filesystemReader === nativeProjectFilesystemReader
+          ? await hashUtf8File(absolutePath)
+          : hashSource(await readProjectFilesystemText(filesystemReader, absolutePath))
     };
   } catch (error) {
     if (projectFilesystemMissingCode(error) !== null) {

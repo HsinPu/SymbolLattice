@@ -159,6 +159,28 @@ function tomlDelimiterDelta(value: string): number | null {
   return quote === null && !escaped ? depth : null;
 }
 
+/** Locate a multiline string's terminator without interpreting its contents. */
+function multilineStringEnd(value: string, quote: '"' | "'", start = 0): number | null {
+  for (let index = start; index < value.length; index += 1) {
+    if (quote === '"' && value[index] === "\\") {
+      index += 1;
+      continue;
+    }
+    if (value[index] !== quote) {
+      continue;
+    }
+    let end = index + 1;
+    while (value[end] === quote) {
+      end += 1;
+    }
+    if (end - index >= 3) {
+      return end;
+    }
+    index = end - 1;
+  }
+  return null;
+}
+
 /**
  * Reads only the small TOML subset required for explicit workspace membership
  * and direct inline-table path dependencies. Unsupported TOML is deliberately
@@ -170,6 +192,7 @@ function parseTomlSections(sourceText: string, relativePath: string): ReadonlyMa
   let pendingKey: string | undefined;
   let pendingValue = "";
   let pendingDepth = 0;
+  let pendingString: { key: string; value: string; quote: '"' | "'" } | undefined;
 
   function store(key: string, value: string): void {
     if (currentSection === undefined) {
@@ -182,6 +205,18 @@ function parseTomlSections(sourceText: string, relativePath: string): ReadonlyMa
   }
 
   for (const rawLine of sourceText.split(/\r?\n/u)) {
+    if (pendingString !== undefined) {
+      const end = multilineStringEnd(rawLine, pendingString.quote);
+      pendingString.value += `\n${end === null ? rawLine : rawLine.slice(0, end)}`;
+      if (end !== null) {
+        if (stripTomlComment(rawLine.slice(end)).trim() !== "") {
+          throw configurationError(relativePath, `cannot parse ${pendingString.key} value`);
+        }
+        store(pendingString.key, pendingString.value);
+        pendingString = undefined;
+      }
+      continue;
+    }
     const line = stripTomlComment(rawLine).trim();
     if (pendingKey !== undefined) {
       const delta = tomlDelimiterDelta(line);
@@ -222,6 +257,25 @@ function parseTomlSections(sourceText: string, relativePath: string): ReadonlyMa
       }
       continue;
     }
+    const rawAssignment = /^([A-Za-z0-9_-]+)\s*=\s*(.+)$/u.exec(rawLine.trim());
+    const rawValue = rawAssignment?.[2];
+    // Metadata such as Cargo's description may use multiline strings. Keep
+    // them opaque: their contents must never become sections or dependencies,
+    // and parseTomlString still rejects them for semantic name/path fields.
+    if (rawAssignment?.[1] !== undefined && rawValue !== undefined &&
+        (rawValue.startsWith('"""') || rawValue.startsWith("'''"))) {
+      const quote = rawValue[0] as '"' | "'";
+      const end = multilineStringEnd(rawValue, quote, 3);
+      if (end === null) {
+        pendingString = { key: rawAssignment[1], value: rawValue, quote };
+      } else {
+        if (stripTomlComment(rawValue.slice(end)).trim() !== "") {
+          throw configurationError(relativePath, `cannot parse ${rawAssignment[1]} value`);
+        }
+        store(rawAssignment[1], rawValue.slice(0, end));
+      }
+      continue;
+    }
     if (currentSection === undefined) {
       continue;
     }
@@ -246,6 +300,9 @@ function parseTomlSections(sourceText: string, relativePath: string): ReadonlyMa
 
   if (pendingKey !== undefined) {
     throw configurationError(relativePath, `unterminated ${pendingKey} value`);
+  }
+  if (pendingString !== undefined) {
+    throw configurationError(relativePath, `unterminated ${pendingString.key} value`);
   }
   return sections;
 }

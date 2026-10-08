@@ -33,6 +33,22 @@ afterEach(async () => {
 });
 
 describe("project index inputs", () => {
+  it("versions only Cargo manifests with multiline metadata for ordinary sync", async () => {
+    const projectPath = await createProject();
+    const path = join(projectPath, "Cargo.toml");
+    const ordinary = '[package]\nname = "app"';
+    await writeFile(path, ordinary, "utf8");
+    expect((await readProjectConfigurationInput(projectPath, "cargo-workspace-root-manifest", "Cargo.toml")).contentHash)
+      .toBe(hashSource(ordinary));
+    const multiline = `${ordinary}\n[[bin]]\ndescription = """\n[dependencies]\nfake = { path = "../api" }\n"""`;
+    await writeFile(path, multiline, "utf8");
+    const first = await readProjectConfigurationInput(projectPath, "cargo-workspace-root-manifest", "Cargo.toml");
+    expect(first.contentHash).not.toBe(hashSource(multiline));
+    expect(await readProjectConfigurationInput(projectPath, "cargo-workspace-root-manifest", "Cargo.toml")).toEqual(first);
+    expect((await readProjectConfigurationInput(projectPath, "workspace-root-manifest", "Cargo.toml")).contentHash)
+      .toBe(hashSource(multiline));
+  });
+
   it("captures root gitignore state, canonical scope roots, and a deterministic composed fingerprint", async () => {
     const projectPath = await createProject();
     await mkdir(join(projectPath, "src"), { recursive: true });

@@ -117,9 +117,9 @@ See the [validation documentation](../benchmarks/README.md) for measured results
 
 Use the installation flow above with a new fixed commit or existing tag. After reinstalling, repeat Codex integration and run `SymbolLattice sync .` in each project. The project is in `0.x` development; check the target version's compatibility and migration notes before upgrading.
 
-### Upgrading to v0.550.3
+### Upgrading to v0.550.4
 
-This patch reduces repeated AST traversal and TypeScript module lookups during first initialization. Existing v0.550.2 indexes remain usable; this performance fix does not require another `init`. Use `sync` for routine edits. See the [language verification and speed report](language-verification-and-speed.md) for fixed-project initialization timings and unmeasured scope.
+v0.550.3 reduces repeated AST traversal and TypeScript module lookups; v0.550.4 also reuses lexical scopes, positions and Java native child nodes within one AST, reducing repeated traversal and allocation, and fixes initialization blocked by multiline Cargo descriptions. Sections and dependencies inside multiline text remain text; multiline names or paths still do not establish resolved relationships. Existing v0.550.2 and v0.550.3 indexes do not need rebuilding. Old indexes containing multiline Cargo configuration report changed project inputs; ordinary `sync` refreshes them. Other indexes remain usable. Use `sync` for routine edits. See the [language verification and speed report](language-verification-and-speed.md) for fixed-project initialization timings and unmeasured scope.
 
 ### Upgrading to v0.550.2
 

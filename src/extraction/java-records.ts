@@ -1,4 +1,4 @@
-import { parse, type SgNode } from "./ast-grep-languages.js";
+import { cachedChildren as directChildren, parse, type SgNode } from "./ast-grep-languages.js";
 
 export interface JavaRecordExtractFileFactsInput {
   readonly sourceText: string;
@@ -46,10 +46,6 @@ const SPRING_CONFIGURATION_PROPERTIES_PATH =
   "org.springframework.boot.context.properties.ConfigurationProperties";
 const SPRING_BOOT_PROPERTIES_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
 const JAVA_DOTTED_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$/u;
-
-function directChildren(node: SgNode): readonly SgNode[] {
-  return node.children();
-}
 
 function hasSyntaxError(node: SgNode): boolean {
   return node.kind() === "ERROR" || directChildren(node).some((child) => hasSyntaxError(child));

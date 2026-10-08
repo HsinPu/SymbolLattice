@@ -1,4 +1,4 @@
-import { parse, type SgNode } from "./ast-grep-languages.js";
+import { cachedChildren as directChildren, parse, type SgNode } from "./ast-grep-languages.js";
 
 export interface ModernJavaDeclarationRange {
   readonly start: number;
@@ -127,10 +127,6 @@ export interface ModernJavaDeclarationInspection {
   readonly staticImportNames: readonly string[];
   readonly declarations: readonly ModernJavaDeclaration[];
   readonly imports: readonly ModernJavaImport[];
-}
-
-function directChildren(node: SgNode): readonly SgNode[] {
-  return node.children();
 }
 
 function hasSyntaxError(node: SgNode): boolean {

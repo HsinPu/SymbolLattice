@@ -8,6 +8,7 @@ import {
   type ProjectIndexInputs
 } from "../../domain/index-inputs.js";
 import { canonicalizeScopeRoots, compareProjectPaths, hashSource } from "./discovery.js";
+import { cargoManifestIdentitySource } from "./cargo-manifest-identity.js";
 import { discoverConfigurationCandidateInput } from "./configuration-discovery.js";
 import {
   nativeProjectFilesystemReader,
@@ -90,12 +91,20 @@ export async function readProjectConfigurationInput(
 
   try {
     const contents = await readProjectFilesystemText(filesystemReader, absolutePath);
+    // Earlier Cargo readers could interpret multiline metadata in ignored
+    // tables as dependency sections. Version only affected manifest identities
+    // so ordinary sync refreshes those relationships without invalidating
+    // unrelated projects or changing the stored input format.
+    const identitySource =
+      kind === "cargo-workspace-root-manifest" || kind === "cargo-workspace-package-manifest"
+        ? cargoManifestIdentitySource(contents)
+        : contents;
 
     return {
       kind,
       path: canonicalPath,
       state: "present",
-      contentHash: hashSource(contents)
+      contentHash: hashSource(identitySource)
     };
   } catch (error) {
     if (projectFilesystemMissingCode(error) === null) {

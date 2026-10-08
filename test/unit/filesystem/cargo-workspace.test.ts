@@ -30,6 +30,58 @@ afterEach(async () => {
 });
 
 describe("Cargo workspace crate module resolution", () => {
+  it.each([
+    '"""\nCargo metadata # comment inside string\n[dependencies]\nfake = { package = "api", path = "../api" }\n\\""" remains metadata\n""" # trailing comment',
+    "'''\nCargo metadata # comment inside string\n[dependencies]\nfake = { package = \"api\", path = \"../api\" }\n''' # trailing comment",
+    '"""single line # metadata"""',
+    '"""metadata ends with a quote""""',
+    "'''metadata ends with two quotes'''''"
+  ])("keeps multiline Cargo metadata opaque: %s", async (description) => {
+    const projectPath = await createProject({
+      "Cargo.toml": '[workspace]\nmembers = ["app", "api"]',
+      "app/Cargo.toml": `[package]\nname = "app"\ndescription = ${description}\n[dependencies]\napi = { path = "../api" }`,
+      "app/src/lib.rs": "use api::run;",
+      "api/Cargo.toml": '[package]\nname = "api"',
+      "api/src/lib.rs": "pub fn run() {}"
+    });
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+    expect(scan.moduleResolver.resolve("app/src/lib.rs", "api")).toEqual({
+      targetFilePath: "api/src/lib.rs",
+      strategy: "cargo-workspace-crate",
+      configurationPaths: ["Cargo.toml", "app/Cargo.toml", "api/Cargo.toml"]
+    });
+    expect(scan.moduleResolver.resolve("app/src/lib.rs", "fake").strategy).toBe("unresolved");
+  });
+
+  it("does not treat multiline text in an ignored Cargo table as real sections", async () => {
+    const projectPath = await createProject({
+      "Cargo.toml": '[workspace]\nmembers = ["app"]',
+      "app/Cargo.toml": '[package]\nname = "app"\n[[bin]]\ndescription = """\n[package]\nname = "fake"\n"""',
+      "app/src/lib.rs": "pub fn run() {}"
+    });
+    await expect(new FileSystemSourceCatalog().scan(projectPath)).resolves.toBeDefined();
+  });
+
+  it.each(['"""unterminated', '"""closed""" invalid'])("rejects malformed multiline Cargo metadata: %s", async (description) => {
+    const projectPath = await createProject({
+      "Cargo.toml": `[workspace]\nmembers = []\n[package]\nname = "app"\ndescription = ${description}`,
+      "src/lib.rs": "pub fn run() {}"
+    });
+    await expect(new FileSystemSourceCatalog().scan(projectPath)).rejects.toThrow(/description value/u);
+  });
+
+  it("leaves unsupported multiline package names unresolved", async () => {
+    const projectPath = await createProject({
+      "Cargo.toml": '[workspace]\nmembers = ["app", "api"]',
+      "app/Cargo.toml": '[package]\nname = """app"""\n[dependencies]\napi = { path = "../api" }',
+      "app/src/lib.rs": "use api::run;",
+      "api/Cargo.toml": '[package]\nname = "api"',
+      "api/src/lib.rs": "pub fn run() {}"
+    });
+    const scan = await new FileSystemSourceCatalog().scan(projectPath);
+    expect(scan.moduleResolver.resolve("app/src/lib.rs", "api").strategy).toBe("unresolved");
+  });
+
   it("resolves an imported Rust crate only with explicit workspace and direct path-dependency proof", async () => {
     const projectPath = await createProject({
       "Cargo.toml": [

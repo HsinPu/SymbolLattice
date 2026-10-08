@@ -30,7 +30,7 @@ import {
   type SpringBootPropertiesValueReferenceFact,
   type SymbolNode
 } from "../domain/index.js";
-import { parse as parseAstGrep, type SgNode } from "./ast-grep-languages.js";
+import { cachedChildren as astGrepChildren, parse as parseAstGrep, type SgNode } from "./ast-grep-languages.js";
 import { frameworkCapability } from "./framework-capabilities.js";
 import {
   inspectModernJavaDeclarations,
@@ -439,10 +439,6 @@ function rangeFor(lineStarts: readonly number[], from: number, to: number): Sour
     start: positionFor(lineStarts, from),
     end: positionFor(lineStarts, to)
   };
-}
-
-function astGrepChildren(node: SgNode): readonly SgNode[] {
-  return node.children();
 }
 
 function astGrepHasError(node: SgNode): boolean {

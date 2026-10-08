@@ -13,6 +13,18 @@ function graph(sourceText: string, language: "javascript" | "typescript") {
 }
 
 describe.each(["javascript", "typescript"] as const)("%s named function expressions", (language) => {
+  it("recomputes sibling and private-name scopes after editing the same source path", () => {
+    const source = "function recur () {}\nconsume(function recur () { recur(); });\n{ recur(); }";
+    const first = graph(source, language);
+    const edited = graph(source.replace("function recur () { recur(); }", "function recur (recur) { recur(); }"), language);
+    const exactCalls = (snapshot: typeof first.snapshot) => snapshot.edges.filter(
+      (edge) => edge.kind === "calls" && edge.resolution === "exact"
+    );
+    expect(exactCalls(first.snapshot).map((edge) => edge.range?.start.line)).toEqual([2, 3]);
+    expect(exactCalls(edited.snapshot).map((edge) => edge.range?.start.line)).toEqual([3]);
+    expect(graph(source, language)).toEqual(first);
+  });
+
   it("retains assigned expression source and attributes initializer calls to it", () => {
     const expression = "function dispatch () { const result = helper(); return result; }";
     const source = `function helper () {}\nmodule.exports = ${expression};\ndispatch();`;

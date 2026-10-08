@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/fmtlib/fmt.git",
+  "commit": "10cda465edf19ed0303a0655b762ea752f8a0997",
+  "truthMethod": "Manual reading of this pinned source before the first product query. These bounded file/source tasks check retention during init optimization; they do not establish C++ preprocessor expansion, exception configuration or complete formatting flow. Other selected files remain unjudged.",
+  "tasks": [
+    {
+      "id": "known-formatting-error",
+      "split": "held-out",
+      "query": "report_error",
+      "requiredFiles": ["include/fmt/format-inl.h"], "supportingFiles": ["include/fmt/core.h"], "irrelevantFiles": [],
+      "evidence": [
+        { "file": "include/fmt/format-inl.h", "line": 157, "text": "FMT_FUNC void report_error(const char* message)" }
+      ]
+    },
+    {
+      "id": "unhinted-format-error-exception",
+      "split": "held-out",
+      "query": "How does a formatting failure turn an error message into an exception?",
+      "requiredFiles": ["include/fmt/format-inl.h"], "supportingFiles": [], "irrelevantFiles": [],
+      "evidence": [
+        { "file": "include/fmt/format-inl.h", "line": 164, "text": "FMT_THROW(format_error(message));" }
+      ]
+    }
+  ]
+}
