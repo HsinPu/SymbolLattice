@@ -1802,6 +1802,7 @@ const constructorInstanceAliasCache = new WeakMap<ts.SourceFile, Map<string, Rea
 const constructorPrototypeAliasCache = new WeakMap<ts.SourceFile, Map<string, ReadonlySet<string>>>();
 const unprovenDynamicPrototypeAliasCache = new WeakMap<ts.SourceFile, ReadonlySet<string>>();
 const receiverMemberMutationCache = new WeakMap<ts.SourceFile, Map<string, boolean>>();
+const memberMutationCandidatesCache = new WeakMap<ts.Node, readonly ts.Node[]>();
 const constructorPrototypeMemberMutationCache = new WeakMap<
   ts.SourceFile,
   Map<string, boolean>
@@ -2691,6 +2692,34 @@ function constructorPrototypeAliases(
   return aliases;
 }
 
+/** Reuse the syntactic work while retaining each receiver's conservative checks. */
+function memberMutationCandidates(root: ts.Node): readonly ts.Node[] {
+  const cached = memberMutationCandidatesCache.get(root);
+  if (cached !== undefined) return cached;
+  const candidates: ts.Node[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      !ts.isSourceFile(root) &&
+      (ts.isClassDeclaration(node) || ts.isClassExpression(node))
+    ) {
+      return;
+    }
+    if (
+      ts.isCallExpression(node) ||
+      ts.isDeleteExpression(node) ||
+      (ts.isBinaryExpression(node) &&
+        node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+        node.operatorToken.kind <= ts.SyntaxKind.LastAssignment)
+    ) {
+      candidates.push(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(root, visit);
+  memberMutationCandidatesCache.set(root, candidates);
+  return candidates;
+}
+
 function receiverMemberIsMutated(
   sourceFile: ts.SourceFile,
   receiver: ts.Expression,
@@ -2814,16 +2843,11 @@ function receiverMemberIsMutated(
       mutated = true;
       return;
     }
-    if (
-      owner !== null &&
-      node !== root &&
-      (ts.isClassDeclaration(node) || ts.isClassExpression(node))
-    ) {
-      return;
-    }
-    ts.forEachChild(node, visit);
   };
-  ts.forEachChild(root, visit);
+  for (const node of memberMutationCandidates(root)) {
+    visit(node);
+    if (mutated) break;
+  }
   byReceiver.set(cacheKey, mutated);
   return mutated;
 }
@@ -2906,9 +2930,11 @@ function constructorPrototypeMemberIsMutated(
         return;
       }
     }
-    ts.forEachChild(node, visit);
   };
-  ts.forEachChild(sourceFile, visit);
+  for (const node of memberMutationCandidates(sourceFile)) {
+    visit(node);
+    if (mutated) break;
+  }
   byConstructorMember.set(cacheKey, mutated);
   return mutated;
 }

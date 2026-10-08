@@ -1,6 +1,6 @@
 # 語言驗證程度與搜尋速度報告
 
-文件跟隨版本：`v0.550.2`。更新日期：2026-10-06。完整主表量測產品：`v0.549.0`（`54893be20020208866c5e8daae7863196f7ccaf7`）；最新局部查找與速度補驗另列於文末。
+文件跟隨版本：`v0.550.3`。更新日期：2026-10-08。完整主表量測產品：`v0.549.0`（`54893be20020208866c5e8daae7863196f7ccaf7`）；最新局部查找與速度補驗另列於文末。
 
 本報告集中列出全部 58 種語言／格式的驗證範圍、查找結果與速度，後續優化更新同一份文件。所有數值均保留測量版本；純文件升版不把舊數據改稱新版本實測。
 
@@ -338,3 +338,73 @@ Gin 三題沿用原 `v0.550.1` 真值及首次結果，本批作為開發／回�
 | `timing.mjs` | `895e774587289cb0b4a6bbfed9270b232f4c4643412b33e35b7ca8951c566cdb` |
 
 重跑命令見 [Go audit](../benchmarks/go/boolean-semicolon-audit.md)。後續優化更新同一份報告，保留原始失敗、較慢樣本與不同測量版本。
+
+
+## v0.550.3：首次初始化重複工作
+
+更新日期：2026-10-08。產品比較：v0.550.2（commit `77a8a51396889ea234e140ef2135d58da507a0e2`）與 v0.550.3；這是維持對外契約的效能修正，採 patch。既有 58 行主表、歷史查詢時間及未量測範圍不改稱本版實測。
+
+NestJS 的診斷 CPU profile 顯示，方法呼叫的保守 mutation 判定會反覆走訪同一 AST，TypeScript 模組解析也會重複存取相同路徑。候選版重用每個 AST 根的呼叫／賦值／刪除候選，保留原有接收者、別名、prototype、escape 及巢狀類別邊界檢查；每次掃描另建立獨立 TypeScript 模組快取，原選項、移除 paths、移除 paths/baseUrl 三種解析各自隔離。下一次掃描重建快取，新增／刪除檔案與設定變更仍會重新判定。原始 facts、resolver、source-search 版本及索引格式均不變，不因本項效能修正重新初始化既有索引。
+
+### 固定來源與首次索引時間
+
+- nest：https://github.com/nestjs/nest；commit `35c3ded6dbf3f23f917ae88d0ed966932788cae6`。
+- fastify：https://github.com/fastify/fastify；commit `70b14e92c0b55e8201f5530ba2e6bab4e928c784`。
+- grpc：https://github.com/grpc/grpc-go；commit `d96c2ef4f3339142d20a47797d8a5a4fae948607`。
+
+使用 [paired-init](../benchmarks/mcp/paired-init.mjs)，Windows x64、Node.js v24.19.0。每個專案四對交替執行，共 24 次首次初始化。每次使用新的 checkout 與不存在的索引，沒有執行其他測試或 benchmark；OS 檔案快取未清除，並非冷磁碟量測。量測後環境核對回報 Windows 10.0.19045、CPU `Genuine Intel(R) CPU 0000 @ 2.00GHz`、47.88 GiB RAM；兩次 logical CPU 回報為 16 與 64，量測時未保存 CPU affinity，不將這些後核對資料當成固定硬體條件。git clone、完整資料核對及 SQLite integrity_check 均在計時之外。下表為四筆的上中位數；CLI 時間包含啟動、索引、狀態、diagnostics 與結束，索引階段則取產品的 monotonic operationPerformance。各階段中位數不一定相加等於整體中位數。
+
+| 專案 | 已索引檔案 | v0.550.2 CLI 秒 | v0.550.3 CLI 秒 | 變化 | 索引階段秒（舊 → 新） |
+| --- | ---: | ---: | ---: | --- | --- |
+| nest | 1738 | 47.89 | 37.39 | -21.94% | 47.35 → 36.78 |
+| fastify | 338 | 12.56 | 12.32 | -1.92% | 12.07 → 11.79 |
+| grpc | 1107 | 19.53 | 19.44 | -0.49% | 19.01 → 18.91 |
+
+| NestJS 階段 | v0.550.2 ms | v0.550.3 ms |
+| --- | ---: | ---: |
+| scan | 8494.91 | 8549.00 |
+| extraction | 15304.03 | 11395.77 |
+| resolution | 14871.34 | 7887.12 |
+| persistence | 8287.93 | 8606.84 |
+| status-read | 430.04 | 427.24 |
+
+這是三個固定來源的首次初始化結果；小樣本及檔案快取變異不建立 SLO、統計顯著性或所有語言的加速承諾。Fastify 與 grpc-go 保留作對照，較慢樣本也列在原始紀錄。修改來源的增量同步、service 查詢、CLI 查詢速度、MCP transport、完整 Agent 任務與補查成本均未在本批重新量測。累計仍只有 4/58 種語言有歷史任務查詢速度，其餘 54 種未量測。尚未取得使用者遇到 init 緩慢的專案資料及實機耗時，不能將此結果當成該專案的完成時間。
+
+### 品質與來源核對
+
+24 次初始化的完整 raw facts、graph（符號、關係及其證據、pending references）、設定身分、來源及 FTS corpus 均與各自基準完全相同；僅排除 generation ID 及 indexedAt。三個固定專案共 3183 個已索引來源，每次均另讀 pinned checkout 核對內容，SQLite integrity_check 與 foreign_key_check 通過。完整相等只證明本次未改變既有輸出，不證明基準解析已完整或所有關係都正確。
+
+另以既有五份固定任務 manifest 執行 [task-retrieval](../benchmarks/mcp/task-retrieval.mjs)，兩個產品讀同一個新索引，避免世代及時間戳差異。真值未調整，逐筆核對完整回應、來源片段、詞彙及圖證據。必要檔案只按主要 focuses/match 計分；來源涵蓋可包含補充 windows，不能互相替代。TP 包含預先指定補充檔案，FN 只計必要檔案；未判定輸出不當作 FP，整體 precision 未量測。
+
+| 專案 | 題數 | 必要檔案（兩版） | 指定來源（兩版） | TP / FP / FN / 待核對（兩版） | 比較 |
+| --- | ---: | --- | --- | --- | --- |
+| nest | 5 | 7/7 | 13/13 | 10 / 0 / 0 / 10 | 完整回應相同 |
+| fastify | 2 | 4/4 | 7/7 | 6 / 0 / 0 / 2 | 完整回應相同 |
+| grpc | 2 | 2/3 | 5/13 | 2 / 0 / 1 / 6 | 完整回應相同 |
+
+grpc-go 已知 Serve 查找與流程來源的既有缺口仍保留；回應相同不是完整任務驗收。新增測試核對同一 catalog 下一次掃描能看見 missing → present → removed → 設定重新映射；原有 runtime mutation 反例、巢狀邊界及框架測試保留。型別檢查、建置、527 項相關測試、全套 3498 項測試（四項既有略過）及 58 種最小契約通過；本批沒有重跑所有語言的大型語料 oracle。
+
+### 產物與重跑
+
+凍結 dist SHA-256：baseline `443be69a3d097fd95813d6ca2e31d3c842f03c657d6b40c786f96169fd743457`；candidate `6ae154f8cd69a8d3a835c8f6e75c93ad00320d2dc887f98034ae5045f23b0350`。原始來源、索引、個別樣本、完整 init JSON、parity digest、診斷 profile、固定任務結果與檢查 log 位於 `%TEMP%/SymbolLattice-v5503-init-validation`；產品在 `%TEMP%/SymbolLattice-v5502-boolean-candidate` 與 `%TEMP%/SymbolLattice-v5503-init-candidate`。原來源及舊索引未修改。profile 不納入受控速度數據。
+
+| 產物 | SHA-256 |
+| --- | --- |
+| `nest-init.json` | `dd1812939a46d88ebeccdfee17e052cc3c6638421d243e0b3bdd1017004fdb97` |
+| `fastify-init.json` | `fe16faa706ade19d639f9e254e8003597a335359804a505b679efc3df2e59ae2` |
+| `grpc-init.json` | `17b0366ac17a4ec9cb04d97ee6b01b9b0e990f3fe2da0943853bd7e0d01084b7` |
+| `quality.json` | `8cb217014b5a9908997ecc93ae47d83d682ddf98553c3ab1d2707c9691523332` |
+| `final-audit.json` | `7706ed15f96a8a2229edf5b4bc7f71327c5236379c7d2fc6dc0a49dcee093529` |
+| `guards.json` | `80cb14561e5c35eedb12e3a7f10886bae7127f2c44e735a20024255b78a322bd` |
+| `quality.mjs` | `7dc969453aa782b7c14d93dc8565041fb8d2165e502eb66b8702c3de2e6f399e` |
+| `audit.mjs` | `00ee811a91449f01a39059f744e240b0c592b3ea0a3438e9738258856d878ad0` |
+| `report.mjs` | `fca275ec78e3679f18f486d29187eb399c1e3e507fe8d658d4d68f1cd3ed19ed` |
+
+先備妥上述固定 commit 的乾淨來源、兩版獨立 built root；work 與 output 必須在產品及語料之外。每次重跑指定全新 workspace，工具拒絕覆用且不刪除既有索引。以 NestJS 為例，Fastify 與 grpc-go 換成各自 pinned checkout：
+
+```powershell
+$validation = Join-Path $env:TEMP "SymbolLattice-init-rerun"
+New-Item -ItemType Directory -Path $validation
+node benchmarks/mcp/paired-init.mjs --source-project <PINNED_NEST_CHECKOUT> --baseline-root <V05502_BUILT_ROOT> --candidate-root <V05503_BUILT_ROOT> --workspace (Join-Path $validation "nest-pairs") --output (Join-Path $validation "nest-init.json") --pairs 4
+node benchmarks/mcp/task-retrieval.mjs --project <FRESH_INDEXED_COPY> --manifest benchmarks/mcp/nest-shutdown-tasks.json --product-root <BUILT_ROOT> --output (Join-Path $validation "quality.json") --repetitions 1
+```

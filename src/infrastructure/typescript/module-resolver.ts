@@ -723,18 +723,28 @@ function isWithinDirectory(directory: string, candidate: string): boolean {
   return value === "" || (!isAbsolute(value) && value !== ".." && !value.startsWith(`..${"/"}`) && !value.startsWith(`..${"\\"}`));
 }
 
-function resolvedModulePath(
-  moduleSpecifier: string,
-  containingFile: string,
+type CompilerModuleResolver = (moduleSpecifier: string, containingFile: string) => string | null;
+
+/** Cache only within this scan; the next scan must see new files and configuration. */
+function createCompilerModuleResolver(
+  projectPath: string,
   compilerOptions: ts.CompilerOptions
-): string | null {
-  const result = ts.resolveModuleName(
-    moduleSpecifier,
-    typeScriptPath(containingFile),
-    compilerOptions,
-    ts.sys
+): CompilerModuleResolver {
+  const cache = ts.createModuleResolutionCache(
+    typeScriptPath(projectPath),
+    (path) => ts.sys.useCaseSensitiveFileNames ? path : path.toLowerCase(),
+    compilerOptions
   );
-  return result.resolvedModule?.resolvedFileName ?? null;
+  return (moduleSpecifier, containingFile) => {
+    const result = ts.resolveModuleName(
+      moduleSpecifier,
+      typeScriptPath(containingFile),
+      compilerOptions,
+      ts.sys,
+      cache
+    );
+    return result.resolvedModule?.resolvedFileName ?? null;
+  };
 }
 
 function withoutCompilerOptions(
@@ -756,13 +766,14 @@ function nonRelativeStrategy(
   moduleSpecifier: string,
   containingFile: string,
   targetPath: string,
-  compilerOptions: ts.CompilerOptions
+  compilerOptions: ts.CompilerOptions,
+  resolveWithoutPaths: CompilerModuleResolver,
+  resolveWithoutPathsOrBaseUrl: CompilerModuleResolver
 ): Exclude<ResolvedModule["strategy"], "relative" | "unresolved"> | null {
   const paths = compilerOptions.paths;
-  const withoutPaths = resolvedModulePath(
+  const withoutPaths = resolveWithoutPaths(
     moduleSpecifier,
-    containingFile,
-    withoutCompilerOptions(compilerOptions, ["paths"])
+    containingFile
   );
   if (
     paths !== undefined &&
@@ -772,10 +783,9 @@ function nonRelativeStrategy(
     return "tsconfig-paths";
   }
 
-  const withoutPathsOrBaseUrl = resolvedModulePath(
+  const withoutPathsOrBaseUrl = resolveWithoutPathsOrBaseUrl(
     moduleSpecifier,
-    containingFile,
-    withoutCompilerOptions(compilerOptions, ["paths", "baseUrl"])
+    containingFile
   );
   if (
     compilerOptions.baseUrl !== undefined &&
@@ -939,13 +949,21 @@ function createSingleTypeScriptProjectModuleResolver(input: {
     compilerOptions.baseUrl === undefined &&
     !configurationDeclaresPaths(chain[0]!) &&
     chain.slice(1).some(configurationDeclaresPaths);
+  const resolveModule = createCompilerModuleResolver(projectPath, compilerOptions);
+  // These are separate caches: removing paths/baseUrl changes the evidence
+  // used to distinguish project aliases from ordinary package resolution.
+  const resolveWithoutPaths = createCompilerModuleResolver(
+    projectPath, withoutCompilerOptions(compilerOptions, ["paths"])
+  );
+  const resolveWithoutPathsOrBaseUrl = createCompilerModuleResolver(
+    projectPath, withoutCompilerOptions(compilerOptions, ["paths", "baseUrl"])
+  );
+  const absolutePathByRelativePath = new Map(
+    input.sourceDocuments.map((document) => [document.relativePath, document.absolutePath])
+  );
 
   function containingFilePath(fromFilePath: string): string {
-    const sourceDocument = input.sourceDocuments.find(
-      (document) => document.relativePath === fromFilePath
-    );
-
-    return sourceDocument?.absolutePath ?? resolve(projectPath, fromFilePath);
+    return absolutePathByRelativePath.get(fromFilePath) ?? resolve(projectPath, fromFilePath);
   }
 
   function hasProjectConfigurationResolution(
@@ -964,11 +982,12 @@ function createSingleTypeScriptProjectModuleResolver(input: {
     }
 
     const containingFile = containingFilePath(fromFilePath);
-    const targetPath = resolvedModulePath(moduleSpecifier, containingFile, compilerOptions);
+    const targetPath = resolveModule(moduleSpecifier, containingFile);
 
     return (
       (targetPath !== null &&
-        nonRelativeStrategy(moduleSpecifier, containingFile, targetPath, compilerOptions) !== null) ||
+        nonRelativeStrategy(moduleSpecifier, containingFile, targetPath, compilerOptions,
+          resolveWithoutPaths, resolveWithoutPathsOrBaseUrl) !== null) ||
       explicitSfcPathsTarget({
         projectPath,
         moduleSpecifier,
@@ -987,7 +1006,7 @@ function createSingleTypeScriptProjectModuleResolver(input: {
         }
 
         const containingFile = containingFilePath(fromFilePath);
-        const targetPath = resolvedModulePath(moduleSpecifier, containingFile, compilerOptions);
+        const targetPath = resolveModule(moduleSpecifier, containingFile);
         if (targetPath === null) {
           const fallbackTargetFilePath = explicitSfcPathsTarget({
             projectPath,
@@ -1006,7 +1025,9 @@ function createSingleTypeScriptProjectModuleResolver(input: {
           moduleSpecifier,
           containingFile,
           targetPath,
-          compilerOptions
+          compilerOptions,
+          resolveWithoutPaths,
+          resolveWithoutPathsOrBaseUrl
         );
         if (targetFilePath === undefined || strategy === null) {
           return unresolved(fallbackConfigurationPaths);

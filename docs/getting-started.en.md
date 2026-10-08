@@ -49,6 +49,8 @@ SymbolLattice find createOrder --project . --sync-if-stale --json
 SymbolLattice sync .
 ```
 
+`init` scans, extracts, resolves and writes the complete index. First-run duration varies with project size and language. Use `sync` for routine edits and upgrades once an index exists, avoiding another full initialization. To inspect timings, run `SymbolLattice init . --json` and read the scan, extraction, resolution and persistence entries in `operationPerformance.phases`. This command still performs full initialization; it is not a read-only diagnostic.
+
 Review the returned files and source excerpts, then follow the relationship evidence. Add `--sync-if-stale` to a live CLI query to acquire writer ownership and run ordinary `sync` only when an existing index is stale, preserving its scope. A fresh index is not synchronized. The option does not initialize a missing index, invoke a forced `index` rebuild, or bypass safe-path and before/after freshness checks.
 
 The option uses the built-in indexer. If the index records explicitly loaded plugins, it returns `CLI_SYNC_REQUIRES_PLUGINS` and preserves the index. Use an MCP host configured with the original `--plugin` options; recovery does not silently remove plugins.
@@ -114,6 +116,10 @@ See the [validation documentation](../benchmarks/README.md) for measured results
 ## Upgrading
 
 Use the installation flow above with a new fixed commit or existing tag. After reinstalling, repeat Codex integration and run `SymbolLattice sync .` in each project. The project is in `0.x` development; check the target version's compatibility and migration notes before upgrading.
+
+### Upgrading to v0.550.3
+
+This patch reduces repeated AST traversal and TypeScript module lookups during first initialization. Existing v0.550.2 indexes remain usable; this performance fix does not require another `init`. Use `sync` for routine edits. See the [language verification and speed report](language-verification-and-speed.md) for fixed-project initialization timings and unmeasured scope.
 
 ### Upgrading to v0.550.2
 

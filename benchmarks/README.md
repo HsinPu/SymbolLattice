@@ -70,6 +70,7 @@ The [v0.550.2 Go boolean semicolon audit](go/boolean-semicolon-audit.md) records
 | `mcp/` | `paired-source-lexical.mjs` | manual alternating frozen source-input replay with complete tokens, receipts, truncation and BM25 score equality; excludes whole-query latency |
 | `mcp/` | `paired-source-prefix-read.mjs` | manual captured source-prefix SQL replay on one read-only transaction; complete bounded-bundle, prefix and truncation equality; excludes whole-query latency |
 | `mcp/` | `paired-index-replace.mjs` | manual alternating full graph-generation replacement on separate disposable index copies |
+| `mcp/` | `paired-init.mjs` | manual alternating first CLI initialization on fresh pinned checkout copies; full fact/graph/source-search parity, source-content and SQLite integrity checks; clone and verification time excluded |
 | `mcp/` | `edge-lookup.mjs` | manual pinned-corpus paired SQLite edge-read measurement |
 | `mcp/` | `django-restore-constraints-tasks.json` | manual pinned-source development retrieval truth; originally held out for v0.536.2, with a known context-manager source gap |
 | `mcp/` | `bounded-graph-read.mjs` | manual pinned-corpus bounded graph read, response hash, latency, and post-GC memory measurement |

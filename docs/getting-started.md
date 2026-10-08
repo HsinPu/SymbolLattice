@@ -49,6 +49,8 @@ SymbolLattice find createOrder --project . --sync-if-stale --json
 SymbolLattice sync .
 ```
 
+`init` 會完整掃描、解析並寫入索引，首次執行時間隨專案大小及語言而異；已有索引時，日常修改及升級使用 `sync`，避免再次完整初始化。需要核對耗時時，執行 `SymbolLattice init . --json`，查看 `operationPerformance.phases` 的掃描、擷取、關係解析及寫入時間；這個指令仍會完整初始化，不是唯讀診斷。
+
 先查看命中的檔案與來源片段，再依關係證據追查。即時 CLI 查詢可加上 `--sync-if-stale`：只有既有索引過期時才會取得同步鎖並執行一般 `sync`，保留原索引範圍；索引已新鮮時不會同步。此選項不建立缺少的索引、不呼叫 `index` 強制重建，也不繞過安全路徑與前後新鮮度檢查。
 
 此選項使用內建索引器。若索引記錄了明確載入的外掛，會回傳 `CLI_SYNC_REQUIRES_PLUGINS`，保留既有索引；請使用配置原 `--plugin` 選項的 MCP host，不會為恢復查詢而默默移除外掛。
@@ -114,6 +116,10 @@ SymbolLattice serve --mcp --project C:\path\to\project
 ## 升級
 
 使用上方安裝流程指定新的固定 commit 或既有 tag，重新安裝後執行 Codex 整合，並在各專案執行 `SymbolLattice sync .`。目前為 `0.x` 開發階段，升級前請核對對應版本的相容性與遷移說明。
+
+### 升級至 v0.550.3
+
+此版減少首次初始化時重複的 AST 走訪及 TypeScript 模組查找。從 v0.550.2 升級時，既有索引可繼續使用，不需為這項效能修正再執行 `init`；日常修改使用 `sync`。固定專案的首次索引時間與尚未量測範圍見[語言驗證與速度報告](language-verification-and-speed.md)。
 
 ### 升級至 v0.550.2
 

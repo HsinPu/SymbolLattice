@@ -19,6 +19,39 @@ afterEach(async () => {
 });
 
 describe("filesystem source catalog freshness", () => {
+  it("refreshes successful and missing module resolutions on each scan", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-source-catalog-module-cache-"));
+    temporaryDirectories.push(projectPath);
+    await mkdir(join(projectPath, "src", "lib"), { recursive: true });
+    await writeFile(join(projectPath, "tsconfig.json"), JSON.stringify({
+      compilerOptions: { baseUrl: ".", paths: { "@fixture/*": ["src/lib/*"] } }
+    }), "utf8");
+    await writeFile(join(projectPath, "src", "consumer.ts"),
+      'import { value } from "@fixture/value"; export { value };', "utf8");
+    const catalog = new FileSystemSourceCatalog();
+    const missing = await catalog.scan(projectPath);
+    expect(missing.moduleResolver.resolve("src/consumer.ts", "@fixture/value").targetFilePath).toBeNull();
+    await writeFile(join(projectPath, "src", "lib", "value.ts"), "export const value = 1;", "utf8");
+    const present = await catalog.scan(projectPath);
+    for (let repeat = 0; repeat < 3; repeat += 1) {
+      expect(present.moduleResolver.resolve("src/consumer.ts", "@fixture/value")).toMatchObject({
+        targetFilePath: "src/lib/value.ts", strategy: "tsconfig-paths"
+      });
+    }
+    await unlink(join(projectPath, "src", "lib", "value.ts"));
+    const removed = await catalog.scan(projectPath);
+    expect(removed.moduleResolver.resolve("src/consumer.ts", "@fixture/value").targetFilePath).toBeNull();
+    await writeFile(join(projectPath, "src", "lib", "other.ts"), "export const value = 2;", "utf8");
+    await writeFile(join(projectPath, "tsconfig.json"), JSON.stringify({
+      compilerOptions: { baseUrl: ".", paths: { "@fixture/value": ["src/lib/other.ts"] } }
+    }), "utf8");
+    const remapped = await catalog.scan(projectPath);
+    expect(remapped.moduleResolver.resolve("src/consumer.ts", "@fixture/value")).toMatchObject({
+      targetFilePath: "src/lib/other.ts", strategy: "tsconfig-paths"
+    });
+    expect(remapped.indexInputs.fingerprint).not.toBe(present.indexInputs.fingerprint);
+  });
+
   it("admits an oracle-approved TypeScript 6 non-resolution option through a local extends chain", async () => {
     const projectPath = await mkdtemp(join(tmpdir(), "SymbolLattice-source-catalog-ts6-option-"));
     temporaryDirectories.push(projectPath);
